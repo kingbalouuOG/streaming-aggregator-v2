@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+api-keys.txt
+
+# Vite
+*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# TypeScript
+*.tsbuildinfo
+
+# Capacitor Android build artifacts
+android/app/build/
+android/.gradle/
+android/build/
+android/captures/
+android/.idea/
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Windows artifacts
+nul
+
+# V1 archive (local reference only)
+_archive/

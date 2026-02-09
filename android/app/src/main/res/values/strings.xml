@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Videx</string>
+    <string name="title_activity_main">Videx</string>
+    <string name="package_name">com.videx.app</string>
+    <string name="custom_url_scheme">com.videx.app</string>
+</resources>

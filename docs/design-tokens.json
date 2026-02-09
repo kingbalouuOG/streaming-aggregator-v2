@@ -1,0 +1,149 @@
+{
+  "$schema": "https://design-tokens.org/json-schema.json",
+  "name": "StreamFinder Design Tokens",
+  "version": "1.0.0",
+  "description": "Design tokens for StreamFinder (Videx) streaming aggregator app - Figma compatible",
+
+  "colors": {
+    "background": {
+      "primary": { "value": "#000000", "type": "color", "description": "Pure black for OLED" },
+      "secondary": { "value": "#121212", "type": "color", "description": "Elevated surfaces" },
+      "tertiary": { "value": "#1E1E1E", "type": "color", "description": "Cards and containers" }
+    },
+    "text": {
+      "primary": { "value": "#FFFFFF", "type": "color", "description": "Main headings, important text" },
+      "secondary": { "value": "#B3B3B3", "type": "color", "description": "Body text, metadata" },
+      "tertiary": { "value": "#666666", "type": "color", "description": "Hints, disabled states" },
+      "inverse": { "value": "#000000", "type": "color", "description": "Text on light backgrounds" }
+    },
+    "accent": {
+      "primary": { "value": "#FF6B35", "type": "color", "description": "Warm coral - primary actions, highlights" },
+      "primaryLight": { "value": "#FF8C42", "type": "color", "description": "Lighter coral for hover/secondary" },
+      "secondary": { "value": "#FFB84D", "type": "color", "description": "Warm gold - secondary actions" },
+      "success": { "value": "#30D158", "type": "color", "description": "Apple green - confirmations" },
+      "warning": { "value": "#FFD60A", "type": "color", "description": "Amber - alerts" },
+      "error": { "value": "#FF453A", "type": "color", "description": "Red - errors" }
+    },
+    "glass": {
+      "light": { "value": "rgba(255, 255, 255, 0.1)", "type": "color" },
+      "medium": { "value": "rgba(255, 255, 255, 0.15)", "type": "color" },
+      "heavy": { "value": "rgba(255, 255, 255, 0.2)", "type": "color" },
+      "border": { "value": "rgba(255, 255, 255, 0.15)", "type": "color" }
+    },
+    "overlay": {
+      "light": { "value": "rgba(0, 0, 0, 0.3)", "type": "color" },
+      "medium": { "value": "rgba(0, 0, 0, 0.6)", "type": "color" },
+      "heavy": { "value": "rgba(0, 0, 0, 0.85)", "type": "color" }
+    },
+    "platforms": {
+      "netflix": { "value": "#E50914", "type": "color" },
+      "amazon": { "value": "#00A8E1", "type": "color" },
+      "apple": { "value": "#000000", "type": "color" },
+      "disney": { "value": "#113CCF", "type": "color" },
+      "bbc": { "value": "#FF0000", "type": "color" },
+      "nowTV": { "value": "#00E0FF", "type": "color" },
+      "itvx": { "value": "#000000", "type": "color" },
+      "channel4": { "value": "#0095D9", "type": "color" },
+      "paramount": { "value": "#0064FF", "type": "color" },
+      "skyGo": { "value": "#0072C9", "type": "color" }
+    }
+  },
+
+  "typography": {
+    "fontFamily": {
+      "light": { "value": "Satoshi-Light", "type": "fontFamily" },
+      "regular": { "value": "Satoshi-Regular", "type": "fontFamily" },
+      "medium": { "value": "Satoshi-Medium", "type": "fontFamily" }
+    },
+    "h1": {
+      "fontFamily": { "value": "{typography.fontFamily.medium}" },
+      "fontSize": { "value": 34, "type": "dimension" },
+      "lineHeight": { "value": 41, "type": "dimension" },
+      "letterSpacing": { "value": 0.37, "type": "dimension" }
+    },
+    "h2": {
+      "fontFamily": { "value": "{typography.fontFamily.medium}" },
+      "fontSize": { "value": 28, "type": "dimension" },
+      "lineHeight": { "value": 34, "type": "dimension" },
+      "letterSpacing": { "value": 0.36, "type": "dimension" }
+    },
+    "h3": {
+      "fontFamily": { "value": "{typography.fontFamily.medium}" },
+      "fontSize": { "value": 22, "type": "dimension" },
+      "lineHeight": { "value": 28, "type": "dimension" },
+      "letterSpacing": { "value": 0.35, "type": "dimension" }
+    },
+    "h4": {
+      "fontFamily": { "value": "{typography.fontFamily.medium}" },
+      "fontSize": { "value": 20, "type": "dimension" },
+      "lineHeight": { "value": 25, "type": "dimension" },
+      "letterSpacing": { "value": 0.38, "type": "dimension" }
+    },
+    "body": {
+      "fontFamily": { "value": "{typography.fontFamily.regular}" },
+      "fontSize": { "value": 17, "type": "dimension" },
+      "lineHeight": { "value": 22, "type": "dimension" },
+      "letterSpacing": { "value": -0.41, "type": "dimension" }
+    },
+    "button": {
+      "fontFamily": { "value": "{typography.fontFamily.medium}" },
+      "fontSize": { "value": 17, "type": "dimension" },
+      "lineHeight": { "value": 22, "type": "dimension" },
+      "letterSpacing": { "value": -0.41, "type": "dimension" }
+    },
+    "caption": {
+      "fontFamily": { "value": "{typography.fontFamily.regular}" },
+      "fontSize": { "value": 15, "type": "dimension" },
+      "lineHeight": { "value": 20, "type": "dimension" },
+      "letterSpacing": { "value": -0.24, "type": "dimension" }
+    },
+    "metadata": {
+      "fontFamily": { "value": "{typography.fontFamily.light}" },
+      "fontSize": { "value": 13, "type": "dimension" },
+      "lineHeight": { "value": 18, "type": "dimension" },
+      "letterSpacing": { "value": -0.08, "type": "dimension" }
+    }
+  },
+
+  "spacing": {
+    "xs": { "value": 4, "type": "dimension", "description": "Tight spacing, icon padding" },
+    "sm": { "value": 8, "type": "dimension", "description": "Small gaps, chip padding" },
+    "md": { "value": 12, "type": "dimension", "description": "Default spacing between related elements" },
+    "lg": { "value": 16, "type": "dimension", "description": "Section spacing, card padding" },
+    "xl": { "value": 24, "type": "dimension", "description": "Large gaps, screen padding" },
+    "xxl": { "value": 32, "type": "dimension", "description": "Section headers, major spacing" },
+    "xxxl": { "value": 48, "type": "dimension", "description": "Screen top/bottom padding" }
+  },
+
+  "borderRadius": {
+    "small": { "value": 6, "type": "dimension" },
+    "medium": { "value": 12, "type": "dimension" },
+    "large": { "value": 16, "type": "dimension" },
+    "pill": { "value": 20, "type": "dimension" },
+    "circle": { "value": 999, "type": "dimension" }
+  },
+
+  "shadows": {
+    "card": {
+      "x": { "value": 0, "type": "dimension" },
+      "y": { "value": 4, "type": "dimension" },
+      "blur": { "value": 12, "type": "dimension" },
+      "spread": { "value": 0, "type": "dimension" },
+      "color": { "value": "rgba(0, 0, 0, 0.3)", "type": "color" }
+    },
+    "elevated": {
+      "x": { "value": 0, "type": "dimension" },
+      "y": { "value": 8, "type": "dimension" },
+      "blur": { "value": 24, "type": "dimension" },
+      "spread": { "value": 0, "type": "dimension" },
+      "color": { "value": "rgba(0, 0, 0, 0.4)", "type": "color" }
+    },
+    "glow": {
+      "x": { "value": 0, "type": "dimension" },
+      "y": { "value": 0, "type": "dimension" },
+      "blur": { "value": 10, "type": "dimension" },
+      "spread": { "value": 0, "type": "dimension" },
+      "color": { "value": "rgba(255, 107, 53, 0.4)", "type": "color", "description": "Accent glow effect" }
+    }
+  }
+}
