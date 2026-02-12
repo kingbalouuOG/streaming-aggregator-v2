@@ -188,9 +188,9 @@ export function useContentService(providerIds: number[], filters?: FilterState) 
 
           const [movies, tv] = genreResults[i];
           const genreItems = await filterPaidOnly(deduplicate([
-            ...(movies.data?.results || []).slice(0, 6).map((m: any) => tmdbMovieToContentItem(m)),
-            ...(tv.data?.results || []).slice(0, 6).map((t: any) => tmdbTVToContentItem(t)),
-          ].sort(() => Math.random() - 0.5), excludeSet).slice(0, 10));
+            ...(movies.data?.results || []).slice(0, 10).map((m: any) => tmdbMovieToContentItem(m)),
+            ...(tv.data?.results || []).slice(0, 10).map((t: any) => tmdbTVToContentItem(t)),
+          ].sort(() => Math.random() - 0.5), excludeSet).slice(0, 15));
 
           if (genreItems.length > 0) {
             genreRows.push({ genreId, name, items: genreItems });

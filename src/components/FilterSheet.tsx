@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { X } from "lucide-react";
+import { EyeIcon, EyeOffIcon } from "./icons";
 import { motion, AnimatePresence } from "motion/react";
 import { PLATFORMS, getPlatform } from "./platformLogos";
 
@@ -21,6 +22,7 @@ export interface FilterState {
   cost: string;
   genres: string[];
   minRating: number;
+  showWatched: boolean;
 }
 
 const defaultFilters: FilterState = {
@@ -29,6 +31,7 @@ const defaultFilters: FilterState = {
   cost: "All",
   genres: [],
   minRating: 0,
+  showWatched: false,
 };
 
 interface FilterSheetProps {
@@ -107,7 +110,8 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
     (local.contentType !== "All" ? 1 : 0) +
     (local.cost !== "All" ? 1 : 0) +
     local.genres.length +
-    (local.minRating > 0 ? 1 : 0);
+    (local.minRating > 0 ? 1 : 0) +
+    (local.showWatched ? 1 : 0);
 
   if (!isOpen) return null;
 
@@ -296,6 +300,26 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
                 <span>5</span>
                 <span>10</span>
               </div>
+
+              {/* SHOW WATCHED */}
+              <SectionLabel>SHOW WATCHED</SectionLabel>
+              <button
+                onClick={() => setLocal((p) => ({ ...p, showWatched: !p.showWatched }))}
+                className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl mb-4 transition-all duration-200 border ${
+                  local.showWatched
+                    ? "bg-primary/10 border-primary/30 text-primary"
+                    : "bg-secondary border-transparent text-muted-foreground"
+                }`}
+              >
+                {local.showWatched ? (
+                  <EyeIcon className="w-5 h-5 shrink-0" />
+                ) : (
+                  <EyeOffIcon className="w-5 h-5 shrink-0" />
+                )}
+                <span className="text-[13px]" style={{ fontWeight: 600 }}>
+                  {local.showWatched ? "Visible" : "Hidden"}
+                </span>
+              </button>
             </div>
 
             {/* Bottom bar */}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Bookmark } from "lucide-react";
+import { TickIcon } from "./icons";
 import { motion } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
 import { ContentItem } from "./ContentCard";
@@ -15,9 +16,10 @@ interface BrowseCardProps {
   bookmarked?: boolean;
   onToggleBookmark?: (item: ContentItem) => void;
   userServices?: ServiceId[];
+  watched?: boolean;
 }
 
-export function BrowseCard({ item, index = 0, onSelect, bookmarked = false, onToggleBookmark, userServices }: BrowseCardProps) {
+export function BrowseCard({ item, index = 0, onSelect, bookmarked = false, onToggleBookmark, userServices, watched = false }: BrowseCardProps) {
   const [justToggled, setJustToggled] = useState(false);
   const [allServices, setAllServices] = useState<ServiceId[]>(item.services);
 
@@ -61,27 +63,33 @@ export function BrowseCard({ item, index = 0, onSelect, bookmarked = false, onTo
       {/* Gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
 
-      {/* Bookmark button with haptic feedback */}
-      <motion.button
-        onClick={handleBookmark}
-        whileTap={{ scale: 0.75 }}
-        animate={
-          justToggled
-            ? { scale: [1, 1.3, 0.9, 1.05, 1] }
-            : { scale: 1 }
-        }
-        transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-        className={`absolute top-2.5 left-2.5 w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
-          bookmarked
-            ? "bg-primary text-white"
-            : "bg-black/40 backdrop-blur-sm text-white/70 hover:text-white hover:bg-black/60"
-        }`}
-      >
-        <Bookmark className={`w-4 h-4 ${bookmarked ? "fill-current" : ""}`} />
-      </motion.button>
+      {/* Watched tick or Bookmark button */}
+      {watched ? (
+        <div className="absolute top-2.5 right-2.5 w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
+          <TickIcon className="w-4 h-4 text-white" />
+        </div>
+      ) : (
+        <motion.button
+          onClick={handleBookmark}
+          whileTap={{ scale: 0.75 }}
+          animate={
+            justToggled
+              ? { scale: [1, 1.3, 0.9, 1.05, 1] }
+              : { scale: 1 }
+          }
+          transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className={`absolute top-2.5 right-2.5 w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
+            bookmarked
+              ? "bg-primary text-white"
+              : "bg-black/40 backdrop-blur-sm text-white/70 hover:text-white hover:bg-black/60"
+          }`}
+        >
+          <Bookmark className={`w-4 h-4 ${bookmarked ? "fill-current" : ""}`} />
+        </motion.button>
+      )}
 
-      {/* Service badges - top right */}
-      <div className="absolute top-2.5 right-2.5 flex items-center gap-1">
+      {/* Service badges - top left */}
+      <div className="absolute top-2.5 left-2.5 flex items-center gap-1">
         {services.map((service) => (
           <ServiceBadge key={service} service={service} size="md" />
         ))}

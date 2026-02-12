@@ -43,10 +43,11 @@ export function useWatchlist() {
       setItems((prev) => prev.filter((i) => !(i.id === tmdbId && i.type === mediaType)));
       return false; // removed
     } else {
+      // Extract TMDb poster path from full URL (e.g. "https://image.tmdb.org/t/p/w342/abc.jpg" → "/abc.jpg")
+      const posterPath = item.image?.match(/\/t\/p\/\w+(\/.+)$/)?.[1] || null;
       const newItem = await addToWatchlist(tmdbId, mediaType, {
         title: item.title,
-        poster_path: null, // image is already a full URL
-        posterPath: null,
+        posterPath,
         overview: '',
         release_date: item.year ? `${item.year}-01-01` : '',
         vote_average: item.rating || 0,

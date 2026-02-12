@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react-swc';
 import path from 'path';
 
 export default defineConfig({
+  base: './',
   plugins: [react()],
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
@@ -11,7 +12,7 @@ export default defineConfig({
     },
   },
   define: {
-    __DEV__: 'import.meta.env.DEV',
+    __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production'),
   },
   build: {
     target: 'esnext',
@@ -19,6 +20,7 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    host: '0.0.0.0',
     open: true,
   },
 });

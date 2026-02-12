@@ -1,8 +1,13 @@
-import React, { useState, useRef, useCallback } from "react";
-import { Bookmark, CheckCircle2, LayoutGrid, List, Plus, ChevronRight, Trash2 } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Bookmark, LayoutGrid, List, Plus, ChevronRight, Trash2, CheckCircle2 } from "lucide-react";
+import { TickIcon } from "./icons";
 import { motion, AnimatePresence } from "motion/react";
 import { ContentItem } from "./ContentCard";
 import { ServiceBadge } from "./ServiceBadge";
+import { ImageSkeleton } from "./ImageSkeleton";
+import { getCachedServices } from "@/lib/utils/serviceCache";
+import { parseContentItemId } from "@/lib/adapters/contentAdapter";
+import type { ServiceId } from "./platformLogos";
 
 type WatchlistTab = "want" | "watched";
 type ViewMode = "grid" | "list";
@@ -219,6 +224,16 @@ function GridCard({
   onMoveToWantToWatch,
 }: CardProps) {
   const [showActions, setShowActions] = useState(false);
+  const [services, setServices] = useState<ServiceId[]>(item.services);
+
+  useEffect(() => {
+    if (item.services.length > 0) {
+      setServices(item.services);
+      return;
+    }
+    const { tmdbId, mediaType } = parseContentItemId(item.id);
+    getCachedServices(String(tmdbId), mediaType).then(setServices);
+  }, [item.id, item.services]);
 
   return (
     <motion.div
@@ -235,39 +250,36 @@ function GridCard({
       }}
     >
       {/* Poster */}
-      <img
+      <ImageSkeleton
         src={item.image}
         alt={item.title}
         className="w-full h-full object-cover"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
 
-      {/* Watched overlay */}
-      {tab === "watched" && (
-        <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-          <div className="w-10 h-10 rounded-full bg-primary/90 flex items-center justify-center">
-            <CheckCircle2 className="w-5 h-5 text-white fill-white" />
-          </div>
-        </div>
-      )}
-
-      {/* Bookmark button - top left */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove();
-        }}
-        className="absolute top-2.5 left-2.5 w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center transition-transform active:scale-90"
-      >
-        <Bookmark className="w-4 h-4 fill-current" />
-      </button>
-
-      {/* Service badge - top right */}
-      <div className="absolute top-2.5 right-2.5">
-        {item.services.slice(0, 1).map((service) => (
+      {/* Service badges - top left */}
+      <div className="absolute top-2.5 left-2.5 flex items-center gap-1">
+        {services.slice(0, 3).map((service) => (
           <ServiceBadge key={service} service={service} size="md" />
         ))}
       </div>
+
+      {/* Bookmark/Watched indicator - top right */}
+      {tab === "watched" ? (
+        <div className="absolute top-2.5 right-2.5 w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
+          <TickIcon className="w-4 h-4 text-white" />
+        </div>
+      ) : (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="absolute top-2.5 right-2.5 w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center transition-transform active:scale-90"
+        >
+          <Bookmark className="w-4 h-4 fill-current" />
+        </button>
+      )}
 
       {/* Title at bottom */}
       <div className="absolute bottom-0 left-0 right-0 p-3">
@@ -353,6 +365,16 @@ function SwipeableListCard({
   const [isSwiping, setIsSwiping] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
+  const [services, setServices] = useState<ServiceId[]>(item.services);
+
+  useEffect(() => {
+    if (item.services.length > 0) {
+      setServices(item.services);
+      return;
+    }
+    const { tmdbId, mediaType } = parseContentItemId(item.id);
+    getCachedServices(String(tmdbId), mediaType).then(setServices);
+  }, [item.id, item.services]);
   const isHorizontalRef = useRef<boolean | null>(null);
   const currentOffsetRef = useRef(0);
   const isDraggingRef = useRef(false);
@@ -549,14 +571,14 @@ function SwipeableListCard({
       >
         {/* Thumbnail */}
         <div className="relative w-14 h-20 rounded-lg overflow-hidden shrink-0">
-          <img
+          <ImageSkeleton
             src={item.image}
             alt={item.title}
             className="w-full h-full object-cover"
           />
           {tab === "watched" && (
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4 text-primary fill-primary" />
+              <TickIcon className="w-4 h-4 text-emerald-400" />
             </div>
           )}
         </div>
@@ -570,7 +592,7 @@ function SwipeableListCard({
             {item.title}
           </h3>
           <div className="flex items-center gap-1.5 mt-0.5">
-            {item.services.slice(0, 2).map((s) => (
+            {services.slice(0, 3).map((s) => (
               <ServiceBadge key={s} service={s} size="sm" />
             ))}
             {item.year && (

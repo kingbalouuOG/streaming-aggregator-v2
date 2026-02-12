@@ -10,9 +10,10 @@ interface ContentRowProps {
   bookmarkedIds?: Set<string>;
   onToggleBookmark?: (item: ContentItem) => void;
   userServices?: ServiceId[];
+  watchedIds?: Set<string>;
 }
 
-export function ContentRow({ title, items, variant = "default", onItemSelect, bookmarkedIds, onToggleBookmark, userServices }: ContentRowProps) {
+export function ContentRow({ title, items, variant = "default", onItemSelect, bookmarkedIds, onToggleBookmark, userServices, watchedIds }: ContentRowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -38,6 +39,7 @@ export function ContentRow({ title, items, variant = "default", onItemSelect, bo
             bookmarked={bookmarkedIds?.has(item.id)}
             onToggleBookmark={onToggleBookmark}
             userServices={userServices}
+            watched={watchedIds?.has(item.id)}
           />
         ))}
       </div>

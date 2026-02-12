@@ -1,5 +1,6 @@
 import React from "react";
 import { Info, Bookmark } from "lucide-react";
+import { EyeFilledIcon } from "./icons";
 import { motion } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
 import { ImageSkeleton } from "./ImageSkeleton";
@@ -14,9 +15,10 @@ interface FeaturedHeroProps {
   bookmarked?: boolean;
   onToggleBookmark?: () => void;
   scrollY?: number;
+  watched?: boolean;
 }
 
-export function FeaturedHero({ title, subtitle, image, services, tags, bookmarked, onToggleBookmark, scrollY = 0 }: FeaturedHeroProps) {
+export function FeaturedHero({ title, subtitle, image, services, tags, bookmarked, onToggleBookmark, scrollY = 0, watched = false }: FeaturedHeroProps) {
   // Parallax: image moves at 40% of scroll speed
   const parallaxOffset = scrollY * 0.4;
   const heroOpacity = Math.max(0, 1 - scrollY / 500);
@@ -85,27 +87,34 @@ export function FeaturedHero({ title, subtitle, image, services, tags, bookmarke
 
         {/* Action buttons */}
         <div className="flex items-center gap-3">
-          <motion.button
-            onClick={onToggleBookmark}
-            whileTap={{ scale: 0.92 }}
-            animate={bookmarked ? { scale: [1, 1.15, 0.95, 1] } : undefined}
-            transition={{ duration: 0.35 }}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all shadow-lg ${
-              bookmarked
-                ? "bg-primary/20 text-primary border border-primary/50 shadow-primary/20"
-                : "bg-primary text-white shadow-primary/30 hover:brightness-110"
-            }`}
-          >
-            <motion.div
-              animate={bookmarked ? { rotateY: [0, 180, 360] } : { rotateY: 0 }}
-              transition={{ duration: 0.5 }}
+          {watched ? (
+            <div className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/50">
+              <EyeFilledIcon className="w-4 h-4" />
+              <span className="text-[14px]" style={{ fontWeight: 600 }}>Watched</span>
+            </div>
+          ) : (
+            <motion.button
+              onClick={onToggleBookmark}
+              whileTap={{ scale: 0.92 }}
+              animate={bookmarked ? { scale: [1, 1.15, 0.95, 1] } : undefined}
+              transition={{ duration: 0.35 }}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all shadow-lg ${
+                bookmarked
+                  ? "bg-primary/20 text-primary border border-primary/50 shadow-primary/20"
+                  : "bg-primary text-white shadow-primary/30 hover:brightness-110"
+              }`}
             >
-              <Bookmark className={`w-4 h-4 ${bookmarked ? "fill-current" : ""}`} />
-            </motion.div>
-            <span className="text-[14px]" style={{ fontWeight: 600 }}>
-              {bookmarked ? "In Watchlist" : "Add to Watchlist"}
-            </span>
-          </motion.button>
+              <motion.div
+                animate={bookmarked ? { rotateY: [0, 180, 360] } : { rotateY: 0 }}
+                transition={{ duration: 0.5 }}
+              >
+                <Bookmark className={`w-4 h-4 ${bookmarked ? "fill-current" : ""}`} />
+              </motion.div>
+              <span className="text-[14px]" style={{ fontWeight: 600 }}>
+                {bookmarked ? "In Watchlist" : "Add to Watchlist"}
+              </span>
+            </motion.button>
+          )}
           <button className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm text-white/80 hover:bg-white/20 transition-all">
             <Info className="w-5 h-5" />
           </button>

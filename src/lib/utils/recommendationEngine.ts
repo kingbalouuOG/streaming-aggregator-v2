@@ -123,14 +123,17 @@ async function getTopLikedItems(count = 3): Promise<WatchlistItem[]> {
 
 async function fetchGenreBasedContent(
   topGenres: { genreId: number; score: number }[],
-  region = 'GB'
+  region = 'GB',
+  providerIds: number[] = []
 ): Promise<ScoredCandidate[]> {
   try {
+    const providerParam = providerIds.length > 0 ? { with_watch_providers: providerIds.join('|'), watch_region: region } : { watch_region: region };
+
     if (topGenres.length === 0) {
       if (DEBUG) console.log('[RecommendationEngine] No top genres, using popular content');
       const [moviesRes, tvRes] = await Promise.all([
-        discoverMovies({ page: 1, watch_region: region }),
-        discoverTV({ page: 1, watch_region: region }),
+        discoverMovies({ page: 1, ...providerParam }),
+        discoverTV({ page: 1, ...providerParam }),
       ]);
       return [
         ...(moviesRes.data?.results || []).map((m: any) => ({ ...m, type: 'movie' as const, source: 'popular' as const, genreMatch: [], genre_ids: m.genre_ids || [], score: 0 })),
@@ -142,8 +145,8 @@ async function fetchGenreBasedContent(
     const genreString = genreIds.join(',');
 
     const [moviesRes, tvRes] = await Promise.all([
-      discoverMovies({ with_genres: genreString, page: 1, watch_region: region, sort_by: 'popularity.desc' }),
-      discoverTV({ with_genres: genreString, page: 1, watch_region: region, sort_by: 'popularity.desc' }),
+      discoverMovies({ with_genres: genreString, page: 1, sort_by: 'popularity.desc', ...providerParam }),
+      discoverTV({ with_genres: genreString, page: 1, sort_by: 'popularity.desc', ...providerParam }),
     ]);
 
     return [
@@ -306,7 +309,7 @@ export async function generateRecommendations(
     }
 
     const [genreContent, similarContent] = await Promise.all([
-      fetchGenreBasedContent(topGenres, region),
+      fetchGenreBasedContent(topGenres, region, userPlatforms),
       fetchSimilarContent(likedItems),
     ]);
 

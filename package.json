@@ -4,7 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "cap:sync": "npx cap sync android",
+    "cap:open": "npx cap open android",
+    "build:android": "npm run build && npx cap sync android",
+    "dev:android": "echo Run: set LIVE_RELOAD=YOUR_IP && npx cap sync android"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.2",
@@ -27,6 +31,7 @@
     "@types/crypto-js": "^4.2.2",
     "@types/node": "^20.10.0",
     "@vitejs/plugin-react-swc": "^3.10.2",
+    "typescript": "^5.9.3",
     "vite": "6.3.5"
   }
 }

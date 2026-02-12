@@ -68,8 +68,11 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
 
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const showEmailError = email.trim().length > 0 && !isValidEmail;
+
   const canContinue = [
-    name.trim().length > 0 && email.trim().length > 0,
+    name.trim().length > 0 && isValidEmail,
     selectedServices.length > 0,
     selectedGenres.length > 0,
   ];
@@ -167,6 +170,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   email={email}
                   onNameChange={setName}
                   onEmailChange={setEmail}
+                  emailError={showEmailError}
                 />
               )}
               {step === 1 && (
@@ -259,11 +263,13 @@ function StepWelcome({
   email,
   onNameChange,
   onEmailChange,
+  emailError,
 }: {
   name: string;
   email: string;
   onNameChange: (v: string) => void;
   onEmailChange: (v: string) => void;
+  emailError?: boolean;
 }) {
   return (
     <div className="flex flex-col h-full px-6 overflow-y-auto no-scrollbar">
@@ -327,9 +333,14 @@ function StepWelcome({
             placeholder="Email address"
             value={email}
             onChange={(e) => onEmailChange(e.target.value)}
-            className="w-full bg-secondary/60 border rounded-xl pl-11 pr-4 py-3.5 text-foreground text-[14px] placeholder:text-muted-foreground/50 outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
-            style={{ borderColor: "var(--border-subtle)" }}
+            className={`w-full bg-secondary/60 border rounded-xl pl-11 pr-4 py-3.5 text-foreground text-[14px] placeholder:text-muted-foreground/50 outline-none focus:ring-1 transition-all ${
+              emailError ? "border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20" : "focus:border-primary/50 focus:ring-primary/20"
+            }`}
+            style={{ borderColor: emailError ? undefined : "var(--border-subtle)" }}
           />
+          {emailError && (
+            <p className="text-red-400 text-[11px] mt-1 ml-1">Please enter a valid email address</p>
+          )}
         </div>
       </motion.div>
 

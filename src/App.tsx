@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from "react";
+import React, { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { toast, Toaster } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { Loader2 } from "lucide-react";
@@ -22,6 +22,7 @@ import { providerIdsToServiceIds } from "./lib/adapters/platformAdapter";
 import { serviceIdsToProviderIds, providerIdToServiceId } from "./lib/adapters/platformAdapter";
 import { GENRE_NAMES } from "./lib/constants/genres";
 import type { ServiceId } from "./components/platformLogos";
+import { App as CapApp } from "@capacitor/app";
 
 const categories = ["All", "Movies", "TV Shows", "Docs", "Anime"];
 
@@ -58,6 +59,12 @@ function AppContent() {
     [connectedServices.join(',')]
   );
 
+  // Set of watched item IDs for detail page
+  const watchedIds = useMemo(
+    () => new Set(wl.watched.map((i) => i.id)),
+    [wl.watched]
+  );
+
   // --- Build home filters from category pills + FilterSheet ---
   const homeFilters: FilterState = useMemo(() => {
     const base = { ...filters };
@@ -82,7 +89,14 @@ function AppContent() {
     (filters.contentType !== "All" ? 1 : 0) +
     (filters.cost !== "All" ? 1 : 0) +
     filters.genres.length +
-    (filters.minRating > 0 ? 1 : 0);
+    (filters.minRating > 0 ? 1 : 0) +
+    (filters.showWatched ? 1 : 0);
+
+  // Filter out watched items from home content unless showWatched is on
+  const filterWatched = useCallback((items: ContentItem[]) => {
+    if (filters.showWatched || watchedIds.size === 0) return items;
+    return items.filter((item) => !watchedIds.has(item.id));
+  }, [filters.showWatched, watchedIds]);
 
   const handleItemSelect = (item: ContentItem) => {
     setSelectedItem(item);
@@ -142,6 +156,70 @@ function AppContent() {
     }
   }, []);
 
+  // ── Android back button ──
+  useEffect(() => {
+    const listener = CapApp.addListener("backButton", () => {
+      if (selectedItem) {
+        setSelectedItem(null);
+      } else if (activeTab !== "home") {
+        setActiveTab("home");
+      } else {
+        CapApp.exitApp();
+      }
+    });
+    return () => { listener.then((l) => l.remove()); };
+  }, [selectedItem, activeTab]);
+
+  // ── Pull-to-refresh ──
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const pullStartY = useRef(0);
+  const isPulling = useRef(false);
+  const PULL_THRESHOLD = 80;
+
+  const handlePullStart = useCallback((clientY: number) => {
+    if (scrollRef.current && scrollRef.current.scrollTop <= 0 && !isRefreshing) {
+      pullStartY.current = clientY;
+      isPulling.current = true;
+    }
+  }, [isRefreshing]);
+
+  const handlePullMove = useCallback((clientY: number) => {
+    if (!isPulling.current || isRefreshing) return;
+    if (scrollRef.current && scrollRef.current.scrollTop > 0) {
+      isPulling.current = false;
+      setPullDistance(0);
+      return;
+    }
+    const delta = Math.max(0, clientY - pullStartY.current);
+    // Dampen the pull distance
+    setPullDistance(Math.min(delta * 0.5, 120));
+  }, [isRefreshing]);
+
+  const handlePullEnd = useCallback(async () => {
+    if (!isPulling.current) return;
+    isPulling.current = false;
+    if (pullDistance >= PULL_THRESHOLD) {
+      setIsRefreshing(true);
+      setPullDistance(PULL_THRESHOLD);
+      try {
+        if (activeTab === "home") {
+          await Promise.all([content.reload(), recs.reload()]);
+        }
+      } catch {}
+      setIsRefreshing(false);
+    }
+    setPullDistance(0);
+  }, [pullDistance, activeTab, content.reload, recs.reload]);
+
+  // Featured item from content service (skip watched unless showWatched is on)
+  const featured = useMemo(() => {
+    if (filters.showWatched || !content.featured) return content.featured;
+    if (!watchedIds.has(content.featured.id)) return content.featured;
+    // If the featured item is watched, pick next non-watched from popular
+    return content.popular.find((item) => !watchedIds.has(item.id)) || content.featured;
+  }, [content.featured, content.popular, filters.showWatched, watchedIds]);
+
   // ── Loading state ──
   if (userPrefs.loading) {
     return (
@@ -161,17 +239,34 @@ function AppContent() {
     );
   }
 
-  // Featured item from content service
-  const featured = content.featured;
-
   return (
     <div className="size-full bg-background text-foreground overflow-hidden flex justify-center">
       <div className="w-full max-w-md h-full flex flex-col relative">
+        {/* Pull-to-refresh indicator */}
+        {(pullDistance > 0 || isRefreshing) && !selectedItem && activeTab === "home" && (
+          <div
+            className="absolute top-0 left-0 right-0 z-20 flex items-center justify-center pointer-events-none"
+            style={{ height: pullDistance, transition: isPulling.current ? 'none' : 'height 0.3s ease' }}
+          >
+            <Loader2
+              className={`w-5 h-5 text-primary ${isRefreshing ? 'animate-spin' : ''}`}
+              style={{
+                opacity: Math.min(pullDistance / PULL_THRESHOLD, 1),
+                transform: `rotate(${pullDistance * 3}deg)`,
+              }}
+            />
+          </div>
+        )}
+
         {/* Scrollable content */}
         <div
           ref={scrollRef}
           onScroll={handleScroll}
+          onTouchStart={(e) => handlePullStart(e.touches[0].clientY)}
+          onTouchMove={(e) => handlePullMove(e.touches[0].clientY)}
+          onTouchEnd={handlePullEnd}
           className="flex-1 overflow-y-auto pb-20 no-scrollbar"
+          style={{ transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined, transition: isPulling.current ? 'none' : 'transform 0.3s ease' }}
         >
           {selectedItem ? (
             <DetailPage
@@ -186,6 +281,9 @@ function AppContent() {
               onToggleBookmarkItem={handleToggleBookmark}
               connectedServices={connectedServices}
               userServices={connectedServiceIds}
+              watchedIds={watchedIds}
+              onMoveToWatched={handleMoveToWatched}
+              onMoveToWantToWatch={handleMoveToWantToWatch}
             />
           ) : (
             <AnimatePresence mode="wait">
@@ -209,6 +307,7 @@ function AppContent() {
                       bookmarked={wl.bookmarkedIds.has(featured.id)}
                       onToggleBookmark={() => handleToggleBookmark(featured)}
                       scrollY={scrollY}
+                      watched={watchedIds.has(featured.id)}
                     />
                   ) : content.loading ? (
                     <div className="w-full aspect-[4/3] bg-secondary animate-pulse" />
@@ -231,13 +330,13 @@ function AppContent() {
                   ) : (
                     <>
                       {recs.items.length > 0 && (
-                        <ContentRow title="For You" items={recs.items} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} />
+                        <ContentRow title="For You" items={filterWatched(recs.items)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       )}
-                      <ContentRow title="Popular on Your Services" items={content.popular} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} />
-                      <ContentRow title="Highest Rated" items={content.highestRated} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} />
-                      <ContentRow title="Recently Added" items={content.recentlyAdded} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} />
+                      <ContentRow title="Popular on Your Services" items={filterWatched(content.popular)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                      <ContentRow title="Highest Rated" items={filterWatched(content.highestRated)} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                      <ContentRow title="Recently Added" items={filterWatched(content.recentlyAdded)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       {content.genreRows.map((row) => (
-                        <ContentRow key={row.genreId} title={row.name} items={row.items} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} />
+                        <ContentRow key={row.genreId} title={row.name} items={filterWatched(row.items)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       ))}
                     </>
                   )}
@@ -255,6 +354,7 @@ function AppContent() {
                   onToggleBookmark={handleToggleBookmark}
                   providerIds={connectedServices}
                   userServices={connectedServiceIds}
+                  watchedIds={watchedIds}
                 />
               )}
 
@@ -284,6 +384,10 @@ function AppContent() {
                       ?.map((id) => GENRE_NAMES[id])
                       .filter(Boolean) || [],
                   } : null}
+                  onSignOut={userPrefs.signOut}
+                  onUpdateServices={userPrefs.updateServices}
+                  onUpdateGenres={userPrefs.updateGenres}
+                  onUpdateProfile={userPrefs.updateProfile}
                 />
               )}
               </motion.div>

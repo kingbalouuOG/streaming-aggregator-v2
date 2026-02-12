@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, Bookmark, Star, Loader2 } from "lucide-react";
+import { ArrowLeft, Bookmark, Star, Loader2, Undo2 } from "lucide-react";
+import { TickIcon, EyeIcon } from "./icons";
 import { motion } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
 import { ContentItem } from "./ContentCard";
@@ -28,9 +29,12 @@ interface DetailPageProps {
   onToggleBookmarkItem?: (item: ContentItem) => void;
   connectedServices?: number[];
   userServices?: ServiceId[];
+  watchedIds?: Set<string>;
+  onMoveToWatched?: (id: string) => void;
+  onMoveToWantToWatch?: (id: string) => void;
 }
 
-export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = false, onToggleBookmark, onItemSelect, bookmarkedIds, onToggleBookmarkItem, connectedServices, userServices }: DetailPageProps) {
+export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = false, onToggleBookmark, onItemSelect, bookmarkedIds, onToggleBookmarkItem, connectedServices, userServices, watchedIds, onMoveToWatched, onMoveToWantToWatch }: DetailPageProps) {
   const { detail, similar, loading, error } = useContentDetail(itemId, connectedServices);
 
   // Loading state
@@ -97,20 +101,28 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
           <ArrowLeft className="w-5 h-5" />
         </button>
 
-        <motion.button
-          onClick={() => onToggleBookmark?.()}
-          whileTap={{ scale: 0.8 }}
-          animate={bookmarked ? { scale: [1, 1.25, 0.9, 1] } : undefined}
-          transition={{ duration: 0.35 }}
-          className={`absolute right-4 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 ${
-            bookmarked
-              ? "bg-primary text-white"
-              : "bg-black/40 backdrop-blur-sm text-white/90 hover:bg-black/60"
-          }`}
-          style={{ top: "max(1rem, env(safe-area-inset-top, 1rem))" }}
-        >
-          <Bookmark className={`w-5 h-5 ${bookmarked ? "fill-current" : ""}`} />
-        </motion.button>
+        {/* Bookmark button - top right */}
+        <div className="absolute right-4" style={{ top: "max(1rem, env(safe-area-inset-top, 1rem))" }}>
+          {watchedIds?.has(itemId) ? (
+            <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center">
+              <TickIcon className="w-5 h-5 text-white" />
+            </div>
+          ) : (
+            <motion.button
+              onClick={() => onToggleBookmark?.()}
+              whileTap={{ scale: 0.8 }}
+              animate={bookmarked ? { scale: [1, 1.25, 0.9, 1] } : undefined}
+              transition={{ duration: 0.35 }}
+              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 ${
+                bookmarked
+                  ? "bg-primary text-white"
+                  : "bg-black/40 backdrop-blur-sm text-white/90 hover:bg-black/60"
+              }`}
+            >
+              <Bookmark className={`w-5 h-5 ${bookmarked ? "fill-current" : ""}`} />
+            </motion.button>
+          )}
+        </div>
       </div>
 
       {/* Content */}
@@ -154,6 +166,35 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             </span>
           ))}
         </div>
+
+        {/* Mark as Watched / Watched state */}
+        {bookmarked && !watchedIds?.has(itemId) && onMoveToWatched && (
+          <motion.button
+            onClick={() => onMoveToWatched(itemId)}
+            whileTap={{ scale: 0.97 }}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 text-white mb-4 shadow-lg shadow-emerald-600/25"
+          >
+            <EyeIcon className="w-5 h-5" />
+            <span className="text-[14px]" style={{ fontWeight: 600 }}>Mark as Watched</span>
+          </motion.button>
+        )}
+        {watchedIds?.has(itemId) && (
+          <div className="w-full flex items-center justify-between py-3 px-4 rounded-xl bg-emerald-950 border border-emerald-700 mb-4">
+            <div className="flex items-center gap-2 text-emerald-500">
+              <EyeIcon className="w-5 h-5" />
+              <span className="text-[14px]" style={{ fontWeight: 600 }}>You've watched this</span>
+            </div>
+            {onMoveToWantToWatch && (
+              <button
+                onClick={() => onMoveToWantToWatch(itemId)}
+                className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+                <span className="text-[12px]" style={{ fontWeight: 600 }}>Undo</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Description */}
         <p className="text-foreground/80 text-[14px] leading-relaxed mb-6">
@@ -250,6 +291,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
                   bookmarked={bookmarkedIds?.has(rec.id)}
                   onToggleBookmark={onToggleBookmarkItem}
                   userServices={userServices}
+                  watched={watchedIds?.has(rec.id)}
                 />
               ))}
             </div>
@@ -261,13 +303,14 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
 }
 
 // ── Similar Card with service lazy-loading ──────────────
-function SimilarCard({ item, index, onSelect, bookmarked, onToggleBookmark, userServices }: {
+function SimilarCard({ item, index, onSelect, bookmarked, onToggleBookmark, userServices, watched }: {
   item: ContentItem;
   index: number;
   onSelect?: (item: ContentItem) => void;
   bookmarked?: boolean;
   onToggleBookmark?: (item: ContentItem) => void;
   userServices?: ServiceId[];
+  watched?: boolean;
 }) {
   const [allServices, setAllServices] = useState<ServiceId[]>(item.services);
 
@@ -297,21 +340,27 @@ function SimilarCard({ item, index, onSelect, bookmarked, onToggleBookmark, user
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/10" />
 
       {item.matchPercentage != null && item.matchPercentage > 0 && (
-        <div className="absolute top-2.5 left-2.5 bg-green-600 text-white text-[12px] px-3 py-1 rounded-full shadow-lg" style={{ fontWeight: 700 }}>
+        <div className="absolute top-2.5 left-2.5 bg-emerald-600 text-white text-[12px] px-3 py-1 rounded-full shadow-lg" style={{ fontWeight: 700 }}>
           {item.matchPercentage}% Match
         </div>
       )}
 
-      <button
-        onClick={(e) => { e.stopPropagation(); onToggleBookmark?.(item); }}
-        className={`absolute top-2.5 right-2.5 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 ${
-          bookmarked
-            ? "bg-primary text-white"
-            : "bg-black/40 backdrop-blur-sm text-white/70 hover:text-white"
-        }`}
-      >
-        <Bookmark className={`w-3.5 h-3.5 ${bookmarked ? "fill-current" : ""}`} />
-      </button>
+      {watched ? (
+        <div className="absolute top-2.5 right-2.5 w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center">
+          <TickIcon className="w-3.5 h-3.5 text-white" />
+        </div>
+      ) : (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleBookmark?.(item); }}
+          className={`absolute top-2.5 right-2.5 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 ${
+            bookmarked
+              ? "bg-primary text-white"
+              : "bg-black/40 backdrop-blur-sm text-white/70 hover:text-white"
+          }`}
+        >
+          <Bookmark className={`w-3.5 h-3.5 ${bookmarked ? "fill-current" : ""}`} />
+        </button>
+      )}
 
       <div className="absolute bottom-0 left-0 right-0 p-3">
         <div className="flex items-center gap-1 mb-1">

@@ -66,6 +66,9 @@ export const PROVIDER_ID_VARIANTS: Record<number, number> = {
   41: 54,    // ITV Hub -> ITVX
   2087: 54,  // ITVX Free -> ITVX
   591: 39,   // NOW -> Now TV
+  10: 9,     // Amazon Video (rent/buy) -> Amazon Prime Video
+  2: 350,    // Apple iTunes (rent/buy) -> Apple TV+
+  130: 39,   // Sky Store (rent/buy) -> Now TV / Sky
 };
 
 export const mapProviderIdToCanonical = (providerId: number): number => {

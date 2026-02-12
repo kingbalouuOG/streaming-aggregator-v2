@@ -113,12 +113,21 @@ const fetchServicesFromAPI = async (
   try {
     const response = await getContentWatchProviders(Number(itemId), mediaType, 'GB');
 
-    if (response.success && response.data?.flatrate) {
-      const services = response.data.flatrate
-        .map((p: any) => providerIdToServiceId(p.provider_id))
-        .filter((id: ServiceId | null): id is ServiceId =>
-          id !== null && VALID_SERVICES.has(id),
-        );
+    if (response.success && response.data) {
+      const allProviders: any[] = [
+        ...(response.data.flatrate || []),
+        ...(response.data.rent || []),
+        ...(response.data.buy || []),
+      ];
+      const seen = new Set<ServiceId>();
+      const services: ServiceId[] = [];
+      for (const p of allProviders) {
+        const id = providerIdToServiceId(p.provider_id);
+        if (id !== null && VALID_SERVICES.has(id) && !seen.has(id)) {
+          seen.add(id);
+          services.push(id);
+        }
+      }
       return services;
     }
 

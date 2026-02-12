@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Pencil,
@@ -33,9 +33,13 @@ interface ProfilePageProps {
   watchlistCount: number;
   watchedCount: number;
   userProfile?: OnboardingData | null;
+  onSignOut?: () => void;
+  onUpdateServices?: (services: string[]) => Promise<void>;
+  onUpdateGenres?: (genres: string[]) => Promise<void>;
+  onUpdateProfile?: (name: string, email: string) => Promise<void>;
 }
 
-export function ProfilePage({ watchlistCount, watchedCount, userProfile }: ProfilePageProps) {
+export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignOut, onUpdateServices, onUpdateGenres, onUpdateProfile }: ProfilePageProps) {
   // ── Profile state ─��───────────────────────────────
   const [name, setName] = useState(userProfile?.name || "Joe");
   const [email, setEmail] = useState(userProfile?.email || "joegreenwas@gmail.com");
@@ -58,17 +62,22 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile }: Profi
   // ── Theme state ─────────────────────────────────
   const { theme, setTheme } = useTheme();
 
-  // ── Dirty check ─────────────────────────────────
-  const hasUnsavedChanges =
-    name !== editName ||
-    email !== editEmail ||
-    isEditingDetails;
+  // ── Track initial state for dirty detection ─────────────────
+  const initialServices = useRef(connectedServices.slice().sort().join(','));
+  const initialGenres = useRef(selectedGenres.slice().sort().join(','));
+
+  // ── Dirty check (includes services + genres) ─────────────────
+  const servicesChanged = connectedServices.slice().sort().join(',') !== initialServices.current;
+  const genresChanged = selectedGenres.slice().sort().join(',') !== initialGenres.current;
+  const detailsChanged = name !== editName || email !== editEmail || isEditingDetails;
+  const hasUnsavedChanges = detailsChanged || servicesChanged || genresChanged;
 
   // ── Handlers ─────────────────────────────────
-  const handleSaveDetails = () => {
+  const handleSaveDetails = async () => {
     setName(editName);
     setEmail(editEmail);
     setIsEditingDetails(false);
+    await onUpdateProfile?.(editName, editEmail);
     toast.success("Profile updated", { icon: "👤", description: "Your details have been saved." });
   };
 
@@ -90,12 +99,28 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile }: Profi
     );
   };
 
-  const handleSaveChanges = () => {
-    toast.success("Settings saved", { icon: "✅", description: "Your preferences have been updated." });
+  const handleSaveChanges = async () => {
+    try {
+      if (detailsChanged && !isEditingDetails) {
+        await onUpdateProfile?.(name, email);
+      }
+      if (servicesChanged) {
+        await onUpdateServices?.(connectedServices);
+      }
+      if (genresChanged) {
+        await onUpdateGenres?.(selectedGenres);
+      }
+      // Reset initial refs to current values after save
+      initialServices.current = connectedServices.slice().sort().join(',');
+      initialGenres.current = selectedGenres.slice().sort().join(',');
+      toast.success("Settings saved", { icon: "✅", description: "Your preferences have been updated." });
+    } catch {
+      toast.error("Failed to save", { description: "Please try again." });
+    }
   };
 
   const handleSignOut = () => {
-    toast("Signed out", { icon: "👋", description: "You have been signed out." });
+    onSignOut?.();
   };
 
   const initials = name
@@ -406,10 +431,15 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile }: Profi
       {/* ── Save Changes ────────────────────────────── */}
       <button
         onClick={handleSaveChanges}
-        className="w-full py-3 rounded-xl bg-secondary/60 text-muted-foreground text-[13px] mb-3 transition-colors hover:bg-secondary/80 border"
-        style={{ fontWeight: 600, borderColor: "var(--border-subtle-2)" }}
+        disabled={!hasUnsavedChanges}
+        className={`w-full py-3 rounded-xl text-[13px] mb-3 transition-colors border ${
+          hasUnsavedChanges
+            ? "bg-primary text-white border-primary/40 hover:bg-primary/90"
+            : "bg-secondary/60 text-muted-foreground border-transparent hover:bg-secondary/80"
+        }`}
+        style={{ fontWeight: 600, borderColor: hasUnsavedChanges ? undefined : "var(--border-subtle-2)" }}
       >
-        Save Changes
+        {hasUnsavedChanges ? "Save Changes" : "No Changes"}
       </button>
 
       {/* ── Sign Out ────────────────────────────── */}

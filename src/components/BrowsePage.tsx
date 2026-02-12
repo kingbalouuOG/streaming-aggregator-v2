@@ -21,9 +21,10 @@ interface BrowsePageProps {
   onToggleBookmark?: (item: ContentItem) => void;
   providerIds?: number[];
   userServices?: ServiceId[];
+  watchedIds?: Set<string>;
 }
 
-export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters, onShowFiltersChange, bookmarkedIds, onToggleBookmark, providerIds = [], userServices }: BrowsePageProps) {
+export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters, onShowFiltersChange, bookmarkedIds, onToggleBookmark, providerIds = [], userServices, watchedIds }: BrowsePageProps) {
   const [activeCategory, setActiveCategory] = useState("All");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -178,7 +179,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
         ) : displayItems.length > 0 ? (
           <div className="grid grid-cols-2 gap-3">
             {displayItems.map((item, index) => (
-              <BrowseCard key={item.id} item={item} index={index} onSelect={onItemSelect} bookmarked={bookmarkedIds?.has(item.id)} onToggleBookmark={onToggleBookmark} userServices={userServices} />
+              <BrowseCard key={item.id} item={item} index={index} onSelect={onItemSelect} bookmarked={bookmarkedIds?.has(item.id)} onToggleBookmark={onToggleBookmark} userServices={userServices} watched={watchedIds?.has(item.id)} />
             ))}
           </div>
         ) : (
