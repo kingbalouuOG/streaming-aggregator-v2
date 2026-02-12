@@ -76,6 +76,9 @@ export function watchlistItemToContentItem(item: any): ContentItem {
     rating: item.metadata?.voteAverage ?? undefined,
     year: item.metadata?.releaseDate ? parseInt(item.metadata.releaseDate.substring(0, 4), 10) : undefined,
     type: item.type === 'tv' ? 'tv' : (item.metadata?.genreIds?.includes(99) ? 'doc' : 'movie'),
+    addedAt: item.addedAt ?? undefined,
+    runtime: item.metadata?.runtime ?? undefined,
+    genre: item.metadata?.genreIds?.[0] ? GENRE_NAMES[item.metadata.genreIds[0]] : undefined,
   };
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Bookmark, LayoutGrid, List, Plus, ChevronRight, Trash2, CheckCircle2 } from "lucide-react";
+import { Bookmark, LayoutGrid, List, Plus, ChevronRight, Trash2, CheckCircle2, ThumbsUp, ThumbsDown, ArrowUpDown, Clock, Star, Timer } from "lucide-react";
 import { TickIcon } from "./icons";
 import { motion, AnimatePresence } from "motion/react";
 import { ContentItem } from "./ContentCard";
@@ -11,6 +11,46 @@ import type { ServiceId } from "./platformLogos";
 
 type WatchlistTab = "want" | "watched";
 type ViewMode = "grid" | "list";
+type Category = "all" | "tv" | "movie" | "doc";
+type SortOption = "added" | "rating" | "shortest";
+
+const SORT_OPTIONS: { value: SortOption; label: string; icon: typeof Clock }[] = [
+  { value: "added", label: "Recently Added", icon: Clock },
+  { value: "rating", label: "Highest Rated", icon: Star },
+  { value: "shortest", label: "Shortest", icon: Timer },
+];
+
+function filterByCategory(items: ContentItem[], category: Category): ContentItem[] {
+  if (category === "all") return items;
+  return items.filter((i) => i.type === category);
+}
+
+function sortItems(items: ContentItem[], sort: SortOption): ContentItem[] {
+  const sorted = [...items];
+  switch (sort) {
+    case "added":
+      return sorted.sort((a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0));
+    case "rating":
+      return sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+    case "shortest":
+      return sorted.sort((a, b) => {
+        const aR = a.runtime ?? Infinity;
+        const bR = b.runtime ?? Infinity;
+        return aR - bR;
+      });
+    default:
+      return sorted;
+  }
+}
+
+function getCategoryCounts(items: ContentItem[]): Record<Category, number> {
+  return {
+    all: items.length,
+    tv: items.filter((i) => i.type === "tv").length,
+    movie: items.filter((i) => i.type === "movie").length,
+    doc: items.filter((i) => i.type === "doc").length,
+  };
+}
 
 interface WatchlistPageProps {
   watchlist: ContentItem[];
@@ -20,6 +60,8 @@ interface WatchlistPageProps {
   onMoveToWantToWatch: (id: string) => void;
   onItemSelect: (item: ContentItem) => void;
   onNavigateToBrowse: () => void;
+  ratings?: Record<string, 'up' | 'down'>;
+  onRate?: (id: string, rating: 'up' | 'down' | null) => void;
 }
 
 export function WatchlistPage({
@@ -30,11 +72,24 @@ export function WatchlistPage({
   onMoveToWantToWatch,
   onItemSelect,
   onNavigateToBrowse,
+  ratings,
+  onRate,
 }: WatchlistPageProps) {
   const [activeTab, setActiveTab] = useState<WatchlistTab>("want");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [activeCategory, setActiveCategory] = useState<Category>("all");
+  const [activeSort, setActiveSort] = useState<SortOption>("added");
+  const [showSortMenu, setShowSortMenu] = useState(false);
 
-  const items = activeTab === "want" ? watchlist : watched;
+  // Reset category when switching tabs
+  const handleTabChange = (tab: WatchlistTab) => {
+    setActiveTab(tab);
+    setActiveCategory("all");
+  };
+
+  const tabItems = activeTab === "want" ? watchlist : watched;
+  const categoryCounts = getCategoryCounts(tabItems);
+  const items = sortItems(filterByCategory(tabItems, activeCategory), activeSort);
   const totalItems = watchlist.length + watched.length;
 
   return (
@@ -45,7 +100,7 @@ export function WatchlistPage({
         <div className="px-5 mb-4">
         <div className="flex bg-secondary rounded-2xl p-1">
           <button
-            onClick={() => setActiveTab("want")}
+            onClick={() => handleTabChange("want")}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] transition-all duration-250 ${
               activeTab === "want"
                 ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
@@ -59,7 +114,7 @@ export function WatchlistPage({
             Want to Watch ({watchlist.length})
           </button>
           <button
-            onClick={() => setActiveTab("watched")}
+            onClick={() => handleTabChange("watched")}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] transition-all duration-250 ${
               activeTab === "watched"
                 ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
@@ -76,33 +131,114 @@ export function WatchlistPage({
       </div>
       </div>
 
-      {/* Count + view toggle */}
-      {items.length > 0 && (
+      {/* Category filter pills */}
+      {tabItems.length > 0 && (
+        <div className="flex gap-1.5 overflow-x-auto px-5 mb-3 no-scrollbar">
+          {(["all", "tv", "movie", "doc"] as Category[]).map((cat) => {
+            const count = categoryCounts[cat];
+            if (cat !== "all" && count === 0) return null;
+            const label = cat === "all" ? "All" : cat === "tv" ? "TV Shows" : cat === "movie" ? "Movies" : "Docs";
+            const isActive = activeCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`shrink-0 px-3 py-1.5 rounded-lg text-[12px] border transition-all duration-200 ${
+                  isActive
+                    ? "bg-primary/15 text-primary border-primary/30"
+                    : "bg-secondary/50 text-muted-foreground border-transparent"
+                }`}
+                style={{ fontWeight: isActive ? 600 : 500 }}
+              >
+                {label} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Count + sort + view toggle */}
+      {tabItems.length > 0 && (
         <div className="flex items-center justify-between px-5 mb-3">
           <span className="text-muted-foreground text-[13px]">
             {items.length} title{items.length !== 1 ? "s" : ""}
           </span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                viewMode === "grid"
-                  ? "bg-secondary text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                viewMode === "list"
-                  ? "bg-secondary text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <List className="w-4 h-4" />
-            </button>
+          <div className="flex items-center gap-2">
+            {/* Sort dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSortMenu(!showSortMenu)}
+                className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowUpDown className="w-3 h-3" />
+                <span className="text-[12px]" style={{ fontWeight: 500 }}>
+                  {SORT_OPTIONS.find((o) => o.value === activeSort)?.label}
+                </span>
+              </button>
+              <AnimatePresence>
+                {showSortMenu && (
+                  <>
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="fixed inset-0 z-30 bg-black/10"
+                      onClick={() => setShowSortMenu(false)}
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-1 min-w-[180px] rounded-xl bg-card border shadow-lg z-40 overflow-hidden"
+                    >
+                      {SORT_OPTIONS.map((opt) => {
+                        const Icon = opt.icon;
+                        const isActive = activeSort === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            onClick={() => { setActiveSort(opt.value); setShowSortMenu(false); }}
+                            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] transition-colors ${
+                              isActive
+                                ? "text-primary bg-primary/8"
+                                : "text-foreground hover:bg-secondary/50"
+                            }`}
+                            style={{ fontWeight: isActive ? 600 : 500 }}
+                          >
+                            <Icon className="w-3.5 h-3.5" />
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+            {/* View mode toggle */}
+            <div className="flex items-center gap-1 ml-1">
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                  viewMode === "grid"
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                  viewMode === "list"
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -155,6 +291,8 @@ export function WatchlistPage({
                     onRemove={() => onRemoveBookmark(item.id)}
                     onMoveToWatched={() => onMoveToWatched(item.id)}
                     onMoveToWantToWatch={() => onMoveToWantToWatch(item.id)}
+                    rating={ratings?.[item.id]}
+                    onRate={onRate ? (r) => onRate(item.id, r) : undefined}
                   />
                 ))}
               </AnimatePresence>
@@ -185,11 +323,27 @@ export function WatchlistPage({
                     onRemove={() => onRemoveBookmark(item.id)}
                     onMoveToWatched={() => onMoveToWatched(item.id)}
                     onMoveToWantToWatch={() => onMoveToWantToWatch(item.id)}
+                    rating={ratings?.[item.id]}
+                    onRate={onRate ? (r) => onRate(item.id, r) : undefined}
                   />
                 ))}
               </AnimatePresence>
             </div>
           )
+        ) : tabItems.length > 0 ? (
+          /* Category filter yielded no results */
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <p className="text-muted-foreground text-[14px]" style={{ fontWeight: 500 }}>
+              No {activeCategory === "tv" ? "TV shows" : activeCategory === "movie" ? "movies" : "docs"} in this list
+            </p>
+            <button
+              onClick={() => setActiveCategory("all")}
+              className="text-primary text-[13px] mt-2"
+              style={{ fontWeight: 500 }}
+            >
+              Show all
+            </button>
+          </div>
         ) : (
           <EmptyState tab={activeTab} onBrowse={onNavigateToBrowse} />
         )}
@@ -206,6 +360,8 @@ interface CardProps {
   onRemove: () => void;
   onMoveToWatched: () => void;
   onMoveToWantToWatch: () => void;
+  rating?: 'up' | 'down';
+  onRate?: (rating: 'up' | 'down' | null) => void;
 }
 
 function GridCard({
@@ -215,6 +371,8 @@ function GridCard({
   onRemove,
   onMoveToWatched,
   onMoveToWantToWatch,
+  rating,
+  onRate,
 }: CardProps) {
   const [showActions, setShowActions] = useState(false);
   const [services, setServices] = useState<ServiceId[]>(item.services);
@@ -274,14 +432,44 @@ function GridCard({
         </button>
       )}
 
-      {/* Title at bottom */}
+      {/* Title + rating at bottom */}
       <div className="absolute bottom-0 left-0 right-0 p-3">
-        <h3
-          className="text-white text-[14px] leading-tight"
-          style={{ fontWeight: 600 }}
-        >
-          {item.title}
-        </h3>
+        <div className="flex items-end justify-between gap-2">
+          <h3
+            className="text-white text-[14px] leading-tight flex-1 min-w-0"
+            style={{ fontWeight: 600 }}
+          >
+            {item.title}
+          </h3>
+          {tab === "watched" && onRate && (
+            <div className="flex items-center gap-1 shrink-0">
+              <motion.button
+                onClick={(e) => { e.stopPropagation(); onRate(rating === 'up' ? null : 'up'); }}
+                whileTap={{ scale: 0.8 }}
+                animate={rating === 'up' ? { scale: [1, 1.2, 1] } : undefined}
+                className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
+                  rating === 'up'
+                    ? "bg-emerald-500 text-white"
+                    : "bg-black/50 backdrop-blur-sm text-white/60"
+                }`}
+              >
+                <ThumbsUp className={`w-3 h-3 ${rating === 'up' ? 'fill-current' : ''}`} />
+              </motion.button>
+              <motion.button
+                onClick={(e) => { e.stopPropagation(); onRate(rating === 'down' ? null : 'down'); }}
+                whileTap={{ scale: 0.8 }}
+                animate={rating === 'down' ? { scale: [1, 1.2, 1] } : undefined}
+                className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
+                  rating === 'down'
+                    ? "bg-red-500 text-white"
+                    : "bg-black/50 backdrop-blur-sm text-white/60"
+                }`}
+              >
+                <ThumbsDown className={`w-3 h-3 ${rating === 'down' ? 'fill-current' : ''}`} />
+              </motion.button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Quick action overlay (on long-press / right-click) */}
@@ -353,6 +541,8 @@ function SwipeableListCard({
   onRemove,
   onMoveToWatched,
   onMoveToWantToWatch,
+  rating,
+  onRate,
 }: CardProps) {
   const [offsetX, setOffsetX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
@@ -602,6 +792,29 @@ function SwipeableListCard({
                 <span className="text-muted-foreground text-[11px]">
                   {item.rating}
                 </span>
+              </>
+            )}
+            {tab === "watched" && onRate && (
+              <>
+                <span className="text-muted-foreground text-[11px] mx-0.5">·</span>
+                <motion.button
+                  onClick={(e) => { e.stopPropagation(); onRate(rating === 'up' ? null : 'up'); }}
+                  whileTap={{ scale: 0.8 }}
+                  className={`w-5 h-5 rounded-full flex items-center justify-center transition-all duration-200 ${
+                    rating === 'up' ? "text-emerald-400" : "text-muted-foreground/40"
+                  }`}
+                >
+                  <ThumbsUp className={`w-3 h-3 ${rating === 'up' ? 'fill-current' : ''}`} />
+                </motion.button>
+                <motion.button
+                  onClick={(e) => { e.stopPropagation(); onRate(rating === 'down' ? null : 'down'); }}
+                  whileTap={{ scale: 0.8 }}
+                  className={`w-5 h-5 rounded-full flex items-center justify-center transition-all duration-200 ${
+                    rating === 'down' ? "text-red-400" : "text-muted-foreground/40"
+                  }`}
+                >
+                  <ThumbsDown className={`w-3 h-3 ${rating === 'down' ? 'fill-current' : ''}`} />
+                </motion.button>
               </>
             )}
           </div>

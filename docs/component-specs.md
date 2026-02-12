@@ -1,27 +1,25 @@
-# StreamFinder Component Specifications
+# Videx Component Specifications
 
-Design specifications for recreating components in Figma/Pencil.
+> **Note:** This document was originally created as a pre-migration Figma/Pencil design reference. Color values and component names have been updated to reflect the current implementation. For the live design system, see `src/styles/globals.css`.
 
 ## Design Foundation
 
 ### Typography
-- **Font Family:** Satoshi (Light 300, Regular 400, Medium 500)
+- **Font Family:** DM Sans (via Google Fonts CDN) — weights 400, 500, 600, 700
 - **Base Unit:** 4px grid system
+- **Font sizes:** Set via `text-[Xpx]` Tailwind classes with inline `style={{ fontWeight }}` for precise control
 
 ### Color Palette (Dark Theme)
-| Token | Value | Usage |
-|-------|-------|-------|
-| Background Primary | #000000 | Screen background (OLED optimized) |
-| Background Secondary | #121212 | Elevated surfaces, modals |
-| Background Tertiary | #1E1E1E | Cards, containers |
-| Text Primary | #FFFFFF | Headings, important text |
-| Text Secondary | #B3B3B3 | Body text |
-| Text Tertiary | #666666 | Hints, placeholders |
-| Accent Primary | #FF6B35 | Buttons, highlights (Coral) |
-| Accent Light | #FF8C42 | Hover states |
-| Success | #30D158 | Confirmations |
-| Warning | #FFD60A | Alerts |
-| Error | #FF453A | Errors, destructive |
+| Token | CSS Variable | Value | Usage |
+|-------|-------------|-------|-------|
+| Background | --background | #0a0a0f | Screen background |
+| Secondary | --secondary | #1e1e2a | Elevated surfaces, cards |
+| Card | --card | #12121a | Card backgrounds |
+| Foreground | --foreground | #f0f0f5 | Primary text |
+| Muted Foreground | --muted-foreground | #8585a0 | Secondary text |
+| Primary | --primary | coral | Accent, buttons, highlights |
+| Border | --border | #2a2a3a | Borders |
+| Border Subtle | --border-subtle | #1e1e2e | Subtle dividers |
 
 ---
 
@@ -348,9 +346,10 @@ Pulse: 1s infinite opacity
 
 ## Export Notes for Pencil/Figma
 
-1. **Fonts**: Install Satoshi font family before importing
-2. **Colors**: Use design tokens JSON for color variables
+1. **Fonts**: DM Sans via Google Fonts CDN (400, 500, 600, 700)
+2. **Colors**: Use CSS variables defined in `src/styles/globals.css`
 3. **Components**: Build as Figma components with variants
 4. **Auto Layout**: Use for all containers (matches Flexbox)
 5. **Constraints**: Set for responsive behavior
 6. **Interactions**: Add press states in prototype mode
+7. **Icons**: Lucide React icon set + custom SVGs in `icons.tsx`

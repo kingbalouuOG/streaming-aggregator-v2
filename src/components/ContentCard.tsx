@@ -17,6 +17,9 @@ export interface ContentItem {
   year?: number;
   type?: "movie" | "tv" | "doc";
   matchPercentage?: number;
+  runtime?: number;
+  addedAt?: number;
+  genre?: string;
 }
 
 interface ContentCardProps {

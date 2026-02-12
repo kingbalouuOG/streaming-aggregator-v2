@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { OnboardingData } from "./OnboardingFlow";
 import { useTheme, ThemeMode } from "./ThemeContext";
 import { PLATFORMS, getPlatform } from "./platformLogos";
+import { SpendDashboard } from "./SpendDashboard";
 
 // ── Service definitions ─────────────────────────────────────────────────────
 const allServices = PLATFORMS;
@@ -334,6 +335,9 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Monthly Spend Dashboard ────────────────────────────── */}
+      <SpendDashboard connectedServices={connectedServices} />
 
       {/* ── Homepage Genres ────────────────────────────── */}
       <SectionHeader

@@ -1,8 +1,10 @@
 import storage from '../storage';
+import { invalidateRecommendationCache } from './recommendations';
 
 const DEBUG = __DEV__;
 
 const WATCHLIST_KEY = '@app_watchlist';
+const HIDDEN_GEMS_CACHE_KEY = '@app_hidden_gems';
 
 export interface WatchlistItemMetadata {
   title: string;
@@ -89,6 +91,8 @@ export const addToWatchlist = async (id: number, type: 'movie' | 'tv', metadata:
 
   watchlist.items.unshift(newItem);
   await saveWatchlist(watchlist);
+  invalidateRecommendationCache().catch(() => {});
+  storage.removeItem(HIDDEN_GEMS_CACHE_KEY).catch(() => {});
   if (DEBUG) console.log('[Watchlist] Added:', newItem.metadata.title);
   return newItem;
 };
@@ -112,6 +116,8 @@ export const updateWatchlistItem = async (id: number, type: string, updates: Par
 
   watchlist.items[index] = updatedItem;
   await saveWatchlist(watchlist);
+  invalidateRecommendationCache().catch(() => {});
+  storage.removeItem(HIDDEN_GEMS_CACHE_KEY).catch(() => {});
   return updatedItem;
 };
 
@@ -121,6 +127,8 @@ export const removeFromWatchlist = async (id: number, type: string): Promise<boo
   watchlist.items = watchlist.items.filter((item) => !(item.id === id && item.type === type));
   if (watchlist.items.length === initialLength) return false;
   await saveWatchlist(watchlist);
+  invalidateRecommendationCache().catch(() => {});
+  storage.removeItem(HIDDEN_GEMS_CACHE_KEY).catch(() => {});
   return true;
 };
 

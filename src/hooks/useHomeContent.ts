@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRecommendations } from './useRecommendations';
+import { useHiddenGems } from './useHiddenGems';
 import { useSectionData } from './useSectionData';
 import { clearSectionCache } from '@/lib/sectionSessionCache';
 import { getHomeGenres } from '@/lib/storage/userPreferences';
@@ -118,6 +119,9 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
   // --- Recommendations ("For You") ---
   const recs = useRecommendations(providerIds);
 
+  // --- Hidden Gems ---
+  const hiddenGems = useHiddenGems(providerIds);
+
   // --- Load genre list + affinities ---
   useEffect(() => {
     let cancelled = false;
@@ -153,9 +157,9 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     clearSectionCache();
     excludeIdsRef.current.clear();
     setReloadCounter((c) => c + 1);
-    // Also reload recommendations
-    await recs.reload();
-  }, [recs.reload]);
+    // Also reload recommendations and hidden gems
+    await Promise.all([recs.reload(), hiddenGems.reload()]);
+  }, [recs.reload, hiddenGems.reload]);
 
   return {
     featured,
@@ -163,6 +167,7 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     highestRated,
     recentlyAdded,
     forYou: recs,
+    hiddenGems,
     genreList,
     genreAffinities,
     baseParams,

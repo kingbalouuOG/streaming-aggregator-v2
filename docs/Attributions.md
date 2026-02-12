@@ -1,3 +1,7 @@
-This Figma Make file includes components from [shadcn/ui](https://ui.shadcn.com/) used under [MIT license](https://github.com/shadcn-ui/ui/blob/main/LICENSE.md).
+# Attributions
 
-This Figma Make file includes photos from [Unsplash](https://unsplash.com) used under [license](https://unsplash.com/license).
+- Content metadata provided by [TMDb](https://www.themoviedb.org/) — "This product uses the TMDB API but is not endorsed or certified by TMDB."
+- Additional ratings from [OMDB API](http://www.omdbapi.com/)
+- Streaming availability data from [WatchMode](https://api.watchmode.com/)
+- Icons from [Lucide](https://lucide.dev/) used under [ISC License](https://github.com/lucide-icons/lucide/blob/main/LICENSE)
+- Photos from [Unsplash](https://unsplash.com) used under [Unsplash License](https://unsplash.com/license)

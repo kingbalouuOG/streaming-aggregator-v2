@@ -13,13 +13,15 @@ import { FilterSheet, FilterState, defaultFilters } from "./components/FilterShe
 import { WatchlistPage } from "./components/WatchlistPage";
 import { ProfilePage } from "./components/ProfilePage";
 import { OnboardingFlow, OnboardingData } from "./components/OnboardingFlow";
+import { CalendarPage } from "./components/CalendarPage";
+import { ComingSoonCard } from "./components/ComingSoonCard";
 import { ThemeProvider, useTheme } from "./components/ThemeContext";
 import { useUserPreferences } from "./hooks/useUserPreferences";
 import { useWatchlist } from "./hooks/useWatchlist";
 import { useHomeContent } from "./hooks/useHomeContent";
+import { useUpcoming } from "./hooks/useUpcoming";
 import { LazyGenreSection } from "./components/LazyGenreSection";
-import { providerIdsToServiceIds } from "./lib/adapters/platformAdapter";
-import { serviceIdsToProviderIds, providerIdToServiceId } from "./lib/adapters/platformAdapter";
+import { providerIdsToServiceIds, serviceIdsToProviderIds, providerIdToServiceId } from "./lib/adapters/platformAdapter";
 import { GENRE_NAMES } from "./lib/constants/genres";
 import type { ServiceId } from "./components/platformLogos";
 import { App as CapApp } from "@capacitor/app";
@@ -40,6 +42,7 @@ function AppContent() {
   const [activeTab, setActiveTab] = useState("home");
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
 
   // --- User preferences (onboarding, profile) ---
@@ -81,6 +84,9 @@ function AppContent() {
   // --- Home content (lazy-loaded sections) ---
   const home = useHomeContent(connectedServices, homeFilters);
 
+  // --- Upcoming content (Coming Soon) ---
+  const upcoming = useUpcoming(connectedServices);
+
   const activeFilterCount =
     filters.services.length +
     (filters.contentType !== "All" ? 1 : 0) +
@@ -105,35 +111,73 @@ function AppContent() {
 
   const handleTabChange = (tab: string) => {
     setSelectedItem(null);
+    setShowCalendar(false);
     setActiveTab(tab);
   };
 
   const handleToggleBookmark = useCallback(async (item: ContentItem) => {
-    const added = await wl.toggleBookmark(item);
-    if (added) {
-      toast.success("Added to Watchlist", { description: item.title, icon: "\u{1F516}" });
-    } else {
-      toast("Removed from Watchlist", { description: item.title, icon: "\u{1F516}" });
+    try {
+      const added = await wl.toggleBookmark(item);
+      if (added) {
+        toast.success("Added to Watchlist", { description: item.title, icon: "\u{1F516}" });
+      } else {
+        toast("Removed from Watchlist", { description: item.title, icon: "\u{1F516}" });
+      }
+    } catch (err) {
+      console.error('[handleToggleBookmark]', err);
+      toast.error("Something went wrong");
     }
   }, [wl.toggleBookmark]);
 
   const handleRemoveBookmark = useCallback(async (id: string) => {
-    const item = [...wl.watchlist, ...wl.watched].find((i) => i.id === id);
-    await wl.removeBookmark(id);
-    toast("Removed from Watchlist", { description: item?.title || "Title removed", icon: "\u{1F5D1}\u{FE0F}" });
+    try {
+      const item = [...wl.watchlist, ...wl.watched].find((i) => i.id === id);
+      await wl.removeBookmark(id);
+      toast("Removed from Watchlist", { description: item?.title || "Title removed", icon: "\u{1F5D1}\u{FE0F}" });
+    } catch (err) {
+      console.error('[handleRemoveBookmark]', err);
+      toast.error("Something went wrong");
+    }
   }, [wl.removeBookmark, wl.watchlist, wl.watched]);
 
   const handleMoveToWatched = useCallback(async (id: string) => {
-    const item = wl.watchlist.find((i) => i.id === id);
-    await wl.moveToWatched(id);
-    toast.success("Marked as Watched", { description: item?.title, icon: "\u{2705}" });
+    try {
+      const item = wl.watchlist.find((i) => i.id === id);
+      await wl.moveToWatched(id);
+      toast.success("Marked as Watched", { description: item?.title, icon: "\u{2705}" });
+    } catch (err) {
+      console.error('[handleMoveToWatched]', err);
+      toast.error("Something went wrong");
+    }
   }, [wl.moveToWatched, wl.watchlist]);
 
   const handleMoveToWantToWatch = useCallback(async (id: string) => {
-    const item = wl.watched.find((i) => i.id === id);
-    await wl.moveToWantToWatch(id);
-    toast("Moved to Want to Watch", { description: item?.title, icon: "\u{1F516}" });
+    try {
+      const item = wl.watched.find((i) => i.id === id);
+      await wl.moveToWantToWatch(id);
+      toast("Moved to Want to Watch", { description: item?.title, icon: "\u{1F516}" });
+    } catch (err) {
+      console.error('[handleMoveToWantToWatch]', err);
+      toast.error("Something went wrong");
+    }
   }, [wl.moveToWantToWatch, wl.watched]);
+
+  const handleRate = useCallback(async (id: string, rating: 'up' | 'down' | null) => {
+    try {
+      const storageRating = rating === 'up' ? 1 : rating === 'down' ? -1 : 0;
+      await wl.setRating(id, storageRating as -1 | 0 | 1);
+      if (rating === 'up') {
+        toast.success("Thumbs up!", { description: "Thanks! This improves your recommendations.", icon: "\u{1F44D}" });
+      } else if (rating === 'down') {
+        toast.success("Thumbs down", { description: "Thanks! This improves your recommendations.", icon: "\u{1F44E}" });
+      } else {
+        toast("Rating removed", { description: "Your rating has been cleared.", icon: "\u{1F504}" });
+      }
+    } catch (err) {
+      console.error('[handleRate]', err);
+      toast.error("Something went wrong");
+    }
+  }, [wl.setRating]);
 
   const handleOnboardingComplete = useCallback(async (data: OnboardingData) => {
     await userPrefs.completeOnboarding(data);
@@ -158,6 +202,8 @@ function AppContent() {
     const listener = CapApp.addListener("backButton", () => {
       if (selectedItem) {
         setSelectedItem(null);
+      } else if (showCalendar) {
+        setShowCalendar(false);
       } else if (activeTab !== "home") {
         setActiveTab("home");
       } else {
@@ -165,7 +211,7 @@ function AppContent() {
       }
     });
     return () => { listener.then((l) => l.remove()); };
-  }, [selectedItem, activeTab]);
+  }, [selectedItem, showCalendar, activeTab]);
 
   // ── Pull-to-refresh ──
   const [pullDistance, setPullDistance] = useState(0);
@@ -265,7 +311,20 @@ function AppContent() {
           className="flex-1 overflow-y-auto pb-4 no-scrollbar"
           style={{ transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined, transition: isPulling.current ? 'none' : 'transform 0.3s ease' }}
         >
-          {selectedItem ? (
+          {showCalendar ? (
+            <CalendarPage
+              items={upcoming.items}
+              loading={upcoming.loading}
+              onBack={() => setShowCalendar(false)}
+              onItemSelect={(item) => {
+                setShowCalendar(false);
+                handleItemSelect({ id: item.id, title: item.title, image: item.image, services: item.services, rating: item.rating, type: item.type });
+              }}
+              userServices={connectedServiceIds}
+              bookmarkedIds={wl.bookmarkedIds}
+              onToggleBookmark={(item) => handleToggleBookmark({ id: item.id, title: item.title, image: item.image, services: item.services, rating: item.rating, type: item.type })}
+            />
+          ) : selectedItem ? (
             <DetailPage
               itemId={selectedItem.id}
               itemTitle={selectedItem.title}
@@ -281,6 +340,8 @@ function AppContent() {
               watchedIds={watchedIds}
               onMoveToWatched={handleMoveToWatched}
               onMoveToWantToWatch={handleMoveToWantToWatch}
+              userRating={wl.ratings[selectedItem.id] || null}
+              onRate={handleRate}
             />
           ) : (
             <AnimatePresence mode="wait">
@@ -329,8 +390,30 @@ function AppContent() {
                       {home.forYou.items.length > 0 && (
                         <ContentRow title="For You" items={filterWatched(home.forYou.items)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       )}
+                      {upcoming.items.length > 0 && (
+                        <div className="mb-6">
+                          <div className="flex items-center justify-between px-5 mb-3">
+                            <h2 className="text-foreground text-[16px]" style={{ fontWeight: 700 }}>Coming Soon</h2>
+                            <button onClick={() => setShowCalendar(true)} className="text-primary text-[13px]" style={{ fontWeight: 500 }}>See All</button>
+                          </div>
+                          <div className="flex gap-3 overflow-x-auto px-5 no-scrollbar" style={{ scrollbarWidth: "none" }}>
+                            {upcoming.items.slice(0, 8).map((item) => (
+                              <ComingSoonCard
+                                key={item.id}
+                                item={item}
+                                onSelect={(u) => handleItemSelect({ id: u.id, title: u.title, image: u.image, services: u.services, rating: u.rating, type: u.type })}
+                                bookmarked={wl.bookmarkedIds.has(item.id)}
+                                onToggleBookmark={(u) => handleToggleBookmark({ id: u.id, title: u.title, image: u.image, services: u.services, rating: u.rating, type: u.type })}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       <ContentRow title="Popular on Your Services" items={filterWatched(home.popular.items)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.popular.loadMore} loadingMore={home.popular.loadingMore} hasMore={home.popular.hasMore} />
                       <ContentRow title="Highest Rated" items={filterWatched(home.highestRated.items)} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.highestRated.loadMore} loadingMore={home.highestRated.loadingMore} hasMore={home.highestRated.hasMore} />
+                      {home.hiddenGems.items.length > 0 && (
+                        <ContentRow title="Hidden Gems" items={filterWatched(home.hiddenGems.items)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                      )}
                       <ContentRow title="Recently Added" items={filterWatched(home.recentlyAdded.items)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.recentlyAdded.loadMore} loadingMore={home.recentlyAdded.loadingMore} hasMore={home.recentlyAdded.hasMore} />
                       {home.genreList.map((genreId) => (
                         <LazyGenreSection
@@ -381,6 +464,8 @@ function AppContent() {
                   onMoveToWantToWatch={handleMoveToWantToWatch}
                   onItemSelect={handleItemSelect}
                   onNavigateToBrowse={() => setActiveTab("browse")}
+                  ratings={wl.ratings}
+                  onRate={handleRate}
                 />
               )}
 

@@ -1,14 +1,12 @@
-# StreamHub Frontend Integration & Capacitor Deployment
+# Videx Frontend Integration & Capacitor Deployment
 
-## Prompt for Claude Code
-
-Copy everything below this line and paste it into Claude Code in your existing repo.
+> **Historical Reference:** This document was the original migration prompt used to integrate the Figma Make prototype into the codebase. The migration is complete — all phases have been executed. Kept for reference only.
 
 ---
 
 ## Context
 
-I have a **fully built React + Tailwind CSS v4 frontend** for a streaming aggregator app called StreamHub. It was prototyped in Figma Make and is ready to be integrated into my existing codebase, which has the backend structure (APIs, vector database, recommendation logic, etc.) already in place.
+(Originally for a **fully built React + Tailwind CSS v4 frontend** prototyped in Figma Make, integrated into the existing codebase with APIs, recommendation logic, etc.)
 
 I need your help to:
 1. Integrate the new frontend into my existing repo (phased migration)

@@ -7,6 +7,7 @@
  * - 30% weight: TMDb similar content (for top liked items)
  */
 
+import storage from '@/lib/storage';
 import { getWatchlist, getWatchedWithRating, type WatchlistItem } from '@/lib/storage/watchlist';
 import {
   getCachedRecommendations,
@@ -142,7 +143,7 @@ async function fetchGenreBasedContent(
     }
 
     const genreIds = topGenres.map((g) => g.genreId);
-    const genreString = genreIds.join(',');
+    const genreString = genreIds.join('|');
 
     const [moviesRes, tvRes] = await Promise.all([
       discoverMovies({ with_genres: genreString, page: 1, sort_by: 'popularity.desc', ...providerParam }),
@@ -360,6 +361,106 @@ export async function generateRecommendations(
     return recommendations;
   } catch (error) {
     console.error('[RecommendationEngine] Error generating recommendations:', error);
+    return [];
+  }
+}
+
+const HIDDEN_GEMS_CACHE_KEY = '@app_hidden_gems';
+const HIDDEN_GEMS_TTL = 6 * 60 * 60 * 1000; // 6 hours
+
+export async function generateHiddenGems(
+  userPlatforms: number[] = [],
+  region = 'GB'
+): Promise<Recommendation[]> {
+  try {
+    // Check cache
+    const rawCache = await storage.getItem(HIDDEN_GEMS_CACHE_KEY);
+    if (rawCache) {
+      const cache = JSON.parse(rawCache);
+      if (Date.now() < cache.expiresAt && cache.items?.length > 0) {
+        if (DEBUG) console.log('[HiddenGems] Using cached results');
+        return cache.items;
+      }
+    }
+
+    if (DEBUG) console.log('[HiddenGems] Generating fresh hidden gems');
+
+    const affinities = await calculateGenreAffinities();
+    const topGenres = getTopGenres(affinities, 3);
+    const genreString = topGenres.length > 0 ? topGenres.map((g) => g.genreId).join('|') : '';
+
+    const providerParam = userPlatforms.length > 0
+      ? { with_watch_providers: userPlatforms.join('|'), watch_region: region }
+      : { watch_region: region };
+
+    const discoverParams: Record<string, unknown> = {
+      sort_by: 'vote_average.desc',
+      'vote_count.gte': 50,
+      'vote_count.lte': 500,
+      'vote_average.gte': 7.5,
+      'popularity.lte': 15,
+      ...providerParam,
+    };
+    if (genreString) discoverParams.with_genres = genreString;
+
+    const [moviesRes, tvRes] = await Promise.all([
+      discoverMovies(discoverParams),
+      discoverTV(discoverParams),
+    ]);
+
+    const allResults = [
+      ...(moviesRes.data?.results || []).map((m: any) => ({ ...m, mediaType: 'movie' as const })),
+      ...(tvRes.data?.results || []).map((t: any) => ({ ...t, mediaType: 'tv' as const })),
+    ];
+
+    // Filter out watchlist items
+    const watchlist = await getWatchlist();
+    const watchlistIds = new Set(watchlist.items.map((i) => `${i.type}-${i.id}`));
+    const filtered = allResults.filter((item) => !watchlistIds.has(`${item.mediaType}-${item.id}`));
+
+    // Diversity filter: max 2 per primary genre
+    const genreCounts: Record<number, number> = {};
+    const diverse: typeof filtered = [];
+    for (const item of filtered) {
+      const primaryGenre = (item.genre_ids || [])[0];
+      if (primaryGenre && (genreCounts[primaryGenre] || 0) >= 2) continue;
+      diverse.push(item);
+      if (primaryGenre) genreCounts[primaryGenre] = (genreCounts[primaryGenre] || 0) + 1;
+      if (diverse.length >= 15) break;
+    }
+
+    const gems: Recommendation[] = diverse.map((item) => {
+      const primaryGenre = (item.genre_ids || [])[0];
+      const genreName = primaryGenre ? GENRE_NAMES[primaryGenre] : null;
+      return {
+        id: item.id,
+        type: item.mediaType,
+        score: item.vote_average || 0,
+        reason: genreName ? `Hidden gem in ${genreName}` : 'Hidden gem',
+        source: 'hidden_gem',
+        metadata: {
+          title: item.title || item.name || 'Unknown',
+          posterPath: item.poster_path || null,
+          backdropPath: item.backdrop_path || null,
+          overview: item.overview || '',
+          releaseDate: item.release_date || item.first_air_date || '',
+          voteAverage: item.vote_average || 0,
+          genreIds: item.genre_ids || [],
+          popularity: item.popularity || 0,
+        },
+      };
+    });
+
+    // Cache results
+    await storage.setItem(HIDDEN_GEMS_CACHE_KEY, JSON.stringify({
+      items: gems,
+      expiresAt: Date.now() + HIDDEN_GEMS_TTL,
+    }));
+
+    if (DEBUG) console.log('[HiddenGems] Generated', gems.length, 'hidden gems');
+    return gems;
+  } catch (error) {
+    console.error('[HiddenGems] Error:', error);
     return [];
   }
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, Bookmark, Star, Loader2, Undo2 } from "lucide-react";
+import { ArrowLeft, Bookmark, Star, Loader2, Undo2, ThumbsUp, ThumbsDown } from "lucide-react";
 import { TickIcon, EyeIcon } from "./icons";
 import { motion } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
@@ -32,9 +32,11 @@ interface DetailPageProps {
   watchedIds?: Set<string>;
   onMoveToWatched?: (id: string) => void;
   onMoveToWantToWatch?: (id: string) => void;
+  userRating?: 'up' | 'down' | null;
+  onRate?: (id: string, rating: 'up' | 'down' | null) => void;
 }
 
-export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = false, onToggleBookmark, onItemSelect, bookmarkedIds, onToggleBookmarkItem, connectedServices, userServices, watchedIds, onMoveToWatched, onMoveToWantToWatch }: DetailPageProps) {
+export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = false, onToggleBookmark, onItemSelect, bookmarkedIds, onToggleBookmarkItem, connectedServices, userServices, watchedIds, onMoveToWatched, onMoveToWantToWatch, userRating, onRate }: DetailPageProps) {
   const { detail, similar, loading, error } = useContentDetail(itemId, connectedServices);
 
   // Loading state
@@ -104,9 +106,13 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
         {/* Bookmark button - top right */}
         <div className="absolute right-4" style={{ top: "max(1rem, env(safe-area-inset-top, 1rem))" }}>
           {watchedIds?.has(itemId) ? (
-            <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center">
+            <motion.button
+              onClick={() => onMoveToWantToWatch?.(itemId)}
+              whileTap={{ scale: 0.8 }}
+              className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center"
+            >
               <TickIcon className="w-5 h-5 text-white" />
-            </div>
+            </motion.button>
           ) : (
             <motion.button
               onClick={() => onToggleBookmark?.()}
@@ -156,6 +162,51 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
               <span className="text-muted-foreground text-[11px]">RT</span>
             </div>
           )}
+
+          {/* Thumbs rating buttons — only when watched */}
+          {watchedIds?.has(itemId) && onRate && (
+            <div className="flex flex-col items-end gap-1 ml-auto">
+              <div className="flex items-center gap-1.5">
+                <motion.button
+                  onClick={() => onRate(itemId, userRating === 'up' ? null : 'up')}
+                  whileTap={{ scale: 0.8 }}
+                  animate={userRating === 'up' ? { scale: [1, 1.2, 1] } : undefined}
+                  transition={{ duration: 0.3 }}
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                    userRating === 'up'
+                      ? "text-white"
+                      : "bg-secondary text-muted-foreground hover:text-foreground"
+                  }`}
+                  style={userRating === 'up' ? { backgroundColor: '#10b981' } : undefined}
+                >
+                  <ThumbsUp className={`w-3.5 h-3.5 ${userRating === 'up' ? 'fill-current' : ''}`} />
+                </motion.button>
+                <motion.button
+                  onClick={() => onRate(itemId, userRating === 'down' ? null : 'down')}
+                  whileTap={{ scale: 0.8 }}
+                  animate={userRating === 'down' ? { scale: [1, 1.2, 1] } : undefined}
+                  transition={{ duration: 0.3 }}
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                    userRating === 'down'
+                      ? "text-white"
+                      : "bg-secondary text-muted-foreground hover:text-foreground"
+                  }`}
+                  style={userRating === 'down' ? { backgroundColor: '#ef4444' } : undefined}
+                >
+                  <ThumbsDown className={`w-3.5 h-3.5 ${userRating === 'down' ? 'fill-current' : ''}`} />
+                </motion.button>
+              </div>
+              {userRating && onMoveToWantToWatch && (
+                <button
+                  onClick={() => onMoveToWantToWatch(itemId)}
+                  className="text-muted-foreground/70 hover:text-muted-foreground text-[11px] transition-colors"
+                  style={{ fontWeight: 500 }}
+                >
+                  Move back to Want to Watch
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Genre tags */}
@@ -178,19 +229,26 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             <span className="text-[14px]" style={{ fontWeight: 600 }}>Mark as Watched</span>
           </motion.button>
         )}
-        {watchedIds?.has(itemId) && (
-          <div className="w-full flex items-center justify-between py-3 px-4 rounded-xl bg-emerald-950 border border-emerald-700 mb-4">
-            <div className="flex items-center gap-2 text-emerald-500">
-              <EyeIcon className="w-5 h-5" />
-              <span className="text-[14px]" style={{ fontWeight: 600 }}>You've watched this</span>
+        {watchedIds?.has(itemId) && !userRating && (
+          <div className="w-full flex items-center justify-between py-3 px-4 rounded-xl bg-emerald-500/8 border border-emerald-500/20 mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center">
+                <EyeIcon className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div>
+                <span className="text-foreground text-[13px] block" style={{ fontWeight: 600 }}>You've watched this</span>
+                {onRate && (
+                  <span className="text-muted-foreground text-[11px]">Rate it to improve your recommendations</span>
+                )}
+              </div>
             </div>
             {onMoveToWantToWatch && (
               <button
                 onClick={() => onMoveToWantToWatch(itemId)}
-                className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                className="text-muted-foreground hover:text-foreground text-[11px] transition-colors shrink-0"
+                style={{ fontWeight: 500 }}
               >
-                <Undo2 className="w-3.5 h-3.5" />
-                <span className="text-[12px]" style={{ fontWeight: 600 }}>Undo</span>
+                Undo
               </button>
             )}
           </div>

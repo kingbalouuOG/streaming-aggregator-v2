@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   getWatchlist,
   addToWatchlist,
   removeFromWatchlist,
   setWatchlistStatus,
+  setWatchlistRating,
   type WatchlistItem,
 } from '@/lib/storage/watchlist';
 import { watchlistItemToContentItem, parseContentItemId } from '@/lib/adapters/contentAdapter';
@@ -21,18 +22,31 @@ export function useWatchlist() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Derived lists as ContentItem[]
-  const watchlist: ContentItem[] = items
-    .filter((i) => i.status === 'want_to_watch')
-    .map(watchlistItemToContentItem);
-
-  const watched: ContentItem[] = items
-    .filter((i) => i.status === 'watched')
-    .map(watchlistItemToContentItem);
-
-  const bookmarkedIds = new Set<string>(
-    items.map((i) => `${i.type}-${i.id}`)
+  // Derived lists as ContentItem[] — memoized to prevent render cascades
+  const watchlist = useMemo<ContentItem[]>(
+    () => items.filter((i) => i.status === 'want_to_watch').map(watchlistItemToContentItem),
+    [items]
   );
+
+  const watched = useMemo<ContentItem[]>(
+    () => items.filter((i) => i.status === 'watched').map(watchlistItemToContentItem),
+    [items]
+  );
+
+  const bookmarkedIds = useMemo(
+    () => new Set<string>(items.map((i) => `${i.type}-${i.id}`)),
+    [items]
+  );
+
+  // Derived ratings map: contentItemId → 'up' | 'down'
+  const ratings = useMemo(() => {
+    const map: Record<string, 'up' | 'down'> = {};
+    items.forEach((i) => {
+      if (i.rating === 1) map[`${i.type}-${i.id}`] = 'up';
+      else if (i.rating === -1) map[`${i.type}-${i.id}`] = 'down';
+    });
+    return map;
+  }, [items]);
 
   const toggleBookmark = useCallback(async (item: ContentItem) => {
     const { tmdbId, mediaType } = parseContentItemId(item.id);
@@ -88,15 +102,29 @@ export function useWatchlist() {
     );
   }, []);
 
+  const setRating = useCallback(async (contentItemId: string, rating: -1 | 0 | 1) => {
+    const { tmdbId, mediaType } = parseContentItemId(contentItemId);
+    await setWatchlistRating(tmdbId, mediaType, rating);
+    setItems((prev) =>
+      prev.map((i) =>
+        i.id === tmdbId && i.type === mediaType
+          ? { ...i, rating, updatedAt: Date.now() }
+          : i
+      )
+    );
+  }, []);
+
   return {
     watchlist,
     watched,
     bookmarkedIds,
+    ratings,
     loading,
     toggleBookmark,
     removeBookmark,
     moveToWatched,
     moveToWantToWatch,
+    setRating,
     reload: load,
   };
 }
