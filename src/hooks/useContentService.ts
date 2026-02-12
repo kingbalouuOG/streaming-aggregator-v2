@@ -1,3 +1,4 @@
+/** @deprecated Replaced by useHomeContent.ts — kept for reference */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { discoverMovies, discoverTV } from '@/lib/api/tmdb';
 import { tmdbMovieToContentItem, tmdbTVToContentItem } from '@/lib/adapters/contentAdapter';

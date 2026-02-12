@@ -16,8 +16,8 @@ import { OnboardingFlow, OnboardingData } from "./components/OnboardingFlow";
 import { ThemeProvider, useTheme } from "./components/ThemeContext";
 import { useUserPreferences } from "./hooks/useUserPreferences";
 import { useWatchlist } from "./hooks/useWatchlist";
-import { useContentService } from "./hooks/useContentService";
-import { useRecommendations } from "./hooks/useRecommendations";
+import { useHomeContent } from "./hooks/useHomeContent";
+import { LazyGenreSection } from "./components/LazyGenreSection";
 import { providerIdsToServiceIds } from "./lib/adapters/platformAdapter";
 import { serviceIdsToProviderIds, providerIdToServiceId } from "./lib/adapters/platformAdapter";
 import { GENRE_NAMES } from "./lib/constants/genres";
@@ -78,11 +78,8 @@ function AppContent() {
     return base;
   }, [filters, activeCategory]);
 
-  // --- Content service (home page data) ---
-  const content = useContentService(connectedServices, homeFilters);
-
-  // --- Recommendations ---
-  const recs = useRecommendations(connectedServices);
+  // --- Home content (lazy-loaded sections) ---
+  const home = useHomeContent(connectedServices, homeFilters);
 
   const activeFilterCount =
     filters.services.length +
@@ -204,21 +201,21 @@ function AppContent() {
       setPullDistance(PULL_THRESHOLD);
       try {
         if (activeTab === "home") {
-          await Promise.all([content.reload(), recs.reload()]);
+          await home.reload();
         }
       } catch {}
       setIsRefreshing(false);
     }
     setPullDistance(0);
-  }, [pullDistance, activeTab, content.reload, recs.reload]);
+  }, [pullDistance, activeTab, home.reload]);
 
-  // Featured item from content service (skip watched unless showWatched is on)
+  // Featured item from home content (skip watched unless showWatched is on)
   const featured = useMemo(() => {
-    if (filters.showWatched || !content.featured) return content.featured;
-    if (!watchedIds.has(content.featured.id)) return content.featured;
+    if (filters.showWatched || !home.featured) return home.featured;
+    if (!watchedIds.has(home.featured.id)) return home.featured;
     // If the featured item is watched, pick next non-watched from popular
-    return content.popular.find((item) => !watchedIds.has(item.id)) || content.featured;
-  }, [content.featured, content.popular, filters.showWatched, watchedIds]);
+    return home.popular.items.find((item) => !watchedIds.has(item.id)) || home.featured;
+  }, [home.featured, home.popular.items, filters.showWatched, watchedIds]);
 
   // ── Loading state ──
   if (userPrefs.loading) {
@@ -265,7 +262,7 @@ function AppContent() {
           onTouchStart={(e) => handlePullStart(e.touches[0].clientY)}
           onTouchMove={(e) => handlePullMove(e.touches[0].clientY)}
           onTouchEnd={handlePullEnd}
-          className="flex-1 overflow-y-auto pb-24 no-scrollbar"
+          className="flex-1 overflow-y-auto pb-4 no-scrollbar"
           style={{ transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined, transition: isPulling.current ? 'none' : 'transform 0.3s ease' }}
         >
           {selectedItem ? (
@@ -309,7 +306,7 @@ function AppContent() {
                       scrollY={scrollY}
                       watched={watchedIds.has(featured.id)}
                     />
-                  ) : content.loading ? (
+                  ) : home.loading ? (
                     <div className="w-full aspect-[4/3] bg-secondary animate-pulse" />
                   ) : null}
 
@@ -323,20 +320,37 @@ function AppContent() {
                   />
 
                   {/* Content rows */}
-                  {content.loading ? (
+                  {home.loading ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="w-6 h-6 text-primary animate-spin" />
                     </div>
                   ) : (
                     <>
-                      {recs.items.length > 0 && (
-                        <ContentRow title="For You" items={filterWatched(recs.items)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                      {home.forYou.items.length > 0 && (
+                        <ContentRow title="For You" items={filterWatched(home.forYou.items)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       )}
-                      <ContentRow title="Popular on Your Services" items={filterWatched(content.popular)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
-                      <ContentRow title="Highest Rated" items={filterWatched(content.highestRated)} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
-                      <ContentRow title="Recently Added" items={filterWatched(content.recentlyAdded)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
-                      {content.genreRows.map((row) => (
-                        <ContentRow key={row.genreId} title={row.name} items={filterWatched(row.items)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                      <ContentRow title="Popular on Your Services" items={filterWatched(home.popular.items)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.popular.loadMore} loadingMore={home.popular.loadingMore} hasMore={home.popular.hasMore} />
+                      <ContentRow title="Highest Rated" items={filterWatched(home.highestRated.items)} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.highestRated.loadMore} loadingMore={home.highestRated.loadingMore} hasMore={home.highestRated.hasMore} />
+                      <ContentRow title="Recently Added" items={filterWatched(home.recentlyAdded.items)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.recentlyAdded.loadMore} loadingMore={home.recentlyAdded.loadingMore} hasMore={home.recentlyAdded.hasMore} />
+                      {home.genreList.map((genreId) => (
+                        <LazyGenreSection
+                          key={genreId}
+                          genreId={genreId}
+                          baseParams={home.baseParams}
+                          sectionKeyBase={home.sectionKeyBase}
+                          filterGenreIds={home.filterGenreIds}
+                          fetchMovies={home.fetchMovies}
+                          fetchTV={home.fetchTV}
+                          excludeIds={home.excludeIds}
+                          onNewIds={home.registerIds}
+                          genreAffinities={home.genreAffinities}
+                          onItemSelect={handleItemSelect}
+                          bookmarkedIds={wl.bookmarkedIds}
+                          onToggleBookmark={handleToggleBookmark}
+                          userServices={connectedServiceIds}
+                          watchedIds={watchedIds}
+                          filterWatched={filterWatched}
+                        />
                       ))}
                     </>
                   )}

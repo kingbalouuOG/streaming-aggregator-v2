@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { StatusBar, Style } from "@capacitor/status-bar";
+import { Capacitor, registerPlugin } from "@capacitor/core";
+
+interface NavigationBarPlugin {
+  setColor(options: { color: string; darkButtons: boolean }): Promise<void>;
+}
+
+const NavigationBar = registerPlugin<NavigationBarPlugin>("NavigationBar");
 
 export type ThemeMode = "dark" | "light" | "system";
 
@@ -58,6 +65,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     StatusBar.setStyle({
       style: resolvedTheme === "dark" ? Style.Dark : Style.Light,
     }).catch(() => {});
+    // Match Android navigation bar to the app theme
+    if (Capacitor.isNativePlatform()) {
+      NavigationBar.setColor({
+        color: resolvedTheme === "dark" ? "#0a0a0f" : "#f5f4f1",
+        darkButtons: resolvedTheme === "light",
+      }).catch(() => {});
+    }
   }, [resolvedTheme]);
 
   const setTheme = useCallback((mode: ThemeMode) => {

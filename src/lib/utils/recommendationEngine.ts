@@ -32,7 +32,7 @@ const AFFINITY_SCORES = {
   WANT_TO_WATCH: 1,
 };
 
-interface GenreAffinities {
+export interface GenreAffinities {
   [genreId: string]: number;
 }
 
