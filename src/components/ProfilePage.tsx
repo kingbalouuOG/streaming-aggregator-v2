@@ -131,11 +131,9 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
     .slice(0, 2);
 
   return (
-    <div className="flex flex-col min-h-full px-4 pb-8" style={{ paddingTop: "max(1.25rem, env(safe-area-inset-top, 1.25rem))" }}>
-      {/* Header */}
-      <h1 className="text-foreground text-[20px] mb-5" style={{ fontWeight: 700 }}>
-        Profile
-      </h1>
+    <div className="flex flex-col min-h-full px-4 pb-8">
+      {/* Safe area spacer */}
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl -mx-4 px-4" style={{ backgroundColor: "var(--background)", paddingTop: "env(safe-area-inset-top, 0px)" }} />
 
       {/* ── Avatar & Info ─────────────────────────────────── */}
       <div className="flex flex-col items-center mb-6">

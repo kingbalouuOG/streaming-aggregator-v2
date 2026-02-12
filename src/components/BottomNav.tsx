@@ -29,9 +29,10 @@ export function BottomNav({ activeTab, onTabChange, watchlistCount = 0 }: Bottom
         borderColor: "var(--border-subtle)",
         /* Capacitor: backdrop-blur fallback for older Android */
         backgroundColor: "var(--nav-bg)",
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
-      <div className="max-w-md mx-auto flex items-center justify-around px-2 py-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
+      <div className="max-w-md mx-auto flex items-center justify-around px-2 py-2">
         {navItems.map((item) => {
           const isActive = item.id === activeTab;
           const Icon = item.icon;
@@ -40,7 +41,7 @@ export function BottomNav({ activeTab, onTabChange, watchlistCount = 0 }: Bottom
               key={item.id}
               onClick={() => onTabChange(item.id)}
               whileTap={{ scale: 0.88 }}
-              className={`flex flex-col items-center gap-0.5 py-1 px-4 rounded-xl transition-colors duration-200 ${
+              className={`flex flex-col items-center gap-1 py-1.5 px-4 rounded-xl transition-colors duration-200 ${
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground"
@@ -51,13 +52,13 @@ export function BottomNav({ activeTab, onTabChange, watchlistCount = 0 }: Bottom
                   animate={isActive ? { scale: [1, 1.15, 1] } : { scale: 1 }}
                   transition={{ duration: 0.3, ease: "easeOut" }}
                 >
-                  <Icon className={`w-5 h-5 ${isActive ? "fill-current" : ""}`} strokeWidth={isActive ? 2.5 : 1.8} />
+                  <Icon className={`w-6 h-6 ${isActive ? "fill-current" : ""}`} strokeWidth={isActive ? 2.5 : 1.8} />
                 </motion.div>
                 {item.id === "watchlist" && watchlistCount > 0 && !isActive && (
                   <motion.span
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
-                    className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center px-1"
+                    className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center px-1"
                     style={{ fontWeight: 700 }}
                   >
                     {watchlistCount}

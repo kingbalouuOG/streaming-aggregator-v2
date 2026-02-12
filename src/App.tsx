@@ -265,7 +265,7 @@ function AppContent() {
           onTouchStart={(e) => handlePullStart(e.touches[0].clientY)}
           onTouchMove={(e) => handlePullMove(e.touches[0].clientY)}
           onTouchEnd={handlePullEnd}
-          className="flex-1 overflow-y-auto pb-20 no-scrollbar"
+          className="flex-1 overflow-y-auto pb-24 no-scrollbar"
           style={{ transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined, transition: isPulling.current ? 'none' : 'transform 0.3s ease' }}
         >
           {selectedItem ? (

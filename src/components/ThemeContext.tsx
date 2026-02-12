@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { StatusBar, Style } from "@capacitor/status-bar";
 
 export type ThemeMode = "dark" | "light" | "system";
 
@@ -45,7 +46,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  // Apply the data-theme attribute to the root element
+  // Apply the data-theme attribute and sync Capacitor status bar style
   useEffect(() => {
     const root = document.documentElement;
     if (resolvedTheme === "light") {
@@ -53,6 +54,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     } else {
       root.removeAttribute("data-theme");
     }
+    // Light theme → dark status bar icons; Dark theme → light (white) status bar icons
+    StatusBar.setStyle({
+      style: resolvedTheme === "dark" ? Style.Dark : Style.Light,
+    }).catch(() => {});
   }, [resolvedTheme]);
 
   const setTheme = useCallback((mode: ThemeMode) => {

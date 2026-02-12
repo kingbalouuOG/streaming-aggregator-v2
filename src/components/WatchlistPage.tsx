@@ -39,18 +39,10 @@ export function WatchlistPage({
 
   return (
     <div className="flex flex-col min-h-full">
-      {/* Header */}
-      <div className="px-5 pb-4" style={{ paddingTop: "max(1.25rem, env(safe-area-inset-top, 1.25rem))" }}>
-        <h1
-          className="text-foreground text-[20px]"
-          style={{ fontWeight: 700 }}
-        >
-          My Watchlist
-        </h1>
-      </div>
-
-      {/* Segmented tab bar */}
-      <div className="px-5 mb-4">
+      {/* Sticky header + tab bar */}
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl" style={{ backgroundColor: "var(--background)", paddingTop: "max(0.5rem, env(safe-area-inset-top, 0.5rem))" }}>
+        {/* Segmented tab bar */}
+        <div className="px-5 mb-4">
         <div className="flex bg-secondary rounded-2xl p-1">
           <button
             onClick={() => setActiveTab("want")}
@@ -81,6 +73,7 @@ export function WatchlistPage({
             Watched ({watched.length})
           </button>
         </div>
+      </div>
       </div>
 
       {/* Count + view toggle */}
