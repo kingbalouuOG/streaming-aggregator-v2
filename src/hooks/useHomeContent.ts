@@ -8,8 +8,6 @@ import { calculateGenreAffinities, type GenreAffinities } from '@/lib/utils/reco
 import { serviceIdsToProviderIds } from '@/lib/adapters/platformAdapter';
 import { GENRE_NAME_TO_ID } from '@/lib/constants/genres';
 import type { FilterState } from '@/components/FilterSheet';
-import type { ServiceId } from '@/components/platformLogos';
-
 export function useHomeContent(providerIds: number[], filters?: FilterState) {
   const [genreList, setGenreList] = useState<number[]>([]);
   const [genreAffinities, setGenreAffinities] = useState<GenreAffinities>({});

@@ -28,11 +28,9 @@ export function useRecommendations(providerIds: number[]) {
     }
 
     setLoading(true);
-
     try {
       const recommendations = await generateRecommendations(providerIds, 'GB');
-      const contentItems = recommendations.map((r) => recommendationToContentItem(r));
-      setItems(contentItems);
+      setItems(recommendations.map(recommendationToContentItem));
     } catch (error) {
       console.error('[useRecommendations] Error:', error);
     } finally {

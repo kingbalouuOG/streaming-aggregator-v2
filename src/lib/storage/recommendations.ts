@@ -40,10 +40,13 @@ export const getCachedRecommendations = async (): Promise<RecommendationCache> =
   }
 };
 
+const CURRENT_SCHEMA_VERSION = 2;
+
 export const isRecommendationCacheValid = async (cache?: RecommendationCache | null): Promise<boolean> => {
   try {
     const cached = cache || (await getCachedRecommendations());
     if (!cached?.recommendations?.length) return false;
+    if (cached.schemaVersion !== CURRENT_SCHEMA_VERSION) return false;
     return Date.now() < cached.expiresAt;
   } catch {
     return false;
@@ -55,7 +58,7 @@ export const setCachedRecommendations = async (recommendations: any[], basedOn: 
   const data: RecommendationCache = {
     recommendations, generatedAt: now, expiresAt: now + RECOMMENDATION_CACHE_TTL,
     basedOn: { genreAffinities: basedOn.genreAffinities || {}, likedItemIds: basedOn.likedItemIds || [] },
-    schemaVersion: 1,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
   };
   await storage.setItem(STORAGE_KEYS.RECOMMENDATIONS, JSON.stringify(data));
   if (DEBUG) console.log('[Recommendations] Cached:', recommendations.length, 'items');

@@ -29,7 +29,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
-  const search = useSearch();
+  const search = useSearch(userServices);
   const isSearching = search.query.trim().length > 0;
 
   // Build filters with category override (memoized to avoid unstable object refs)

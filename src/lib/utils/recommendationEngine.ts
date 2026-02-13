@@ -235,7 +235,9 @@ function scoreCandidate(item: ScoredCandidate, affinities: GenreAffinities): num
 function applyDiversityFilter(rankedItems: ScoredCandidate[], maxPerGenre = 3, targetCount = 20): ScoredCandidate[] {
   const result: ScoredCandidate[] = [];
   const genreCounts: Record<number, number> = {};
+  const typeCounts: Record<string, number> = { movie: 0, tv: 0 };
   const seenIds = new Set<string>();
+  const maxPerType = Math.ceil(targetCount * 0.7); // Max 70% of one type
 
   for (const item of rankedItems) {
     const uniqueKey = `${item.type}-${item.id}`;
@@ -247,8 +249,12 @@ function applyDiversityFilter(rankedItems: ScoredCandidate[], maxPerGenre = 3, t
       if ((genreCounts[primaryGenre] || 0) >= maxPerGenre) continue;
     }
 
+    // Type balance: don't let one type dominate
+    if ((typeCounts[item.type] || 0) >= maxPerType) continue;
+
     result.push(item);
     seenIds.add(uniqueKey);
+    typeCounts[item.type] = (typeCounts[item.type] || 0) + 1;
     if (primaryGenre) {
       genreCounts[primaryGenre] = (genreCounts[primaryGenre] || 0) + 1;
     }
