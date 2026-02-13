@@ -50,7 +50,7 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
 
   // ── Services state ─────────────────────────────────
   const [connectedServices, setConnectedServices] = useState<string[]>(
-    userProfile?.services || ["netflix", "prime", "apple", "paramount", "now"]
+    userProfile?.services || PLATFORMS.map((p) => p.id)
   );
   const [isEditingServices, setIsEditingServices] = useState(false);
 

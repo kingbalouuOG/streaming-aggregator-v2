@@ -68,9 +68,27 @@ export function providerIdsToServiceIds(providerIds: number[]): ServiceId[] {
   return result;
 }
 
+// Extra TMDb provider IDs to include in discover queries.
+// TMDb's discover endpoint sometimes recognizes different IDs than the
+// canonical ones returned by watch/providers. E.g., ITVX discover data
+// lives under 41 (ITV Hub), not 54 (ITVX) — which returns 0 results.
+const DISCOVER_VARIANT_IDS: Partial<Record<ServiceId, number[]>> = {
+  itvx: [41],  // ITV Hub — TMDb discover has 878 results vs 0 for ID 54
+};
+
 /**
  * Convert an array of ServiceId strings to TMDb provider IDs.
+ * Includes variant IDs for discover queries (e.g., 41 for ITVX).
  */
 export function serviceIdsToProviderIds(serviceIds: ServiceId[]): number[] {
-  return serviceIds.map(serviceIdToProviderId);
+  const ids: number[] = [];
+  for (const id of serviceIds) {
+    const canonical = SERVICE_ID_TO_TMDB[id];
+    if (canonical !== undefined) {
+      ids.push(canonical);
+      const extras = DISCOVER_VARIANT_IDS[id];
+      if (extras) ids.push(...extras);
+    }
+  }
+  return ids;
 }

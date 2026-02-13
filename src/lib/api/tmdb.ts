@@ -152,7 +152,7 @@ export const searchMulti = (query: string, page = 1) => {
 };
 
 export const getContentWatchProviders = async (contentId: number, mediaType = 'movie', region = 'GB') => {
-  return cachedRequest(`${mediaType}_${contentId}_wp2`, { region }, async () => {
+  return cachedRequest(`${mediaType}_${contentId}_wp4`, { region }, async () => {
     const response = await tmdbClient.get(`/${mediaType}/${contentId}/watch/providers`);
     const regionData = response.data?.results?.[region] || {};
     const result = {

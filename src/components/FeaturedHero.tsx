@@ -1,24 +1,41 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Info, Bookmark } from "lucide-react";
 import { EyeFilledIcon } from "./icons";
 import { motion } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
 import { ImageSkeleton } from "./ImageSkeleton";
+import { getCachedServices } from "@/lib/utils/serviceCache";
+import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 import type { ServiceId } from "./platformLogos";
 
 interface FeaturedHeroProps {
   title: string;
   subtitle: string;
   image: string;
+  itemId?: string;
   services: ServiceId[];
   tags: string[];
   bookmarked?: boolean;
   onToggleBookmark?: () => void;
   scrollY?: number;
   watched?: boolean;
+  userServices?: ServiceId[];
 }
 
-export function FeaturedHero({ title, subtitle, image, services, tags, bookmarked, onToggleBookmark, scrollY = 0, watched = false }: FeaturedHeroProps) {
+export function FeaturedHero({ title, subtitle, image, itemId, services, tags, bookmarked, onToggleBookmark, scrollY = 0, watched = false, userServices }: FeaturedHeroProps) {
+  const [loadedServices, setLoadedServices] = useState<ServiceId[]>(services);
+
+  useEffect(() => {
+    if (services.length > 0) { setLoadedServices(services); return; }
+    if (!itemId) return;
+    const { tmdbId, mediaType } = parseContentItemId(itemId);
+    getCachedServices(String(tmdbId), mediaType).then(setLoadedServices);
+  }, [itemId, services]);
+
+  const displayServices = userServices?.length
+    ? loadedServices.filter((s) => userServices.includes(s))
+    : loadedServices;
+
   // Parallax: image moves at 40% of scroll speed
   const parallaxOffset = scrollY * 0.4;
   const heroOpacity = Math.max(0, 1 - scrollY / 500);
@@ -61,10 +78,12 @@ export function FeaturedHero({ title, subtitle, image, services, tags, bookmarke
       >
         {/* Service badges */}
         <div className="flex items-center gap-1.5 mb-2">
-          {services.map((service) => (
+          {displayServices.map((service) => (
             <ServiceBadge key={service} service={service} size="md" />
           ))}
-          <span className="text-white/50 text-[11px] ml-1">Available on {services.length} service{services.length > 1 ? "s" : ""}</span>
+          {displayServices.length > 0 && (
+            <span className="text-white/50 text-[11px] ml-1">Available on {displayServices.length} service{displayServices.length > 1 ? "s" : ""}</span>
+          )}
         </div>
 
         {/* Title */}

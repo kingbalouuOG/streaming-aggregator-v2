@@ -25,7 +25,7 @@ interface CacheEntry {
 
 const CACHE_TTL = 1000 * 60 * 30; // 30 minutes
 const MAX_CACHE_SIZE = 500;
-const CACHE_VERSION = 2; // Bump when provider data format changes
+const CACHE_VERSION = 4; // Bump when provider data format changes
 
 // In-memory cache
 const serviceCache = new Map<string, CacheEntry>();
@@ -75,7 +75,7 @@ const cleanupCache = (): void => {
 export const getCachedServices = async (
   itemId: string,
   mediaType: string,
-  maxServices: number = 4,
+  maxServices: number = 10,
 ): Promise<ServiceId[]> => {
   const cacheKey = getCacheKey(itemId, mediaType);
 
