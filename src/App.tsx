@@ -43,6 +43,7 @@ function AppContent() {
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [watchlistSubTab, setWatchlistSubTab] = useState<"want" | "watched">("want");
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
 
   // --- User preferences (onboarding, profile) ---
@@ -309,7 +310,7 @@ function AppContent() {
           onTouchMove={(e) => handlePullMove(e.touches[0].clientY)}
           onTouchEnd={handlePullEnd}
           className="flex-1 overflow-y-auto pb-4 no-scrollbar"
-          style={{ transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined, transition: isPulling.current ? 'none' : 'transform 0.3s ease' }}
+          style={{ overflowX: 'hidden', overscrollBehaviorX: 'none', transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined, transition: isPulling.current ? 'none' : 'transform 0.3s ease' }}
         >
           {showCalendar ? (
             <CalendarPage
@@ -360,12 +361,14 @@ function AppContent() {
                       title={featured.title}
                       subtitle={featured.type === 'tv' ? 'Trending on your services' : 'Popular right now'}
                       image={featured.image}
+                      itemId={featured.id}
                       services={featured.services}
                       tags={[...(featured.type ? [featured.type === 'tv' ? 'TV Show' : featured.type === 'doc' ? 'Documentary' : 'Movie'] : []), ...(featured.year ? [String(featured.year)] : [])]}
                       bookmarked={wl.bookmarkedIds.has(featured.id)}
                       onToggleBookmark={() => handleToggleBookmark(featured)}
                       scrollY={scrollY}
                       watched={watchedIds.has(featured.id)}
+                      userServices={connectedServiceIds}
                     />
                   ) : home.loading ? (
                     <div className="w-full aspect-[4/3] bg-secondary animate-pulse" />
@@ -391,7 +394,7 @@ function AppContent() {
                         <ContentRow title="For You" items={filterWatched(home.forYou.items)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       )}
                       {upcoming.items.length > 0 && (
-                        <div className="mb-6">
+                        <div className="mb-6 overflow-hidden">
                           <div className="flex items-center justify-between px-5 mb-3">
                             <h2 className="text-foreground text-[16px]" style={{ fontWeight: 700 }}>Coming Soon</h2>
                             <button onClick={() => setShowCalendar(true)} className="text-primary text-[13px]" style={{ fontWeight: 500 }}>See All</button>
@@ -466,6 +469,8 @@ function AppContent() {
                   onNavigateToBrowse={() => setActiveTab("browse")}
                   ratings={wl.ratings}
                   onRate={handleRate}
+                  activeSubTab={watchlistSubTab}
+                  onSubTabChange={setWatchlistSubTab}
                 />
               )}
 

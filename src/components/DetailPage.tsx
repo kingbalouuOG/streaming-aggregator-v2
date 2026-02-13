@@ -143,29 +143,31 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
           {detail.seasons && <><span className="mx-1.5">&middot;</span> {detail.seasons} Season{detail.seasons !== 1 ? 's' : ''}</>}
         </p>
 
-        {/* Rating badges */}
-        <div className="flex items-center gap-2.5 mb-4">
-          <div className="flex items-center gap-1.5 bg-secondary rounded-lg px-2.5 py-1.5">
-            <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
-            <span className="text-foreground text-[13px]" style={{ fontWeight: 600 }}>
-              {detail.imdbRating.toFixed(1)}
-            </span>
-            <span className="text-muted-foreground text-[11px]">IMDb</span>
-          </div>
-
-          {detail.rottenTomatoes > 0 && (
+        {/* Rating badges + thumbs */}
+        <div className="flex items-center justify-between gap-2.5 mb-4">
+          <div className="flex items-center gap-2.5">
             <div className="flex items-center gap-1.5 bg-secondary rounded-lg px-2.5 py-1.5">
-              <img src={rottenTomatoesLogo} alt="RT" className="w-4 h-4" />
+              <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
               <span className="text-foreground text-[13px]" style={{ fontWeight: 600 }}>
-                {detail.rottenTomatoes}%
+                {detail.imdbRating.toFixed(1)}
               </span>
-              <span className="text-muted-foreground text-[11px]">RT</span>
+              <span className="text-muted-foreground text-[11px]">IMDb</span>
             </div>
-          )}
+
+            {detail.rottenTomatoes > 0 && (
+              <div className="flex items-center gap-1.5 bg-secondary rounded-lg px-2.5 py-1.5">
+                <img src={rottenTomatoesLogo} alt="RT" className="w-4 h-4" />
+                <span className="text-foreground text-[13px]" style={{ fontWeight: 600 }}>
+                  {detail.rottenTomatoes}%
+                </span>
+                <span className="text-muted-foreground text-[11px]">RT</span>
+              </div>
+            )}
+          </div>
 
           {/* Thumbs rating buttons — only when watched */}
           {watchedIds?.has(itemId) && onRate && (
-            <div className="flex flex-col items-end gap-1 ml-auto">
+            <div className="flex flex-col items-end gap-1">
               <div className="flex items-center gap-1.5">
                 <motion.button
                   onClick={() => onRate(itemId, userRating === 'up' ? null : 'up')}

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { getCachedData, setCachedData, createTMDbCacheKey } from './cache';
 import { logError, ErrorType } from '../utils/errorHandler';
+import { networkNameToProviderId } from '../constants/platforms';
 
 const BASE_URL = 'https://api.themoviedb.org/3';
 const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
@@ -151,15 +152,34 @@ export const searchMulti = (query: string, page = 1) => {
 };
 
 export const getContentWatchProviders = async (contentId: number, mediaType = 'movie', region = 'GB') => {
-  return cachedRequest(`${mediaType}_${contentId}_providers`, { region }, async () => {
+  return cachedRequest(`${mediaType}_${contentId}_wp2`, { region }, async () => {
     const response = await tmdbClient.get(`/${mediaType}/${contentId}/watch/providers`);
     const regionData = response.data?.results?.[region] || {};
-    return {
+    const result = {
       flatrate: regionData.flatrate || [],
       rent: regionData.rent || [],
       buy: regionData.buy || [],
+      free: regionData.free || [],
+      ads: regionData.ads || [],
     };
-  }, { flatrate: [], rent: [], buy: [] });
+
+    // Fallback: for TV with no streaming providers, try networks (production metadata)
+    if (mediaType === 'tv' && !result.flatrate.length && !result.free.length && !result.ads.length) {
+      try {
+        const tvResponse = await tmdbClient.get(`/tv/${contentId}`);
+        const networks = tvResponse.data?.networks || [];
+        const networkProviders = networks
+          .map((n: any) => networkNameToProviderId(n.name))
+          .filter((id: number | null): id is number => id !== null)
+          .map((id: number) => ({ provider_id: id }));
+        if (networkProviders.length > 0) {
+          result.flatrate = networkProviders;
+        }
+      } catch { /* network fallback is best-effort */ }
+    }
+
+    return result;
+  }, { flatrate: [], rent: [], buy: [], free: [], ads: [] });
 };
 
 export const getSimilarMovies = (movieId: number, page = 1) =>

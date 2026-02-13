@@ -69,10 +69,32 @@ export const PROVIDER_ID_VARIANTS: Record<number, number> = {
   10: 9,     // Amazon Video (rent/buy) -> Amazon Prime Video
   2: 350,    // Apple iTunes (rent/buy) -> Apple TV+
   130: 39,   // Sky Store (rent/buy) -> Now TV / Sky
+  1796: 8,   // Netflix basic with Ads -> Netflix
+  2100: 9,   // Amazon Prime Video with Ads -> Amazon Prime Video
+  1899: 337, // Disney+ Basic with Ads -> Disney+
 };
 
 export const mapProviderIdToCanonical = (providerId: number): number => {
   return PROVIDER_ID_VARIANTS[providerId] || providerId;
+};
+
+// Network name → TMDb provider ID (fallback when watch/providers is empty)
+// TMDb "networks" = production/broadcast network, not streaming availability.
+// Used as a last resort for new content where JustWatch data hasn't propagated yet.
+const NETWORK_TO_PROVIDER_ID: Record<string, number> = {
+  'Netflix': 8,
+  'Amazon': 9,
+  'Disney+': 337,
+  'Apple TV+': 350,
+  'BBC One': 38, 'BBC Two': 38, 'BBC Three': 38, 'BBC iPlayer': 38, 'BBC Four': 38, 'CBBC': 38, 'CBeebies': 38,
+  'ITV': 54, 'ITV1': 54, 'ITV2': 54, 'ITVX': 54, 'ITV4': 54, 'ITVBe': 54,
+  'Channel 4': 103, 'E4': 103, 'More4': 103, 'Film4': 103,
+  'Sky Atlantic': 39, 'Sky One': 39, 'Sky Max': 39, 'Sky Arts': 39,
+  'Paramount+': 582,
+};
+
+export const networkNameToProviderId = (networkName: string): number | null => {
+  return NETWORK_TO_PROVIDER_ID[networkName] ?? null;
 };
 
 export const normalizePlatformName = (name: string): string => {

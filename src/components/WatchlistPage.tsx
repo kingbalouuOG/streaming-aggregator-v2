@@ -62,6 +62,8 @@ interface WatchlistPageProps {
   onNavigateToBrowse: () => void;
   ratings?: Record<string, 'up' | 'down'>;
   onRate?: (id: string, rating: 'up' | 'down' | null) => void;
+  activeSubTab?: "want" | "watched";
+  onSubTabChange?: (tab: "want" | "watched") => void;
 }
 
 export function WatchlistPage({
@@ -74,8 +76,11 @@ export function WatchlistPage({
   onNavigateToBrowse,
   ratings,
   onRate,
+  activeSubTab,
+  onSubTabChange,
 }: WatchlistPageProps) {
-  const [activeTab, setActiveTab] = useState<WatchlistTab>("want");
+  const [localTab, setLocalTab] = useState<WatchlistTab>("want");
+  const activeTab = activeSubTab ?? localTab;
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [activeCategory, setActiveCategory] = useState<Category>("all");
   const [activeSort, setActiveSort] = useState<SortOption>("added");
@@ -83,7 +88,8 @@ export function WatchlistPage({
 
   // Reset category when switching tabs
   const handleTabChange = (tab: WatchlistTab) => {
-    setActiveTab(tab);
+    if (onSubTabChange) onSubTabChange(tab);
+    else setLocalTab(tab);
     setActiveCategory("all");
   };
 
@@ -109,7 +115,7 @@ export function WatchlistPage({
             style={{ fontWeight: 600 }}
           >
             <Bookmark
-              className={`w-3.5 h-3.5 ${activeTab === "want" ? "fill-current" : ""}`}
+              className="w-3.5 h-3.5"
             />
             Want to Watch ({watchlist.length})
           </button>
@@ -123,7 +129,7 @@ export function WatchlistPage({
             style={{ fontWeight: 600 }}
           >
             <CheckCircle2
-              className={`w-3.5 h-3.5 ${activeTab === "watched" ? "fill-current" : ""}`}
+              className="w-3.5 h-3.5"
             />
             Watched ({watched.length})
           </button>
@@ -417,9 +423,15 @@ function GridCard({
 
       {/* Bookmark/Watched indicator - top right */}
       {tab === "watched" ? (
-        <div className="absolute top-2.5 right-2.5 w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onMoveToWantToWatch();
+          }}
+          className="absolute top-2.5 right-2.5 w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center transition-transform active:scale-90"
+        >
           <TickIcon className="w-4 h-4 text-white" />
-        </div>
+        </button>
       ) : (
         <button
           onClick={(e) => {

@@ -25,12 +25,21 @@ interface CacheEntry {
 
 const CACHE_TTL = 1000 * 60 * 30; // 30 minutes
 const MAX_CACHE_SIZE = 500;
+const CACHE_VERSION = 2; // Bump when provider data format changes
 
 // In-memory cache
 const serviceCache = new Map<string, CacheEntry>();
 
 // Pending requests to prevent duplicate API calls
 const pendingRequests = new Map<string, Promise<ServiceId[]>>();
+
+// Invalidate stale in-memory cache from pre-fix code (survives HMR)
+const SC_VERSION_KEY = '__sc_version';
+if ((globalThis as any)[SC_VERSION_KEY] !== CACHE_VERSION) {
+  serviceCache.clear();
+  pendingRequests.clear();
+  (globalThis as any)[SC_VERSION_KEY] = CACHE_VERSION;
+}
 
 // Valid service types for UK market
 const VALID_SERVICES = new Set<ServiceId>([
@@ -116,6 +125,8 @@ const fetchServicesFromAPI = async (
     if (response.success && response.data) {
       const allProviders: any[] = [
         ...(response.data.flatrate || []),
+        ...(response.data.free || []),
+        ...(response.data.ads || []),
         ...(response.data.rent || []),
         ...(response.data.buy || []),
       ];

@@ -7,7 +7,7 @@
 import type { ServiceId } from '@/components/platformLogos';
 import { buildBackdropUrl, buildPosterUrl, buildImageUrl } from '../api/tmdb';
 import { providerIdsToServiceIds, providerIdToServiceId } from './platformAdapter';
-import { mapProviderIdToCanonical, normalizePlatformName, rentBuyMatchesUserPlatform } from '../constants/platforms';
+import { mapProviderIdToCanonical, normalizePlatformName, rentBuyMatchesUserPlatform, networkNameToProviderId } from '../constants/platforms';
 
 export interface CastMember {
   name: string;
@@ -91,10 +91,31 @@ export function buildDetailData(
   // Genres
   const genres = (tmdbDetail.genres || []).map((g: any) => g.name);
 
-  // Streaming services from watch/providers
+  // Streaming services from watch/providers (flatrate + free + ads = "available to stream")
   const providers = tmdbDetail['watch/providers']?.results?.GB;
-  const flatrateIds = (providers?.flatrate || []).map((p: any) => mapProviderIdToCanonical(p.provider_id));
-  const allServices = providerIdsToServiceIds(flatrateIds);
+  const streamingProviders = [
+    ...(providers?.flatrate || []),
+    ...(providers?.free || []),
+    ...(providers?.ads || []),
+  ];
+  const streamingIds = streamingProviders.map((p: any) => mapProviderIdToCanonical(p.provider_id));
+  const allServices = providerIdsToServiceIds(streamingIds);
+
+  // Fallback: if no streaming providers found for TV, use networks (production metadata)
+  // This covers new content where JustWatch data hasn't propagated yet
+  if (allServices.length === 0 && mediaType === 'tv' && tmdbDetail.networks?.length) {
+    const seen = new Set<ServiceId>();
+    for (const network of tmdbDetail.networks) {
+      const pid = networkNameToProviderId(network.name);
+      if (pid) {
+        const sid = providerIdsToServiceIds([pid])[0];
+        if (sid && !seen.has(sid)) {
+          allServices.push(sid);
+          seen.add(sid);
+        }
+      }
+    }
+  }
 
   // Filter "Available on" to only user's subscribed platforms
   const userServiceSet = userPlatformIds?.length
