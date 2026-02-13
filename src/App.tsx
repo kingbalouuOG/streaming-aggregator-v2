@@ -94,13 +94,22 @@ function AppContent() {
     (filters.cost !== "All" ? 1 : 0) +
     filters.genres.length +
     (filters.minRating > 0 ? 1 : 0) +
-    (filters.showWatched ? 1 : 0);
+    (filters.showWatched ? 1 : 0) +
+    filters.languages.length;
 
   // Filter out watched items from home content unless showWatched is on
   const filterWatched = useCallback((items: ContentItem[]) => {
     if (filters.showWatched || watchedIds.size === 0) return items;
     return items.filter((item) => !watchedIds.has(item.id));
   }, [filters.showWatched, watchedIds]);
+
+  // Filter by language selection
+  const filterLanguage = useCallback((items: ContentItem[]) => {
+    if (filters.languages.length === 0) return items;
+    return items.filter((item) =>
+      item.language ? filters.languages.includes(item.language) : true
+    );
+  }, [filters.languages]);
 
   const handleItemSelect = (item: ContentItem) => {
     setSelectedItem(item);
@@ -143,14 +152,18 @@ function AppContent() {
 
   const handleMoveToWatched = useCallback(async (id: string) => {
     try {
-      const item = wl.watchlist.find((i) => i.id === id);
+      // If not already in watchlist, add it first (direct-to-watched flow)
+      if (!wl.bookmarkedIds.has(id) && selectedItem) {
+        await wl.toggleBookmark(selectedItem);
+      }
       await wl.moveToWatched(id);
-      toast.success("Marked as Watched", { description: item?.title, icon: "\u{2705}" });
+      const item = [...wl.watchlist, ...wl.watched].find((i) => i.id === id);
+      toast.success("Marked as Watched", { description: item?.title || selectedItem?.title, icon: "\u{2705}" });
     } catch (err) {
       console.error('[handleMoveToWatched]', err);
       toast.error("Something went wrong");
     }
-  }, [wl.moveToWatched, wl.watchlist]);
+  }, [wl.moveToWatched, wl.toggleBookmark, wl.bookmarkedIds, wl.watchlist, wl.watched, selectedItem]);
 
   const handleMoveToWantToWatch = useCallback(async (id: string) => {
     try {
@@ -391,7 +404,7 @@ function AppContent() {
                   ) : (
                     <>
                       {home.forYou.items.length > 0 && (
-                        <ContentRow title="For You" items={filterWatched(home.forYou.items).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                        <ContentRow title="For You" items={filterLanguage(filterWatched(home.forYou.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       )}
                       {upcoming.items.length > 0 && (
                         <div className="mb-6 overflow-hidden">
@@ -412,12 +425,12 @@ function AppContent() {
                           </div>
                         </div>
                       )}
-                      <ContentRow title="Popular on Your Services" items={filterWatched(home.popular.items)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.popular.loadMore} loadingMore={home.popular.loadingMore} hasMore={home.popular.hasMore} />
-                      <ContentRow title="Highest Rated" items={filterWatched(home.highestRated.items)} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.highestRated.loadMore} loadingMore={home.highestRated.loadingMore} hasMore={home.highestRated.hasMore} />
+                      <ContentRow title="Popular on Your Services" items={filterLanguage(filterWatched(home.popular.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.popular.loadMore} loadingMore={home.popular.loadingMore} hasMore={home.popular.hasMore} />
+                      <ContentRow title="Highest Rated" items={filterLanguage(filterWatched(home.highestRated.items))} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.highestRated.loadMore} loadingMore={home.highestRated.loadingMore} hasMore={home.highestRated.hasMore} />
                       {home.hiddenGems.items.length > 0 && (
-                        <ContentRow title="Hidden Gems" items={filterWatched(home.hiddenGems.items).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                        <ContentRow title="Hidden Gems" items={filterLanguage(filterWatched(home.hiddenGems.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       )}
-                      <ContentRow title="Recently Added" items={filterWatched(home.recentlyAdded.items)} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.recentlyAdded.loadMore} loadingMore={home.recentlyAdded.loadingMore} hasMore={home.recentlyAdded.hasMore} />
+                      <ContentRow title="Recently Added" items={filterLanguage(filterWatched(home.recentlyAdded.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.recentlyAdded.loadMore} loadingMore={home.recentlyAdded.loadingMore} hasMore={home.recentlyAdded.hasMore} />
                       {home.genreList.map((genreId) => (
                         <LazyGenreSection
                           key={genreId}
@@ -435,7 +448,7 @@ function AppContent() {
                           onToggleBookmark={handleToggleBookmark}
                           userServices={connectedServiceIds}
                           watchedIds={watchedIds}
-                          filterWatched={filterWatched}
+                          filterWatched={(items) => filterLanguage(filterWatched(items))}
                         />
                       ))}
                     </>

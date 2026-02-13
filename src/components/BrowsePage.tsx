@@ -61,10 +61,17 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     (filters.contentType !== "All" ? 1 : 0) +
     (filters.cost !== "All" ? 1 : 0) +
     filters.genres.length +
-    (filters.minRating > 0 ? 1 : 0);
+    (filters.minRating > 0 ? 1 : 0) +
+    filters.languages.length;
 
-  // Display items: search results or browse results
-  const displayItems = isSearching ? search.results : browse.items;
+  // Display items: search results or browse results, filtered by language
+  const rawItems = isSearching ? search.results : browse.items;
+  const displayItems = useMemo(() => {
+    if (filters.languages.length === 0) return rawItems;
+    return rawItems.filter((item) =>
+      item.language ? filters.languages.includes(item.language) : true
+    );
+  }, [rawItems, filters.languages]);
   const isLoading = isSearching ? search.loading : browse.loading;
 
   return (

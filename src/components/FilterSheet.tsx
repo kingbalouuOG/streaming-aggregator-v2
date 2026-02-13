@@ -14,6 +14,11 @@ const genres = [
   "Music", "Mystery", "Romance", "Sci-Fi",
   "Thriller", "War", "Western",
 ];
+const languages = [
+  "English", "Japanese", "Korean", "Spanish",
+  "French", "German", "Hindi", "Italian",
+  "Turkish", "Danish", "Norwegian", "Swedish",
+];
 
 // ----- Filter state types -----
 export interface FilterState {
@@ -23,6 +28,7 @@ export interface FilterState {
   genres: string[];
   minRating: number;
   showWatched: boolean;
+  languages: string[];
 }
 
 const defaultFilters: FilterState = {
@@ -32,6 +38,7 @@ const defaultFilters: FilterState = {
   genres: [],
   minRating: 0,
   showWatched: false,
+  languages: [],
 };
 
 interface FilterSheetProps {
@@ -76,6 +83,15 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
     }));
   };
 
+  const toggleLanguage = (lang: string) => {
+    setLocal((prev) => ({
+      ...prev,
+      languages: prev.languages.includes(lang)
+        ? prev.languages.filter((l) => l !== lang)
+        : [...prev.languages, lang],
+    }));
+  };
+
   // Slider logic
   const updateRating = (clientX: number) => {
     if (!sliderRef.current) return;
@@ -111,7 +127,8 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
     (local.cost !== "All" ? 1 : 0) +
     local.genres.length +
     (local.minRating > 0 ? 1 : 0) +
-    (local.showWatched ? 1 : 0);
+    (local.showWatched ? 1 : 0) +
+    local.languages.length;
 
   if (!isOpen) return null;
 
@@ -320,6 +337,31 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
                   {local.showWatched ? "Visible" : "Hidden"}
                 </span>
               </button>
+
+              {/* LANGUAGE */}
+              <SectionLabel>LANGUAGE</SectionLabel>
+              <p className="text-muted-foreground/60 text-[11px] -mt-1.5 mb-3">
+                Select languages you want to see. None selected = show all.
+              </p>
+              <div className="flex flex-wrap gap-2 mb-6">
+                {languages.map((lang) => {
+                  const selected = local.languages.includes(lang);
+                  return (
+                    <button
+                      key={lang}
+                      onClick={() => toggleLanguage(lang)}
+                      className={`px-3.5 py-1.5 rounded-full text-[13px] transition-colors duration-200 border ${
+                        selected
+                          ? "bg-primary/15 border-primary text-primary"
+                          : "bg-transparent text-muted-foreground hover:text-foreground"
+                      }`}
+                      style={{ borderColor: selected ? undefined : "var(--check-border-2)" }}
+                    >
+                      {lang}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Bottom bar */}

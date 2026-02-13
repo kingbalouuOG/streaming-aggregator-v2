@@ -8,6 +8,7 @@ import type { ServiceId } from '@/components/platformLogos';
 import { buildBackdropUrl, buildPosterUrl, buildImageUrl } from '../api/tmdb';
 import { providerIdsToServiceIds, providerIdToServiceId } from './platformAdapter';
 import { mapProviderIdToCanonical, normalizePlatformName, rentBuyMatchesUserPlatform, networkNameToProviderId } from '../constants/platforms';
+import { isoToLanguageName } from './contentAdapter';
 
 export interface CastMember {
   name: string;
@@ -37,6 +38,7 @@ export interface DetailData {
   cast: CastMember[];
   runtime?: string;
   seasons?: number;
+  language?: string;
   mediaType: 'movie' | 'tv';
 }
 
@@ -204,9 +206,11 @@ export function buildDetailData(
 
   const seasons = mediaType === 'tv' ? tmdbDetail.number_of_seasons : undefined;
 
+  const language = tmdbDetail.original_language ? isoToLanguageName(tmdbDetail.original_language) : undefined;
+
   return {
     id, title, heroImage, year, contentRating,
     imdbRating, rottenTomatoes, description: tmdbDetail.overview || '',
-    genres, services, rentalOptions, cast, runtime, seasons, mediaType,
+    genres, services, rentalOptions, cast, runtime, seasons, language, mediaType,
   };
 }

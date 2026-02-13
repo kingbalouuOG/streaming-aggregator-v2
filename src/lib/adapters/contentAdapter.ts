@@ -8,6 +8,18 @@ import type { ServiceId } from '@/components/platformLogos';
 import { buildPosterUrl } from '../api/tmdb';
 import { GENRE_NAMES } from '../constants/genres';
 
+const ISO_TO_LANGUAGE: Record<string, string> = {
+  en: "English", ja: "Japanese", ko: "Korean", es: "Spanish",
+  fr: "French", de: "German", hi: "Hindi", it: "Italian",
+  tr: "Turkish", da: "Danish", no: "Norwegian", sv: "Swedish",
+  pt: "Portuguese", zh: "Chinese", th: "Thai", pl: "Polish",
+  nl: "Dutch", ru: "Russian", ar: "Arabic",
+};
+
+export function isoToLanguageName(code: string): string | undefined {
+  return ISO_TO_LANGUAGE[code];
+}
+
 /**
  * Convert a TMDb movie object to a ContentItem.
  * Services are left empty — lazy-loaded per card via serviceCache.
@@ -21,6 +33,7 @@ export function tmdbMovieToContentItem(movie: any): ContentItem {
     rating: movie.vote_average ?? undefined,
     year: movie.release_date ? parseInt(movie.release_date.substring(0, 4), 10) : undefined,
     type: movie.genre_ids?.includes(99) ? 'doc' : 'movie',
+    language: movie.original_language ? ISO_TO_LANGUAGE[movie.original_language] : undefined,
   };
 }
 
@@ -37,6 +50,7 @@ export function tmdbTVToContentItem(tvShow: any): ContentItem {
     rating: tvShow.vote_average ?? undefined,
     year: tvShow.first_air_date ? parseInt(tvShow.first_air_date.substring(0, 4), 10) : undefined,
     type: tvShow.genre_ids?.includes(99) ? 'doc' : 'tv',
+    language: tvShow.original_language ? ISO_TO_LANGUAGE[tvShow.original_language] : undefined,
   };
 }
 

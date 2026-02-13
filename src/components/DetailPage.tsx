@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, Bookmark, Star, Loader2, Undo2, ThumbsUp, ThumbsDown } from "lucide-react";
-import { TickIcon, EyeIcon } from "./icons";
+import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, Check, CheckCircle2, Undo2 } from "lucide-react";
+import { TickIcon } from "./icons";
 import { motion } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
 import { ContentItem } from "./ContentCard";
@@ -16,6 +16,21 @@ import rottenTomatoesLogo from "@/assets/rotten-tomatoes-logo.png";
 export type { DetailData };
 
 const serviceLabels = platformServiceLabels;
+
+const languageCountryCodes: Record<string, string> = {
+  English: "gb",
+  Japanese: "jp",
+  Korean: "kr",
+  Spanish: "es",
+  French: "fr",
+  German: "de",
+  Hindi: "in",
+  Italian: "it",
+  Turkish: "tr",
+  Danish: "dk",
+  Norwegian: "no",
+  Swedish: "se",
+};
 
 interface DetailPageProps {
   itemId: string;
@@ -38,6 +53,7 @@ interface DetailPageProps {
 
 export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = false, onToggleBookmark, onItemSelect, bookmarkedIds, onToggleBookmarkItem, connectedServices, userServices, watchedIds, onMoveToWatched, onMoveToWantToWatch, userRating, onRate }: DetailPageProps) {
   const { detail, similar, loading, error } = useContentDetail(itemId, connectedServices);
+  const isWatched = watchedIds?.has(itemId) ?? false;
 
   // Loading state
   if (loading || !detail) {
@@ -103,32 +119,23 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
           <ArrowLeft className="w-5 h-5" />
         </button>
 
-        {/* Bookmark button - top right */}
-        <div className="absolute right-4" style={{ top: "max(1rem, env(safe-area-inset-top, 1rem))" }}>
-          {watchedIds?.has(itemId) ? (
-            <motion.button
-              onClick={() => onMoveToWantToWatch?.(itemId)}
-              whileTap={{ scale: 0.8 }}
-              className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center"
-            >
-              <TickIcon className="w-5 h-5 text-white" />
-            </motion.button>
-          ) : (
-            <motion.button
-              onClick={() => onToggleBookmark?.()}
-              whileTap={{ scale: 0.8 }}
-              animate={bookmarked ? { scale: [1, 1.25, 0.9, 1] } : undefined}
-              transition={{ duration: 0.35 }}
-              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 ${
-                bookmarked
-                  ? "bg-primary text-white"
-                  : "bg-black/40 backdrop-blur-sm text-white/90 hover:bg-black/60"
-              }`}
-            >
-              <Bookmark className={`w-5 h-5 ${bookmarked ? "fill-current" : ""}`} />
-            </motion.button>
-          )}
-        </div>
+        {/* Status badge (non-interactive) */}
+        {(isWatched || bookmarked) && (
+          <div
+            className={`absolute right-4 w-8 h-8 rounded-lg flex items-center justify-center ${
+              isWatched
+                ? "bg-emerald-500/90 text-white"
+                : "bg-primary/90 text-white"
+            }`}
+            style={{ top: "max(1rem, env(safe-area-inset-top, 1rem))" }}
+          >
+            {isWatched ? (
+              <Check className="w-4 h-4" />
+            ) : (
+              <Bookmark className="w-4 h-4 fill-current" />
+            )}
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -141,6 +148,17 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
           {detail.year} <span className="mx-1.5">&middot;</span> {detail.contentRating}
           {detail.runtime && <><span className="mx-1.5">&middot;</span> {detail.runtime}</>}
           {detail.seasons && <><span className="mx-1.5">&middot;</span> {detail.seasons} Season{detail.seasons !== 1 ? 's' : ''}</>}
+          {detail.language && (
+            <>
+              <span className="mx-1.5">&middot;</span>
+              <span className="inline-flex items-center gap-1">
+                {languageCountryCodes[detail.language] && (
+                  <span className={`fi fi-${languageCountryCodes[detail.language]} fis`} style={{ fontSize: '11px', borderRadius: '2px' }} />
+                )}
+                {detail.language}
+              </span>
+            </>
+          )}
         </p>
 
         {/* Rating badges + thumbs */}
@@ -198,18 +216,114 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
                   <ThumbsDown className={`w-3.5 h-3.5 ${userRating === 'down' ? 'fill-current' : ''}`} />
                 </motion.button>
               </div>
-              {userRating && onMoveToWantToWatch && (
-                <button
-                  onClick={() => onMoveToWantToWatch(itemId)}
-                  className="text-muted-foreground/70 hover:text-muted-foreground text-[11px] transition-colors"
-                  style={{ fontWeight: 500 }}
-                >
-                  Move back to Want to Watch
-                </button>
-              )}
             </div>
           )}
         </div>
+
+        {/* Dual action buttons */}
+        <div className="flex gap-2.5 mb-4">
+          {/* Left button */}
+          {isWatched ? (
+            <motion.button
+              onClick={() => onMoveToWantToWatch?.(itemId)}
+              whileTap={{ scale: 0.96 }}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-secondary/50 border text-muted-foreground transition-colors"
+              style={{ borderColor: "var(--check-border-2)" }}
+            >
+              <Undo2 className="w-4 h-4" />
+              <span className="text-[14px]" style={{ fontWeight: 500 }}>Watchlist</span>
+            </motion.button>
+          ) : bookmarked ? (
+            <motion.button
+              onClick={() => onToggleBookmark?.()}
+              whileTap={{ scale: 0.96 }}
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-white"
+            >
+              <motion.span
+                initial={{ scale: 0, rotate: -90 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: "spring", damping: 15, stiffness: 300 }}
+              >
+                <Check className="w-4 h-4" />
+              </motion.span>
+              <span className="text-[14px]" style={{ fontWeight: 600 }}>In Watchlist</span>
+            </motion.button>
+          ) : (
+            <motion.button
+              onClick={() => onToggleBookmark?.()}
+              whileTap={{ scale: 0.96 }}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-secondary/50 border text-foreground transition-colors"
+              style={{ borderColor: "var(--check-border-2)" }}
+            >
+              <Plus className="w-4 h-4" />
+              <span className="text-[14px]" style={{ fontWeight: 500 }}>Add to Watchlist</span>
+            </motion.button>
+          )}
+
+          {/* Right button */}
+          {isWatched ? (
+            <motion.button
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 text-white cursor-default"
+            >
+              <motion.span
+                initial={{ scale: 0, rotate: -90 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: "spring", damping: 15, stiffness: 300 }}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+              </motion.span>
+              <span className="text-[14px]" style={{ fontWeight: 600 }}>Watched</span>
+            </motion.button>
+          ) : bookmarked ? (
+            <motion.button
+              onClick={() => onMoveToWatched?.(itemId)}
+              whileTap={{ scale: 0.96 }}
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 text-white"
+            >
+              <Eye className="w-4 h-4" />
+              <span className="text-[14px]" style={{ fontWeight: 600 }}>Mark as Watched</span>
+            </motion.button>
+          ) : (
+            <motion.button
+              onClick={() => onMoveToWatched?.(itemId)}
+              whileTap={{ scale: 0.96 }}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-secondary/50 border text-foreground transition-colors"
+              style={{ borderColor: "var(--check-border-2)" }}
+            >
+              <Eye className="w-4 h-4" />
+              <span className="text-[14px]" style={{ fontWeight: 500 }}>Mark as Watched</span>
+            </motion.button>
+          )}
+        </div>
+
+        {/* Rating prompt — watched but not yet rated */}
+        {isWatched && onRate && !userRating && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="flex items-center gap-3 p-3 rounded-xl border mb-4"
+            style={{ borderColor: "rgba(52, 211, 153, 0.25)", background: "rgba(16, 185, 129, 0.12)" }}
+          >
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
+              <ThumbsUp className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-foreground text-[13px]" style={{ fontWeight: 600 }}>
+                Rate this title
+              </p>
+              <p className="text-muted-foreground text-[11px] flex items-center gap-1 flex-wrap">
+                Use <ThumbsUp className="w-3 h-3 inline text-muted-foreground" /> or <ThumbsDown className="w-3 h-3 inline text-muted-foreground" /> above to improve recommendations
+              </p>
+            </div>
+          </motion.div>
+        )}
 
         {/* Genre tags */}
         <div className="flex flex-wrap items-center gap-1.5 mb-4">
@@ -219,42 +333,6 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             </span>
           ))}
         </div>
-
-        {/* Mark as Watched / Watched state */}
-        {bookmarked && !watchedIds?.has(itemId) && onMoveToWatched && (
-          <motion.button
-            onClick={() => onMoveToWatched(itemId)}
-            whileTap={{ scale: 0.97 }}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 text-white mb-4 shadow-lg shadow-emerald-600/25"
-          >
-            <EyeIcon className="w-5 h-5" />
-            <span className="text-[14px]" style={{ fontWeight: 600 }}>Mark as Watched</span>
-          </motion.button>
-        )}
-        {watchedIds?.has(itemId) && !userRating && (
-          <div className="w-full flex items-center justify-between py-3 px-4 rounded-xl bg-emerald-500/8 border border-emerald-500/20 mb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center">
-                <EyeIcon className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div>
-                <span className="text-foreground text-[13px] block" style={{ fontWeight: 600 }}>You've watched this</span>
-                {onRate && (
-                  <span className="text-muted-foreground text-[11px]">Rate it to improve your recommendations</span>
-                )}
-              </div>
-            </div>
-            {onMoveToWantToWatch && (
-              <button
-                onClick={() => onMoveToWantToWatch(itemId)}
-                className="text-muted-foreground hover:text-foreground text-[11px] transition-colors shrink-0"
-                style={{ fontWeight: 500 }}
-              >
-                Undo
-              </button>
-            )}
-          </div>
-        )}
 
         {/* Description */}
         <p className="text-foreground/80 text-[14px] leading-relaxed mb-6">

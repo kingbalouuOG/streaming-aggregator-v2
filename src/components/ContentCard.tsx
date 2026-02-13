@@ -20,6 +20,7 @@ export interface ContentItem {
   runtime?: number;
   addedAt?: number;
   genre?: string;
+  language?: string;
 }
 
 interface ContentCardProps {
