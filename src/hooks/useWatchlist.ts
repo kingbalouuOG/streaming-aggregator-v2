@@ -65,7 +65,8 @@ export function useWatchlist() {
         overview: '',
         release_date: item.year ? `${item.year}-01-01` : '',
         vote_average: item.rating || 0,
-        genre_ids: [],
+        genre_ids: item.genreIds || [],
+        originalLanguage: item.originalLanguage || null,
       });
       setItems((prev) => [newItem, ...prev]);
       return true; // added

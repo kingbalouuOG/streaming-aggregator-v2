@@ -11,25 +11,30 @@ import {
 } from "lucide-react";
 import videxLogo from "@/assets/videx-logos/videx-icon-192.png";
 import { PLATFORMS, type PlatformDef } from "./platformLogos";
+import { TasteQuiz } from "./quiz/TasteQuiz";
+import type { TasteVector } from "@/lib/taste/tasteVector";
+import type { QuizAnswer } from "@/lib/storage/tasteProfile";
 
 // ── Service definitions ──────────────────────────────────
 export type { PlatformDef as StreamingServiceDef };
 
 export const allServices = PLATFORMS;
 
+export const MAX_GENRES = 5;
+
 export const allGenres = [
-  "Action", "Adventure", "Animation", "Comedy", "Crime",
+  "Action", "Adventure", "Animation", "Anime", "Comedy", "Crime",
   "Documentary", "Drama", "Family", "Fantasy", "History",
-  "Horror", "Music", "Mystery", "Romance", "Sci-Fi",
+  "Horror", "Musical", "Mystery", "Reality", "Romance", "Sci-Fi",
   "Thriller", "War", "Western",
 ];
 
-const genreIcons: Record<string, string> = {
-  Action: "💥", Adventure: "🗺️", Animation: "✨", Comedy: "😂",
-  Crime: "🔍", Documentary: "🎬", Drama: "🎭", Family: "👨‍👩‍👧‍👦",
-  Fantasy: "🐉", History: "📜", Horror: "👻", Music: "🎵",
-  Mystery: "🕵️", Romance: "❤️", "Sci-Fi": "🚀", Thriller: "😱",
-  War: "⚔️", Western: "🤠",
+export const genreIcons: Record<string, string> = {
+  Action: "💥", Adventure: "🗺️", Animation: "✨", Anime: "🎌",
+  Comedy: "😂", Crime: "🔍", Documentary: "🎬", Drama: "🎭",
+  Family: "👨‍👩‍👧‍👦", Fantasy: "🐉", History: "📜", Horror: "👻",
+  Musical: "🎵", Mystery: "🕵️", Reality: "📺", Romance: "❤️",
+  "Sci-Fi": "🚀", Thriller: "😱", War: "⚔️", Western: "🤠",
 };
 
 // ── Types ──────────────────────────────────
@@ -38,11 +43,15 @@ export interface OnboardingData {
   email: string;
   services: string[];
   genres: string[];
+  quizAnswers?: QuizAnswer[];
+  tasteVector?: TasteVector;
 }
 
 interface OnboardingFlowProps {
   onComplete: (data: OnboardingData) => void;
 }
+
+const TOTAL_STEPS = 4; // Welcome, Services, Genres, Quiz
 
 // ── Slide direction logic ──────────────────
 const slideVariants = {
@@ -78,17 +87,33 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   ];
 
   const goNext = () => {
-    if (step === 2) {
-      onComplete({ name: name.trim(), email: email.trim(), services: selectedServices, genres: selectedGenres });
+    if (step < 3) {
+      setDirection(1);
+      setStep((s) => s + 1);
       return;
     }
-    setDirection(1);
-    setStep((s) => s + 1);
   };
 
   const goBack = () => {
     setDirection(-1);
     setStep((s) => s - 1);
+  };
+
+  // Quiz completion: includes quiz answers + vector
+  const handleQuizComplete = (quizAnswers: QuizAnswer[], tasteVector: TasteVector) => {
+    onComplete({
+      name: name.trim(), email: email.trim(),
+      services: selectedServices, genres: selectedGenres,
+      quizAnswers, tasteVector,
+    });
+  };
+
+  // Quiz skip: complete onboarding without quiz data
+  const handleQuizSkip = () => {
+    onComplete({
+      name: name.trim(), email: email.trim(),
+      services: selectedServices, genres: selectedGenres,
+    });
   };
 
   const toggleService = (id: string) => {
@@ -98,9 +123,11 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   };
 
   const toggleGenre = (genre: string) => {
-    setSelectedGenres((prev) =>
-      prev.includes(genre) ? prev.filter((g) => g !== genre) : [...prev, genre]
-    );
+    setSelectedGenres((prev) => {
+      if (prev.includes(genre)) return prev.filter((g) => g !== genre);
+      if (prev.length >= MAX_GENRES) return prev; // Reject when at limit
+      return [...prev, genre];
+    });
   };
 
   const selectAllServices = () => {
@@ -111,13 +138,23 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
   };
 
-  const selectAllGenres = () => {
-    if (selectedGenres.length === allGenres.length) {
-      setSelectedGenres([]);
-    } else {
-      setSelectedGenres([...allGenres]);
-    }
+  const clearGenres = () => {
+    setSelectedGenres([]);
   };
+
+  // Step 3 (Quiz) takes over the full viewport — no chrome
+  if (step === 3) {
+    return (
+      <div className="size-full bg-background text-foreground">
+        <TasteQuiz
+          onComplete={handleQuizComplete}
+          onSkip={handleQuizSkip}
+          showSkip={true}
+          userGenres={selectedGenres}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="size-full bg-background text-foreground flex justify-center overflow-hidden">
@@ -135,7 +172,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             </motion.button>
           )}
           <div className="flex-1 flex items-center gap-2">
-            {[0, 1, 2].map((i) => (
+            {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
               <div key={i} className="flex-1 h-1 rounded-full bg-secondary overflow-hidden">
                 <motion.div
                   className="h-full bg-primary rounded-full"
@@ -147,7 +184,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             ))}
           </div>
           <span className="text-muted-foreground text-[12px] ml-2 tabular-nums" style={{ fontWeight: 500 }}>
-            {step + 1}/3
+            {step + 1}/{TOTAL_STEPS}
           </span>
         </div>
 
@@ -184,7 +221,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 <StepGenres
                   selected={selectedGenres}
                   onToggle={toggleGenre}
-                  onSelectAll={selectAllGenres}
+                  onClear={clearGenres}
                 />
               )}
             </motion.div>
@@ -201,7 +238,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           )}
           {step === 2 && selectedGenres.length === 0 && (
             <p className="text-muted-foreground text-[12px] text-center mb-2">
-              Pick at least one genre you enjoy
+              Pick your top {MAX_GENRES} favourite genres
             </p>
           )}
           {step === 1 && selectedServices.length > 0 && (
@@ -211,7 +248,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           )}
           {step === 2 && selectedGenres.length > 0 && (
             <p className="text-muted-foreground text-[12px] text-center mb-2">
-              {selectedGenres.length} genre{selectedGenres.length !== 1 ? "s" : ""} selected
+              {selectedGenres.length} of {MAX_GENRES} selected
             </p>
           )}
 
@@ -226,17 +263,8 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             }`}
             style={{ fontWeight: 600 }}
           >
-            {step === 2 ? (
-              <>
-                <Sparkles className="w-4.5 h-4.5" />
-                Get Started
-              </>
-            ) : (
-              <>
-                Continue
-                <ArrowRight className="w-4.5 h-4.5" />
-              </>
-            )}
+            Continue
+            <ArrowRight className="w-4.5 h-4.5" />
           </motion.button>
 
           {step > 0 && (
@@ -479,12 +507,14 @@ function StepServices({
 function StepGenres({
   selected,
   onToggle,
-  onSelectAll,
+  onClear,
 }: {
   selected: string[];
   onToggle: (genre: string) => void;
-  onSelectAll: () => void;
+  onClear: () => void;
 }) {
+  const atLimit = selected.length >= MAX_GENRES;
+
   return (
     <div className="flex flex-col h-full px-6 overflow-y-auto no-scrollbar">
       {/* Header */}
@@ -497,12 +527,30 @@ function StepGenres({
           <div className="w-10 h-10 rounded-2xl bg-primary/15 flex items-center justify-center">
             <Sparkles className="w-5 h-5 text-primary" />
           </div>
-          <div>
-            <h2 className="text-foreground text-[20px]" style={{ fontWeight: 700 }}>
-              Your Taste
-            </h2>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h2 className="text-foreground text-[20px]" style={{ fontWeight: 700 }}>
+                Your Taste
+              </h2>
+              {/* Counter badge */}
+              <AnimatePresence>
+                {selected.length > 0 && (
+                  <motion.span
+                    key={selected.length}
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.8, opacity: 0 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                    className="bg-primary text-white text-[12px] px-2 py-0.5 rounded-full tabular-nums"
+                    style={{ fontWeight: 600 }}
+                  >
+                    {selected.length}/{MAX_GENRES}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </div>
             <p className="text-muted-foreground text-[13px]">
-              Pick genres you enjoy watching
+              Pick your top {MAX_GENRES} favourite genres
             </p>
           </div>
         </motion.div>
@@ -512,19 +560,25 @@ function StepGenres({
       <div className="grid grid-cols-2 gap-2.5">
         {allGenres.map((genre, idx) => {
           const isSelected = selected.includes(genre);
+          const isDisabled = atLimit && !isSelected;
           const emoji = genreIcons[genre] || "🎬";
           return (
             <motion.button
               key={genre}
               initial={{ opacity: 0, scale: 0.85 }}
-              animate={{ opacity: 1, scale: 1 }}
+              animate={{
+                opacity: isDisabled ? 0.4 : 1,
+                scale: isDisabled ? 0.98 : 1,
+              }}
               transition={{ delay: 0.03 * idx, type: "spring", damping: 20, stiffness: 300 }}
-              whileTap={{ scale: 0.94 }}
-              onClick={() => onToggle(genre)}
+              whileTap={!isDisabled ? { scale: 0.94 } : undefined}
+              onClick={() => !isDisabled && onToggle(genre)}
               className={`relative flex items-center gap-3 px-3.5 py-3 rounded-2xl border transition-all duration-250 ${
                 isSelected
                   ? "border-primary/50 bg-primary/10"
-                  : "bg-secondary/40 hover:bg-secondary/60"
+                  : isDisabled
+                    ? "bg-secondary/20 cursor-not-allowed"
+                    : "bg-secondary/40 hover:bg-secondary/60"
               }`}
               style={{ borderColor: isSelected ? undefined : "var(--border-subtle)" }}
             >
@@ -567,15 +621,41 @@ function StepGenres({
         })}
       </div>
 
-      {/* Select all button */}
-      <div className="mt-4 text-center">
-        <button
-          onClick={onSelectAll}
-          className="text-primary text-[13px] hover:underline transition-colors"
-        >
-          {selected.length === allGenres.length ? "Deselect All" : "Select All"}
-        </button>
-      </div>
+      {/* Max selection message */}
+      <AnimatePresence>
+        {atLimit && (
+          <motion.p
+            initial={{ opacity: 0, y: -10, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -10, height: 0 }}
+            transition={{ duration: 0.3, ease: [0.0, 0.0, 0.2, 1] }}
+            className="text-primary text-[12px] text-center mt-3"
+          >
+            Maximum {MAX_GENRES} genres selected — deselect one to choose another
+          </motion.p>
+        )}
+      </AnimatePresence>
+
+      {/* Clear selections button */}
+      <AnimatePresence>
+        {selected.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="mt-3 text-center"
+          >
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              onClick={onClear}
+              className="text-muted-foreground text-[13px] hover:text-foreground transition-colors"
+            >
+              Clear selections
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Bottom spacer */}
       <div className="h-4" />

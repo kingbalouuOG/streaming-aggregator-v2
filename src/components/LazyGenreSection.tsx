@@ -23,6 +23,7 @@ interface LazyGenreSectionProps {
   userServices?: ServiceId[];
   watchedIds?: Set<string>;
   filterWatched: (items: ContentItem[]) => ContentItem[];
+  immediate?: boolean;
 }
 
 function SectionSkeleton({ genreId }: { genreId: number }) {
@@ -61,8 +62,10 @@ export function LazyGenreSection({
   userServices,
   watchedIds,
   filterWatched,
+  immediate,
 }: LazyGenreSectionProps) {
   const { ref, isVisible } = useIntersectionObserver({ rootMargin: '200px 0px', triggerOnce: true });
+  const effectivelyVisible = immediate || isVisible;
 
   // Build genre-specific params: combine row genre with any active genre filter (AND logic)
   const genreParam = filterGenreIds.length > 0
@@ -78,7 +81,7 @@ export function LazyGenreSection({
     tvParams: { sort_by: 'popularity.desc' },
     fetchMovies,
     fetchTV,
-    enabled: isVisible,
+    enabled: effectivelyVisible,
     excludeIds,
     onNewIds,
     genreAffinities,
@@ -89,7 +92,7 @@ export function LazyGenreSection({
   const filteredItems = filterWatched(section.items);
 
   // Not yet visible — show skeleton placeholder
-  if (!isVisible || section.loading) {
+  if (!effectivelyVisible || section.loading) {
     return (
       <div ref={ref}>
         <SectionSkeleton genreId={genreId} />

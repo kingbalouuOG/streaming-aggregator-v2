@@ -1,4 +1,5 @@
 import storage from '../storage';
+import { clearTasteProfile } from './tasteProfile';
 
 const DEBUG = __DEV__;
 
@@ -97,6 +98,7 @@ export const hasCompletedOnboarding = async (): Promise<boolean> => {
 
 export const clearAllData = async () => {
   await storage.multiRemove([STORAGE_KEYS.USER_PROFILE, STORAGE_KEYS.USER_PREFERENCES]);
+  await clearTasteProfile();
   if (DEBUG) console.log('[Storage] All user data cleared');
 };
 

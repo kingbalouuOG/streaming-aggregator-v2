@@ -18,9 +18,21 @@ import {
 } from '@/lib/storage/recommendations';
 import { discoverMovies, discoverTV, getSimilarMovies, getSimilarTV } from '@/lib/api/tmdb';
 import { GENRE_NAMES } from '@/lib/constants/genres';
+import { getTasteProfile } from '@/lib/storage/tasteProfile';
+import type { TasteVector } from '@/lib/taste/tasteVector';
+import { cosineSimilarity, DIMENSION_WEIGHTS } from '@/lib/taste/tasteVector';
+import { contentToVector } from '@/lib/taste/contentVectorMapping';
 
 const DEBUG = __DEV__;
 
+// Weights when taste vector is available (per spec Part 4)
+const VECTOR_WEIGHTS = {
+  TASTE_VECTOR: 0.60,
+  SIMILAR_CONTENT: 0.25,
+  TRENDING_RECENCY: 0.15,
+};
+
+// Fallback weights when no taste vector
 const WEIGHTS = {
   GENRE_AFFINITY: 0.70,
   SIMILAR_CONTENT: 0.30,
@@ -204,26 +216,54 @@ async function fetchSimilarContent(likedItems: WatchlistItem[]): Promise<ScoredC
   }
 }
 
-function scoreCandidate(item: ScoredCandidate, affinities: GenreAffinities): number {
+function scoreCandidate(item: ScoredCandidate, affinities: GenreAffinities, tasteVector?: TasteVector | null): number {
   let score = 0;
 
-  const genreIds = item.genre_ids || [];
-  let genreScore = 0;
-  genreIds.forEach((genreId) => {
-    genreScore += affinities[genreId] || 0;
-  });
-  const normalizedGenreScore = Math.min(genreScore / 10, 1) * 100;
+  if (tasteVector) {
+    // Vector-based scoring (per spec Part 4)
+    const dateStr = item.release_date || item.first_air_date || '';
+    const contentMeta = {
+      genreIds: item.genre_ids || [],
+      popularity: item.popularity || 0,
+      voteCount: 100, // Not available on discover results; use reasonable default
+      releaseYear: dateStr ? parseInt(dateStr.slice(0, 4)) || null : null,
+      originalLanguage: (item as any).original_language || null,
+    };
+    const contentVector = contentToVector(contentMeta);
+    const similarity = cosineSimilarity(tasteVector, contentVector, DIMENSION_WEIGHTS); // 0-100
 
-  if (item.source === 'genre') {
-    score += normalizedGenreScore * WEIGHTS.GENRE_AFFINITY;
-  } else if (item.source === 'similar') {
-    score += 50 * WEIGHTS.SIMILAR_CONTENT;
-    score += normalizedGenreScore * WEIGHTS.GENRE_AFFINITY * 0.5;
+    if (item.source === 'similar') {
+      score += similarity * VECTOR_WEIGHTS.TASTE_VECTOR;
+      score += 50 * VECTOR_WEIGHTS.SIMILAR_CONTENT;
+    } else {
+      score += similarity * VECTOR_WEIGHTS.TASTE_VECTOR;
+    }
+
+    // Trending/recency component
+    const popularity = item.popularity || 0;
+    const trendingScore = Math.min(popularity / 100, 1) * 100;
+    score += trendingScore * VECTOR_WEIGHTS.TRENDING_RECENCY;
+  } else {
+    // Fallback: genre affinity scoring (original algorithm)
+    const genreIds = item.genre_ids || [];
+    let genreScore = 0;
+    genreIds.forEach((genreId) => {
+      genreScore += affinities[genreId] || 0;
+    });
+    const normalizedGenreScore = Math.min(genreScore / 10, 1) * 100;
+
+    if (item.source === 'genre') {
+      score += normalizedGenreScore * WEIGHTS.GENRE_AFFINITY;
+    } else if (item.source === 'similar') {
+      score += 50 * WEIGHTS.SIMILAR_CONTENT;
+      score += normalizedGenreScore * WEIGHTS.GENRE_AFFINITY * 0.5;
+    }
+
+    const popularity = item.popularity || 0;
+    score += Math.min(popularity / 100, 1) * 10;
   }
 
-  const popularity = item.popularity || 0;
-  score += Math.min(popularity / 100, 1) * 10;
-
+  // Rating bonus (both paths)
   const rating = item.vote_average || 0;
   if (rating >= 7) {
     score += (rating - 7) * 3;
@@ -265,11 +305,42 @@ function applyDiversityFilter(rankedItems: ScoredCandidate[], maxPerGenre = 3, t
   return result;
 }
 
-function generateReasonText(item: ScoredCandidate, affinities: GenreAffinities): string {
+function generateReasonText(item: ScoredCandidate, affinities: GenreAffinities, tasteVector?: TasteVector | null): string {
   if (item.source === 'similar' && item.similarTo) {
     return `Similar to ${item.similarTo}`;
   }
 
+  // Vector-enhanced reasons: match on content's strongest genre vs user's vector
+  if (tasteVector) {
+    const dateStr = item.release_date || item.first_air_date || '';
+    const contentMeta = {
+      genreIds: item.genre_ids || [],
+      popularity: item.popularity || 0,
+      voteCount: 100,
+      releaseYear: dateStr ? parseInt(dateStr.slice(0, 4)) || null : null,
+      originalLanguage: (item as any).original_language || null,
+    };
+    const contentVector = contentToVector(contentMeta);
+    const similarity = cosineSimilarity(tasteVector, contentVector, DIMENSION_WEIGHTS);
+
+    if (similarity >= 80) {
+      // Find strongest matching genre
+      const genreIds = item.genre_ids || [];
+      for (const gId of genreIds) {
+        if (GENRE_NAMES[gId]) return `Great match for your taste in ${GENRE_NAMES[gId]}`;
+      }
+      return 'Great match for your taste';
+    }
+    if (similarity >= 60) {
+      const genreIds = item.genre_ids || [];
+      for (const gId of genreIds) {
+        if (GENRE_NAMES[gId]) return `Matches your ${GENRE_NAMES[gId]} preferences`;
+      }
+      return 'Matches your preferences';
+    }
+  }
+
+  // Fallback: genre affinity reasons
   const genreIds = item.genreMatch?.length ? item.genreMatch : (item.genre_ids || []);
   let bestGenre: number | null = null;
   let bestScore = 0;
@@ -306,13 +377,18 @@ export async function generateRecommendations(
 
     if (DEBUG) console.log('[RecommendationEngine] Generating fresh recommendations');
 
-    const affinities = await calculateGenreAffinities();
+    const [affinities, tasteProfile] = await Promise.all([
+      calculateGenreAffinities(),
+      getTasteProfile(),
+    ]);
+    const tasteVector = tasteProfile?.vector || null;
     const topGenres = getTopGenres(affinities, 3);
     const likedItems = await getTopLikedItems(3);
 
     if (DEBUG) {
       console.log('[RecommendationEngine] Top genres:', topGenres);
       console.log('[RecommendationEngine] Liked items:', likedItems.length);
+      console.log('[RecommendationEngine] Taste vector available:', !!tasteVector);
     }
 
     const [genreContent, similarContent] = await Promise.all([
@@ -323,7 +399,7 @@ export async function generateRecommendations(
     const allCandidates = [...genreContent, ...similarContent];
     const scored = allCandidates.map((item) => ({
       ...item,
-      score: scoreCandidate(item, affinities),
+      score: scoreCandidate(item, affinities, tasteVector),
     }));
 
     scored.sort((a, b) => b.score - a.score);
@@ -343,7 +419,7 @@ export async function generateRecommendations(
       id: item.id,
       type: item.type,
       score: item.score,
-      reason: generateReasonText(item, affinities),
+      reason: generateReasonText(item, affinities, tasteVector),
       source: item.source,
       metadata: {
         title: item.title || item.name || 'Unknown',
@@ -391,7 +467,11 @@ export async function generateHiddenGems(
 
     if (DEBUG) console.log('[HiddenGems] Generating fresh hidden gems');
 
-    const affinities = await calculateGenreAffinities();
+    const [affinities, tasteProfile] = await Promise.all([
+      calculateGenreAffinities(),
+      getTasteProfile(),
+    ]);
+    const tasteVector = tasteProfile?.vector || null;
     const topGenres = getTopGenres(affinities, 3);
     const genreString = topGenres.length > 0 ? topGenres.map((g) => g.genreId).join('|') : '';
 
@@ -423,6 +503,17 @@ export async function generateHiddenGems(
     const watchlist = await getWatchlist();
     const watchlistIds = new Set(watchlist.items.map((i) => `${i.type}-${i.id}`));
     const filtered = allResults.filter((item) => !watchlistIds.has(`${item.mediaType}-${item.id}`));
+
+    // Sort by taste vector similarity when available
+    if (tasteVector) {
+      filtered.sort((a, b) => {
+        const aDate = a.release_date || a.first_air_date || '';
+        const bDate = b.release_date || b.first_air_date || '';
+        const aVec = contentToVector({ genreIds: a.genre_ids || [], popularity: a.popularity || 0, voteCount: a.vote_count || 50, releaseYear: aDate ? parseInt(aDate.slice(0, 4)) || null : null, originalLanguage: a.original_language || null });
+        const bVec = contentToVector({ genreIds: b.genre_ids || [], popularity: b.popularity || 0, voteCount: b.vote_count || 50, releaseYear: bDate ? parseInt(bDate.slice(0, 4)) || null : null, originalLanguage: b.original_language || null });
+        return cosineSimilarity(tasteVector, bVec, DIMENSION_WEIGHTS) - cosineSimilarity(tasteVector, aVec, DIMENSION_WEIGHTS);
+      });
+    }
 
     // Diversity filter: max 2 per primary genre
     const genreCounts: Record<number, number> = {};

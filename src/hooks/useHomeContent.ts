@@ -6,8 +6,11 @@ import { clearSectionCache } from '@/lib/sectionSessionCache';
 import { getHomeGenres } from '@/lib/storage/userPreferences';
 import { calculateGenreAffinities, type GenreAffinities } from '@/lib/utils/recommendationEngine';
 import { serviceIdsToProviderIds } from '@/lib/adapters/platformAdapter';
-import { GENRE_NAME_TO_ID } from '@/lib/constants/genres';
+import { GENRE_NAME_TO_ID, TASTE_GENRE_IDS, GENRE_NAMES, GENRE_KEY_TO_TMDB } from '@/lib/constants/genres';
 import type { FilterState } from '@/components/FilterSheet';
+import { getTasteProfile } from '@/lib/storage/tasteProfile';
+import { getGenresFromVector } from '@/lib/taste/tasteVector';
+
 export function useHomeContent(providerIds: number[], filters?: FilterState) {
   const [genreList, setGenreList] = useState<number[]>([]);
   const [genreAffinities, setGenreAffinities] = useState<GenreAffinities>({});
@@ -120,19 +123,31 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
   // --- Hidden Gems ---
   const hiddenGems = useHiddenGems(providerIds);
 
-  // --- Load genre list + affinities ---
+  // --- Load genre list + affinities (vector-driven when quiz completed) ---
   useEffect(() => {
     let cancelled = false;
     setMetaLoading(true);
     async function load() {
       try {
-        const [genres, affinities] = await Promise.all([
+        const [homeGenres, affinities, tasteProfile] = await Promise.all([
           getHomeGenres(),
           calculateGenreAffinities(),
+          getTasteProfile(),
         ]);
-        if (!cancelled) {
-          setGenreList(genres);
-          setGenreAffinities(affinities);
+        if (cancelled) return;
+
+        setGenreAffinities(affinities);
+
+        if (tasteProfile?.quizCompleted && tasteProfile.vector) {
+          // Post-quiz: all genres above threshold, ordered by vector score
+          const vectorKeys = getGenresFromVector(tasteProfile.vector);
+          const vectorGenreIds = vectorKeys
+            .map((key) => GENRE_KEY_TO_TMDB[key])
+            .filter(Boolean);
+          setGenreList(vectorGenreIds.length > 0 ? vectorGenreIds : homeGenres);
+        } else {
+          // Pre-quiz fallback: onboarding genre selections
+          setGenreList(homeGenres);
         }
       } catch (err) {
         console.error('[useHomeContent] Error loading genres/affinities:', err);

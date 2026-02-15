@@ -85,6 +85,7 @@ export const addToWatchlist = async (id: number, type: 'movie' | 'tv', metadata:
       genreIds: metadata?.genreIds || metadata?.genre_ids || [],
       runtime: metadata?.runtime || null,
       numberOfSeasons: metadata?.numberOfSeasons || metadata?.number_of_seasons || null,
+      originalLanguage: metadata?.originalLanguage || metadata?.original_language || null,
     },
     syncStatus: 'local_only', lastSyncedAt: null, version: 1,
   };

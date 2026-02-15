@@ -1,9 +1,10 @@
 // TMDb Genre IDs
 export const GENRES: Record<string, number> = {
-  // Movies & TV
+  // Movies & TV (20 taste-vector genres)
   action: 28,
   adventure: 12,
   animation: 16,
+  anime: -1,           // Videx-defined (no TMDb ID — detected via language + genre heuristic)
   comedy: 35,
   crime: 80,
   documentary: 99,
@@ -12,19 +13,19 @@ export const GENRES: Record<string, number> = {
   fantasy: 14,
   history: 36,
   horror: 27,
-  music: 10402,
+  musical: 10402,
   mystery: 9648,
+  reality: 10764,
   romance: 10749,
   sciFi: 878,
   thriller: 53,
   war: 10752,
   western: 37,
 
-  // TV-specific
+  // TV-specific (not in taste vector)
   actionAdventure: 10759,
   kids: 10762,
   news: 10763,
-  reality: 10764,
   soap: 10766,
   talk: 10767,
   warPolitics: 10768,
@@ -35,6 +36,7 @@ export const GENRE_NAMES: Record<number, string> = {
   28: 'Action',
   12: 'Adventure',
   16: 'Animation',
+  [-1]: 'Anime',
   35: 'Comedy',
   80: 'Crime',
   99: 'Documentary',
@@ -43,27 +45,47 @@ export const GENRE_NAMES: Record<number, string> = {
   14: 'Fantasy',
   36: 'History',
   27: 'Horror',
-  10402: 'Music',
+  10402: 'Musical',
   9648: 'Mystery',
+  10764: 'Reality',
   10749: 'Romance',
   878: 'Sci-Fi',
   53: 'Thriller',
   10752: 'War',
   37: 'Western',
+  // TV-specific
   10759: 'Action & Adventure',
   10762: 'Kids',
   10763: 'News',
-  10764: 'Reality',
   10766: 'Soap',
   10767: 'Talk',
   10768: 'War & Politics',
 };
 
 // Reverse mapping: display name → TMDb genre ID
-export const GENRE_NAME_TO_ID: Record<string, number> = Object.fromEntries(
-  Object.entries(GENRE_NAMES).map(([id, name]) => [name, Number(id)])
-);
+export const GENRE_NAME_TO_ID: Record<string, number> = {
+  ...Object.fromEntries(
+    Object.entries(GENRE_NAMES).map(([id, name]) => [name, Number(id)])
+  ),
+  // Backwards compatibility: "Music" still maps to 10402
+  'Music': 10402,
+};
+
+// The 20 taste-vector genre IDs (for iteration in homepage ordering, etc.)
+export const TASTE_GENRE_IDS = [
+  28, 12, 16, -1, 35, 80, 99, 18, 10751, 14,
+  36, 27, 10402, 9648, 10764, 10749, 878, 53, 10752, 37,
+] as const;
 
 export const getGenreName = (id: number): string => {
   return GENRE_NAMES[id] || 'Unknown';
 };
+
+// Taste vector dimension key → TMDb genre ID (shared mapping for homepage sections)
+import { genreNameToKey } from '@/lib/taste/tasteVector';
+
+export const GENRE_KEY_TO_TMDB: Record<string, number> = {};
+for (const [name, id] of Object.entries(GENRE_NAME_TO_ID)) {
+  const key = genreNameToKey(name);
+  if (key && id > 0) GENRE_KEY_TO_TMDB[key] = id;
+}

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Pencil,
@@ -11,6 +11,8 @@ import {
   Check,
   X,
   Film,
+  Sparkles,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -19,16 +21,17 @@ import { OnboardingData } from "./OnboardingFlow";
 import { useTheme, ThemeMode } from "./ThemeContext";
 import { PLATFORMS, getPlatform } from "./platformLogos";
 import { SpendDashboard } from "./SpendDashboard";
+import { TasteQuiz } from "./quiz/TasteQuiz";
+import { getTasteProfile, saveQuizResults, retakeQuiz } from "@/lib/storage/tasteProfile";
+import { invalidateRecommendationCache } from "@/lib/storage/recommendations";
+import storage from "@/lib/storage";
+import type { TasteProfile, QuizAnswer } from "@/lib/storage/tasteProfile";
+import type { TasteVector } from "@/lib/taste/tasteVector";
+import { getGenresFromVector, genreKeyToName } from "@/lib/taste/tasteVector";
 
 // ── Service definitions ─────────────────────────────────────────────────────
 const allServices = PLATFORMS;
 
-const allGenres = [
-  "Action", "Adventure", "Animation", "Comedy", "Crime",
-  "Documentary", "Drama", "Family", "Fantasy", "History",
-  "Horror", "Music", "Mystery", "Romance", "Sci-Fi",
-  "Thriller", "War", "Western",
-];
 
 interface ProfilePageProps {
   watchlistCount: number;
@@ -58,20 +61,55 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
   const [selectedGenres, setSelectedGenres] = useState<string[]>(
     userProfile?.genres || ["Crime", "Fantasy", "Thriller", "Sci-Fi", "History", "Documentary", "Action", "Adventure"]
   );
-  const [isEditingGenres, setIsEditingGenres] = useState(false);
+
+  // ── Taste profile / quiz state ──────────────────
+  const [tasteProfile, setTasteProfile] = useState<TasteProfile | null>(null);
+  const [showQuiz, setShowQuiz] = useState(false);
+
+  useEffect(() => {
+    getTasteProfile().then(setTasteProfile);
+  }, []);
+
+  const topGenrePills = tasteProfile?.quizCompleted && tasteProfile.vector
+    ? getGenresFromVector(tasteProfile.vector).slice(0, 5).map(genreKeyToName)
+    : selectedGenres;
+
+  const handleQuizComplete = useCallback(async (answers: QuizAnswer[], vector: TasteVector) => {
+    try {
+      if (tasteProfile?.quizCompleted) {
+        // Retake: preserve interaction history
+        const updated = await retakeQuiz(answers, vector);
+        if (updated) setTasteProfile(updated);
+      } else {
+        const updated = await saveQuizResults(answers, vector);
+        setTasteProfile(updated);
+      }
+      // Invalidate caches so recommendations use new vector
+      await Promise.all([
+        invalidateRecommendationCache(),
+        storage.removeItem('@app_hidden_gems'),
+      ]).catch(() => {});
+      toast.success("Taste profile updated", { icon: "✨" });
+    } catch {
+      toast.error("Failed to save quiz results");
+    }
+    setShowQuiz(false);
+  }, [tasteProfile]);
+
+  const handleQuizSkip = useCallback(() => {
+    setShowQuiz(false);
+  }, []);
 
   // ── Theme state ─────────────────────────────────
   const { theme, setTheme } = useTheme();
 
   // ── Track initial state for dirty detection ─────────────────
   const initialServices = useRef(connectedServices.slice().sort().join(','));
-  const initialGenres = useRef(selectedGenres.slice().sort().join(','));
 
-  // ── Dirty check (includes services + genres) ─────────────────
+  // ── Dirty check (services only — genres no longer manually editable) ─────────────────
   const servicesChanged = connectedServices.slice().sort().join(',') !== initialServices.current;
-  const genresChanged = selectedGenres.slice().sort().join(',') !== initialGenres.current;
   const detailsChanged = name !== editName || email !== editEmail || isEditingDetails;
-  const hasUnsavedChanges = detailsChanged || servicesChanged || genresChanged;
+  const hasUnsavedChanges = detailsChanged || servicesChanged;
 
   // ── Handlers ─────────────────────────────────
   const handleSaveDetails = async () => {
@@ -94,12 +132,6 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
     );
   };
 
-  const toggleGenre = (genre: string) => {
-    setSelectedGenres((prev) =>
-      prev.includes(genre) ? prev.filter((g) => g !== genre) : [...prev, genre]
-    );
-  };
-
   const handleSaveChanges = async () => {
     try {
       if (detailsChanged && !isEditingDetails) {
@@ -108,12 +140,7 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
       if (servicesChanged) {
         await onUpdateServices?.(connectedServices);
       }
-      if (genresChanged) {
-        await onUpdateGenres?.(selectedGenres);
-      }
-      // Reset initial refs to current values after save
       initialServices.current = connectedServices.slice().sort().join(',');
-      initialGenres.current = selectedGenres.slice().sort().join(',');
       toast.success("Settings saved", { icon: "✅", description: "Your preferences have been updated." });
     } catch {
       toast.error("Failed to save", { description: "Please try again." });
@@ -130,6 +157,25 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
     .join("")
     .toUpperCase()
     .slice(0, 2);
+
+  // Full-screen quiz overlay
+  if (showQuiz) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background">
+        <TasteQuiz
+          onComplete={handleQuizComplete}
+          onSkip={handleQuizSkip}
+          showSkip={false}
+          userGenres={selectedGenres}
+          showGenreSelect={true}
+          onGenresUpdated={async (genres) => {
+            setSelectedGenres(genres);
+            await onUpdateGenres?.(genres);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-full px-4 pb-8">
@@ -339,46 +385,54 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
       {/* ── Monthly Spend Dashboard ────────────────────────────── */}
       <SpendDashboard connectedServices={connectedServices} />
 
-      {/* ── Homepage Genres ────────────────────────────── */}
-      <SectionHeader
-        title="Homepage Genres"
-        action={
-          <button
-            onClick={() => setIsEditingGenres(!isEditingGenres)}
-            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
-              isEditingGenres
-                ? "bg-primary text-white"
-                : "bg-secondary text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {isEditingGenres ? <Check className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
-          </button>
-        }
-      />
+      {/* ── Taste Profile ────────────────────────────── */}
+      <SectionHeader title="Taste Profile" />
 
-      <div className="flex flex-wrap gap-1.5 mb-6">
-        {(isEditingGenres ? allGenres : selectedGenres).map((genre) => {
-          const isSelected = selectedGenres.includes(genre);
-          return (
-            <motion.button
-              key={genre}
-              layout
-              onClick={() => isEditingGenres && toggleGenre(genre)}
-              disabled={!isEditingGenres}
-              className={`px-3 py-1.5 rounded-full text-[12px] transition-all duration-200 border ${
-                isSelected
-                  ? isEditingGenres
-                    ? "border-primary/40 bg-primary/15 text-primary"
-                    : "bg-secondary text-foreground"
-                  : "bg-secondary/40 text-muted-foreground/50"
-              } ${isEditingGenres ? "cursor-pointer" : "cursor-default"}`}
-              style={{ borderColor: isSelected && isEditingGenres ? undefined : "var(--border-subtle)" }}
-            >
-              {genre}
-            </motion.button>
-          );
-        })}
-      </div>
+      {tasteProfile?.quizCompleted ? (
+        <div className="mb-6">
+          {/* Top genres */}
+          {topGenrePills.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <span className="text-muted-foreground text-[12px] whitespace-nowrap">Top tastes:</span>
+              {topGenrePills.map((genre) => (
+                <span
+                  key={genre}
+                  className="px-2.5 py-1 rounded-full bg-primary/15 text-primary text-[11px] whitespace-nowrap"
+                  style={{ fontWeight: 600 }}
+                >
+                  {genre}
+                </span>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => setShowQuiz(true)}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border bg-secondary/40 text-muted-foreground text-[13px] transition-colors hover:bg-secondary/60 hover:text-foreground"
+            style={{ fontWeight: 600, borderColor: "var(--border-subtle)" }}
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Retake Taste Quiz
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowQuiz(true)}
+          className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-primary/30 bg-primary/5 mb-6 transition-colors hover:bg-primary/10"
+          style={{ borderColor: undefined }}
+        >
+          <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
+            <Sparkles className="w-5 h-5 text-primary" />
+          </div>
+          <div className="flex-1 text-left">
+            <p className="text-foreground text-[14px]" style={{ fontWeight: 600 }}>
+              Take Taste Quiz
+            </p>
+            <p className="text-muted-foreground text-[12px]">
+              Answer 10 questions to personalise your recommendations
+            </p>
+          </div>
+        </button>
+      )}
 
       {/* ── Appearance ────────────────────────────── */}
       <SectionHeader title="Appearance" />

@@ -34,6 +34,8 @@ export function tmdbMovieToContentItem(movie: any): ContentItem {
     year: movie.release_date ? parseInt(movie.release_date.substring(0, 4), 10) : undefined,
     type: movie.genre_ids?.includes(99) ? 'doc' : 'movie',
     language: movie.original_language ? ISO_TO_LANGUAGE[movie.original_language] : undefined,
+    genreIds: movie.genre_ids || [],
+    originalLanguage: movie.original_language || undefined,
   };
 }
 
@@ -51,6 +53,8 @@ export function tmdbTVToContentItem(tvShow: any): ContentItem {
     year: tvShow.first_air_date ? parseInt(tvShow.first_air_date.substring(0, 4), 10) : undefined,
     type: tvShow.genre_ids?.includes(99) ? 'doc' : 'tv',
     language: tvShow.original_language ? ISO_TO_LANGUAGE[tvShow.original_language] : undefined,
+    genreIds: tvShow.genre_ids || [],
+    originalLanguage: tvShow.original_language || undefined,
   };
 }
 
@@ -93,6 +97,8 @@ export function watchlistItemToContentItem(item: any): ContentItem {
     addedAt: item.addedAt ?? undefined,
     runtime: item.metadata?.runtime ?? undefined,
     genre: item.metadata?.genreIds?.[0] ? GENRE_NAMES[item.metadata.genreIds[0]] : undefined,
+    genreIds: item.metadata?.genreIds || [],
+    originalLanguage: item.metadata?.originalLanguage || undefined,
   };
 }
 

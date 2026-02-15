@@ -13,12 +13,18 @@ import { serviceIdToProviderId } from '@/lib/adapters/platformAdapter';
 import { GENRE_NAME_TO_ID } from '@/lib/constants/genres';
 import { UK_PROVIDERS_ARRAY } from '@/lib/constants/platforms';
 import type { ServiceId } from '@/components/platformLogos';
+import { initializeFromGenres, saveQuizResults, getTasteProfile, saveTasteProfile } from '@/lib/storage/tasteProfile';
+import type { QuizAnswer } from '@/lib/storage/tasteProfile';
+import type { TasteVector } from '@/lib/taste/tasteVector';
+import { genreNameToKey, clampVector, GENRE_DIMENSIONS } from '@/lib/taste/tasteVector';
 
 export interface OnboardingPayload {
   name: string;
   email: string;
   services: string[];   // ServiceId strings
   genres: string[];      // display names like "Action"
+  quizAnswers?: QuizAnswer[];
+  tasteVector?: TasteVector;
 }
 
 export function useUserPreferences() {
@@ -61,6 +67,13 @@ export function useUserPreferences() {
 
     await saveUserPreferences({ region: 'GB', platforms, homeGenres });
 
+    // Save taste profile: quiz results if completed, otherwise seed from genres
+    if (data.quizAnswers && data.tasteVector) {
+      await saveQuizResults(data.quizAnswers, data.tasteVector).catch(() => {});
+    } else {
+      await initializeFromGenres(data.genres).catch(() => {});
+    }
+
     setProfile({ userId, name: data.name, email: data.email, createdAt: Date.now() });
     setPreferences({ region: 'GB', platforms, homeGenres });
     setOnboardingComplete(true);
@@ -91,6 +104,25 @@ export function useUserPreferences() {
     const updated = { ...(preferences || { region: 'GB', platforms: [] }), homeGenres } as UserPreferences;
     await saveUserPreferences(updated);
     setPreferences(updated);
+
+    // Update taste vector: boost added genres, reduce removed genres
+    const profile = await getTasteProfile();
+    if (profile) {
+      const selectedKeys = new Set(genreNames.map(genreNameToKey));
+      const newVector = { ...profile.vector };
+      for (const dim of GENRE_DIMENSIONS) {
+        if (selectedKeys.has(dim)) {
+          // Selected genre: nudge toward 0.5 (preference baseline)
+          newVector[dim] = Math.max(newVector[dim], 0.4);
+        } else {
+          // Unselected: nudge down toward 0.2 (unselected baseline)
+          newVector[dim] = Math.min(newVector[dim], 0.3);
+        }
+      }
+      profile.vector = clampVector(newVector);
+      profile.lastUpdated = new Date().toISOString();
+      await saveTasteProfile(profile);
+    }
   }, [preferences]);
 
   const signOut = useCallback(async () => {

@@ -25,6 +25,9 @@ import { providerIdsToServiceIds, serviceIdsToProviderIds, providerIdToServiceId
 import { GENRE_NAMES } from "./lib/constants/genres";
 import type { ServiceId } from "./components/platformLogos";
 import { App as CapApp } from "@capacitor/app";
+import { useTasteProfile } from "./hooks/useTasteProfile";
+import { initializeFromGenres, migrateFromLegacyPreferences } from "./lib/storage/tasteProfile";
+import { IMMEDIATE_LOAD_COUNT } from "./lib/taste/tasteVector";
 
 const categories = ["All", "Movies", "TV Shows", "Docs", "Anime"];
 
@@ -51,6 +54,19 @@ function AppContent() {
 
   // --- Watchlist ---
   const wl = useWatchlist();
+
+  // --- Taste profile (continuous learning) ---
+  const taste = useTasteProfile();
+
+  // --- Migration: create taste profile for existing users ---
+  useEffect(() => {
+    if (userPrefs.onboardingComplete && !taste.loading && !taste.profile) {
+      const homeGenres = userPrefs.preferences?.homeGenres;
+      if (homeGenres && homeGenres.length > 0) {
+        migrateFromLegacyPreferences(homeGenres).then(() => taste.reload());
+      }
+    }
+  }, [userPrefs.onboardingComplete, taste.loading, taste.profile, userPrefs.preferences?.homeGenres?.join(',')]);
 
   // --- Derive provider IDs from user's selected services ---
   const connectedServices = userPrefs.preferences?.platforms
@@ -125,19 +141,36 @@ function AppContent() {
     setActiveTab(tab);
   };
 
+  // Helper: extract content metadata for taste tracking from a ContentItem
+  const buildTasteMeta = useCallback((item: ContentItem) => {
+    const numericId = parseInt(item.id.replace(/^(movie|tv)-/, ''), 10);
+    const contentType = item.type === 'doc' ? 'movie' as const : (item.type || 'movie') as 'movie' | 'tv';
+    return {
+      contentId: numericId,
+      contentType,
+      genreIds: item.genreIds || [],
+      popularity: 0,
+      releaseYear: item.year || null,
+      originalLanguage: item.originalLanguage || null,
+    };
+  }, []);
+
   const handleToggleBookmark = useCallback(async (item: ContentItem) => {
     try {
       const added = await wl.toggleBookmark(item);
       if (added) {
         toast.success("Added to Watchlist", { description: item.title, icon: "\u{1F516}" });
+        // Fire-and-forget taste tracking
+        taste.trackInteraction(buildTasteMeta(item), 'watchlist_add');
       } else {
         toast("Removed from Watchlist", { description: item.title, icon: "\u{1F516}" });
+        taste.trackInteraction(buildTasteMeta(item), 'removed');
       }
     } catch (err) {
       console.error('[handleToggleBookmark]', err);
       toast.error("Something went wrong");
     }
-  }, [wl.toggleBookmark]);
+  }, [wl.toggleBookmark, taste.trackInteraction, buildTasteMeta]);
 
   const handleRemoveBookmark = useCallback(async (id: string) => {
     try {
@@ -159,11 +192,14 @@ function AppContent() {
       await wl.moveToWatched(id);
       const item = [...wl.watchlist, ...wl.watched].find((i) => i.id === id);
       toast.success("Marked as Watched", { description: item?.title || selectedItem?.title, icon: "\u{2705}" });
+      // Fire-and-forget taste tracking — prefer source with genreIds
+      const trackItem = (item?.genreIds?.length ? item : null) || (selectedItem?.genreIds?.length ? selectedItem : null) || item || selectedItem;
+      if (trackItem) taste.trackInteraction(buildTasteMeta(trackItem), 'watched');
     } catch (err) {
       console.error('[handleMoveToWatched]', err);
       toast.error("Something went wrong");
     }
-  }, [wl.moveToWatched, wl.toggleBookmark, wl.bookmarkedIds, wl.watchlist, wl.watched, selectedItem]);
+  }, [wl.moveToWatched, wl.toggleBookmark, wl.bookmarkedIds, wl.watchlist, wl.watched, selectedItem, taste.trackInteraction, buildTasteMeta]);
 
   const handleMoveToWantToWatch = useCallback(async (id: string) => {
     try {
@@ -187,11 +223,20 @@ function AppContent() {
       } else {
         toast("Rating removed", { description: "Your rating has been cleared.", icon: "\u{1F504}" });
       }
+      // Fire-and-forget taste tracking for thumbs up/down
+      if (rating === 'up' || rating === 'down') {
+        const wlItem = [...wl.watchlist, ...wl.watched].find((i) => i.id === id);
+        // Prefer source with genreIds (selectedItem from card usually has them; older watchlist items may not)
+        const item = (wlItem?.genreIds?.length ? wlItem : null) || (selectedItem?.genreIds?.length ? selectedItem : null) || wlItem || selectedItem;
+        if (item) {
+          taste.trackInteraction(buildTasteMeta(item), rating === 'up' ? 'thumbs_up' : 'thumbs_down');
+        }
+      }
     } catch (err) {
       console.error('[handleRate]', err);
       toast.error("Something went wrong");
     }
-  }, [wl.setRating]);
+  }, [wl.setRating, wl.watchlist, wl.watched, selectedItem, taste.trackInteraction, buildTasteMeta]);
 
   const handleOnboardingComplete = useCallback(async (data: OnboardingData) => {
     await userPrefs.completeOnboarding(data);
@@ -431,10 +476,11 @@ function AppContent() {
                         <ContentRow title="Hidden Gems" items={filterLanguage(filterWatched(home.hiddenGems.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       )}
                       <ContentRow title="Recently Added" items={filterLanguage(filterWatched(home.recentlyAdded.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.recentlyAdded.loadMore} loadingMore={home.recentlyAdded.loadingMore} hasMore={home.recentlyAdded.hasMore} />
-                      {home.genreList.map((genreId) => (
+                      {home.genreList.map((genreId, idx) => (
                         <LazyGenreSection
                           key={genreId}
                           genreId={genreId}
+                          immediate={idx < IMMEDIATE_LOAD_COUNT}
                           baseParams={home.baseParams}
                           sectionKeyBase={home.sectionKeyBase}
                           filterGenreIds={home.filterGenreIds}

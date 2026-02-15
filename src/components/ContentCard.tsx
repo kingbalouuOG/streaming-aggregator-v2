@@ -21,6 +21,8 @@ export interface ContentItem {
   addedAt?: number;
   genre?: string;
   language?: string;
+  genreIds?: number[];
+  originalLanguage?: string;
 }
 
 interface ContentCardProps {
