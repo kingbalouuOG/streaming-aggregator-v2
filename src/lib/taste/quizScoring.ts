@@ -4,6 +4,12 @@
  * Processes quiz answers into taste vector adjustments.
  * Phase 1-2 (fixed + genre-responsive) pairs apply full-weight deltas.
  * Phase 3 (adaptive) pairs apply 70% weight deltas.
+ *
+ * Answer types:
+ * - A / B: Winner-loser delta with negative damping on tested dimensions
+ * - both:  Two independent winner passes (A then B), no loser subtraction or damping
+ * - neither: Reduces affinity for both options' primary genres by 0.15
+ * - skip: Zero delta (no signal)
  */
 
 import {
@@ -19,6 +25,7 @@ import {
 } from './tasteVector';
 import type { QuizPair } from './quizConfig';
 import type { QuizAnswer } from '../storage/tasteProfile';
+import { debug } from '../debugLogger';
 
 // ── Phase weights ───────────────────────────────────────────────
 
@@ -38,12 +45,39 @@ const NEGATIVE_DAMPING = 0.6;
 function computeAnswerDelta(pair: QuizPair, choice: QuizAnswer['chosenOption']): TasteVector {
   const delta = createEmptyVector();
 
+  debug.info('QuizScoring', `Answer: ${choice}`, {
+    pairId: pair.id,
+    optionA: pair.optionA.title,
+    optionB: pair.optionB.title,
+    choice,
+    dimensionsTested: pair.dimensionsTested,
+  });
+
   if (choice === 'skip') {
     // No signal — skip the question entirely
+    debug.info('QuizScoring', 'Skip — zero delta');
     return delta;
   }
 
   const testedDims = new Set(pair.dimensionsTested);
+
+  if (choice === 'both') {
+    // Run winner-side delta for option A (no unchosen subtraction, no damping)
+    for (const dim of ALL_DIMENSIONS) {
+      if (!testedDims.has(dim)) continue;
+      const aVal = pair.optionA.vectorPosition[dim] ?? 0;
+      delta[dim] += aVal * 0.3;
+    }
+    // Run winner-side delta for option B (no unchosen subtraction, no damping)
+    for (const dim of ALL_DIMENSIONS) {
+      if (!testedDims.has(dim)) continue;
+      const bVal = pair.optionB.vectorPosition[dim] ?? 0;
+      delta[dim] += bVal * 0.3;
+    }
+    const bothNonZero = Object.entries(delta).filter(([, v]) => v !== 0).map(([k, v]) => `${k}:${(v as number).toFixed(3)}`);
+    debug.info('QuizScoring', 'Both delta (A+B winner passes)', { nonZeroDeltas: bothNonZero });
+    return delta;
+  }
 
   if (choice === 'neither') {
     // Active negative: reduce affinity for both options' primary genres
@@ -55,6 +89,8 @@ function computeAnswerDelta(pair: QuizPair, choice: QuizAnswer['chosenOption']):
       if (aVal > 0) delta[dim] -= 0.15;
       if (bVal > 0) delta[dim] -= 0.15;
     }
+    const neitherNonZero = Object.entries(delta).filter(([, v]) => v !== 0).map(([k, v]) => `${k}:${(v as number).toFixed(3)}`);
+    debug.info('QuizScoring', 'Neither delta', { nonZeroDeltas: neitherNonZero });
     return delta;
   }
 
@@ -82,6 +118,8 @@ function computeAnswerDelta(pair: QuizPair, choice: QuizAnswer['chosenOption']):
     delta[dim] = rawDelta;
   }
 
+  const winnerNonZero = Object.entries(delta).filter(([, v]) => v !== 0).map(([k, v]) => `${k}:${(v as number).toFixed(3)}`);
+  debug.info('QuizScoring', `Winner delta (chose ${choice})`, { nonZeroDeltas: winnerNonZero });
   return delta;
 }
 
@@ -115,7 +153,13 @@ export function computeQuizVector(
   }
 
   // Single clamp after all questions processed
-  return clampVector(vector);
+  const final = clampVector(vector);
+  const topDims = Object.entries(final)
+    .sort(([, a], [, b]) => (b as number) - (a as number))
+    .slice(0, 8)
+    .map(([k, v]) => `${k}:${(v as number).toFixed(3)}`);
+  debug.info('QuizScoring', `Final vector (${answers.length} answers)`, { topDimensions: topDims });
+  return final;
 }
 
 // ── Get top genre names from vector ─────────────────────────────

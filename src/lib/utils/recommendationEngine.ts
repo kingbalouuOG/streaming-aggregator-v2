@@ -1,10 +1,15 @@
 /**
  * Recommendation Engine
- * Generates personalized content recommendations based on user's watchlist
+ * Generates personalized content recommendations.
  *
- * Algorithm:
- * - 70% weight: Genre affinity (based on watchlist genres and ratings)
- * - 30% weight: TMDb similar content (for top liked items)
+ * When a taste vector exists (post-quiz):
+ * - 60% Taste vector cosine similarity
+ * - 25% TMDb similar content (for top liked items)
+ * - 15% Trending/recency boost
+ *
+ * Fallback (no taste vector):
+ * - 70% Genre affinity (based on watchlist genres and ratings)
+ * - 30% TMDb similar content
  */
 
 import storage from '@/lib/storage';

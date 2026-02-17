@@ -91,6 +91,9 @@ videx/
     index.css                Tailwind + custom styles
     assets/                  Platform logo PNGs (11 services)
     components/              Feature components
+      quiz/
+        TasteQuiz.tsx        10-question taste quiz orchestrator
+        QuizQuestion.tsx     Pair-choice UI (A/B/Both/Neither)
       OnboardingFlow.tsx     3-step onboarding (profile, services, genres)
       BrowsePage.tsx         Search + filter + grid browse
       DetailPage.tsx         Content detail with ratings, cast, availability
@@ -132,7 +135,14 @@ videx/
       constants/             Config, genres, platform definitions
       data/
         platformPricing.ts   UK subscription pricing data (10 services)
+      taste/                 Taste vector system
+        tasteVector.ts       25D vector model, cosine similarity, dimension weights
+        quizConfig.ts        Quiz pair pools (41 pairs) and selection algorithms
+        quizScoring.ts       Quiz answer → vector delta computation
+        contentVectorMapping.ts  Content metadata → taste vector mapping
+        genreBlending.ts     Genre combination logic for diverse discovery
       storage/               Persistence (watchlist, preferences, recommendations)
+        tasteProfile.ts      Taste profile CRUD, quiz results, interaction logging
         watchlist.ts         Watchlist CRUD with recommendation auto-invalidation
         preferences.ts       User preferences persistence
         recommendations.ts   Recommendation cache management
@@ -149,8 +159,8 @@ videx/
 ## Features
 
 ### Core
-- **Onboarding**: Name, streaming service selection, genre preferences
-- **Home**: Featured hero, trending, popular, top rated, genre-based rows, and personalised "For You" recommendations
+- **Onboarding**: Name, streaming service selection, genre preferences, 10-question taste quiz
+- **Home**: Featured hero, trending, popular, top rated, genre-based rows, taste-vector-driven "For You" and "Hidden Gems" sections
 - **Browse**: Search with auto-suggestions, category filters, service/genre/rating filter sheet
 - **Detail View**: Hero image, IMDb/RT ratings, genre tags, streaming availability, rent/buy prices, cast, similar content
 - **Watchlist**: Want to Watch / Watched tabs, category filters, sort options, grid layout
@@ -163,14 +173,27 @@ videx/
 - **Spend Dashboard**: Monthly subscription cost tracker on the Profile page. Shows per-service breakdown with tier selection, annual projection, and daily rate.
 - **Recommendation Auto-Invalidation**: Watchlist changes (add, remove, rate, move status) automatically invalidate the recommendation and hidden gems caches, so the next home page load reflects updated preferences.
 
+### Taste Quiz & Vector System
+
+A 10-question onboarding quiz builds a 25-dimensional taste vector (20 genre dimensions + 5 meta dimensions: tone, pacing, era, popularity, intensity). Three phases:
+
+1. **Fixed pairs (3)** — identical for all users, cover broad dimensions
+2. **Genre-responsive (2)** — selected based on user's genre picks
+3. **Adaptive (5)** — chosen to resolve the most ambiguous dimensions from the interim vector
+
+Each pair offers four choices: **A**, **B**, **Both** (two independent positive signals), or **Neither** (reduces affinity for both options' genres). The resulting vector drives personalised For You and Hidden Gems sections.
+
 ### Recommendation Engine
 
-The recommendation engine uses a two-signal approach:
+When a taste vector exists (post-quiz), the engine uses a three-signal approach:
 
-- **70% Genre Affinity**: Scores genres based on watchlist activity — thumbs up (+3), watched (+1), thumbs down (-1), want-to-watch (+1). Top 3 genres drive TMDb discover queries.
-- **30% Similar Content**: Fetches TMDb "Similar" titles for the user's top-rated items.
+- **60% Taste Vector**: Cosine similarity between the user's 25D vector and content vectors, with genre-combination blending for diverse discovery.
+- **25% Similar Content**: TMDb "Similar" titles for the user's top-rated items.
+- **15% Trending/Recency**: Boost for popular and recently released content.
 
-Results are cached for 6 hours but auto-invalidated on any watchlist change. Items already on the watchlist or previously dismissed are filtered out.
+Fallback (no taste vector): 70% genre affinity from watchlist ratings + 30% similar content.
+
+User filters (content type, genre, service) thread through all discovery queries. Results are cached for 6 hours but auto-invalidated on any watchlist change. Items already on the watchlist or previously dismissed are filtered out.
 
 ## Design System
 

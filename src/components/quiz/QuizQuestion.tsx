@@ -9,7 +9,7 @@ interface QuizQuestionProps {
   pair: QuizPair;
   questionNumber: number;
   totalQuestions: number;
-  onChoose: (choice: 'A' | 'B' | 'neither' | 'skip') => void;
+  onChoose: (choice: 'A' | 'B' | 'neither' | 'skip' | 'both') => void;
   onBack?: () => void;
   showBack: boolean;
   /** Poster URLs resolved by parent (keyed by tmdbId) */
@@ -43,6 +43,11 @@ export function QuizQuestion({
   const handleSkipOrNeither = useCallback((choice: 'skip' | 'neither') => {
     if (transitioning) return;
     onChoose(choice);
+  }, [onChoose, transitioning]);
+
+  const handleBoth = useCallback(() => {
+    if (transitioning) return;
+    onChoose('both');
   }, [onChoose, transitioning]);
 
   return (
@@ -107,17 +112,8 @@ export function QuizQuestion({
         </div>
       </div>
 
-      {/* Skip / Neither buttons */}
+      {/* Neither / Both buttons */}
       <div className="flex items-center gap-3 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3">
-        <motion.button
-          whileTap={{ scale: 0.96 }}
-          onClick={() => handleSkipOrNeither('skip')}
-          disabled={transitioning}
-          className="flex-1 py-3 rounded-xl bg-secondary/60 text-foreground text-[14px] transition-colors"
-          style={{ fontWeight: 600 }}
-        >
-          Skip
-        </motion.button>
         <motion.button
           whileTap={{ scale: 0.96 }}
           onClick={() => handleSkipOrNeither('neither')}
@@ -126,6 +122,15 @@ export function QuizQuestion({
           style={{ fontWeight: 600 }}
         >
           Neither
+        </motion.button>
+        <motion.button
+          whileTap={{ scale: 0.96 }}
+          onClick={() => handleBoth()}
+          disabled={transitioning}
+          className="flex-1 py-3 rounded-xl bg-secondary/60 text-foreground text-[14px] transition-colors"
+          style={{ fontWeight: 600 }}
+        >
+          Both
         </motion.button>
       </div>
     </div>

@@ -36,7 +36,7 @@ export interface TasteProfile {
 
 export interface QuizAnswer {
   pairId: string;
-  chosenOption: 'A' | 'B' | 'neither' | 'skip';
+  chosenOption: 'A' | 'B' | 'neither' | 'skip' | 'both';
   phase: 'fixed' | 'genre-responsive' | 'adaptive';
   timestamp: string;
 }

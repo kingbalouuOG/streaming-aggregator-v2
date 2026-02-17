@@ -8,7 +8,7 @@
  * 2. Genre-responsive pairs (2) — chosen based on user's genre selections
  * 3. Adaptive pairs (5) — chosen based on interim vector to resolve ambiguity
  *
- * Each pair presents two titles and records which the user prefers.
+ * Each pair presents two titles. The user can pick A, B, Both, or Neither.
  * The preference signal is used to refine the user's TasteVector.
  */
 
@@ -193,7 +193,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
     triggerGenres: ['documentary'],
     dimensionsTested: ['documentary', 'tone', 'pacing', 'intensity'],
     optionA: {
-      tmdbId: 69769,
+      tmdbId: 68595,
       mediaType: 'tv',
       title: 'Planet Earth II',
       year: 2016,
@@ -204,7 +204,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       },
     },
     optionB: {
-      tmdbId: 63247,
+      tmdbId: 64439,
       mediaType: 'tv',
       title: 'Making a Murderer',
       year: 2015,
@@ -445,7 +445,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
     triggerGenres: ['reality'],
     dimensionsTested: ['reality', 'tone', 'pacing', 'intensity'],
     optionA: {
-      tmdbId: 46261,
+      tmdbId: 87012,
       mediaType: 'tv',
       title: 'The Great British Bake Off',
       year: 2010,
@@ -456,7 +456,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       },
     },
     optionB: {
-      tmdbId: 60625,
+      tmdbId: 8514,
       mediaType: 'tv',
       title: "RuPaul's Drag Race",
       year: 2009,
@@ -733,7 +733,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       },
     },
     optionB: {
-      tmdbId: 67136,
+      tmdbId: 76922,
       mediaType: 'tv',
       title: 'Queer Eye',
       year: 2018,
@@ -778,7 +778,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
     phase: 'adaptive',
     dimensionsTested: ['romance', 'comedy', 'tone', 'era', 'pacing'],
     optionA: {
-      tmdbId: 70160,
+      tmdbId: 55721,
       mediaType: 'movie',
       title: 'Bridesmaids',
       year: 2011,
@@ -789,7 +789,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       },
     },
     optionB: {
-      tmdbId: 17473,
+      tmdbId: 38684,
       mediaType: 'movie',
       title: 'Jane Eyre',
       year: 2011,
@@ -929,7 +929,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       },
     },
     optionB: {
-      tmdbId: 9292,
+      tmdbId: 843,
       mediaType: 'movie',
       title: 'In the Mood for Love',
       year: 2000,
@@ -1041,7 +1041,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       },
     },
     optionB: {
-      tmdbId: 1405,
+      tmdbId: 33907,
       mediaType: 'tv',
       title: 'Downton Abbey',
       year: 2010,
@@ -1058,7 +1058,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
     phase: 'adaptive',
     dimensionsTested: ['documentary', 'tone', 'intensity', 'pacing'],
     optionA: {
-      tmdbId: 84360,
+      tmdbId: 83880,
       mediaType: 'tv',
       title: 'Our Planet',
       year: 2019,
@@ -1069,7 +1069,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       },
     },
     optionB: {
-      tmdbId: 549,
+      tmdbId: 1430,
       mediaType: 'movie',
       title: 'Bowling for Columbine',
       year: 2002,
@@ -1125,7 +1125,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       },
     },
     optionB: {
-      tmdbId: 72879,
+      tmdbId: 61662,
       mediaType: 'tv',
       title: 'Schitt\'s Creek',
       year: 2015,
@@ -1153,7 +1153,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       },
     },
     optionB: {
-      tmdbId: 194662,
+      tmdbId: 1949,
       mediaType: 'movie',
       title: 'Zodiac',
       year: 2007,
