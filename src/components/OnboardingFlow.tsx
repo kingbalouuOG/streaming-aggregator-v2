@@ -14,35 +14,22 @@ import { PLATFORMS, type PlatformDef } from "./platformLogos";
 import { TasteQuiz } from "./quiz/TasteQuiz";
 import type { TasteVector } from "@/lib/taste/tasteVector";
 import type { QuizAnswer } from "@/lib/storage/tasteProfile";
+import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS, type TasteCluster } from "@/lib/taste/tasteClusters";
 
 // ── Service definitions ──────────────────────────────────
 export type { PlatformDef as StreamingServiceDef };
 
 export const allServices = PLATFORMS;
 
-export const MAX_GENRES = 5;
-
-export const allGenres = [
-  "Action", "Adventure", "Animation", "Anime", "Comedy", "Crime",
-  "Documentary", "Drama", "Family", "Fantasy", "History",
-  "Horror", "Musical", "Mystery", "Reality", "Romance", "Sci-Fi",
-  "Thriller", "War", "Western",
-];
-
-export const genreIcons: Record<string, string> = {
-  Action: "💥", Adventure: "🗺️", Animation: "✨", Anime: "🎌",
-  Comedy: "😂", Crime: "🔍", Documentary: "🎬", Drama: "🎭",
-  Family: "👨‍👩‍👧‍👦", Fantasy: "🐉", History: "📜", Horror: "👻",
-  Musical: "🎵", Mystery: "🕵️", Reality: "📺", Romance: "❤️",
-  "Sci-Fi": "🚀", Thriller: "😱", War: "⚔️", Western: "🤠",
-};
+// Re-export cluster constants for consumers
+export { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS };
 
 // ── Types ──────────────────────────────────
 export interface OnboardingData {
   name: string;
   email: string;
   services: string[];
-  genres: string[];
+  clusters: string[];
   quizAnswers?: QuizAnswer[];
   tasteVector?: TasteVector;
 }
@@ -51,7 +38,7 @@ interface OnboardingFlowProps {
   onComplete: (data: OnboardingData) => void;
 }
 
-const TOTAL_STEPS = 4; // Welcome, Services, Genres, Quiz
+const TOTAL_STEPS = 4; // Welcome, Services, Taste Clusters, Quiz
 
 // ── Slide direction logic ──────────────────
 const slideVariants = {
@@ -75,7 +62,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
-  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const [selectedClusters, setSelectedClusters] = useState<string[]>([]);
 
   const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const showEmailError = email.trim().length > 0 && !isValidEmail;
@@ -83,7 +70,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const canContinue = [
     name.trim().length > 0 && isValidEmail,
     selectedServices.length > 0,
-    selectedGenres.length > 0,
+    selectedClusters.length >= MIN_CLUSTERS,
   ];
 
   const goNext = () => {
@@ -103,7 +90,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const handleQuizComplete = (quizAnswers: QuizAnswer[], tasteVector: TasteVector) => {
     onComplete({
       name: name.trim(), email: email.trim(),
-      services: selectedServices, genres: selectedGenres,
+      services: selectedServices, clusters: selectedClusters,
       quizAnswers, tasteVector,
     });
   };
@@ -112,7 +99,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const handleQuizSkip = () => {
     onComplete({
       name: name.trim(), email: email.trim(),
-      services: selectedServices, genres: selectedGenres,
+      services: selectedServices, clusters: selectedClusters,
     });
   };
 
@@ -122,11 +109,11 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     );
   };
 
-  const toggleGenre = (genre: string) => {
-    setSelectedGenres((prev) => {
-      if (prev.includes(genre)) return prev.filter((g) => g !== genre);
-      if (prev.length >= MAX_GENRES) return prev; // Reject when at limit
-      return [...prev, genre];
+  const toggleCluster = (clusterId: string) => {
+    setSelectedClusters((prev) => {
+      if (prev.includes(clusterId)) return prev.filter((c) => c !== clusterId);
+      if (prev.length >= MAX_CLUSTERS) return prev;
+      return [...prev, clusterId];
     });
   };
 
@@ -138,8 +125,8 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
   };
 
-  const clearGenres = () => {
-    setSelectedGenres([]);
+  const clearClusters = () => {
+    setSelectedClusters([]);
   };
 
   // Step 3 (Quiz) takes over the full viewport — no chrome
@@ -150,7 +137,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           onComplete={handleQuizComplete}
           onSkip={handleQuizSkip}
           showSkip={true}
-          userGenres={selectedGenres}
+          userClusters={selectedClusters}
         />
       </div>
     );
@@ -218,10 +205,10 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 />
               )}
               {step === 2 && (
-                <StepGenres
-                  selected={selectedGenres}
-                  onToggle={toggleGenre}
-                  onClear={clearGenres}
+                <StepClusters
+                  selected={selectedClusters}
+                  onToggle={toggleCluster}
+                  onClear={clearClusters}
                 />
               )}
             </motion.div>
@@ -236,9 +223,9 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               Select at least one service to continue
             </p>
           )}
-          {step === 2 && selectedGenres.length === 0 && (
+          {step === 2 && selectedClusters.length < MIN_CLUSTERS && (
             <p className="text-muted-foreground text-[12px] text-center mb-2">
-              Pick your top {MAX_GENRES} favourite genres
+              Pick at least {MIN_CLUSTERS} that match your vibe
             </p>
           )}
           {step === 1 && selectedServices.length > 0 && (
@@ -246,9 +233,9 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               {selectedServices.length} service{selectedServices.length !== 1 ? "s" : ""} selected
             </p>
           )}
-          {step === 2 && selectedGenres.length > 0 && (
+          {step === 2 && selectedClusters.length >= MIN_CLUSTERS && (
             <p className="text-muted-foreground text-[12px] text-center mb-2">
-              {selectedGenres.length} of {MAX_GENRES} selected
+              {selectedClusters.length} of {MAX_CLUSTERS} selected
             </p>
           )}
 
@@ -502,18 +489,18 @@ function StepServices({
 }
 
 // ═════════════════════════════════════════════════════════
-// ── Step 3: Select Genres ───────────────────────────────
+// ── Step 3: Select Taste Clusters ───────────────────────
 // ═════════════════════════════════════════════════════════
-function StepGenres({
+function StepClusters({
   selected,
   onToggle,
   onClear,
 }: {
   selected: string[];
-  onToggle: (genre: string) => void;
+  onToggle: (clusterId: string) => void;
   onClear: () => void;
 }) {
-  const atLimit = selected.length >= MAX_GENRES;
+  const atLimit = selected.length >= MAX_CLUSTERS;
 
   return (
     <div className="flex flex-col h-full px-6 overflow-y-auto no-scrollbar">
@@ -544,27 +531,26 @@ function StepGenres({
                     className="bg-primary text-white text-[12px] px-2 py-0.5 rounded-full tabular-nums"
                     style={{ fontWeight: 600 }}
                   >
-                    {selected.length}/{MAX_GENRES}
+                    {selected.length}/{MAX_CLUSTERS}
                   </motion.span>
                 )}
               </AnimatePresence>
             </div>
             <p className="text-muted-foreground text-[13px]">
-              Pick your top {MAX_GENRES} favourite genres
+              Pick 3–5 that match your vibe
             </p>
           </div>
         </motion.div>
       </div>
 
-      {/* Genre grid */}
+      {/* Cluster grid */}
       <div className="grid grid-cols-2 gap-2.5">
-        {allGenres.map((genre, idx) => {
-          const isSelected = selected.includes(genre);
+        {TASTE_CLUSTERS.map((cluster, idx) => {
+          const isSelected = selected.includes(cluster.id);
           const isDisabled = atLimit && !isSelected;
-          const emoji = genreIcons[genre] || "🎬";
           return (
             <motion.button
-              key={genre}
+              key={cluster.id}
               initial={{ opacity: 0, scale: 0.85 }}
               animate={{
                 opacity: isDisabled ? 0.4 : 1,
@@ -572,8 +558,8 @@ function StepGenres({
               }}
               transition={{ delay: 0.03 * idx, type: "spring", damping: 20, stiffness: 300 }}
               whileTap={!isDisabled ? { scale: 0.94 } : undefined}
-              onClick={() => !isDisabled && onToggle(genre)}
-              className={`relative flex items-center gap-3 px-3.5 py-3 rounded-2xl border transition-all duration-250 ${
+              onClick={() => !isDisabled && onToggle(cluster.id)}
+              className={`relative flex items-center gap-3 pl-3 pr-8 py-3 rounded-2xl border text-left transition-all duration-250 ${
                 isSelected
                   ? "border-primary/50 bg-primary/10"
                   : isDisabled
@@ -582,17 +568,19 @@ function StepGenres({
               }`}
               style={{ borderColor: isSelected ? undefined : "var(--border-subtle)" }}
             >
-              <span className={`text-[22px] transition-transform duration-200 ${isSelected ? "scale-115" : ""}`}>
-                {emoji}
+              <span className={`text-[22px] shrink-0 transition-transform duration-200 ${isSelected ? "scale-115" : ""}`}>
+                {cluster.emoji}
               </span>
-              <span
-                className={`text-[13px] transition-colors duration-200 ${
-                  isSelected ? "text-foreground" : "text-muted-foreground"
-                }`}
-                style={{ fontWeight: isSelected ? 600 : 400 }}
-              >
-                {genre}
-              </span>
+              <div className="flex flex-col items-start min-w-0 flex-1 pr-4">
+                <span
+                  className={`text-[13px] leading-tight transition-colors duration-200 ${
+                    isSelected ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                  style={{ fontWeight: isSelected ? 600 : 500 }}
+                >
+                  {cluster.name}
+                </span>
+              </div>
 
               {/* Check mark */}
               <div
@@ -631,7 +619,7 @@ function StepGenres({
             transition={{ duration: 0.3, ease: [0.0, 0.0, 0.2, 1] }}
             className="text-primary text-[12px] text-center mt-3"
           >
-            Maximum {MAX_GENRES} genres selected — deselect one to choose another
+            Maximum {MAX_CLUSTERS} selected — deselect one to choose another
           </motion.p>
         )}
       </AnimatePresence>

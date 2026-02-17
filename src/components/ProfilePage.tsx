@@ -28,6 +28,7 @@ import storage from "@/lib/storage";
 import type { TasteProfile, QuizAnswer } from "@/lib/storage/tasteProfile";
 import type { TasteVector } from "@/lib/taste/tasteVector";
 import { getGenresFromVector, genreKeyToName } from "@/lib/taste/tasteVector";
+import { TASTE_CLUSTERS } from "@/lib/taste/tasteClusters";
 
 // ── Service definitions ─────────────────────────────────────────────────────
 const allServices = PLATFORMS;
@@ -39,11 +40,11 @@ interface ProfilePageProps {
   userProfile?: OnboardingData | null;
   onSignOut?: () => void;
   onUpdateServices?: (services: string[]) => Promise<void>;
-  onUpdateGenres?: (genres: string[]) => Promise<void>;
+  onUpdateClusters?: (clusters: string[]) => Promise<void>;
   onUpdateProfile?: (name: string, email: string) => Promise<void>;
 }
 
-export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignOut, onUpdateServices, onUpdateGenres, onUpdateProfile }: ProfilePageProps) {
+export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignOut, onUpdateServices, onUpdateClusters, onUpdateProfile }: ProfilePageProps) {
   // ── Profile state ─��───────────────────────────────
   const [name, setName] = useState(userProfile?.name || "Joe");
   const [email, setEmail] = useState(userProfile?.email || "joegreenwas@gmail.com");
@@ -57,9 +58,9 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
   );
   const [isEditingServices, setIsEditingServices] = useState(false);
 
-  // ── Genres state ─────────────────────────────────
-  const [selectedGenres, setSelectedGenres] = useState<string[]>(
-    userProfile?.genres || ["Crime", "Fantasy", "Thriller", "Sci-Fi", "History", "Documentary", "Action", "Adventure"]
+  // ── Clusters state ─────────────────────────────────
+  const [selectedClusters, setSelectedClusters] = useState<string[]>(
+    userProfile?.clusters || []
   );
 
   // ── Taste profile / quiz state ──────────────────
@@ -70,9 +71,14 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
     getTasteProfile().then(setTasteProfile);
   }, []);
 
-  const topGenrePills = tasteProfile?.quizCompleted && tasteProfile.vector
-    ? getGenresFromVector(tasteProfile.vector).slice(0, 5).map(genreKeyToName)
-    : selectedGenres;
+  const topTastePills = selectedClusters.length > 0
+    ? selectedClusters
+        .map(id => TASTE_CLUSTERS.find(c => c.id === id))
+        .filter((c): c is NonNullable<typeof c> => c != null)
+        .map(c => `${c.emoji} ${c.name}`)
+    : tasteProfile?.quizCompleted && tasteProfile.vector
+      ? getGenresFromVector(tasteProfile.vector).slice(0, 5).map(genreKeyToName)
+      : [];
 
   const handleQuizComplete = useCallback(async (answers: QuizAnswer[], vector: TasteVector) => {
     try {
@@ -166,11 +172,11 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
           onComplete={handleQuizComplete}
           onSkip={handleQuizSkip}
           showSkip={false}
-          userGenres={selectedGenres}
-          showGenreSelect={true}
-          onGenresUpdated={async (genres) => {
-            setSelectedGenres(genres);
-            await onUpdateGenres?.(genres);
+          userClusters={selectedClusters}
+          showClusterSelect={true}
+          onClustersUpdated={async (clusters) => {
+            setSelectedClusters(clusters);
+            await onUpdateClusters?.(clusters);
           }}
         />
       </div>
@@ -391,10 +397,10 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
       {tasteProfile?.quizCompleted ? (
         <div className="mb-6">
           {/* Top genres */}
-          {topGenrePills.length > 0 && (
+          {topTastePills.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <span className="text-muted-foreground text-[12px] whitespace-nowrap">Top tastes:</span>
-              {topGenrePills.map((genre) => (
+              {topTastePills.map((genre) => (
                 <span
                   key={genre}
                   className="px-2.5 py-1 rounded-full bg-primary/15 text-primary text-[11px] whitespace-nowrap"

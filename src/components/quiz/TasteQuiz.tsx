@@ -11,7 +11,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { TasteVector } from '@/lib/taste/tasteVector';
-import { createDefaultVector } from '@/lib/taste/tasteVector';
+import { computeClusterSeedVector, getTopGenreKeysFromClusters } from '@/lib/taste/tasteClusters';
 import type { QuizPair } from '@/lib/taste/quizConfig';
 import { getFixedPairs, selectGenreResponsivePairs, selectAdaptivePairs } from '@/lib/taste/quizConfig';
 import { computeQuizVector, getTopGenreNames } from '@/lib/taste/quizScoring';
@@ -21,12 +21,12 @@ import { QuizIntro } from './QuizIntro';
 import { QuizQuestion } from './QuizQuestion';
 import { QuizInterstitial } from './QuizInterstitial';
 import { QuizCompletion } from './QuizCompletion';
-import { QuizGenreSelect } from './QuizGenreSelect';
+import { QuizClusterSelect } from './QuizClusterSelect';
 
 // ── Types ────────────────────────────────────────────────────────
 
 type QuizStage =
-  | { type: 'genre-select' }
+  | { type: 'cluster-select' }
   | { type: 'intro' }
   | { type: 'question'; index: number }       // 0-based (0..9)
   | { type: 'interstitial' }
@@ -36,9 +36,9 @@ interface TasteQuizProps {
   onComplete: (answers: QuizAnswer[], vector: TasteVector) => void;
   onSkip: () => void;
   showSkip: boolean;
-  userGenres: string[];
-  showGenreSelect?: boolean;
-  onGenresUpdated?: (genres: string[]) => void;
+  userClusters: string[];
+  showClusterSelect?: boolean;
+  onClustersUpdated?: (clusters: string[]) => void;
 }
 
 const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY;
@@ -46,13 +46,13 @@ const TOTAL_QUESTIONS = 10;
 
 // ── Component ────────────────────────────────────────────────────
 
-export function TasteQuiz({ onComplete, onSkip, showSkip, userGenres, showGenreSelect, onGenresUpdated }: TasteQuizProps) {
-  const [stage, setStage] = useState<QuizStage>(showGenreSelect ? { type: 'genre-select' } : { type: 'intro' });
+export function TasteQuiz({ onComplete, onSkip, showSkip, userClusters, showClusterSelect, onClustersUpdated }: TasteQuizProps) {
+  const [stage, setStage] = useState<QuizStage>(showClusterSelect ? { type: 'cluster-select' } : { type: 'intro' });
   const [answers, setAnswers] = useState<QuizAnswer[]>([]);
   const [direction, setDirection] = useState(1); // 1 = forward, -1 = backward
 
-  // Local genres: start from userGenres, can be updated by genre-select stage
-  const [localGenres, setLocalGenres] = useState<string[]>(userGenres);
+  // Local clusters: start from userClusters, can be updated by cluster-select stage
+  const [localClusters, setLocalClusters] = useState<string[]>(userClusters);
 
   // Pairs: first 5 (fixed+genre-responsive) selected on mount, last 5 (adaptive) after Q5
   const [phase1Pairs, setPhase1Pairs] = useState<QuizPair[]>([]);
@@ -61,20 +61,21 @@ export function TasteQuiz({ onComplete, onSkip, showSkip, userGenres, showGenreS
   // Poster paths resolved from TMDb (keyed by tmdbId)
   const [posterUrls, setPosterUrls] = useState<Record<number, string>>({});
 
-  // Base vector from genre selections
-  const baseVector = useMemo(() => createDefaultVector(localGenres), [localGenres.join(',')]);
+  // Base vector from cluster selections
+  const baseVector = useMemo(() => computeClusterSeedVector(localClusters), [localClusters.join(',')]);
 
   // ── Initialize phase 1 pairs (fixed + genre-responsive) ──
   useEffect(() => {
     const fixed = getFixedPairs();
     const fixedIds = fixed.map((p) => p.id);
-    const genreResponsive = selectGenreResponsivePairs(localGenres, fixedIds);
+    const topGenreKeys = getTopGenreKeysFromClusters(localClusters, 3);
+    const genreResponsive = selectGenreResponsivePairs(topGenreKeys, fixedIds);
     const pairs = [...fixed, ...genreResponsive];
     setPhase1Pairs(pairs);
 
     // Fetch posters for phase 1 pairs
     fetchPosters(pairs);
-  }, [localGenres.join(',')]);
+  }, [localClusters.join(',')]);
 
   // ── Fetch poster paths from TMDb ──
   const fetchPosters = useCallback(async (pairs: QuizPair[]) => {
@@ -190,16 +191,16 @@ export function TasteQuiz({ onComplete, onSkip, showSkip, userGenres, showGenreS
   return (
     <div className="size-full bg-background">
       <AnimatePresence mode="wait" custom={direction}>
-        {stage.type === 'genre-select' && (
+        {stage.type === 'cluster-select' && (
           <motion.div
-            key="genre-select"
+            key="cluster-select"
             className="size-full"
           >
-            <QuizGenreSelect
-              initialGenres={localGenres}
-              onConfirm={(genres) => {
-                setLocalGenres(genres);
-                onGenresUpdated?.(genres);
+            <QuizClusterSelect
+              initialClusters={localClusters}
+              onConfirm={(clusters) => {
+                setLocalClusters(clusters);
+                onClustersUpdated?.(clusters);
                 setDirection(1);
                 setStage({ type: 'intro' });
               }}

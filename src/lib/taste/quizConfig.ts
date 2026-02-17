@@ -17,7 +17,6 @@ import {
   createEmptyVector,
   GENRE_DIMENSIONS,
   META_DIMENSIONS,
-  genreNameToKey,
 } from './tasteVector';
 
 // ── Interfaces ───────────────────────────────────────────────────
@@ -1183,20 +1182,19 @@ export function getFixedPairs(): QuizPair[] {
 }
 
 /**
- * Select 2 genre-responsive pairs based on user's genre picks.
+ * Select 2 genre-responsive pairs based on user's top genre dimensions.
  *
  * Strategy:
- * 1. Convert display genre names to keys (e.g. "Sci-Fi" -> "scifi")
+ * 1. Accepts genre dimension keys directly (e.g. "scifi", "thriller")
  * 2. Find user genres NOT already covered by fixed pairs
  * 3. Match uncovered genres to pool via triggerGenres
  * 4. Pick 2 pairs with best coverage and no title overlap
  * 5. If all user genres are covered, pick within-genre subtype pairs
  */
 export function selectGenreResponsivePairs(
-  userGenres: string[],
+  userGenreKeys: string[],
   fixedPairIds: string[]
 ): QuizPair[] {
-  const userGenreKeys = userGenres.map((g) => genreNameToKey(g));
   const fixedIds = new Set(fixedPairIds);
 
   // Find user genres not covered by the fixed pairs

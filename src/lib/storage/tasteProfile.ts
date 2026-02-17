@@ -117,6 +117,24 @@ export async function initializeFromGenres(selectedGenres: string[]): Promise<Ta
   return profile;
 }
 
+/** Create a taste profile seeded from cluster selections (onboarding V2.5) */
+export async function initializeFromClusters(clusterIds: string[]): Promise<TasteProfile> {
+  const existing = await getTasteProfile();
+  if (existing) return existing; // Don't overwrite
+
+  const { computeClusterSeedVector } = await import('../taste/tasteClusters');
+  const profile: TasteProfile = {
+    vector: computeClusterSeedVector(clusterIds),
+    quizCompleted: false,
+    quizAnswers: [],
+    interactionLog: [],
+    lastUpdated: new Date().toISOString(),
+    version: SCHEMA_VERSION,
+  };
+  await saveTasteProfile(profile);
+  return profile;
+}
+
 /** Save quiz results into taste profile */
 export async function saveQuizResults(
   quizAnswers: QuizAnswer[],

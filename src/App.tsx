@@ -22,12 +22,11 @@ import { useHomeContent } from "./hooks/useHomeContent";
 import { useUpcoming } from "./hooks/useUpcoming";
 import { LazyGenreSection } from "./components/LazyGenreSection";
 import { providerIdsToServiceIds, serviceIdsToProviderIds, providerIdToServiceId } from "./lib/adapters/platformAdapter";
-import { GENRE_NAMES } from "./lib/constants/genres";
 import { reorderWithinWindows } from "./lib/taste/genreBlending";
 import type { ServiceId } from "./components/platformLogos";
 import { App as CapApp } from "@capacitor/app";
 import { useTasteProfile } from "./hooks/useTasteProfile";
-import { initializeFromGenres, migrateFromLegacyPreferences } from "./lib/storage/tasteProfile";
+import { migrateFromLegacyPreferences } from "./lib/storage/tasteProfile";
 import { IMMEDIATE_LOAD_COUNT } from "./lib/taste/tasteVector";
 
 const categories = ["All", "Movies", "TV Shows", "Docs", "Anime"];
@@ -551,13 +550,11 @@ function AppContent() {
                     services: userPrefs.preferences?.platforms
                       ?.map((p) => providerIdToServiceId(p.id))
                       .filter((s): s is ServiceId => s !== null) || [],
-                    genres: userPrefs.preferences?.homeGenres
-                      ?.map((id) => GENRE_NAMES[id])
-                      .filter(Boolean) || [],
+                    clusters: userPrefs.preferences?.selectedClusters || [],
                   } : null}
                   onSignOut={userPrefs.signOut}
                   onUpdateServices={userPrefs.updateServices}
-                  onUpdateGenres={userPrefs.updateGenres}
+                  onUpdateClusters={userPrefs.updateClusters}
                   onUpdateProfile={userPrefs.updateProfile}
                 />
               )}

@@ -225,6 +225,14 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
             .map(([id, score]) => ({ genreId: Number(id), name: GENRE_NAMES[Number(id)], score })),
         });
 
+        if (tasteProfile?.vector) {
+          const v = tasteProfile.vector;
+          const allDims = Object.entries(v)
+            .sort(([, a], [, b]) => Math.abs(b as number) - Math.abs(a as number))
+            .map(([k, val]) => `${k}:${(val as number).toFixed(3)}`);
+          debug.info('Vector', 'Full stored vector (25D)', { dimensions: allDims });
+        }
+
         if (tasteProfile?.quizCompleted && tasteProfile.vector) {
           // Post-quiz: all genres above threshold, ordered by vector score
           const vectorKeys = getGenresFromVector(tasteProfile.vector);

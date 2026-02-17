@@ -10,19 +10,20 @@ import {
   type UserPreferences,
 } from '@/lib/storage/userPreferences';
 import { serviceIdToProviderId } from '@/lib/adapters/platformAdapter';
-import { GENRE_NAME_TO_ID } from '@/lib/constants/genres';
 import { UK_PROVIDERS_ARRAY } from '@/lib/constants/platforms';
 import type { ServiceId } from '@/components/platformLogos';
-import { initializeFromGenres, saveQuizResults, getTasteProfile, saveTasteProfile } from '@/lib/storage/tasteProfile';
+import { initializeFromClusters, saveQuizResults, getTasteProfile, saveTasteProfile } from '@/lib/storage/tasteProfile';
 import type { QuizAnswer } from '@/lib/storage/tasteProfile';
 import type { TasteVector } from '@/lib/taste/tasteVector';
-import { genreNameToKey, clampVector, GENRE_DIMENSIONS } from '@/lib/taste/tasteVector';
+import { clampVector, ALL_DIMENSIONS } from '@/lib/taste/tasteVector';
+import { computeClusterSeedVector, deriveHomeGenres } from '@/lib/taste/tasteClusters';
+import { debug } from '@/lib/debugLogger';
 
 export interface OnboardingPayload {
   name: string;
   email: string;
   services: string[];   // ServiceId strings
-  genres: string[];      // display names like "Action"
+  clusters: string[];   // taste cluster IDs
   quizAnswers?: QuizAnswer[];
   tasteVector?: TasteVector;
 }
@@ -51,6 +52,13 @@ export function useUserPreferences() {
   const completeOnboarding = useCallback(async (data: OnboardingPayload) => {
     const userId = `user_${Date.now()}`;
 
+    debug.info('Onboarding', 'Completing onboarding', {
+      clusters: data.clusters,
+      services: data.services,
+      hasQuizAnswers: !!(data.quizAnswers && data.tasteVector),
+      quizAnswerCount: data.quizAnswers?.length ?? 0,
+    });
+
     await saveUserProfile({ userId, name: data.name, email: data.email });
 
     // Map ServiceId strings → TMDb provider IDs for storage
@@ -60,22 +68,23 @@ export function useUserPreferences() {
       return { id: providerId, name: provider?.name || serviceId, selected: true };
     });
 
-    // Map genre display names → TMDb genre IDs
-    const homeGenres = data.genres
-      .map((name) => GENRE_NAME_TO_ID[name])
-      .filter((id): id is number => id !== undefined);
+    // Derive homeGenres from cluster seed vector
+    const homeGenres = deriveHomeGenres(data.clusters);
 
-    await saveUserPreferences({ region: 'GB', platforms, homeGenres });
+    await saveUserPreferences({
+      region: 'GB', platforms, homeGenres,
+      selectedClusters: data.clusters,
+    });
 
-    // Save taste profile: quiz results if completed, otherwise seed from genres
+    // Save taste profile: quiz results if completed, otherwise seed from clusters
     if (data.quizAnswers && data.tasteVector) {
       await saveQuizResults(data.quizAnswers, data.tasteVector).catch(() => {});
     } else {
-      await initializeFromGenres(data.genres).catch(() => {});
+      await initializeFromClusters(data.clusters).catch(() => {});
     }
 
     setProfile({ userId, name: data.name, email: data.email, createdAt: Date.now() });
-    setPreferences({ region: 'GB', platforms, homeGenres });
+    setPreferences({ region: 'GB', platforms, homeGenres, selectedClusters: data.clusters });
     setOnboardingComplete(true);
   }, []);
 
@@ -97,31 +106,47 @@ export function useUserPreferences() {
     setPreferences(updated);
   }, [preferences]);
 
-  const updateGenres = useCallback(async (genreNames: string[]) => {
-    const homeGenres = genreNames
-      .map((name) => GENRE_NAME_TO_ID[name])
-      .filter((id): id is number => id !== undefined);
-    const updated = { ...(preferences || { region: 'GB', platforms: [] }), homeGenres } as UserPreferences;
+  const updateClusters = useCallback(async (clusterIds: string[]) => {
+    debug.info('Clusters', 'Updating clusters', {
+      newClusters: clusterIds,
+      previousClusters: preferences?.selectedClusters ?? [],
+    });
+
+    const newSeed = computeClusterSeedVector(clusterIds);
+    const homeGenres = deriveHomeGenres(clusterIds);
+
+    // Persist to preferences
+    const updated = {
+      ...(preferences || { region: 'GB', platforms: [] }),
+      homeGenres,
+      selectedClusters: clusterIds,
+    } as UserPreferences;
     await saveUserPreferences(updated);
     setPreferences(updated);
 
-    // Update taste vector: boost added genres, reduce removed genres
-    const profile = await getTasteProfile();
-    if (profile) {
-      const selectedKeys = new Set(genreNames.map(genreNameToKey));
-      const newVector = { ...profile.vector };
-      for (const dim of GENRE_DIMENSIONS) {
-        if (selectedKeys.has(dim)) {
-          // Selected genre: nudge toward 0.5 (preference baseline)
-          newVector[dim] = Math.max(newVector[dim], 0.4);
-        } else {
-          // Unselected: nudge down toward 0.2 (unselected baseline)
-          newVector[dim] = Math.min(newVector[dim], 0.3);
+    // Update taste vector via seed delta shift
+    const tasteProfile = await getTasteProfile();
+    if (tasteProfile) {
+      const oldClusters = preferences?.selectedClusters;
+      if (oldClusters && oldClusters.length > 0) {
+        // Shift current vector by seed difference (preserves quiz + interaction deltas).
+        // Math: newVector = currentVector + (newSeed - oldSeed)
+        //                 = newSeed + quizDelta + interactionDrift
+        const oldSeed = computeClusterSeedVector(oldClusters);
+        const newVector = { ...tasteProfile.vector };
+        for (const d of ALL_DIMENSIONS) {
+          newVector[d] += newSeed[d] - oldSeed[d];
         }
+        tasteProfile.vector = clampVector(newVector);
+      } else {
+        // Legacy user choosing clusters for the first time — one-time lossy re-seed.
+        // Their old quiz was calibrated against createDefaultVector (genre-based),
+        // which is fundamentally different from a cluster seed. Preserving those
+        // deltas would produce incoherent results.
+        tasteProfile.vector = newSeed;
       }
-      profile.vector = clampVector(newVector);
-      profile.lastUpdated = new Date().toISOString();
-      await saveTasteProfile(profile);
+      tasteProfile.lastUpdated = new Date().toISOString();
+      await saveTasteProfile(tasteProfile);
     }
   }, [preferences]);
 
@@ -140,7 +165,7 @@ export function useUserPreferences() {
     completeOnboarding,
     updateProfile,
     updateServices,
-    updateGenres,
+    updateClusters,
     signOut,
     reload: load,
   };

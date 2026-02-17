@@ -1,23 +1,24 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
-import { allGenres, MAX_GENRES, genreIcons } from "../OnboardingFlow";
+import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste/tasteClusters";
 
-interface QuizGenreSelectProps {
-  initialGenres: string[];
-  onConfirm: (genres: string[]) => void;
+interface QuizClusterSelectProps {
+  initialClusters: string[];
+  onConfirm: (clusterIds: string[]) => void;
   onBack: () => void;
 }
 
-export function QuizGenreSelect({ initialGenres, onConfirm, onBack }: QuizGenreSelectProps) {
-  const [selected, setSelected] = useState<string[]>(initialGenres);
-  const atLimit = selected.length >= MAX_GENRES;
+export function QuizClusterSelect({ initialClusters, onConfirm, onBack }: QuizClusterSelectProps) {
+  const [selected, setSelected] = useState<string[]>(initialClusters);
+  const atLimit = selected.length >= MAX_CLUSTERS;
+  const canConfirm = selected.length >= MIN_CLUSTERS;
 
-  const toggle = (genre: string) => {
+  const toggle = (clusterId: string) => {
     setSelected((prev) => {
-      if (prev.includes(genre)) return prev.filter((g) => g !== genre);
-      if (prev.length >= MAX_GENRES) return prev;
-      return [...prev, genre];
+      if (prev.includes(clusterId)) return prev.filter((c) => c !== clusterId);
+      if (prev.length >= MAX_CLUSTERS) return prev;
+      return [...prev, clusterId];
     });
   };
 
@@ -53,7 +54,7 @@ export function QuizGenreSelect({ initialGenres, onConfirm, onBack }: QuizGenreS
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <h2 className="text-foreground text-[20px]" style={{ fontWeight: 700 }}>
-                  Update Your Tastes
+                  Update Your Taste
                 </h2>
                 <AnimatePresence>
                   {selected.length > 0 && (
@@ -66,27 +67,26 @@ export function QuizGenreSelect({ initialGenres, onConfirm, onBack }: QuizGenreS
                       className="bg-primary text-white text-[12px] px-2 py-0.5 rounded-full tabular-nums"
                       style={{ fontWeight: 600 }}
                     >
-                      {selected.length}/{MAX_GENRES}
+                      {selected.length}/{MAX_CLUSTERS}
                     </motion.span>
                   )}
                 </AnimatePresence>
               </div>
               <p className="text-muted-foreground text-[13px]">
-                Pick your top {MAX_GENRES} favourite genres
+                Pick 3–5 that match your vibe
               </p>
             </div>
           </motion.div>
         </div>
 
-        {/* Genre grid */}
+        {/* Cluster grid */}
         <div className="grid grid-cols-2 gap-2.5">
-          {allGenres.map((genre, idx) => {
-            const isSelected = selected.includes(genre);
+          {TASTE_CLUSTERS.map((cluster, idx) => {
+            const isSelected = selected.includes(cluster.id);
             const isDisabled = atLimit && !isSelected;
-            const emoji = genreIcons[genre] || "🎬";
             return (
               <motion.button
-                key={genre}
+                key={cluster.id}
                 initial={{ opacity: 0, scale: 0.85 }}
                 animate={{
                   opacity: isDisabled ? 0.4 : 1,
@@ -94,8 +94,8 @@ export function QuizGenreSelect({ initialGenres, onConfirm, onBack }: QuizGenreS
                 }}
                 transition={{ delay: 0.03 * idx, type: "spring", damping: 20, stiffness: 300 }}
                 whileTap={!isDisabled ? { scale: 0.94 } : undefined}
-                onClick={() => !isDisabled && toggle(genre)}
-                className={`relative flex items-center gap-3 px-3.5 py-3 rounded-2xl border transition-all duration-250 ${
+                onClick={() => !isDisabled && toggle(cluster.id)}
+                className={`relative flex items-center gap-3 pl-3 pr-8 py-3 rounded-2xl border text-left transition-all duration-250 ${
                   isSelected
                     ? "border-primary/50 bg-primary/10"
                     : isDisabled
@@ -104,17 +104,19 @@ export function QuizGenreSelect({ initialGenres, onConfirm, onBack }: QuizGenreS
                 }`}
                 style={{ borderColor: isSelected ? undefined : "var(--border-subtle)" }}
               >
-                <span className={`text-[22px] transition-transform duration-200 ${isSelected ? "scale-115" : ""}`}>
-                  {emoji}
+                <span className={`text-[22px] shrink-0 transition-transform duration-200 ${isSelected ? "scale-115" : ""}`}>
+                  {cluster.emoji}
                 </span>
-                <span
-                  className={`text-[13px] transition-colors duration-200 ${
-                    isSelected ? "text-foreground" : "text-muted-foreground"
-                  }`}
-                  style={{ fontWeight: isSelected ? 600 : 400 }}
-                >
-                  {genre}
-                </span>
+                <div className="flex flex-col items-start min-w-0 flex-1 pr-4">
+                  <span
+                    className={`text-[13px] leading-tight transition-colors duration-200 ${
+                      isSelected ? "text-foreground" : "text-muted-foreground"
+                    }`}
+                    style={{ fontWeight: isSelected ? 600 : 500 }}
+                  >
+                    {cluster.name}
+                  </span>
+                </div>
 
                 {/* Check mark */}
                 <div
@@ -153,7 +155,7 @@ export function QuizGenreSelect({ initialGenres, onConfirm, onBack }: QuizGenreS
               transition={{ duration: 0.3, ease: [0.0, 0.0, 0.2, 1] }}
               className="text-primary text-[12px] text-center mt-3"
             >
-              Maximum {MAX_GENRES} genres selected — deselect one to choose another
+              Maximum {MAX_CLUSTERS} selected — deselect one to choose another
             </motion.p>
           )}
         </AnimatePresence>
@@ -185,22 +187,22 @@ export function QuizGenreSelect({ initialGenres, onConfirm, onBack }: QuizGenreS
 
       {/* Bottom CTA */}
       <div className="px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3">
-        {selected.length > 0 && (
+        {canConfirm && (
           <p className="text-muted-foreground text-[12px] text-center mb-2">
-            {selected.length} of {MAX_GENRES} selected
+            {selected.length} of {MAX_CLUSTERS} selected
           </p>
         )}
-        {selected.length === 0 && (
+        {!canConfirm && (
           <p className="text-muted-foreground text-[12px] text-center mb-2">
-            Pick your top {MAX_GENRES} favourite genres
+            Pick at least {MIN_CLUSTERS} that match your vibe
           </p>
         )}
         <motion.button
           onClick={() => onConfirm(selected)}
-          disabled={selected.length === 0}
-          whileTap={selected.length > 0 ? { scale: 0.97 } : undefined}
+          disabled={!canConfirm}
+          whileTap={canConfirm ? { scale: 0.97 } : undefined}
           className={`w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-[15px] transition-all duration-300 ${
-            selected.length > 0
+            canConfirm
               ? "bg-primary text-white shadow-lg shadow-primary/25"
               : "bg-secondary text-muted-foreground cursor-not-allowed"
           }`}

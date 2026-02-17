@@ -20,6 +20,7 @@ export interface UserPreferences {
   region: string;
   platforms: Array<{ id: number; name: string; selected?: boolean }>;
   homeGenres?: number[];
+  selectedClusters?: string[];
 }
 
 export const saveUserProfile = async (profile: Partial<UserProfile> & { userId: string; name: string; email: string }) => {
