@@ -10,6 +10,7 @@ export interface UpcomingRelease {
   releaseDate: string;
   type: 'movie' | 'tv';
   genre: string;
+  genreIds: number[];
   services: ServiceId[];
   overview: string;
   rating?: number;
@@ -19,7 +20,7 @@ function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];
 }
 
-export function useUpcoming(providerIds: number[]) {
+export function useUpcoming(providerIds: number[], fetchMovies = true, fetchTV = true) {
   const [items, setItems] = useState<UpcomingRelease[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -42,20 +43,20 @@ export function useUpcoming(providerIds: number[]) {
       const providerPipe = providerStr.replace(/,/g, '|');
 
       const [moviesRes, tvRes] = await Promise.all([
-        discoverMovies({
+        fetchMovies ? discoverMovies({
           'primary_release_date.gte': todayStr,
           'primary_release_date.lte': futureStr,
           with_watch_providers: providerPipe,
           watch_region: 'GB',
           sort_by: 'primary_release_date.asc',
-        }),
-        discoverTV({
+        }) : Promise.resolve({ data: { results: [] } }),
+        fetchTV ? discoverTV({
           'first_air_date.gte': todayStr,
           'first_air_date.lte': futureStr,
           with_watch_providers: providerPipe,
           watch_region: 'GB',
           sort_by: 'first_air_date.asc',
-        }),
+        }) : Promise.resolve({ data: { results: [] } }),
       ]);
 
       const movies: UpcomingRelease[] = (moviesRes.data?.results || []).map((m: any) => ({
@@ -66,6 +67,7 @@ export function useUpcoming(providerIds: number[]) {
         releaseDate: m.release_date || todayStr,
         type: 'movie' as const,
         genre: m.genre_ids?.[0] ? getGenreShort(m.genre_ids[0]) : '',
+        genreIds: m.genre_ids || [],
         services: [] as ServiceId[],
         overview: m.overview || '',
         rating: m.vote_average || undefined,
@@ -79,6 +81,7 @@ export function useUpcoming(providerIds: number[]) {
         releaseDate: t.first_air_date || todayStr,
         type: 'tv' as const,
         genre: t.genre_ids?.[0] ? getGenreShort(t.genre_ids[0]) : '',
+        genreIds: t.genre_ids || [],
         services: [] as ServiceId[],
         overview: t.overview || '',
         rating: t.vote_average || undefined,
@@ -94,7 +97,7 @@ export function useUpcoming(providerIds: number[]) {
     } finally {
       setLoading(false);
     }
-  }, [providerStr]);
+  }, [providerStr, fetchMovies, fetchTV]);
 
   useEffect(() => { load(); }, [load]);
 

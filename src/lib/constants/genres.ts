@@ -89,3 +89,86 @@ for (const [name, id] of Object.entries(GENRE_NAME_TO_ID)) {
   const key = genreNameToKey(name);
   if (key && id > 0) GENRE_KEY_TO_TMDB[key] = id;
 }
+
+// ── TV Genre Compatibility ──────────────────────────────────────
+
+// Genre IDs valid for the TMDb TV discover endpoint
+export const VALID_TV_GENRE_IDS = new Set([
+  10759, // Action & Adventure
+  16,    // Animation
+  35,    // Comedy
+  80,    // Crime
+  99,    // Documentary
+  18,    // Drama
+  10751, // Family
+  36,    // History (verified: returns results)
+  10762, // Kids
+  9648,  // Mystery
+  10763, // News
+  10764, // Reality
+  10749, // Romance (verified: returns results)
+  10765, // Sci-Fi & Fantasy
+  10766, // Soap
+  10767, // Talk
+  10768, // War & Politics
+  37,    // Western
+]);
+
+// Movie genre IDs → TV equivalents
+export const MOVIE_TO_TV_GENRE: Record<number, number> = {
+  28: 10759,    // Action → Action & Adventure
+  12: 10759,    // Adventure → Action & Adventure
+  878: 10765,   // Sci-Fi → Sci-Fi & Fantasy
+  14: 10765,    // Fantasy → Sci-Fi & Fantasy
+  10752: 10768, // War → War & Politics
+};
+
+// Genre display names unsupported on TV discover (for FilterSheet)
+export const TV_UNSUPPORTED_GENRE_NAMES = ['Thriller', 'Horror', 'Music'] as const;
+
+/**
+ * Convert movie genre IDs to their TV equivalents.
+ * IDs valid on both endpoints pass through unchanged.
+ * IDs with no TV equivalent (53, 27, 10402) also pass through —
+ * use sanitiseTVGenreParams to strip those.
+ */
+export function convertMovieGenresToTV(movieGenreIds: number[]): number[] {
+  const result = new Set<number>();
+  for (const id of movieGenreIds) {
+    result.add(MOVIE_TO_TV_GENRE[id] ?? id);
+  }
+  return [...result];
+}
+
+/**
+ * Sanitise a discover params object for TV calls.
+ * Converts movie IDs to TV equivalents and strips IDs that have
+ * no valid TV equivalent (Thriller 53, Horror 27, Musical 10402).
+ */
+export function sanitiseTVGenreParams(
+  params: Record<string, unknown>,
+): Record<string, unknown> {
+  const sanitised = { ...params };
+  if (sanitised.with_genres) {
+    const separator = String(sanitised.with_genres).includes(',') ? ',' : '|';
+    const genreIds = String(sanitised.with_genres)
+      .split(/[,|]/)
+      .map(Number)
+      .filter(Boolean);
+
+    // Convert movie IDs → TV, then keep only valid TV IDs
+    const validForTV = genreIds
+      .map((id) => MOVIE_TO_TV_GENRE[id] ?? id)
+      .filter((id) => VALID_TV_GENRE_IDS.has(id));
+
+    // Deduplicate (e.g. Action 28 + Adventure 12 both → 10759)
+    const unique = [...new Set(validForTV)];
+
+    if (unique.length > 0) {
+      sanitised.with_genres = unique.join(separator);
+    } else {
+      delete sanitised.with_genres;
+    }
+  }
+  return sanitised;
+}

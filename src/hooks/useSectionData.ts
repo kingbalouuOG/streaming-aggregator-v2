@@ -2,8 +2,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { discoverMovies, discoverTV } from '@/lib/api/tmdb';
 import { tmdbMovieToContentItem, tmdbTVToContentItem } from '@/lib/adapters/contentAdapter';
 import { getSectionCache, setSectionCache } from '@/lib/sectionSessionCache';
+import { sanitiseTVGenreParams } from '@/lib/constants/genres';
+import { reorderWithinWindows, hybridScore } from '@/lib/taste/genreBlending';
+import type { TasteVector } from '@/lib/taste/tasteVector';
 import type { ContentItem } from '@/components/ContentCard';
 import type { GenreAffinities } from '@/lib/utils/recommendationEngine';
+import { debug } from '@/lib/debugLogger';
+
+export type ScoringMode = 'none' | 'affinity' | 'windowReorder' | 'hybrid';
 
 /** ContentItem extended with raw TMDb fields for scoring */
 interface BufferedItem extends ContentItem {
@@ -33,6 +39,14 @@ export interface UseSectionDataOptions {
   genreAffinities?: GenreAffinities | null;
   /** Whether to sort by genre affinity */
   applyScoring?: boolean;
+  /** Scoring mode: determines how items are sorted in the buffer */
+  scoringMode?: ScoringMode;
+  /** User's taste vector for vector-based scoring */
+  tasteVector?: TasteVector | null;
+  /** Whether this is a genre-specific section (affects TV genre handling) */
+  isGenreSection?: boolean;
+  /** When true, skip dedup against excludeIds and onNewIds registration (for useMemo dedup) */
+  skipExternalDedup?: boolean;
   /** Number of items to show initially */
   initialSize?: number;
   /** Number of items per loadMore batch */
@@ -94,10 +108,17 @@ export function useSectionData(options: UseSectionDataOptions): SectionDataState
     onNewIds,
     genreAffinities,
     applyScoring = false,
+    scoringMode: scoringModeOpt,
+    tasteVector,
+    isGenreSection = false,
+    skipExternalDedup = false,
     initialSize = 10,
     batchSize = 5,
     maxItems = 50,
   } = options;
+
+  // Resolve scoring mode: explicit scoringMode takes precedence over legacy applyScoring
+  const scoringMode: ScoringMode = scoringModeOpt ?? (applyScoring ? 'affinity' : 'none');
 
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -120,12 +141,18 @@ export function useSectionData(options: UseSectionDataOptions): SectionDataState
     const moviePage = nextMoviePageRef.current;
     const tvPage = nextTVPageRef.current;
 
+    // Build TV params — sanitise genre IDs for non-genre sections
+    const rawTvParams = { ...baseParams, ...tvParams, page: tvPage };
+    const effectiveTvParams = (!isGenreSection && rawTvParams.with_genres)
+      ? sanitiseTVGenreParams(rawTvParams)
+      : rawTvParams;
+
     const [movieRes, tvRes] = await Promise.all([
       fetchMovies
         ? discoverMovies({ ...baseParams, ...movieParams, page: moviePage })
         : Promise.resolve({ data: { results: [], total_pages: 0 } }),
       fetchTV
-        ? discoverTV({ ...baseParams, ...tvParams, page: tvPage })
+        ? discoverTV(effectiveTvParams)
         : Promise.resolve({ data: { results: [], total_pages: 0 } }),
     ]);
 
@@ -152,26 +179,38 @@ export function useSectionData(options: UseSectionDataOptions): SectionDataState
     }
 
     return { items: combined, apiDone };
-  }, [baseParams, movieParams, tvParams, fetchMovies, fetchTV]);
+  }, [baseParams, movieParams, tvParams, fetchMovies, fetchTV, isGenreSection]);
 
   /** Deduplicate items against the shared exclude set */
   const dedup = useCallback((itemList: BufferedItem[]): BufferedItem[] => {
+    if (skipExternalDedup) return itemList;
     if (!excludeIds || excludeIds.size === 0) return itemList;
     return itemList.filter((item) => !excludeIds.has(item.id));
-  }, [excludeIds]);
+  }, [excludeIds, skipExternalDedup]);
 
-  /** Sort buffer by affinity if scoring is enabled */
+  /** Sort/reorder buffer based on scoring mode */
   const sortBuffer = useCallback((buf: BufferedItem[]): BufferedItem[] => {
-    if (!applyScoring || !genreAffinities) return buf;
-    return [...buf].sort((a, b) => scoreByAffinity(b, genreAffinities) - scoreByAffinity(a, genreAffinities));
-  }, [applyScoring, genreAffinities]);
+    switch (scoringMode) {
+      case 'windowReorder':
+        if (!tasteVector) return buf;
+        return reorderWithinWindows(buf, tasteVector, (item) => item._genreIds || []);
+      case 'hybrid':
+        if (!tasteVector) return buf;
+        return [...buf].sort((a, b) => hybridScore(b, tasteVector) - hybridScore(a, tasteVector));
+      case 'affinity':
+        if (!genreAffinities) return buf;
+        return [...buf].sort((a, b) => scoreByAffinity(b, genreAffinities) - scoreByAffinity(a, genreAffinities));
+      case 'none':
+      default:
+        return buf;
+    }
+  }, [scoringMode, tasteVector, genreAffinities]);
 
   /** Register item IDs in the shared exclude set */
   const registerItems = useCallback((newItems: ContentItem[]) => {
-    if (onNewIds) {
-      onNewIds(newItems.map((i) => i.id));
-    }
-  }, [onNewIds]);
+    if (skipExternalDedup || !onNewIds) return;
+    onNewIds(newItems.map((i) => i.id));
+  }, [onNewIds, skipExternalDedup]);
 
   /** Save current state to session cache */
   const saveToCache = useCallback((displayItems: ContentItem[], buffer: BufferedItem[]) => {
@@ -206,12 +245,30 @@ export function useSectionData(options: UseSectionDataOptions): SectionDataState
 
     setLoading(true);
     try {
+      const fetchStart = Date.now();
       const { items: fetched, apiDone } = await fetchOnePage();
       const deduped = dedup(fetched);
       const sorted = sortBuffer(deduped);
 
       const display = sorted.slice(0, initialSize);
       const buffer = sorted.slice(initialSize);
+
+      // Log section load with reorder details
+      const sectionLabel = sectionKey.split('|')[0];
+      const reordered = scoringMode !== 'none' && fetched.length > 0;
+      debug.info(`Section:${sectionLabel}`, 'Fetch complete', {
+        fetchedCount: fetched.length,
+        afterDedup: deduped.length,
+        displayCount: display.length,
+        bufferCount: buffer.length,
+        scoringMode,
+        reordered,
+        timeMs: Date.now() - fetchStart,
+        apiDone,
+        ...(reordered && display.length >= 3 ? {
+          first3: display.slice(0, 3).map((i) => ({ id: i.id, title: i.title })),
+        } : {}),
+      });
 
       bufferRef.current = buffer;
       setItems(display);
@@ -220,6 +277,7 @@ export function useSectionData(options: UseSectionDataOptions): SectionDataState
       saveToCache(display, buffer);
     } catch (err) {
       console.error(`[useSectionData] Error loading ${sectionKey}:`, err);
+      debug.error(`Section:${sectionKey.split('|')[0]}`, 'Fetch error', { error: String(err) });
       setHasMore(false);
     } finally {
       setLoading(false);

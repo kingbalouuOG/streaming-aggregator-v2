@@ -17,13 +17,28 @@ import {
   cleanExpiredDismissals,
 } from '@/lib/storage/recommendations';
 import { discoverMovies, discoverTV, getSimilarMovies, getSimilarTV } from '@/lib/api/tmdb';
-import { GENRE_NAMES } from '@/lib/constants/genres';
+import { GENRE_NAMES, GENRE_KEY_TO_TMDB, convertMovieGenresToTV, VALID_TV_GENRE_IDS, MOVIE_TO_TV_GENRE } from '@/lib/constants/genres';
 import { getTasteProfile } from '@/lib/storage/tasteProfile';
 import type { TasteVector } from '@/lib/taste/tasteVector';
-import { cosineSimilarity, DIMENSION_WEIGHTS } from '@/lib/taste/tasteVector';
+import { cosineSimilarity, DIMENSION_WEIGHTS, getGenresFromVector } from '@/lib/taste/tasteVector';
 import { contentToVector } from '@/lib/taste/contentVectorMapping';
+import { generateGenreCombinations } from '@/lib/taste/genreBlending';
+import { debug } from '@/lib/debugLogger';
 
 const DEBUG = __DEV__;
+
+// ── Filter options for threading user's active filters into discovery ──
+
+export interface DiscoverFilterOptions {
+  fetchMovies?: boolean;
+  fetchTV?: boolean;
+  filterGenreIds?: number[];  // TMDb genre IDs from user's FilterSheet selection
+}
+
+function hasActiveFilters(opts?: DiscoverFilterOptions): boolean {
+  if (!opts) return false;
+  return opts.fetchMovies === false || opts.fetchTV === false || (opts.filterGenreIds?.length ?? 0) > 0;
+}
 
 // Weights when taste vector is available (per spec Part 4)
 const VECTOR_WEIGHTS = {
@@ -137,16 +152,128 @@ async function getTopLikedItems(count = 3): Promise<WatchlistItem[]> {
 async function fetchGenreBasedContent(
   topGenres: { genreId: number; score: number }[],
   region = 'GB',
-  providerIds: number[] = []
+  providerIds: number[] = [],
+  tasteVector?: TasteVector | null,
+  filterOpts?: DiscoverFilterOptions
 ): Promise<ScoredCandidate[]> {
   try {
     const providerParam = providerIds.length > 0 ? { with_watch_providers: providerIds.join('|'), watch_region: region } : { watch_region: region };
+    const doMovies = filterOpts?.fetchMovies !== false;
+    const doTV = filterOpts?.fetchTV !== false;
+    const userFilterGenres = filterOpts?.filterGenreIds || [];
 
-    if (topGenres.length === 0) {
+    if (hasActiveFilters(filterOpts)) {
+      debug.info('FilterThreading', 'fetchGenreBasedContent filters', {
+        doMovies,
+        doTV,
+        filterGenres: userFilterGenres.map((id) => GENRE_NAMES[id] || id),
+      });
+    }
+
+    // Vector-based AND genre queries: pairwise combos for multi-genre discovery
+    if (tasteVector) {
+      const vectorKeys = getGenresFromVector(tasteVector);
+      const scoredGenres = vectorKeys
+        .map((key) => ({ genreId: GENRE_KEY_TO_TMDB[key], score: tasteVector[key] }))
+        .filter((g): g is { genreId: number; score: number } => g.genreId > 0);
+
+      // Build combos: filter path vs normal path are MUTUALLY EXCLUSIVE
+      let combos: number[][];
+      if (userFilterGenres.length > 0) {
+        // Filter path: filter genre required in every combo, paired with top vector genres
+        const vectorGenreIds = scoredGenres
+          .map((g) => g.genreId)
+          .filter((id) => !userFilterGenres.includes(id)); // exclude overlap
+        const rawCombos: number[][] = [];
+        for (const filterG of userFilterGenres) {
+          for (const vectorG of vectorGenreIds) {
+            rawCombos.push([filterG, vectorG]);
+          }
+          rawCombos.push([filterG]); // standalone filter genre for broader results
+        }
+        // Deduplicate by combo signature (safety net)
+        const seen = new Set<string>();
+        combos = rawCombos.filter((c) => {
+          const key = [...c].sort().join(',');
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }).slice(0, 4);
+      } else {
+        // No filter: use existing pairwise vector genre combos
+        combos = generateGenreCombinations(scoredGenres).slice(0, 4);
+      }
+
+      debug.info('RecommendationEngine', 'Genre combinations', {
+        vectorGenreCount: scoredGenres.length,
+        topVectorGenres: scoredGenres.slice(0, 5).map((g) => ({ genreId: g.genreId, name: GENRE_NAMES[g.genreId], score: Math.round(g.score * 100) / 100 })),
+        combos: combos.map((c) => c.map((id) => GENRE_NAMES[id] || id)),
+        comboCount: combos.length,
+        filterGenres: userFilterGenres.length > 0 ? userFilterGenres.map((id) => GENRE_NAMES[id] || id) : undefined,
+      });
+
+      if (combos.length > 0) {
+        // Fire AND queries in parallel (max 4 combos × 2 endpoints = 8 API calls)
+        const comboPromises = combos.flatMap((combo) => {
+          const movieGenreStr = combo.join(','); // comma = AND
+          const tvCombo = convertMovieGenresToTV(combo)
+            .filter((id) => VALID_TV_GENRE_IDS.has(id));
+          const tvGenreStr = tvCombo.length > 0 ? tvCombo.join(',') : '';
+
+          return [
+            doMovies
+              ? discoverMovies({ with_genres: movieGenreStr, page: 1, sort_by: 'popularity.desc', ...providerParam })
+              : Promise.resolve({ data: { results: [] } }),
+            doTV && tvGenreStr
+              ? discoverTV({ with_genres: tvGenreStr, page: 1, sort_by: 'popularity.desc', ...providerParam })
+              : Promise.resolve({ data: { results: [] } }),
+          ];
+        });
+
+        const responses = await Promise.all(comboPromises);
+        const seenIds = new Set<string>();
+        const allResults: ScoredCandidate[] = [];
+
+        for (let i = 0; i < responses.length; i += 2) {
+          const movieRes = responses[i];
+          const tvRes = responses[i + 1];
+          const comboGenres = combos[i / 2];
+
+          for (const m of (movieRes.data?.results || [])) {
+            const key = `movie-${m.id}`;
+            if (seenIds.has(key)) continue;
+            seenIds.add(key);
+            allResults.push({
+              ...m, type: 'movie' as const, source: 'genre' as const, score: 0,
+              genreMatch: comboGenres.filter((gId: number) => (m.genre_ids || []).includes(gId)),
+              genre_ids: m.genre_ids || [],
+            });
+          }
+
+          for (const t of (tvRes.data?.results || [])) {
+            const key = `tv-${t.id}`;
+            if (seenIds.has(key)) continue;
+            seenIds.add(key);
+            allResults.push({
+              ...t, type: 'tv' as const, source: 'genre' as const, score: 0,
+              genreMatch: comboGenres.filter((gId: number) => (t.genre_ids || []).includes(gId)),
+              genre_ids: t.genre_ids || [],
+            });
+          }
+        }
+
+        if (DEBUG) console.log(`[RecommendationEngine] AND queries: ${combos.length} combos → ${allResults.length} unique candidates`);
+        return allResults;
+      }
+      // No valid combos from vector — fall through to OR approach
+    }
+
+    // Popular fallback when no genre signal at all
+    if (topGenres.length === 0 && userFilterGenres.length === 0) {
       if (DEBUG) console.log('[RecommendationEngine] No top genres, using popular content');
       const [moviesRes, tvRes] = await Promise.all([
-        discoverMovies({ page: 1, ...providerParam }),
-        discoverTV({ page: 1, ...providerParam }),
+        doMovies ? discoverMovies({ page: 1, ...providerParam }) : Promise.resolve({ data: { results: [] } }),
+        doTV ? discoverTV({ page: 1, ...providerParam }) : Promise.resolve({ data: { results: [] } }),
       ]);
       return [
         ...(moviesRes.data?.results || []).map((m: any) => ({ ...m, type: 'movie' as const, source: 'popular' as const, genreMatch: [], genre_ids: m.genre_ids || [], score: 0 })),
@@ -154,12 +281,25 @@ async function fetchGenreBasedContent(
       ];
     }
 
-    const genreIds = topGenres.map((g) => g.genreId);
+    // OR genre query approach (pre-vector fallback)
+    // When filter genres active, use them instead of affinity-derived genres
+    const genreIds = userFilterGenres.length > 0
+      ? userFilterGenres
+      : topGenres.map((g) => g.genreId);
     const genreString = genreIds.join('|');
 
+    // Convert genre IDs for TV discover (e.g. 878→10765, 28→10759)
+    const tvGenreIds = convertMovieGenresToTV(genreIds)
+      .filter((id) => VALID_TV_GENRE_IDS.has(id));
+    const tvGenreString = tvGenreIds.length > 0 ? tvGenreIds.join('|') : '';
+
     const [moviesRes, tvRes] = await Promise.all([
-      discoverMovies({ with_genres: genreString, page: 1, sort_by: 'popularity.desc', ...providerParam }),
-      discoverTV({ with_genres: genreString, page: 1, sort_by: 'popularity.desc', ...providerParam }),
+      doMovies
+        ? discoverMovies({ with_genres: genreString, page: 1, sort_by: 'popularity.desc', ...providerParam })
+        : Promise.resolve({ data: { results: [] } }),
+      doTV && tvGenreString
+        ? discoverTV({ with_genres: tvGenreString, page: 1, sort_by: 'popularity.desc', ...providerParam })
+        : Promise.resolve({ data: { results: [] } }),
     ]);
 
     return [
@@ -180,12 +320,32 @@ async function fetchGenreBasedContent(
   }
 }
 
-async function fetchSimilarContent(likedItems: WatchlistItem[]): Promise<ScoredCandidate[]> {
+async function fetchSimilarContent(
+  likedItems: WatchlistItem[],
+  filterOpts?: DiscoverFilterOptions
+): Promise<ScoredCandidate[]> {
   try {
     if (likedItems.length === 0) return [];
 
+    // Content type filtering: skip movie/TV similar calls per filter
+    const filteredLiked = likedItems.filter((item) => {
+      if (item.type === 'movie' && filterOpts?.fetchMovies === false) return false;
+      if (item.type === 'tv' && filterOpts?.fetchTV === false) return false;
+      return true;
+    });
+
+    if (hasActiveFilters(filterOpts)) {
+      debug.info('FilterThreading', 'fetchSimilarContent', {
+        totalLiked: likedItems.length,
+        afterTypeFilter: filteredLiked.length,
+        filterGenres: (filterOpts?.filterGenreIds || []).map((id) => GENRE_NAMES[id] || id),
+      });
+    }
+
+    if (filteredLiked.length === 0) return [];
+
     const results = await Promise.all(
-      likedItems.map((item) =>
+      filteredLiked.map((item) =>
         item.type === 'movie' ? getSimilarMovies(item.id) : getSimilarTV(item.id)
       )
     );
@@ -193,7 +353,7 @@ async function fetchSimilarContent(likedItems: WatchlistItem[]): Promise<ScoredC
     const allSimilar: ScoredCandidate[] = [];
     results.forEach((result, index) => {
       if (result.success && result.data?.results) {
-        const sourceItem = likedItems[index];
+        const sourceItem = filteredLiked[index];
         result.data.results.forEach((item: any) => {
           allSimilar.push({
             ...item,
@@ -208,6 +368,28 @@ async function fetchSimilarContent(likedItems: WatchlistItem[]): Promise<ScoredC
         });
       }
     });
+
+    // Genre post-filter: TMDb similar endpoints don't accept genre params
+    // Must expand filter set to include TV equivalents (28→10759, 878→10765, etc.)
+    const filterGenres = filterOpts?.filterGenreIds;
+    if (filterGenres && filterGenres.length > 0) {
+      const filterSet = new Set(filterGenres);
+      const tvEquivalents = new Set(
+        filterGenres.flatMap((id) => {
+          const tvId = MOVIE_TO_TV_GENRE[id];
+          return tvId ? [tvId] : [];
+        })
+      );
+      const filtered = allSimilar.filter((item) =>
+        (item.genre_ids || []).some((gId: number) => filterSet.has(gId) || tvEquivalents.has(gId))
+      );
+      debug.info('FilterThreading', 'Similar genre post-filter', {
+        before: allSimilar.length,
+        after: filtered.length,
+        tvEquivalents: [...tvEquivalents],
+      });
+      return filtered;
+    }
 
     return allSimilar;
   } catch (error) {
@@ -362,20 +544,32 @@ function generateReasonText(item: ScoredCandidate, affinities: GenreAffinities, 
 
 export async function generateRecommendations(
   userPlatforms: number[] = [],
-  region = 'GB'
+  region = 'GB',
+  filterOpts?: DiscoverFilterOptions
 ): Promise<Recommendation[]> {
   try {
     await cleanExpiredDismissals();
 
-    const cached = await getCachedRecommendations();
-    const isValid = await isRecommendationCacheValid(cached);
-
-    if (isValid && cached.recommendations.length > 0) {
-      if (DEBUG) console.log('[RecommendationEngine] Using cached recommendations');
-      return cached.recommendations;
+    if (hasActiveFilters(filterOpts)) {
+      debug.info('FilterThreading', 'generateRecommendations — filtered, bypassing cache', {
+        fetchMovies: filterOpts?.fetchMovies,
+        fetchTV: filterOpts?.fetchTV,
+        filterGenres: (filterOpts?.filterGenreIds || []).map((id) => GENRE_NAMES[id] || id),
+      });
     }
 
-    if (DEBUG) console.log('[RecommendationEngine] Generating fresh recommendations');
+    // Only use cache when no filters active — filtered requests always generate fresh
+    if (!hasActiveFilters(filterOpts)) {
+      const cached = await getCachedRecommendations();
+      const isValid = await isRecommendationCacheValid(cached);
+
+      if (isValid && cached.recommendations.length > 0) {
+        if (DEBUG) console.log('[RecommendationEngine] Using cached recommendations');
+        return cached.recommendations;
+      }
+    }
+
+    if (DEBUG) console.log('[RecommendationEngine] Generating fresh recommendations', hasActiveFilters(filterOpts) ? '(filtered)' : '');
 
     const [affinities, tasteProfile] = await Promise.all([
       calculateGenreAffinities(),
@@ -392,8 +586,8 @@ export async function generateRecommendations(
     }
 
     const [genreContent, similarContent] = await Promise.all([
-      fetchGenreBasedContent(topGenres, region, userPlatforms),
-      fetchSimilarContent(likedItems),
+      fetchGenreBasedContent(topGenres, region, userPlatforms, tasteVector, filterOpts),
+      fetchSimilarContent(likedItems, filterOpts),
     ]);
 
     const allCandidates = [...genreContent, ...similarContent];
@@ -403,6 +597,20 @@ export async function generateRecommendations(
     }));
 
     scored.sort((a, b) => b.score - a.score);
+
+    debug.info('RecommendationEngine', 'Top scores', {
+      totalCandidates: scored.length,
+      genreSourced: genreContent.length,
+      similarSourced: similarContent.length,
+      filtered: hasActiveFilters(filterOpts),
+      top5: scored.slice(0, 5).map((i) => ({
+        id: `${i.type}-${i.id}`,
+        title: i.title || i.name,
+        genreIds: i.genre_ids,
+        score: i.score,
+        source: i.source,
+      })),
+    });
 
     // Filter out watchlist items
     const watchlist = await getWatchlist();
@@ -433,10 +641,13 @@ export async function generateRecommendations(
       },
     }));
 
-    await setCachedRecommendations(recommendations, {
-      genreAffinities: affinities,
-      likedItemIds: likedItems.map((i) => i.id),
-    });
+    // Only cache unfiltered results — filtered results are ephemeral
+    if (!hasActiveFilters(filterOpts)) {
+      await setCachedRecommendations(recommendations, {
+        genreAffinities: affinities,
+        likedItemIds: likedItems.map((i) => i.id),
+      });
+    }
 
     if (DEBUG) console.log('[RecommendationEngine] Generated', recommendations.length, 'recommendations');
 
@@ -452,20 +663,35 @@ const HIDDEN_GEMS_TTL = 6 * 60 * 60 * 1000; // 6 hours
 
 export async function generateHiddenGems(
   userPlatforms: number[] = [],
-  region = 'GB'
+  region = 'GB',
+  filterOpts?: DiscoverFilterOptions
 ): Promise<Recommendation[]> {
   try {
-    // Check cache
-    const rawCache = await storage.getItem(HIDDEN_GEMS_CACHE_KEY);
-    if (rawCache) {
-      const cache = JSON.parse(rawCache);
-      if (Date.now() < cache.expiresAt && cache.items?.length > 0) {
-        if (DEBUG) console.log('[HiddenGems] Using cached results');
-        return cache.items;
+    // Only use cache when no filters active
+    if (!hasActiveFilters(filterOpts)) {
+      const rawCache = await storage.getItem(HIDDEN_GEMS_CACHE_KEY);
+      if (rawCache) {
+        const cache = JSON.parse(rawCache);
+        if (Date.now() < cache.expiresAt && cache.items?.length > 0) {
+          if (DEBUG) console.log('[HiddenGems] Using cached results');
+          return cache.items;
+        }
       }
     }
 
-    if (DEBUG) console.log('[HiddenGems] Generating fresh hidden gems');
+    if (DEBUG) console.log('[HiddenGems] Generating fresh hidden gems', hasActiveFilters(filterOpts) ? '(filtered)' : '');
+
+    const doMovies = filterOpts?.fetchMovies !== false;
+    const doTV = filterOpts?.fetchTV !== false;
+    const userFilterGenres = filterOpts?.filterGenreIds || [];
+
+    if (hasActiveFilters(filterOpts)) {
+      debug.info('FilterThreading', 'generateHiddenGems — filtered, bypassing cache', {
+        doMovies,
+        doTV,
+        filterGenres: userFilterGenres.map((id) => GENRE_NAMES[id] || id),
+      });
+    }
 
     const [affinities, tasteProfile] = await Promise.all([
       calculateGenreAffinities(),
@@ -473,13 +699,12 @@ export async function generateHiddenGems(
     ]);
     const tasteVector = tasteProfile?.vector || null;
     const topGenres = getTopGenres(affinities, 3);
-    const genreString = topGenres.length > 0 ? topGenres.map((g) => g.genreId).join('|') : '';
 
     const providerParam = userPlatforms.length > 0
       ? { with_watch_providers: userPlatforms.join('|'), watch_region: region }
       : { watch_region: region };
 
-    const discoverParams: Record<string, unknown> = {
+    const movieDiscoverParams: Record<string, unknown> = {
       sort_by: 'vote_average.desc',
       'vote_count.gte': 50,
       'vote_count.lte': 500,
@@ -487,11 +712,41 @@ export async function generateHiddenGems(
       'popularity.lte': 15,
       ...providerParam,
     };
-    if (genreString) discoverParams.with_genres = genreString;
+
+    // Genre filtering: user filter genres REPLACE taste genres (not merge)
+    // Vector scoring determines ordering within filtered results
+    if (userFilterGenres.length > 0) {
+      movieDiscoverParams.with_genres = userFilterGenres.join(',');
+    } else {
+      const genreString = topGenres.length > 0 ? topGenres.map((g) => g.genreId).join('|') : '';
+      if (genreString) movieDiscoverParams.with_genres = genreString;
+    }
+
+    // Build TV params with converted genre IDs
+    const tvDiscoverParams = { ...movieDiscoverParams };
+    if (userFilterGenres.length > 0) {
+      // Convert filter genres for TV discover
+      const tvFilterIds = convertMovieGenresToTV(userFilterGenres)
+        .filter((id) => VALID_TV_GENRE_IDS.has(id));
+      if (tvFilterIds.length > 0) {
+        tvDiscoverParams.with_genres = tvFilterIds.join(',');
+      } else {
+        delete tvDiscoverParams.with_genres;
+      }
+    } else if (movieDiscoverParams.with_genres) {
+      const genreIds = topGenres.map((g) => g.genreId);
+      const tvGenreIds = convertMovieGenresToTV(genreIds)
+        .filter((id) => VALID_TV_GENRE_IDS.has(id));
+      if (tvGenreIds.length > 0) {
+        tvDiscoverParams.with_genres = tvGenreIds.join('|');
+      } else {
+        delete tvDiscoverParams.with_genres;
+      }
+    }
 
     const [moviesRes, tvRes] = await Promise.all([
-      discoverMovies(discoverParams),
-      discoverTV(discoverParams),
+      doMovies ? discoverMovies(movieDiscoverParams) : Promise.resolve({ data: { results: [] } }),
+      doTV ? discoverTV(tvDiscoverParams) : Promise.resolve({ data: { results: [] } }),
     ]);
 
     const allResults = [
@@ -548,11 +803,22 @@ export async function generateHiddenGems(
       };
     });
 
-    // Cache results
-    await storage.setItem(HIDDEN_GEMS_CACHE_KEY, JSON.stringify({
-      items: gems,
-      expiresAt: Date.now() + HIDDEN_GEMS_TTL,
-    }));
+    debug.info('HiddenGems', 'Generated', {
+      totalFetched: allResults.length,
+      afterWatchlistFilter: filtered.length,
+      afterDiversity: diverse.length,
+      vectorSorted: !!tasteVector,
+      filtered: hasActiveFilters(filterOpts),
+      topGem: gems[0] ? { title: gems[0].metadata.title, score: gems[0].score, genreIds: gems[0].metadata.genreIds } : null,
+    });
+
+    // Only cache unfiltered results
+    if (!hasActiveFilters(filterOpts)) {
+      await storage.setItem(HIDDEN_GEMS_CACHE_KEY, JSON.stringify({
+        items: gems,
+        expiresAt: Date.now() + HIDDEN_GEMS_TTL,
+      }));
+    }
 
     if (DEBUG) console.log('[HiddenGems] Generated', gems.length, 'hidden gems');
     return gems;

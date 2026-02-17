@@ -15,11 +15,17 @@ function gemToContentItem(rec: Recommendation): ContentItem {
   };
 }
 
-export function useHiddenGems(providerIds: number[]) {
+export function useHiddenGems(
+  providerIds: number[],
+  fetchMovies = true,
+  fetchTV = true,
+  filterGenreIds: number[] = [],
+) {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const providerStr = providerIds.join(',');
+  const filterGenreStr = filterGenreIds.join(',');
 
   const load = useCallback(async () => {
     if (!providerStr) {
@@ -29,14 +35,15 @@ export function useHiddenGems(providerIds: number[]) {
 
     setLoading(true);
     try {
-      const gems = await generateHiddenGems(providerIds, 'GB');
+      const filterOpts = { fetchMovies, fetchTV, filterGenreIds };
+      const gems = await generateHiddenGems(providerIds, 'GB', filterOpts);
       setItems(gems.map(gemToContentItem));
     } catch (error) {
       console.error('[useHiddenGems] Error:', error);
     } finally {
       setLoading(false);
     }
-  }, [providerStr]);
+  }, [providerStr, fetchMovies, fetchTV, filterGenreStr]);
 
   useEffect(() => { load(); }, [load]);
 

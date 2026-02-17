@@ -1,19 +1,21 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { X } from "lucide-react";
 import { EyeIcon, EyeOffIcon } from "./icons";
 import { motion, AnimatePresence } from "motion/react";
 import { PLATFORMS, getPlatform } from "./platformLogos";
+import { TV_UNSUPPORTED_GENRE_NAMES } from "@/lib/constants/genres";
 
 // ----- Data -----
 const contentTypes = ["All", "Movies", "TV", "Docs"];
 const costOptions = ["All", "Free", "Paid"];
-const genres = [
+const ALL_GENRES = [
   "Action", "Adventure", "Animation",
   "Comedy", "Crime", "Documentary", "Drama",
   "Family", "Fantasy", "History", "Horror",
   "Music", "Mystery", "Romance", "Sci-Fi",
   "Thriller", "War", "Western",
 ];
+const TV_UNSUPPORTED_SET = new Set<string>(TV_UNSUPPORTED_GENRE_NAMES);
 const languages = [
   "English", "Japanese", "Korean", "Spanish",
   "French", "German", "Hindi", "Italian",
@@ -61,6 +63,27 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
   useEffect(() => {
     if (isOpen) setLocal(filters);
   }, [isOpen, filters]);
+
+  // Dynamic genre list: hide unsupported genres when TV is selected
+  const visibleGenres = useMemo(
+    () => local.contentType === "TV"
+      ? ALL_GENRES.filter((g) => !TV_UNSUPPORTED_SET.has(g))
+      : ALL_GENRES,
+    [local.contentType]
+  );
+
+  // Auto-clear unsupported genre selections when switching to TV
+  useEffect(() => {
+    if (local.contentType === "TV") {
+      const hasUnsupported = local.genres.some((g) => TV_UNSUPPORTED_SET.has(g));
+      if (hasUnsupported) {
+        setLocal((prev) => ({
+          ...prev,
+          genres: prev.genres.filter((g) => !TV_UNSUPPORTED_SET.has(g)),
+        }));
+      }
+    }
+  }, [local.contentType]);
 
   // Toggle helpers
   const toggleService = (id: string) => {
@@ -253,7 +276,7 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
               {/* GENRE */}
               <SectionLabel>GENRE</SectionLabel>
               <div className="flex flex-wrap gap-2 mb-6">
-                {genres.map((genre) => {
+                {visibleGenres.map((genre) => {
                   const selected = local.genres.includes(genre);
                   return (
                     <motion.button

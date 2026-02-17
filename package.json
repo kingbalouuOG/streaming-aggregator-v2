@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "vite",
+    "debug-server": "node scripts/debug-server.js",
+    "dev:debug": "node scripts/debug-server.js & npm run dev",
     "build": "vite build",
     "cap:sync": "npx cap sync android",
     "cap:open": "npx cap open android",

@@ -17,7 +17,7 @@ import {
 
 // ── TMDb genre ID → vector dimension key ────────────────────────
 
-const TMDB_GENRE_TO_DIM: Record<number, GenreDimension> = {
+export const TMDB_GENRE_TO_DIM: Record<number, GenreDimension> = {
   28: 'action',
   12: 'adventure',
   16: 'animation',
@@ -37,8 +37,9 @@ const TMDB_GENRE_TO_DIM: Record<number, GenreDimension> = {
   10752: 'war',
   37: 'western',
   // TV-specific genres that map to our dimensions
-  10759: 'action',     // Action & Adventure → action
+  10759: 'action',     // Action & Adventure → action (adventure handled in post-loop)
   10764: 'reality',
+  10765: 'scifi',      // Sci-Fi & Fantasy → scifi (fantasy handled in post-loop)
   10768: 'war',        // War & Politics → war
 };
 
@@ -228,6 +229,18 @@ export function contentToVector(meta: ContentMetadata): TasteVector {
   ) {
     v.anime = 1.0;
     v.animation = 1.0;
+  }
+
+  // ─ Compound TV genres: activate BOTH component dimensions ─
+  if (genreSet.has(10765)) {
+    // Sci-Fi & Fantasy (TV): ensure both dimensions are active
+    v.scifi = 1.0;
+    v.fantasy = 1.0;
+  }
+  if (genreSet.has(10759)) {
+    // Action & Adventure (TV): ensure both dimensions are active
+    v.action = 1.0;
+    v.adventure = 1.0;
   }
 
   // ─ Meta dimensions ─

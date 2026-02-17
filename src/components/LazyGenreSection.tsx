@@ -2,10 +2,11 @@ import React from 'react';
 import { useIntersectionObserver } from '@/hooks/useIntersectionObserver';
 import { useSectionData } from '@/hooks/useSectionData';
 import { ContentRow } from './ContentRow';
-import { GENRE_NAMES } from '@/lib/constants/genres';
+import { GENRE_NAMES, VALID_TV_GENRE_IDS, MOVIE_TO_TV_GENRE } from '@/lib/constants/genres';
 import type { ContentItem } from './ContentCard';
 import type { ServiceId } from './platformLogos';
 import type { GenreAffinities } from '@/lib/utils/recommendationEngine';
+import type { TasteVector } from '@/lib/taste/tasteVector';
 
 interface LazyGenreSectionProps {
   genreId: number;
@@ -17,6 +18,7 @@ interface LazyGenreSectionProps {
   excludeIds: Set<string>;
   onNewIds: (ids: string[]) => void;
   genreAffinities: GenreAffinities;
+  tasteVector?: TasteVector | null;
   onItemSelect?: (item: ContentItem) => void;
   bookmarkedIds?: Set<string>;
   onToggleBookmark?: (item: ContentItem) => void;
@@ -56,6 +58,7 @@ export function LazyGenreSection({
   excludeIds,
   onNewIds,
   genreAffinities,
+  tasteVector,
   onItemSelect,
   bookmarkedIds,
   onToggleBookmark,
@@ -67,12 +70,13 @@ export function LazyGenreSection({
   const { ref, isVisible } = useIntersectionObserver({ rootMargin: '200px 0px', triggerOnce: true });
   const effectivelyVisible = immediate || isVisible;
 
-  // Build genre-specific params: combine row genre with any active genre filter (AND logic)
-  const genreParam = filterGenreIds.length > 0
-    ? [genreId, ...filterGenreIds].join(',')
-    : String(genreId);
+  // TV compatibility: check if this genre has a valid TV discover equivalent
+  const hasValidTVGenre = VALID_TV_GENRE_IDS.has(genreId) || !!MOVIE_TO_TV_GENRE[genreId];
+  const effectiveFetchTV = fetchTV && hasValidTVGenre;
 
-  const genreBaseParams = { ...baseParams, with_genres: genreParam };
+  // Strip with_genres from baseParams — genre sections set their own genre, not inherited filter genres
+  const { with_genres: _strip, ...cleanBaseParams } = baseParams as Record<string, unknown> & { with_genres?: unknown };
+  const genreBaseParams = { ...cleanBaseParams, with_genres: String(genreId) };
 
   const section = useSectionData({
     sectionKey: `genre-${genreId}|${sectionKeyBase}`,
@@ -80,12 +84,14 @@ export function LazyGenreSection({
     movieParams: { sort_by: 'popularity.desc' },
     tvParams: { sort_by: 'popularity.desc' },
     fetchMovies,
-    fetchTV,
+    fetchTV: effectiveFetchTV,
     enabled: effectivelyVisible,
     excludeIds,
     onNewIds,
     genreAffinities,
-    applyScoring: true,
+    isGenreSection: true,
+    scoringMode: tasteVector ? 'hybrid' : 'affinity',
+    tasteVector,
   });
 
   const genreName = GENRE_NAMES[genreId] || 'Unknown';

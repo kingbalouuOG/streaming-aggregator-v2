@@ -15,11 +15,17 @@ function recommendationToContentItem(rec: Recommendation): ContentItem {
   };
 }
 
-export function useRecommendations(providerIds: number[]) {
+export function useRecommendations(
+  providerIds: number[],
+  fetchMovies = true,
+  fetchTV = true,
+  filterGenreIds: number[] = [],
+) {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const providerStr = providerIds.join(',');
+  const filterGenreStr = filterGenreIds.join(',');
 
   const load = useCallback(async () => {
     if (!providerStr) {
@@ -29,14 +35,15 @@ export function useRecommendations(providerIds: number[]) {
 
     setLoading(true);
     try {
-      const recommendations = await generateRecommendations(providerIds, 'GB');
+      const filterOpts = { fetchMovies, fetchTV, filterGenreIds };
+      const recommendations = await generateRecommendations(providerIds, 'GB', filterOpts);
       setItems(recommendations.map(recommendationToContentItem));
     } catch (error) {
       console.error('[useRecommendations] Error:', error);
     } finally {
       setLoading(false);
     }
-  }, [providerStr]);
+  }, [providerStr, fetchMovies, fetchTV, filterGenreStr]);
 
   useEffect(() => { load(); }, [load]);
 

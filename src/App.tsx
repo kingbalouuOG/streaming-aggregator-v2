@@ -23,6 +23,7 @@ import { useUpcoming } from "./hooks/useUpcoming";
 import { LazyGenreSection } from "./components/LazyGenreSection";
 import { providerIdsToServiceIds, serviceIdsToProviderIds, providerIdToServiceId } from "./lib/adapters/platformAdapter";
 import { GENRE_NAMES } from "./lib/constants/genres";
+import { reorderWithinWindows } from "./lib/taste/genreBlending";
 import type { ServiceId } from "./components/platformLogos";
 import { App as CapApp } from "@capacitor/app";
 import { useTasteProfile } from "./hooks/useTasteProfile";
@@ -102,7 +103,13 @@ function AppContent() {
   const home = useHomeContent(connectedServices, homeFilters);
 
   // --- Upcoming content (Coming Soon) ---
-  const upcoming = useUpcoming(connectedServices);
+  const upcoming = useUpcoming(connectedServices, home.fetchMovies, home.fetchTV);
+  const reorderedUpcoming = useMemo(
+    () => home.tasteVector
+      ? reorderWithinWindows(upcoming.items, home.tasteVector, (item) => item.genreIds || [])
+      : upcoming.items,
+    [upcoming.items, home.tasteVector]
+  );
 
   const activeFilterCount =
     filters.services.length +
@@ -451,14 +458,20 @@ function AppContent() {
                       {home.forYou.items.length > 0 && (
                         <ContentRow title="For You" items={filterLanguage(filterWatched(home.forYou.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       )}
-                      {upcoming.items.length > 0 && (
+                      <ContentRow title="Recently Added" items={filterLanguage(filterWatched(home.recentlyAdded.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.recentlyAdded.loadMore} loadingMore={home.recentlyAdded.loadingMore} hasMore={home.recentlyAdded.hasMore} />
+                      <ContentRow title="Highest Rated" items={filterLanguage(filterWatched(home.highestRated.items))} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.highestRated.loadMore} loadingMore={home.highestRated.loadingMore} hasMore={home.highestRated.hasMore} />
+                      <ContentRow title="Popular on Your Services" items={filterLanguage(filterWatched(home.popular.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.popular.loadMore} loadingMore={home.popular.loadingMore} hasMore={home.popular.hasMore} />
+                      {home.hiddenGems.items.length > 0 && (
+                        <ContentRow title="Hidden Gems" items={filterLanguage(filterWatched(home.hiddenGems.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                      )}
+                      {reorderedUpcoming.length > 0 && (
                         <div className="mb-6 overflow-hidden">
                           <div className="flex items-center justify-between px-5 mb-3">
                             <h2 className="text-foreground text-[16px]" style={{ fontWeight: 700 }}>Coming Soon</h2>
                             <button onClick={() => setShowCalendar(true)} className="text-primary text-[13px]" style={{ fontWeight: 500 }}>See All</button>
                           </div>
                           <div className="flex gap-3 overflow-x-auto px-5 no-scrollbar" style={{ scrollbarWidth: "none" }}>
-                            {upcoming.items.slice(0, 8).map((item) => (
+                            {reorderedUpcoming.slice(0, 8).map((item) => (
                               <ComingSoonCard
                                 key={item.id}
                                 item={item}
@@ -470,12 +483,6 @@ function AppContent() {
                           </div>
                         </div>
                       )}
-                      <ContentRow title="Popular on Your Services" items={filterLanguage(filterWatched(home.popular.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.popular.loadMore} loadingMore={home.popular.loadingMore} hasMore={home.popular.hasMore} />
-                      <ContentRow title="Highest Rated" items={filterLanguage(filterWatched(home.highestRated.items))} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.highestRated.loadMore} loadingMore={home.highestRated.loadingMore} hasMore={home.highestRated.hasMore} />
-                      {home.hiddenGems.items.length > 0 && (
-                        <ContentRow title="Hidden Gems" items={filterLanguage(filterWatched(home.hiddenGems.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
-                      )}
-                      <ContentRow title="Recently Added" items={filterLanguage(filterWatched(home.recentlyAdded.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.recentlyAdded.loadMore} loadingMore={home.recentlyAdded.loadingMore} hasMore={home.recentlyAdded.hasMore} />
                       {home.genreList.map((genreId, idx) => (
                         <LazyGenreSection
                           key={genreId}
@@ -486,9 +493,10 @@ function AppContent() {
                           filterGenreIds={home.filterGenreIds}
                           fetchMovies={home.fetchMovies}
                           fetchTV={home.fetchTV}
-                          excludeIds={home.excludeIds}
-                          onNewIds={home.registerIds}
+                          excludeIds={home.genreExcludeIds}
+                          onNewIds={home.registerGenreIds}
                           genreAffinities={home.genreAffinities}
+                          tasteVector={home.tasteVector}
                           onItemSelect={handleItemSelect}
                           bookmarkedIds={wl.bookmarkedIds}
                           onToggleBookmark={handleToggleBookmark}
