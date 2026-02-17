@@ -24,7 +24,6 @@ export const GENRES: Record<string, number> = {
 
   // TV-specific (not in taste vector)
   actionAdventure: 10759,
-  kids: 10762,
   news: 10763,
   soap: 10766,
   talk: 10767,
@@ -55,7 +54,6 @@ export const GENRE_NAMES: Record<number, string> = {
   37: 'Western',
   // TV-specific
   10759: 'Action & Adventure',
-  10762: 'Kids',
   10763: 'News',
   10766: 'Soap',
   10767: 'Talk',
@@ -102,7 +100,6 @@ export const VALID_TV_GENRE_IDS = new Set([
   18,    // Drama
   10751, // Family
   36,    // History (verified: returns results)
-  10762, // Kids
   9648,  // Mystery
   10763, // News
   10764, // Reality

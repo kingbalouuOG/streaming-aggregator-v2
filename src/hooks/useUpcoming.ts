@@ -108,7 +108,7 @@ const GENRE_SHORT: Record<number, string> = {
   28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy', 80: 'Crime',
   99: 'Doc', 18: 'Drama', 10751: 'Family', 14: 'Fantasy', 36: 'History',
   27: 'Horror', 10402: 'Music', 9648: 'Mystery', 10749: 'Romance', 878: 'Sci-Fi',
-  53: 'Thriller', 10752: 'War', 37: 'Western', 10759: 'Action', 10762: 'Kids',
+  53: 'Thriller', 10752: 'War', 37: 'Western', 10759: 'Action',
   10764: 'Reality', 10767: 'Talk', 10768: 'Politics',
 };
 

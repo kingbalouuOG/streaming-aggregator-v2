@@ -117,7 +117,7 @@ export const discoverMovies = (params: Record<string, unknown> = {}) => {
 };
 
 export const discoverTV = (params: Record<string, unknown> = {}) => {
-  const requestParams = { watch_region: 'GB', include_adult: false, sort_by: 'popularity.desc', ...params };
+  const requestParams = { watch_region: 'GB', include_adult: false, sort_by: 'popularity.desc', without_genres: '10762', ...params };
   return cachedRequest('discover_tv', requestParams, async () => {
     const response = await tmdbClient.get('/discover/tv', { params: requestParams });
     return response.data;
