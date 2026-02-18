@@ -73,7 +73,7 @@ export function FeaturedHero({ title, subtitle, image, itemId, services, tags, b
 
       {/* Content - fade with scroll */}
       <div
-        className="absolute bottom-0 left-0 right-0 p-4 pb-5"
+        className="absolute bottom-0 left-0 right-0 px-5 pt-4 pb-5"
         style={{ opacity: heroOpacity }}
       >
         {/* Service badges */}

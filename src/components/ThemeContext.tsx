@@ -36,8 +36,18 @@ function getSystemPreference(): "dark" | "light" {
   return "dark";
 }
 
+const THEME_STORAGE_KEY = "videx-theme";
+
+function getStoredTheme(): ThemeMode {
+  try {
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === "dark" || stored === "light" || stored === "system") return stored;
+  } catch {}
+  return "dark";
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>("dark");
+  const [theme, setThemeState] = useState<ThemeMode>(getStoredTheme);
   const [systemPref, setSystemPref] = useState<"dark" | "light">(getSystemPreference);
 
   const resolvedTheme: "dark" | "light" =
@@ -65,6 +75,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     StatusBar.setStyle({
       style: resolvedTheme === "dark" ? Style.Dark : Style.Light,
     }).catch(() => {});
+    // Sync <meta name="theme-color"> for browser chrome
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute("content", resolvedTheme === "dark" ? "#0a0a0f" : "#f5f4f1");
+    }
     // Match Android navigation bar to the app theme
     if (Capacitor.isNativePlatform()) {
       NavigationBar.setColor({
@@ -76,6 +91,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = useCallback((mode: ThemeMode) => {
     setThemeState(mode);
+    try { localStorage.setItem(THEME_STORAGE_KEY, mode); } catch {}
   }, []);
 
   return (

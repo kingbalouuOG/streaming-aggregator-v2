@@ -41,7 +41,7 @@ export function EyeIcon({ className = "w-5 h-5" }: IconProps) {
   );
 }
 
-/** Filled eye icon (fill-based, currentColor body + white pupil) */
+/** Filled eye icon (fill-based, currentColor body + contrasting pupil) */
 export function EyeFilledIcon({ className = "w-5 h-5" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className}>
@@ -51,7 +51,7 @@ export function EyeFilledIcon({ className = "w-5 h-5" }: IconProps) {
       />
       <path
         d="M12.0004 15C13.6573 15 15.0004 13.6569 15.0004 12C15.0004 10.3431 13.6573 9 12.0004 9C10.3435 9 9.0004 10.3431 9.0004 12C9.0004 13.6569 10.3435 15 12.0004 15Z"
-        fill="white"
+        fill="var(--background)"
       />
     </svg>
   );

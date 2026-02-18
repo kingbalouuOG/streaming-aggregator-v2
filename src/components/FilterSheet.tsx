@@ -165,7 +165,8 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0 backdrop-blur-sm"
+            style={{ backgroundColor: "var(--backdrop)" }}
             onClick={onClose}
           />
 

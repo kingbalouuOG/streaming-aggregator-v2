@@ -559,19 +559,19 @@ function StepClusters({
               transition={{ delay: 0.03 * idx, type: "spring", damping: 20, stiffness: 300 }}
               whileTap={!isDisabled ? { scale: 0.94 } : undefined}
               onClick={() => !isDisabled && onToggle(cluster.id)}
-              className={`relative flex items-center gap-3 pl-3 pr-8 py-3 rounded-2xl border text-left transition-all duration-250 ${
+              className={`relative flex items-center gap-4 py-3 rounded-2xl border text-left transition-all duration-250 ${
                 isSelected
                   ? "border-primary/50 bg-primary/10"
                   : isDisabled
                     ? "bg-secondary/20 cursor-not-allowed"
                     : "bg-secondary/40 hover:bg-secondary/60"
               }`}
-              style={{ borderColor: isSelected ? undefined : "var(--border-subtle)" }}
+              style={{ paddingLeft: '1rem', paddingRight: '2.5rem', borderColor: isSelected ? undefined : "var(--border-subtle)" }}
             >
               <span className={`text-[22px] shrink-0 transition-transform duration-200 ${isSelected ? "scale-115" : ""}`}>
                 {cluster.emoji}
               </span>
-              <div className="flex flex-col items-start min-w-0 flex-1 pr-4">
+              <div className="flex flex-col items-start min-w-0 flex-1">
                 <span
                   className={`text-[13px] leading-tight transition-colors duration-200 ${
                     isSelected ? "text-foreground" : "text-muted-foreground"

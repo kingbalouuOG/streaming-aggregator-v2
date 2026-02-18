@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useIntersectionObserver } from '@/hooks/useIntersectionObserver';
 import { useSectionData } from '@/hooks/useSectionData';
 import { ContentRow } from './ContentRow';
@@ -31,12 +32,12 @@ interface LazyGenreSectionProps {
 function SectionSkeleton({ genreId }: { genreId: number }) {
   return (
     <section className="mb-6">
-      <div className="flex items-center justify-between px-4 mb-3">
+      <div className="flex items-center justify-between px-5 mb-3">
         <h2 className="text-foreground text-[17px]" style={{ fontWeight: 700 }}>
           {GENRE_NAMES[genreId] || 'Loading...'}
         </h2>
       </div>
-      <div className="flex gap-3 px-4">
+      <div className="flex gap-3 px-5">
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
@@ -106,25 +107,33 @@ export function LazyGenreSection({
     );
   }
 
-  // Loaded but empty after filtering — hide section
-  if (filteredItems.length === 0) {
-    return null;
-  }
-
   return (
     <div ref={ref}>
-      <ContentRow
-        title={genreName}
-        items={filteredItems}
-        onItemSelect={onItemSelect}
-        bookmarkedIds={bookmarkedIds}
-        onToggleBookmark={onToggleBookmark}
-        userServices={userServices}
-        watchedIds={watchedIds}
-        onLoadMore={section.loadMore}
-        loadingMore={section.loadingMore}
-        hasMore={section.hasMore}
-      />
+      <AnimatePresence initial={false}>
+        {filteredItems.length > 0 && (
+          <motion.div
+            key={genreId}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            style={{ overflow: "hidden" }}
+          >
+            <ContentRow
+              title={genreName}
+              items={filteredItems}
+              onItemSelect={onItemSelect}
+              bookmarkedIds={bookmarkedIds}
+              onToggleBookmark={onToggleBookmark}
+              userServices={userServices}
+              watchedIds={watchedIds}
+              onLoadMore={section.loadMore}
+              loadingMore={section.loadingMore}
+              hasMore={section.hasMore}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

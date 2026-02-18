@@ -6,12 +6,13 @@ import type { ContentItem } from '@/components/ContentCard';
 import type { ServiceId } from '@/components/platformLogos';
 import { API_CONFIG } from '@/lib/constants/config';
 
-export function useSearch(userServices?: ServiceId[]) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<ContentItem[]>([]);
+export function useSearch(userServices?: ServiceId[], initialQuery?: string, initialResults?: ContentItem[]) {
+  const [query, setQuery] = useState(initialQuery || '');
+  const [results, setResults] = useState<ContentItem[]>(initialResults || []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const isRestoredRef = useRef(!!initialQuery);
 
   // Stabilize dependency to avoid infinite re-renders
   const servicesKey = userServices?.join(',') || '';
@@ -59,8 +60,14 @@ export function useSearch(userServices?: ServiceId[]) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (!query.trim()) {
-      setResults([]);
+      setResults(initialResults && isRestoredRef.current ? initialResults : []);
       setLoading(false);
+      return;
+    }
+
+    // Skip the initial search when restoring from saved state
+    if (isRestoredRef.current) {
+      isRestoredRef.current = false;
       return;
     }
 

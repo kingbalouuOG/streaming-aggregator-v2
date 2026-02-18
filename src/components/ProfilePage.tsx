@@ -42,9 +42,10 @@ interface ProfilePageProps {
   onUpdateServices?: (services: string[]) => Promise<void>;
   onUpdateClusters?: (clusters: string[]) => Promise<void>;
   onUpdateProfile?: (name: string, email: string) => Promise<void>;
+  onNavigateHome?: () => void;
 }
 
-export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignOut, onUpdateServices, onUpdateClusters, onUpdateProfile }: ProfilePageProps) {
+export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignOut, onUpdateServices, onUpdateClusters, onUpdateProfile, onNavigateHome }: ProfilePageProps) {
   // ── Profile state ─��───────────────────────────────
   const [name, setName] = useState(userProfile?.name || "Joe");
   const [email, setEmail] = useState(userProfile?.email || "joegreenwas@gmail.com");
@@ -100,7 +101,8 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
       toast.error("Failed to save quiz results");
     }
     setShowQuiz(false);
-  }, [tasteProfile]);
+    onNavigateHome?.();
+  }, [tasteProfile, onNavigateHome]);
 
   const handleQuizSkip = useCallback(() => {
     setShowQuiz(false);
@@ -184,9 +186,9 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
   }
 
   return (
-    <div className="flex flex-col min-h-full px-4 pb-8">
+    <div className="flex flex-col min-h-full px-5 pb-8">
       {/* Safe area spacer */}
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl -mx-4 px-4" style={{ backgroundColor: "var(--background)", paddingTop: "env(safe-area-inset-top, 0px)" }} />
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl -mx-5 px-5" style={{ backgroundColor: "var(--background)", paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }} />
 
       {/* ── Avatar & Info ─────────────────────────────────── */}
       <div className="flex flex-col items-center mb-6">

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Search, X, SlidersHorizontal, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BrowseCard } from "./BrowseCard";
@@ -11,6 +11,13 @@ import type { ServiceId } from "./platformLogos";
 
 const browseCategories = ["All", "Movies", "TV"];
 
+export interface BrowseStateSnapshot {
+  query: string;
+  results: ContentItem[];
+  recentSearches: string[];
+  activeCategory: string;
+}
+
 interface BrowsePageProps {
   onItemSelect?: (item: ContentItem) => void;
   filters: FilterState;
@@ -22,14 +29,38 @@ interface BrowsePageProps {
   providerIds?: number[];
   userServices?: ServiceId[];
   watchedIds?: Set<string>;
+  savedState?: React.MutableRefObject<BrowseStateSnapshot | null>;
 }
 
-export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters, onShowFiltersChange, bookmarkedIds, onToggleBookmark, providerIds = [], userServices, watchedIds }: BrowsePageProps) {
-  const [activeCategory, setActiveCategory] = useState("All");
+export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters, onShowFiltersChange, bookmarkedIds, onToggleBookmark, providerIds = [], userServices, watchedIds, savedState }: BrowsePageProps) {
+  const initial = savedState?.current;
+  const [activeCategory, setActiveCategory] = useState(initial?.activeCategory ?? "All");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [recentSearches, setRecentSearches] = useState<string[]>(initial?.recentSearches ?? []);
 
-  const search = useSearch(userServices);
+  const search = useSearch(userServices, initial?.query, initial?.results);
+
+  // Refs to track latest values for unmount cleanup
+  const searchRef = useRef(search);
+  searchRef.current = search;
+  const recentSearchesRef = useRef(recentSearches);
+  recentSearchesRef.current = recentSearches;
+  const activeCategoryRef = useRef(activeCategory);
+  activeCategoryRef.current = activeCategory;
+
+  // Save state back to ref on unmount
+  useEffect(() => {
+    return () => {
+      if (savedState) {
+        savedState.current = {
+          query: searchRef.current.query,
+          results: searchRef.current.results,
+          recentSearches: recentSearchesRef.current,
+          activeCategory: activeCategoryRef.current,
+        };
+      }
+    };
+  }, [savedState]);
   const isSearching = search.query.trim().length > 0;
 
   // Build filters with category override (memoized to avoid unstable object refs)
@@ -79,7 +110,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
       {/* Sticky search + filter controls */}
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl pb-1" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))", backgroundColor: "var(--background)" }}>
         {/* Search bar + Filter button */}
-        <div className="px-4 mb-3 flex gap-2">
+        <div className="px-5 mb-3 flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted-foreground pointer-events-none" />
             <input
@@ -95,7 +126,8 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
             {search.query && (
               <button
                 onClick={() => search.clearSearch()}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                style={{ backgroundColor: "var(--overlay-medium)" }}
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -120,7 +152,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
 
         {/* Category filter pills (hidden during search) */}
         {!isSearching && (
-          <div className="flex items-center gap-2 px-4 mb-3">
+          <div className="flex items-center gap-2 px-5 mb-3">
             {browseCategories.map((category) => {
               const isActive = category === activeCategory;
               return (
@@ -148,7 +180,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
-              className="px-4 pb-4"
+              className="px-5 pb-4"
             >
               <div className="bg-secondary/80 backdrop-blur-lg rounded-2xl border p-4" style={{ borderColor: "var(--border-subtle)" }}>
                 {recentSearches.length > 0 && (
@@ -178,7 +210,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
       </div>
 
       {/* Content grid */}
-      <div className="px-4">
+      <div className="px-5">
         {isLoading && displayItems.length === 0 ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />

@@ -42,7 +42,7 @@ export function ContentRow({ title, items, variant = "default", onItemSelect, bo
   return (
     <section className="mb-6">
       {/* Section header */}
-      <div className="flex items-center justify-between px-4 mb-3">
+      <div className="flex items-center justify-between px-5 mb-3">
         <h2 className="text-foreground text-[17px]" style={{ fontWeight: 700 }}>
           {title}
         </h2>
@@ -52,7 +52,7 @@ export function ContentRow({ title, items, variant = "default", onItemSelect, bo
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex gap-3 px-4 overflow-x-auto no-scrollbar scroll-smooth pb-1"
+        className="flex gap-3 px-5 overflow-x-auto no-scrollbar scroll-smooth pb-1"
       >
         {items.map((item) => (
           <ContentCard

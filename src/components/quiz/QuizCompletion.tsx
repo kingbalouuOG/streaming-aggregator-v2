@@ -26,7 +26,7 @@ export function QuizCompletion({ topGenres, onComplete }: QuizCompletionProps) {
           delay: 0.2,
         }}
         className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5 shadow-lg shadow-primary/30"
-        style={{ background: "linear-gradient(to bottom right, #4ade80, var(--primary))" }}
+        style={{ background: "linear-gradient(to bottom right, var(--success), var(--primary))" }}
       >
         <Check className="w-10 h-10 text-white" strokeWidth={3} />
       </motion.div>
@@ -86,7 +86,7 @@ export function QuizCompletion({ topGenres, onComplete }: QuizCompletionProps) {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.7 }}
-        whileHover={{ scale: 1.02, backgroundColor: "#d14d1a" }}
+        whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
         onClick={onComplete}
         className="w-full max-w-[320px] py-3.5 rounded-2xl bg-primary text-white text-[15px] shadow-lg shadow-primary/25"

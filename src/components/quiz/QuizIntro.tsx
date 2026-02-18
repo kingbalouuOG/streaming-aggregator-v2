@@ -54,7 +54,7 @@ export function QuizIntro({ onStart, onSkip, showSkip }: QuizIntroProps) {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5 }}
-        whileHover={{ scale: 1.02, backgroundColor: "#d14d1a" }}
+        whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
         onClick={onStart}
         className="w-full max-w-[320px] flex items-center justify-center gap-2.5 py-3.5 rounded-2xl bg-primary text-white text-[15px] shadow-lg shadow-primary/25"

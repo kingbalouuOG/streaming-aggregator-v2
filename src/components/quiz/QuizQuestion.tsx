@@ -53,7 +53,7 @@ export function QuizQuestion({
   return (
     <div className="flex flex-col h-full">
       {/* Header: Back + Progress dots + Counter */}
-      <div className="flex items-center gap-2 px-4 pt-2 pb-3">
+      <div className="flex items-center gap-2 px-5 pt-2 pb-3">
         {/* Back button */}
         <div className="w-8">
           <AnimatePresence>
@@ -93,7 +93,7 @@ export function QuizQuestion({
       </div>
 
       {/* Poster pair area */}
-      <div className="flex-1 flex items-center justify-center px-4">
+      <div className="flex-1 flex items-center justify-center px-5">
         <div className="flex gap-4 w-full max-w-[360px]">
           <PosterCard
             option={pair.optionA}

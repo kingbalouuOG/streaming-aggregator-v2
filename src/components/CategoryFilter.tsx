@@ -17,8 +17,8 @@ export function CategoryFilter({
   hasActiveFilters,
 }: CategoryFilterProps) {
   return (
-    <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl" style={{ backgroundColor: "var(--background)", paddingTop: "env(safe-area-inset-top, 0px)" }}>
-      <div className="flex items-center gap-2 px-4 py-3">
+    <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl" style={{ backgroundColor: "var(--background)", paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
+      <div className="flex items-center gap-2 px-5 py-3">
         <div className="flex items-center gap-2 flex-1 overflow-x-auto no-scrollbar">
           {categories.map((category) => {
             const isActive = category === activeCategory;

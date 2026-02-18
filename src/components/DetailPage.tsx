@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, Check, CheckCircle2, Undo2 } from "lucide-react";
+import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, Check, CheckCircle2, Undo2, AlertCircle } from "lucide-react";
 import { TickIcon } from "./icons";
 import { motion } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
@@ -72,7 +72,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             <ArrowLeft className="w-5 h-5" />
           </button>
         </div>
-        <div className="px-4 pb-8 -mt-4 relative z-10">
+        <div className="px-5 pb-8 -mt-4 relative z-10">
           <div className="h-7 w-48 bg-secondary rounded animate-pulse mb-2" />
           <div className="h-4 w-24 bg-secondary rounded animate-pulse mb-4" />
           <div className="flex gap-2 mb-4">
@@ -93,9 +93,15 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-full p-8">
-        <p className="text-muted-foreground mb-4">{error}</p>
-        <button onClick={onBack} className="text-primary">Go back</button>
+      <div className="flex flex-col items-center justify-center min-h-full p-8 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center mb-4">
+          <AlertCircle className="w-7 h-7 text-muted-foreground" />
+        </div>
+        <p className="text-foreground text-[16px] mb-1" style={{ fontWeight: 600 }}>
+          Something went wrong
+        </p>
+        <p className="text-muted-foreground text-[13px] mb-4">{error}</p>
+        <button onClick={onBack} className="text-primary text-[14px]" style={{ fontWeight: 600 }}>Go back</button>
       </div>
     );
   }
@@ -139,7 +145,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
       </div>
 
       {/* Content */}
-      <div className="px-4 pb-8 -mt-4 relative z-10">
+      <div className="px-5 pb-8 -mt-4 relative z-10">
         <h1 className="text-foreground text-[24px] mb-1" style={{ fontWeight: 700, lineHeight: 1.2 }}>
           {detail.title}
         </h1>
@@ -197,7 +203,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
                       ? "text-white"
                       : "bg-secondary text-muted-foreground hover:text-foreground"
                   }`}
-                  style={userRating === 'up' ? { backgroundColor: '#10b981' } : undefined}
+                  style={userRating === 'up' ? { backgroundColor: 'var(--success)' } : undefined}
                 >
                   <ThumbsUp className={`w-3.5 h-3.5 ${userRating === 'up' ? 'fill-current' : ''}`} />
                 </motion.button>
@@ -211,7 +217,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
                       ? "text-white"
                       : "bg-secondary text-muted-foreground hover:text-foreground"
                   }`}
-                  style={userRating === 'down' ? { backgroundColor: '#ef4444' } : undefined}
+                  style={userRating === 'down' ? { backgroundColor: 'var(--danger)' } : undefined}
                 >
                   <ThumbsDown className={`w-3.5 h-3.5 ${userRating === 'down' ? 'fill-current' : ''}`} />
                 </motion.button>
@@ -309,7 +315,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
             className="flex items-center gap-3 p-3 rounded-xl border mb-4"
-            style={{ borderColor: "rgba(52, 211, 153, 0.25)", background: "rgba(16, 185, 129, 0.12)" }}
+            style={{ borderColor: "color-mix(in srgb, var(--success) 25%, transparent)", background: "color-mix(in srgb, var(--success) 12%, transparent)" }}
           >
             <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
               <ThumbsUp className="w-4 h-4 text-emerald-400" />
@@ -341,7 +347,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
 
         {/* Available on */}
         {detail.services.length > 0 && (
-          <div className="mb-5">
+          <div className="mb-6">
             <h3 className="text-foreground text-[15px] mb-2.5" style={{ fontWeight: 600 }}>
               Available on:
             </h3>
@@ -384,7 +390,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             <h3 className="text-foreground text-[15px] mb-3" style={{ fontWeight: 600 }}>
               Cast
             </h3>
-            <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-2">
+            <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-5 px-5 pb-2">
               {detail.cast.map((member, i) => (
                 <div key={i} className="flex flex-col items-center shrink-0 w-[76px]">
                   <div className="w-[68px] h-[68px] rounded-2xl overflow-hidden mb-2 bg-secondary">
@@ -419,7 +425,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
                 {similar.length} titles
               </span>
             </div>
-            <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-2">
+            <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-5 px-5 pb-2">
               {similar.map((rec, index) => (
                 <SimilarCard
                   key={rec.id}
@@ -474,7 +480,7 @@ function SimilarCard({ item, index, onSelect, bookmarked, onToggleBookmark, user
       className="relative group shrink-0 w-[165px] h-[240px] rounded-xl overflow-hidden cursor-pointer"
       onClick={() => onSelect?.(item)}
     >
-      <img src={item.image} alt={item.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+      <ImageSkeleton src={item.image} alt={item.title} className="absolute inset-0 w-full h-full object-cover" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/10" />
 
       {item.matchPercentage != null && item.matchPercentage > 0 && (

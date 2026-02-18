@@ -52,6 +52,11 @@
   --toast-bg: rgba(30, 30, 40, 0.95);
   --toast-border: rgba(255, 255, 255, 0.08);
   --toast-color: #ffffff;
+  --backdrop: rgba(0, 0, 0, 0.60);
+  --success: #10b981;
+  --success-foreground: #ffffff;
+  --danger: #ef4444;
+  --danger-foreground: #ffffff;
 
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -101,6 +106,11 @@
   --toast-bg: rgba(255, 255, 255, 0.95);
   --toast-border: rgba(0, 0, 0, 0.08);
   --toast-color: #1a1a2e;
+  --backdrop: rgba(0, 0, 0, 0.50);
+  --success: #059669;
+  --success-foreground: #ffffff;
+  --danger: #dc2626;
+  --danger-foreground: #ffffff;
 }
 
 @theme inline {
@@ -145,6 +155,10 @@
   /* Extended tokens */
   --color-nav-bg: var(--nav-bg);
   --color-surface-elevated: var(--surface-elevated);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
 }
 
 @layer base {

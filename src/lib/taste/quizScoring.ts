@@ -40,6 +40,16 @@ const PHASE_WEIGHTS: Record<QuizAnswer['phase'], number> = {
 // Positive deltas stay at full weight so explicit choices are respected.
 const NEGATIVE_DAMPING = 0.6;
 
+/**
+ * Headroom threshold for cap-aware meta scaling.
+ * When a meta dimension is within this distance of its ±1.0 boundary,
+ * deltas are scaled down proportionally to the remaining headroom.
+ * E.g. at 0.5 threshold: a value of 0.8 has 0.2 headroom → scale = 0.2/0.5 = 0.4
+ */
+const CAP_AWARE_THRESHOLD = 0.5;
+
+const META_DIM_SET = new Set<string>(META_DIMENSIONS);
+
 // ── Compute delta for a single answer ───────────────────────────
 
 function computeAnswerDelta(pair: QuizPair, choice: QuizAnswer['chosenOption']): TasteVector {
@@ -146,9 +156,34 @@ export function computeQuizVector(
     const delta = computeAnswerDelta(pair, answer.chosenOption);
     const phaseWeight = PHASE_WEIGHTS[answer.phase] ?? 1.0;
 
-    // Accumulate without clamping — defer to end so question order doesn't matter
+    // Accumulate with cap-aware scaling for meta dimensions
     for (const d of ALL_DIMENSIONS) {
-      vector[d] += delta[d] * phaseWeight;
+      let weightedDelta = delta[d] * phaseWeight;
+
+      if (META_DIM_SET.has(d) && weightedDelta !== 0) {
+        const currentValue = vector[d];
+        const headroom = weightedDelta > 0
+          ? (1.0 - currentValue)
+          : (currentValue + 1.0);
+        const scale = Math.max(0, Math.min(
+          1.0,
+          headroom / CAP_AWARE_THRESHOLD,
+          headroom / Math.abs(weightedDelta),
+        ));
+
+        if (scale < 1.0) {
+          debug.info('QuizScoring', `Cap-aware scaling on ${d}`, {
+            current: currentValue,
+            rawDelta: weightedDelta,
+            scale: scale,
+            effective: weightedDelta * scale,
+          });
+        }
+
+        weightedDelta *= scale;
+      }
+
+      vector[d] += weightedDelta;
     }
   }
 

@@ -101,7 +101,7 @@ export function WatchlistPage({
   return (
     <div className="flex flex-col min-h-full">
       {/* Sticky header + tab bar */}
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl" style={{ backgroundColor: "var(--background)", paddingTop: "max(0.5rem, env(safe-area-inset-top, 0.5rem))" }}>
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl" style={{ backgroundColor: "var(--background)", paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
         {/* Segmented tab bar */}
         <div className="px-5 mb-4">
         <div className="flex bg-secondary rounded-2xl p-1">

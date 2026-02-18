@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { ArrowLeft, Calendar, Film, Tv, SlidersHorizontal, Bookmark } from "lucide-react";
+import { ArrowLeft, Calendar, Film, Tv, SlidersHorizontal, Bookmark, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
 import { ImageSkeleton } from "./ImageSkeleton";
@@ -211,7 +211,7 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
       <div className="flex-1 px-5 pt-3">
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
           </div>
         ) : grouped.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">

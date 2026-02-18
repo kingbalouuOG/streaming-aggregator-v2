@@ -2680,6 +2680,11 @@
   --toast-bg: #1e1e28f2;
   --toast-border: #ffffff14;
   --toast-color: #fff;
+  --backdrop: rgba(0, 0, 0, 0.60);
+  --success: #10b981;
+  --success-foreground: #fff;
+  --danger: #ef4444;
+  --danger-foreground: #fff;
   --sidebar: oklch(.985 0 0);
   --sidebar-foreground: oklch(.145 0 0);
   --sidebar-primary: #030213;
@@ -2726,6 +2731,11 @@
   --toast-bg: #fffffff2;
   --toast-border: #00000014;
   --toast-color: #1a1a2e;
+  --backdrop: rgba(0, 0, 0, 0.50);
+  --success: #059669;
+  --success-foreground: #fff;
+  --danger: #dc2626;
+  --danger-foreground: #fff;
 }
 
 html {

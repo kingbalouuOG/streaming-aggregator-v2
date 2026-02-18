@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo, useEffect } from "react";
+import React, { useState, useCallback, useRef, useMemo, useEffect, useLayoutEffect } from "react";
 import { toast, Toaster } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { Loader2 } from "lucide-react";
@@ -7,7 +7,7 @@ import { ContentRow } from "./components/ContentRow";
 import { FeaturedHero } from "./components/FeaturedHero";
 import { BottomNav } from "./components/BottomNav";
 import { ContentItem } from "./components/ContentCard";
-import { BrowsePage } from "./components/BrowsePage";
+import { BrowsePage, BrowseStateSnapshot } from "./components/BrowsePage";
 import { DetailPage } from "./components/DetailPage";
 import { FilterSheet, FilterState, defaultFilters } from "./components/FilterSheet";
 import { WatchlistPage } from "./components/WatchlistPage";
@@ -134,6 +134,9 @@ function AppContent() {
   }, [filters.languages]);
 
   const handleItemSelect = (item: ContentItem) => {
+    if (scrollRef.current) {
+      savedScrollPositions.current[activeTab] = scrollRef.current.scrollTop;
+    }
     setSelectedItem(item);
   };
 
@@ -141,7 +144,17 @@ function AppContent() {
     setSelectedItem(null);
   };
 
+  const handleShowCalendar = () => {
+    if (scrollRef.current) {
+      savedScrollPositions.current[activeTab] = scrollRef.current.scrollTop;
+    }
+    setShowCalendar(true);
+  };
+
   const handleTabChange = (tab: string) => {
+    if (scrollRef.current) {
+      savedScrollPositions.current[activeTab] = scrollRef.current.scrollTop;
+    }
     setSelectedItem(null);
     setShowCalendar(false);
     setActiveTab(tab);
@@ -246,6 +259,7 @@ function AppContent() {
 
   const handleOnboardingComplete = useCallback(async (data: OnboardingData) => {
     await userPrefs.completeOnboarding(data);
+    setActiveTab("home");
     toast.success(`Welcome, ${data.name}!`, {
       icon: "\u{1F389}",
       description: "Your profile is all set. Let's find something to watch!",
@@ -255,12 +269,22 @@ function AppContent() {
   // --- Scroll tracking for hero parallax ---
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollY, setScrollY] = useState(0);
+  const savedScrollPositions = useRef<Record<string, number>>({});
+  const browseStateRef = useRef<BrowseStateSnapshot | null>(null);
 
   const handleScroll = useCallback(() => {
     if (scrollRef.current) {
       setScrollY(scrollRef.current.scrollTop);
     }
   }, []);
+
+  // Restore scroll position synchronously before paint
+  useLayoutEffect(() => {
+    if (!selectedItem && scrollRef.current) {
+      const saved = savedScrollPositions.current[activeTab] ?? 0;
+      scrollRef.current.scrollTop = saved;
+    }
+  }, [selectedItem, activeTab]);
 
   // ── Android back button ──
   useEffect(() => {
@@ -376,7 +400,15 @@ function AppContent() {
           className="flex-1 overflow-y-auto pb-4 no-scrollbar"
           style={{ overflowX: 'hidden', overscrollBehaviorX: 'none', transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined, transition: isPulling.current ? 'none' : 'transform 0.3s ease' }}
         >
+          <AnimatePresence mode="wait">
           {showCalendar ? (
+            <motion.div
+              key="calendar"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+            >
             <CalendarPage
               items={upcoming.items}
               loading={upcoming.loading}
@@ -389,7 +421,15 @@ function AppContent() {
               bookmarkedIds={wl.bookmarkedIds}
               onToggleBookmark={(item) => handleToggleBookmark({ id: item.id, title: item.title, image: item.image, services: item.services, rating: item.rating, type: item.type })}
             />
+            </motion.div>
           ) : selectedItem ? (
+            <motion.div
+              key={`detail-${selectedItem.id}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+            >
             <DetailPage
               itemId={selectedItem.id}
               itemTitle={selectedItem.title}
@@ -408,10 +448,10 @@ function AppContent() {
               userRating={wl.ratings[selectedItem.id] || null}
               onRate={handleRate}
             />
+            </motion.div>
           ) : (
-            <AnimatePresence mode="wait">
               <motion.div
-                key={activeTab}
+                key={`tab-${activeTab}`}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
@@ -435,7 +475,13 @@ function AppContent() {
                       userServices={connectedServiceIds}
                     />
                   ) : home.loading ? (
-                    <div className="w-full aspect-[4/3] bg-secondary animate-pulse" />
+                    <div className="w-full aspect-[4/3] bg-secondary/80 overflow-hidden">
+                      <div className="w-full h-full" style={{
+                        background: "linear-gradient(90deg, transparent 0%, var(--shimmer-color) 50%, transparent 100%)",
+                        backgroundSize: "200% 100%",
+                        animation: "shimmer 1.5s ease-in-out infinite",
+                      }} />
+                    </div>
                   ) : null}
 
                   {/* Category filters */}
@@ -450,10 +496,10 @@ function AppContent() {
                   {/* Content rows */}
                   {home.loading ? (
                     <div className="flex items-center justify-center py-12">
-                      <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                      <Loader2 className="w-8 h-8 text-primary animate-spin" />
                     </div>
                   ) : (
-                    <>
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
                       {home.forYou.items.length > 0 && (
                         <ContentRow title="For You" items={filterLanguage(filterWatched(home.forYou.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       )}
@@ -466,8 +512,8 @@ function AppContent() {
                       {reorderedUpcoming.length > 0 && (
                         <div className="mb-6 overflow-hidden">
                           <div className="flex items-center justify-between px-5 mb-3">
-                            <h2 className="text-foreground text-[16px]" style={{ fontWeight: 700 }}>Coming Soon</h2>
-                            <button onClick={() => setShowCalendar(true)} className="text-primary text-[13px]" style={{ fontWeight: 500 }}>See All</button>
+                            <h2 className="text-foreground text-[17px]" style={{ fontWeight: 700 }}>Coming Soon</h2>
+                            <button onClick={handleShowCalendar} className="text-primary text-[13px]" style={{ fontWeight: 500 }}>See All</button>
                           </div>
                           <div className="flex gap-3 overflow-x-auto px-5 no-scrollbar" style={{ scrollbarWidth: "none" }}>
                             {reorderedUpcoming.slice(0, 8).map((item) => (
@@ -504,7 +550,7 @@ function AppContent() {
                           filterWatched={(items) => filterLanguage(filterWatched(items))}
                         />
                       ))}
-                    </>
+                    </motion.div>
                   )}
                 </>
               )}
@@ -521,6 +567,7 @@ function AppContent() {
                   providerIds={connectedServices}
                   userServices={connectedServiceIds}
                   watchedIds={watchedIds}
+                  savedState={browseStateRef}
                 />
               )}
 
@@ -556,11 +603,12 @@ function AppContent() {
                   onUpdateServices={userPrefs.updateServices}
                   onUpdateClusters={userPrefs.updateClusters}
                   onUpdateProfile={userPrefs.updateProfile}
+                  onNavigateHome={() => setActiveTab("home")}
                 />
               )}
               </motion.div>
-            </AnimatePresence>
           )}
+          </AnimatePresence>
         </div>
 
         {/* Bottom Navigation */}
