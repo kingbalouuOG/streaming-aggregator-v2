@@ -16,6 +16,13 @@ import { OnboardingFlow, OnboardingData } from "./components/OnboardingFlow";
 import { CalendarPage } from "./components/CalendarPage";
 import { ComingSoonCard } from "./components/ComingSoonCard";
 import { ThemeProvider, useTheme } from "./components/ThemeContext";
+import { AuthProvider, useAuth } from "./components/AuthContext";
+import AuthScreen from "./components/auth/AuthScreen";
+import SignUpSuccess from "./components/auth/SignUpSuccess";
+import NoConnectionScreen from "./components/auth/NoConnectionScreen";
+import ResetPasswordScreen from "./components/auth/ResetPasswordScreen";
+import { useNetworkStatus } from "./hooks/useNetworkStatus";
+import { supabase } from "./lib/supabase";
 import { useUserPreferences } from "./hooks/useUserPreferences";
 import { useWatchlist } from "./hooks/useWatchlist";
 import { useHomeContent } from "./hooks/useHomeContent";
@@ -33,14 +40,18 @@ const categories = ["All", "Movies", "TV Shows", "Docs", "Anime"];
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AppContent />
-    </ThemeProvider>
+    <AuthProvider>
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
+    </AuthProvider>
   );
 }
 
 function AppContent() {
   const { resolvedTheme } = useTheme();
+  const auth = useAuth();
+  const { isOnline, recheck: recheckNetwork } = useNetworkStatus();
   const [activeCategory, setActiveCategory] = useState("All");
   const [activeTab, setActiveTab] = useState("home");
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
@@ -48,9 +59,33 @@ function AppContent() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [watchlistSubTab, setWatchlistSubTab] = useState<"want" | "watched">("want");
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
+  const [showSignUpSuccess, setShowSignUpSuccess] = useState(false);
+  const [authUsername, setAuthUsername] = useState<string | null>(null);
+  const prevSessionRef = useRef<boolean>(false);
 
   // --- User preferences (onboarding, profile) ---
-  const userPrefs = useUserPreferences();
+  const userId = auth.loading ? null : (auth.user?.id ?? null);
+  const userPrefs = useUserPreferences(userId);
+
+  // Detect sign-in: session just appeared (returning user)
+  useEffect(() => {
+    const hasSession = !!auth.session;
+    if (hasSession && !prevSessionRef.current && !auth.loading && !userPrefs.loading && !showSignUpSuccess) {
+      setActiveTab("home");
+      if (userPrefs.onboardingComplete) {
+        toast.success('Welcome back!', { icon: '\u{1F44B}' });
+      }
+    }
+    prevSessionRef.current = hasSession;
+  }, [auth.session, auth.loading, userPrefs.loading, userPrefs.onboardingComplete, showSignUpSuccess]);
+
+  // Called explicitly by AuthScreen when sign-up succeeds
+  const handleSignUpSuccess = useCallback(async (username: string) => {
+    // Clear any stale localStorage from before auth was added
+    await userPrefs.signOut();
+    setAuthUsername(username);
+    setShowSignUpSuccess(true);
+  }, [userPrefs.signOut]);
 
   // --- Watchlist ---
   const wl = useWatchlist();
@@ -258,13 +293,24 @@ function AppContent() {
   }, [wl.setRating, wl.watchlist, wl.watched, selectedItem, taste.trackInteraction, buildTasteMeta]);
 
   const handleOnboardingComplete = useCallback(async (data: OnboardingData) => {
-    await userPrefs.completeOnboarding(data);
+    // Populate name/email from auth context (onboarding no longer collects them)
+    const name = auth.username || auth.user?.email?.split('@')[0] || 'User';
+    const email = auth.user?.email || '';
+    await userPrefs.completeOnboarding({ ...data, name, email });
+
+    // Mark onboarding complete in Supabase profile
+    if (auth.user) {
+      supabase.from('profiles').update({ onboarding_completed: true, updated_at: new Date().toISOString() }).eq('id', auth.user.id).then(({ error }) => {
+        if (error) console.error('[Supabase] Failed to update onboarding status:', error);
+      });
+    }
+
     setActiveTab("home");
-    toast.success(`Welcome, ${data.name}!`, {
+    toast.success(`Welcome, ${name}!`, {
       icon: "\u{1F389}",
       description: "Your profile is all set. Let's find something to watch!",
     });
-  }, [userPrefs.completeOnboarding]);
+  }, [userPrefs.completeOnboarding, auth.username, auth.user]);
 
   // --- Scroll tracking for hero parallax ---
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -352,12 +398,64 @@ function AppContent() {
     return home.popular.items.find((item) => !watchedIds.has(item.id)) || home.featured;
   }, [home.featured, home.popular.items, filters.showWatched, watchedIds]);
 
-  // ── Loading state ──
+  // ── Auth loading state ──
+  if (auth.loading) {
+    return (
+      <div className="size-full bg-background text-foreground flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  // ── Password recovery mode → reset password screen ──
+  if (auth.isPasswordRecovery) {
+    return (
+      <>
+        <ResetPasswordScreen />
+        <ThemedToaster />
+      </>
+    );
+  }
+
+  // ── Not authenticated → auth screens ──
+  if (!auth.session) {
+    return (
+      <>
+        <AuthScreen onSignUpSuccess={handleSignUpSuccess} />
+        <ThemedToaster />
+      </>
+    );
+  }
+
+  // ── Authenticated but offline → no connection screen ──
+  if (!isOnline) {
+    return (
+      <>
+        <NoConnectionScreen onRetry={recheckNetwork} />
+        <ThemedToaster />
+      </>
+    );
+  }
+
+  // ── User preferences loading ──
   if (userPrefs.loading) {
     return (
       <div className="size-full bg-background text-foreground flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
+    );
+  }
+
+  // ── Sign-up success interstitial ──
+  if (showSignUpSuccess) {
+    return (
+      <>
+        <SignUpSuccess
+          username={authUsername}
+          onContinue={() => setShowSignUpSuccess(false)}
+        />
+        <ThemedToaster />
+      </>
     );
   }
 
@@ -599,11 +697,15 @@ function AppContent() {
                       .filter((s): s is ServiceId => s !== null) || [],
                     clusters: userPrefs.preferences?.selectedClusters || [],
                   } : null}
-                  onSignOut={userPrefs.signOut}
+                  onSignOut={auth.signOut}
                   onUpdateServices={userPrefs.updateServices}
                   onUpdateClusters={userPrefs.updateClusters}
                   onUpdateProfile={userPrefs.updateProfile}
                   onNavigateHome={() => setActiveTab("home")}
+                  isAuthenticated={!!auth.session}
+                  username={auth.username}
+                  email={auth.user?.email || null}
+                  onDeleteAccount={auth.deleteAccount}
                 />
               )}
               </motion.div>

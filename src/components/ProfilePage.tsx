@@ -13,6 +13,7 @@ import {
   Film,
   Sparkles,
   RotateCcw,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -43,15 +44,19 @@ interface ProfilePageProps {
   onUpdateClusters?: (clusters: string[]) => Promise<void>;
   onUpdateProfile?: (name: string, email: string) => Promise<void>;
   onNavigateHome?: () => void;
+  isAuthenticated?: boolean;
+  username?: string | null;
+  email?: string | null;
+  onDeleteAccount?: () => Promise<{ error?: string }>;
 }
 
-export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignOut, onUpdateServices, onUpdateClusters, onUpdateProfile, onNavigateHome }: ProfilePageProps) {
+export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignOut, onUpdateServices, onUpdateClusters, onUpdateProfile, onNavigateHome, isAuthenticated, username, email: authEmail, onDeleteAccount }: ProfilePageProps) {
   // ── Profile state ─��───────────────────────────────
-  const [name, setName] = useState(userProfile?.name || "Joe");
-  const [email, setEmail] = useState(userProfile?.email || "joegreenwas@gmail.com");
+  const [name, setName] = useState(userProfile?.name || "");
+  const [email, setEmail] = useState(userProfile?.email || "");
   const [isEditingDetails, setIsEditingDetails] = useState(false);
-  const [editName, setEditName] = useState(userProfile?.name || "Joe");
-  const [editEmail, setEditEmail] = useState(userProfile?.email || "joegreenwas@gmail.com");
+  const [editName, setEditName] = useState(userProfile?.name || "");
+  const [editEmail, setEditEmail] = useState(userProfile?.email || "");
 
   // ── Services state ─────────────────────────────────
   const [connectedServices, setConnectedServices] = useState<string[]>(
@@ -159,6 +164,39 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
     onSignOut?.();
   };
 
+  // ── Delete account ─────────────────────────────────
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const deleteConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleDeleteAccount = async () => {
+    if (!deleteConfirm) {
+      setDeleteConfirm(true);
+      // Auto-reset confirmation after 5 seconds
+      if (deleteConfirmTimerRef.current) clearTimeout(deleteConfirmTimerRef.current);
+      deleteConfirmTimerRef.current = setTimeout(() => setDeleteConfirm(false), 5000);
+      return;
+    }
+    if (!onDeleteAccount || deleting) return;
+    if (deleteConfirmTimerRef.current) clearTimeout(deleteConfirmTimerRef.current);
+    setDeleting(true);
+    try {
+      const result = await onDeleteAccount();
+      if (result.error) {
+        toast.error('Failed to delete account', { description: result.error });
+        setDeleting(false);
+        setDeleteConfirm(false);
+      } else {
+        toast.success('Account deleted');
+      }
+    } catch {
+      toast.error('Failed to delete account');
+      setDeleting(false);
+      setDeleteConfirm(false);
+    }
+  };
+
   const initials = name
     .split(" ")
     .map((n) => n[0])
@@ -208,7 +246,9 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
           {name}
         </h2>
         <p className="text-primary text-[13px] mb-0.5">{email}</p>
-        <p className="text-muted-foreground text-[12px]">Member since January 2026</p>
+        <p className="text-muted-foreground text-[12px]">
+          Member since {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+        </p>
 
         {/* Quick stats */}
         <div className="flex items-center gap-4 mt-3">
@@ -505,6 +545,36 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
       >
         {hasUnsavedChanges ? "Save Changes" : "No Changes"}
       </button>
+
+      {/* ── Account ────────────────────────────── */}
+      {isAuthenticated && onDeleteAccount && (
+        <div className="mb-3">
+          <SectionHeader title="Account" />
+          {authEmail && (
+            <p className="text-muted-foreground text-[12px] mb-2">
+              Signed in as <span className="text-foreground">{username || authEmail}</span>
+            </p>
+          )}
+          <button
+            onClick={handleDeleteAccount}
+            disabled={deleting}
+            className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] border transition-colors ${
+              deleteConfirm
+                ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                : 'bg-secondary/60 text-muted-foreground border-transparent hover:bg-secondary/80'
+            }`}
+            style={{ fontWeight: 600, borderColor: deleteConfirm ? undefined : 'var(--border-subtle-2)' }}
+          >
+            <Trash2 className="w-4 h-4" />
+            {deleting ? 'Deleting…' : deleteConfirm ? 'Tap again to confirm' : 'Delete Account'}
+          </button>
+          {deleteConfirm && !deleting && (
+            <p className="text-red-400 text-[11px] text-center mt-1.5">
+              This will permanently delete your account and all data
+            </p>
+          )}
+        </div>
+      )}
 
       {/* ── Sign Out ────────────────────────────── */}
       <button

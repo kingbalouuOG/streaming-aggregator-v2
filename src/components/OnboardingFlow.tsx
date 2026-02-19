@@ -6,10 +6,7 @@ import {
   Check,
   Sparkles,
   Tv,
-  Mail,
-  User,
 } from "lucide-react";
-import videxLogo from "@/assets/videx-logos/videx-icon-192.png";
 import { PLATFORMS, type PlatformDef } from "./platformLogos";
 import { TasteQuiz } from "./quiz/TasteQuiz";
 import type { TasteVector } from "@/lib/taste/tasteVector";
@@ -38,7 +35,7 @@ interface OnboardingFlowProps {
   onComplete: (data: OnboardingData) => void;
 }
 
-const TOTAL_STEPS = 4; // Welcome, Services, Taste Clusters, Quiz
+const TOTAL_STEPS = 3; // Services, Taste Clusters, Quiz
 
 // ── Slide direction logic ──────────────────
 const slideVariants = {
@@ -59,22 +56,16 @@ const slideVariants = {
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState(0);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [selectedClusters, setSelectedClusters] = useState<string[]>([]);
 
-  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const showEmailError = email.trim().length > 0 && !isValidEmail;
-
   const canContinue = [
-    name.trim().length > 0 && isValidEmail,
     selectedServices.length > 0,
     selectedClusters.length >= MIN_CLUSTERS,
   ];
 
   const goNext = () => {
-    if (step < 3) {
+    if (step < 2) {
       setDirection(1);
       setStep((s) => s + 1);
       return;
@@ -87,9 +78,10 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   };
 
   // Quiz completion: includes quiz answers + vector
+  // Name/email populated by App.tsx from auth context
   const handleQuizComplete = (quizAnswers: QuizAnswer[], tasteVector: TasteVector) => {
     onComplete({
-      name: name.trim(), email: email.trim(),
+      name: '', email: '',
       services: selectedServices, clusters: selectedClusters,
       quizAnswers, tasteVector,
     });
@@ -98,7 +90,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // Quiz skip: complete onboarding without quiz data
   const handleQuizSkip = () => {
     onComplete({
-      name: name.trim(), email: email.trim(),
+      name: '', email: '',
       services: selectedServices, clusters: selectedClusters,
     });
   };
@@ -129,8 +121,8 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setSelectedClusters([]);
   };
 
-  // Step 3 (Quiz) takes over the full viewport — no chrome
-  if (step === 3) {
+  // Step 2 (Quiz) takes over the full viewport — no chrome
+  if (step === 2) {
     return (
       <div className="size-full bg-background text-foreground">
         <TasteQuiz
@@ -189,22 +181,13 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               className="absolute inset-0 flex flex-col"
             >
               {step === 0 && (
-                <StepWelcome
-                  name={name}
-                  email={email}
-                  onNameChange={setName}
-                  onEmailChange={setEmail}
-                  emailError={showEmailError}
-                />
-              )}
-              {step === 1 && (
                 <StepServices
                   selected={selectedServices}
                   onToggle={toggleService}
                   onSelectAll={selectAllServices}
                 />
               )}
-              {step === 2 && (
+              {step === 1 && (
                 <StepClusters
                   selected={selectedClusters}
                   onToggle={toggleCluster}
@@ -218,22 +201,22 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         {/* ── Bottom CTA ───────────────────── */}
         <div className="px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3">
           {/* Helper text */}
-          {step === 1 && selectedServices.length === 0 && (
+          {step === 0 && selectedServices.length === 0 && (
             <p className="text-muted-foreground text-[12px] text-center mb-2">
               Select at least one service to continue
             </p>
           )}
-          {step === 2 && selectedClusters.length < MIN_CLUSTERS && (
+          {step === 1 && selectedClusters.length < MIN_CLUSTERS && (
             <p className="text-muted-foreground text-[12px] text-center mb-2">
               Pick at least {MIN_CLUSTERS} that match your vibe
             </p>
           )}
-          {step === 1 && selectedServices.length > 0 && (
+          {step === 0 && selectedServices.length > 0 && (
             <p className="text-muted-foreground text-[12px] text-center mb-2">
               {selectedServices.length} service{selectedServices.length !== 1 ? "s" : ""} selected
             </p>
           )}
-          {step === 2 && selectedClusters.length >= MIN_CLUSTERS && (
+          {step === 1 && selectedClusters.length >= MIN_CLUSTERS && (
             <p className="text-muted-foreground text-[12px] text-center mb-2">
               {selectedClusters.length} of {MAX_CLUSTERS} selected
             </p>
@@ -271,109 +254,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 }
 
 // ═════════════════════════════════════════════════════════
-// ── Step 1: Welcome & Details ───────────────────────────
-// ═════════════════════════════════════════════════════════
-function StepWelcome({
-  name,
-  email,
-  onNameChange,
-  onEmailChange,
-  emailError,
-}: {
-  name: string;
-  email: string;
-  onNameChange: (v: string) => void;
-  onEmailChange: (v: string) => void;
-  emailError?: boolean;
-}) {
-  return (
-    <div className="flex flex-col h-full px-6 overflow-y-auto no-scrollbar">
-      {/* Hero area */}
-      <div className="flex flex-col items-center pt-6 pb-8">
-        <motion.img
-          src={videxLogo}
-          alt="Videx"
-          initial={{ scale: 0, rotate: -20 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: "spring", damping: 12, stiffness: 200, delay: 0.15 }}
-          className="w-20 h-20 rounded-3xl mb-5 shadow-xl shadow-primary/30"
-        />
-
-        <motion.h1
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="text-foreground text-[26px] text-center mb-2"
-          style={{ fontWeight: 700 }}
-        >
-          Welcome to Videx
-        </motion.h1>
-        <motion.p
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-          className="text-muted-foreground text-[14px] text-center max-w-[280px]"
-        >
-          Your personal guide to everything streaming. Let's set up your profile.
-        </motion.p>
-      </div>
-
-      {/* Form fields */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.45 }}
-        className="space-y-3"
-      >
-        <div className="relative">
-          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground">
-            <User className="w-4.5 h-4.5" />
-          </div>
-          <input
-            type="text"
-            placeholder="Your name"
-            value={name}
-            onChange={(e) => onNameChange(e.target.value)}
-            className="w-full bg-secondary/60 border rounded-xl pl-11 pr-4 py-3.5 text-foreground text-[14px] placeholder:text-muted-foreground/50 outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
-            style={{ borderColor: "var(--border-subtle)" }}
-          />
-        </div>
-
-        <div className="relative">
-          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground">
-            <Mail className="w-4.5 h-4.5" />
-          </div>
-          <input
-            type="email"
-            placeholder="Email address"
-            value={email}
-            onChange={(e) => onEmailChange(e.target.value)}
-            className={`w-full bg-secondary/60 border rounded-xl pl-11 pr-4 py-3.5 text-foreground text-[14px] placeholder:text-muted-foreground/50 outline-none focus:ring-1 transition-all ${
-              emailError ? "border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20" : "focus:border-primary/50 focus:ring-primary/20"
-            }`}
-            style={{ borderColor: emailError ? undefined : "var(--border-subtle)" }}
-          />
-          {emailError && (
-            <p className="text-red-400 text-[11px] mt-1 ml-1">Please enter a valid email address</p>
-          )}
-        </div>
-      </motion.div>
-
-      {/* Trust notice */}
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.6 }}
-        className="text-muted-foreground/50 text-[11px] text-center mt-4 px-4"
-      >
-        We'll use this to personalize your experience. No spam, ever.
-      </motion.p>
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════
-// ── Step 2: Select Services ─────────────────────────────
+// ── Step 1: Select Services ─────────────────────────────
 // ═════════════════════════════════════════════════════════
 function StepServices({
   selected,
@@ -489,7 +370,7 @@ function StepServices({
 }
 
 // ═════════════════════════════════════════════════════════
-// ── Step 3: Select Taste Clusters ───────────────────────
+// ── Step 2: Select Taste Clusters ───────────────────────
 // ═════════════════════════════════════════════════════════
 function StepClusters({
   selected,

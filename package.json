@@ -21,6 +21,7 @@
     "@capacitor/network": "^8.0.0",
     "@capacitor/splash-screen": "^8.0.0",
     "@capacitor/status-bar": "^8.0.0",
+    "@supabase/supabase-js": "^2.97.0",
     "axios": "^1.13.5",
     "crypto-js": "^4.2.0",
     "flag-icons": "^7.5.0",

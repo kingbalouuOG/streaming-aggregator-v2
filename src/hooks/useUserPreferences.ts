@@ -6,6 +6,8 @@ import {
   saveUserPreferences,
   hasCompletedOnboarding,
   clearAllData,
+  getStoredAuthUserId,
+  setStoredAuthUserId,
   type UserProfile,
   type UserPreferences,
 } from '@/lib/storage/userPreferences';
@@ -28,26 +30,46 @@ export interface OnboardingPayload {
   tasteVector?: TasteVector;
 }
 
-export function useUserPreferences() {
+export function useUserPreferences(currentUserId?: string | null) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (userId?: string) => {
     setLoading(true);
     const [p, prefs, onboarded] = await Promise.all([
       getUserProfile(),
       getUserPreferences(),
       hasCompletedOnboarding(),
     ]);
+
+    // Detect different-user sign-in via stored auth ID
+    if (userId) {
+      const storedAuthId = await getStoredAuthUserId();
+      if (storedAuthId && storedAuthId !== userId) {
+        // Different Supabase user — discard stale localStorage data
+        await clearAllData();
+        setProfile(null);
+        setPreferences(null);
+        setOnboardingComplete(false);
+        setLoading(false);
+        return;
+      }
+      // Remember this auth user for future mismatch detection
+      await setStoredAuthUserId(userId);
+    }
+
     setProfile(p);
     setPreferences(prefs);
     setOnboardingComplete(onboarded);
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Load when userId becomes available or changes
+  useEffect(() => {
+    if (currentUserId) load(currentUserId);
+  }, [currentUserId, load]);
 
   const completeOnboarding = useCallback(async (data: OnboardingPayload) => {
     const userId = `user_${Date.now()}`;

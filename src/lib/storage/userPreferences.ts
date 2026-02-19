@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   USER_PROFILE: '@user_profile',
   USER_PREFERENCES: '@user_preferences',
   THEME_PREFERENCE: '@app_theme_preference',
+  AUTH_USER_ID: '@auth_user_id',
 };
 
 export interface UserProfile {
@@ -98,9 +99,17 @@ export const hasCompletedOnboarding = async (): Promise<boolean> => {
 };
 
 export const clearAllData = async () => {
-  await storage.multiRemove([STORAGE_KEYS.USER_PROFILE, STORAGE_KEYS.USER_PREFERENCES]);
+  await storage.multiRemove([STORAGE_KEYS.USER_PROFILE, STORAGE_KEYS.USER_PREFERENCES, STORAGE_KEYS.AUTH_USER_ID]);
   await clearTasteProfile();
   if (DEBUG) console.log('[Storage] All user data cleared');
+};
+
+export const getStoredAuthUserId = async (): Promise<string | null> => {
+  return storage.getItem(STORAGE_KEYS.AUTH_USER_ID);
+};
+
+export const setStoredAuthUserId = async (userId: string): Promise<void> => {
+  await storage.setItem(STORAGE_KEYS.AUTH_USER_ID, userId);
 };
 
 export { STORAGE_KEYS };

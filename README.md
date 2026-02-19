@@ -11,6 +11,7 @@ Netflix, Amazon Prime Video, Apple TV+, Disney+, NOW, Sky Go, Paramount+, BBC iP
 - **React 18** with TypeScript
 - **Vite 6** for build tooling
 - **Tailwind CSS v4** for styling
+- **Supabase** for authentication and database
 - **Capacitor 8** for native Android deployment
 - **Framer Motion** (`motion/react`) for animations
 - **Sonner** for toast notifications
@@ -21,6 +22,7 @@ Netflix, Amazon Prime Video, Apple TV+, Disney+, NOW, Sky Go, Paramount+, BBC iP
 - **TMDb** - Content metadata, streaming availability, discover/search
 - **OMDB** - Rotten Tomatoes and IMDb ratings
 - **WatchMode** - Rent/buy pricing information
+- **Supabase Auth** - Email/password authentication, session management
 
 ## Getting Started
 
@@ -28,6 +30,7 @@ Netflix, Amazon Prime Video, Apple TV+, Disney+, NOW, Sky Go, Paramount+, BBC iP
 
 - Node.js 18+
 - API keys from [TMDb](https://www.themoviedb.org/settings/api), [OMDB](http://www.omdbapi.com/apikey.aspx), and [WatchMode](https://api.watchmode.com/)
+- [Supabase](https://supabase.com/) project with email auth enabled
 
 ### Setup
 
@@ -41,7 +44,7 @@ npm install
 cp .env.example .env
 ```
 
-3. Add your API keys to `.env`
+3. Add your API keys and Supabase credentials to `.env`
 
 4. Start the dev server:
 ```bash
@@ -91,14 +94,23 @@ videx/
     index.css                Tailwind + custom styles
     assets/                  Platform logo PNGs (11 services)
     components/              Feature components
+      auth/                  Authentication screens
+        AuthScreen.tsx       Auth view router with slide transitions
+        SignInScreen.tsx      Email/password sign-in
+        SignUpScreen.tsx      Registration with username validation
+        ForgotPasswordScreen.tsx  Password reset request (send email)
+        ResetPasswordScreen.tsx  Set new password (from recovery link)
+        SignUpSuccess.tsx     Auto-advancing success interstitial
+        NoConnectionScreen.tsx  Offline state for authenticated users
       quiz/
         TasteQuiz.tsx        10-question taste quiz orchestrator
         QuizQuestion.tsx     Pair-choice UI (A/B/Both/Neither)
-      OnboardingFlow.tsx     3-step onboarding (profile, services, genres)
+      AuthContext.tsx         Supabase auth provider + useAuth hook
+      OnboardingFlow.tsx     3-step onboarding (services, clusters, quiz)
       BrowsePage.tsx         Search + filter + grid browse
       DetailPage.tsx         Content detail with ratings, cast, availability
       WatchlistPage.tsx      Want to Watch / Watched tabs with rating system
-      ProfilePage.tsx        User settings, service management, theme toggle
+      ProfilePage.tsx        User settings, service management, account deletion
       CalendarPage.tsx       Coming Soon calendar with date/service filters
       SpendDashboard.tsx     Monthly spend tracker with tier selection
       FeaturedHero.tsx       Parallax hero banner
@@ -120,12 +132,14 @@ videx/
       useBrowse.ts           Browse/discover logic
       useContentDetail.ts    Detail page data fetching
       useContentService.ts   Core content service (trending, popular, etc.)
+      useNetworkStatus.ts    Online/offline detection (Capacitor Network)
       useRecommendations.ts  Personalized recommendations
       useSearch.ts           Search with debounce
       useUpcoming.ts         Coming Soon / Calendar data
       useUserPreferences.ts  User preferences management
       useWatchlist.ts        Watchlist CRUD with memoized derived state
     lib/                     Business logic
+      supabase.ts            Supabase client singleton
       storage.ts             localStorage adapter (AsyncStorage-compatible)
       adapters/              TMDb data model -> UI interface bridges
         contentAdapter.ts    ContentItem ↔ WatchlistItem conversion
@@ -159,12 +173,13 @@ videx/
 ## Features
 
 ### Core
-- **Onboarding**: Name, streaming service selection, genre preferences, 10-question taste quiz
+- **Authentication**: Email/password sign-up/sign-in via Supabase, password reset (email link → set new password screen), account deletion, session persistence with localStorage-preserved preferences across sign-out/sign-in
+- **Onboarding**: Streaming service selection, taste cluster preferences, 10-question taste quiz (3 steps)
 - **Home**: Featured hero, trending, popular, top rated, genre-based rows, taste-vector-driven "For You" and "Hidden Gems" sections
 - **Browse**: Search with auto-suggestions, category filters, service/genre/rating filter sheet
 - **Detail View**: Hero image, IMDb/RT ratings, genre tags, streaming availability, rent/buy prices, cast, similar content
 - **Watchlist**: Want to Watch / Watched tabs, category filters, sort options, grid layout
-- **Profile**: Edit details, manage services, genre preferences, dark/light/system theme
+- **Profile**: Username/email display, manage services, genre preferences, dark/light/system theme, account deletion
 
 ### Sprint 1 Features
 - **Rating System**: Thumbs up/down on watched content (Detail Page + Watchlist cards). Ratings feed into the recommendation engine via genre affinity scoring.
