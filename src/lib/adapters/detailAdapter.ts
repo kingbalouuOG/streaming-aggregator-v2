@@ -7,7 +7,7 @@
 import type { ServiceId } from '@/components/platformLogos';
 import { buildBackdropUrl, buildPosterUrl, buildImageUrl } from '../api/tmdb';
 import { providerIdsToServiceIds, providerIdToServiceId } from './platformAdapter';
-import { mapProviderIdToCanonical, normalizePlatformName, rentBuyMatchesUserPlatform, networkNameToProviderId } from '../constants/platforms';
+import { mapProviderIdToCanonical, normalizePlatformName, networkNameToProviderId } from '../constants/platforms';
 import { isoToLanguageName } from './contentAdapter';
 
 export interface CastMember {
@@ -34,6 +34,7 @@ export interface DetailData {
   description: string;
   genres: string[];
   services: ServiceId[];
+  allServices: ServiceId[];
   rentalOptions: RentalOption[];
   cast: CastMember[];
   runtime?: string;
@@ -141,14 +142,14 @@ export function buildDetailData(
     image: member.profile_path ? buildImageUrl(member.profile_path, 'w185') || '' : '',
   }));
 
-  // Rental options — filtered to user's platforms only, excluding services already available via flatrate
-  const flatrateServiceSet = new Set(services);
+  // Rental options — excluding services already available via streaming (any service, not just user's)
+  const flatrateServiceSet = new Set(allServices);
   const rentalOptions: RentalOption[] = [];
   if (watchModePrices) {
     (watchModePrices.rent || []).forEach((opt: any) => {
       if (opt.price !== null) {
         const key = resolveServiceKey(opt.name);
-        if (key && !flatrateServiceSet.has(key) && (!userServiceSet || userServiceSet.has(key))) {
+        if (key && !flatrateServiceSet.has(key)) {
           rentalOptions.push({
             service: opt.name,
             serviceKey: key,
@@ -161,7 +162,7 @@ export function buildDetailData(
     (watchModePrices.buy || []).forEach((opt: any) => {
       if (opt.price !== null) {
         const key = resolveServiceKey(opt.name);
-        if (key && !flatrateServiceSet.has(key) && (!userServiceSet || userServiceSet.has(key))) {
+        if (key && !flatrateServiceSet.has(key)) {
           rentalOptions.push({
             service: opt.name,
             serviceKey: key,
@@ -177,7 +178,7 @@ export function buildDetailData(
   if (rentalOptions.length === 0 && providers) {
     (providers.rent || []).forEach((p: any) => {
       const key = resolveServiceKey(p.provider_name, p.provider_id);
-      if (key && !flatrateServiceSet.has(key) && (!userPlatformIds?.length || rentBuyMatchesUserPlatform(p.provider_id, userPlatformIds))) {
+      if (key && !flatrateServiceSet.has(key)) {
         rentalOptions.push({
           service: p.provider_name,
           serviceKey: key,
@@ -188,7 +189,7 @@ export function buildDetailData(
     });
     (providers.buy || []).forEach((p: any) => {
       const key = resolveServiceKey(p.provider_name, p.provider_id);
-      if (key && !flatrateServiceSet.has(key) && (!userPlatformIds?.length || rentBuyMatchesUserPlatform(p.provider_id, userPlatformIds))) {
+      if (key && !flatrateServiceSet.has(key)) {
         rentalOptions.push({
           service: p.provider_name,
           serviceKey: key,
@@ -211,6 +212,6 @@ export function buildDetailData(
   return {
     id, title, heroImage, year, contentRating,
     imdbRating, rottenTomatoes, description: tmdbDetail.overview || '',
-    genres, services, rentalOptions, cast, runtime, seasons, language, mediaType,
+    genres, services, allServices, rentalOptions, cast, runtime, seasons, language, mediaType,
   };
 }

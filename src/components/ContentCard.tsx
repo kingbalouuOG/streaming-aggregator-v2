@@ -23,6 +23,8 @@ export interface ContentItem {
   language?: string;
   genreIds?: number[];
   originalLanguage?: string;
+  popularity?: number;
+  voteCount?: number;
 }
 
 interface ContentCardProps {

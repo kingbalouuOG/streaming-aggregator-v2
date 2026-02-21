@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, Check, CheckCircle2, Undo2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, Check, CheckCircle2, Undo2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { TickIcon } from "./icons";
 import { motion } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
@@ -8,7 +8,8 @@ import { ImageSkeleton } from "./ImageSkeleton";
 import type { ServiceId } from "./platformLogos";
 import { serviceLabels as platformServiceLabels } from "./platformLogos";
 import { useContentDetail } from "@/hooks/useContentDetail";
-import type { DetailData } from "@/lib/adapters/detailAdapter";
+import type { DetailData, RentalOption } from "@/lib/adapters/detailAdapter";
+import { classifyProviders } from "@/lib/utils/providerClassifier";
 import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 import rottenTomatoesLogo from "@/assets/rotten-tomatoes-logo.png";
@@ -345,44 +346,8 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
           {detail.description}
         </p>
 
-        {/* Available on */}
-        {detail.services.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-foreground text-[15px] mb-2.5" style={{ fontWeight: 600 }}>
-              Available on:
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {detail.services.map((service) => (
-                <span key={service} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary text-foreground text-[13px]">
-                  <ServiceBadge service={service} size="sm" />
-                  {serviceLabels[service]}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Rent/Buy */}
-        {detail.rentalOptions.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-foreground text-[15px] mb-2.5" style={{ fontWeight: 600 }}>
-              Available to Rent/Buy:
-            </h3>
-            <div className="flex flex-col gap-2">
-              {detail.rentalOptions.map((option, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary text-foreground text-[13px]">
-                    <ServiceBadge service={option.serviceKey} size="sm" />
-                    {option.service}
-                  </span>
-                  <span className="px-2.5 py-1 rounded-full bg-primary/15 text-primary text-[12px]" style={{ fontWeight: 600 }}>
-                    {option.price} {option.type}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Where to Watch — 3-tier layout */}
+        <WhereToWatch detail={detail} userServices={userServices} />
 
         {/* Cast */}
         {detail.cast.length > 0 && (
@@ -442,6 +407,151 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Where to Watch — 3-tier availability ──────────────
+
+function WhereToWatch({ detail, userServices }: { detail: DetailData; userServices?: ServiceId[] }) {
+  const { tier1, tier2, tier3 } = classifyProviders(
+    detail.allServices,
+    detail.rentalOptions,
+    userServices || []
+  );
+
+  const hasAny = tier1.length > 0 || tier2.length > 0 || tier3.length > 0;
+  if (!hasAny && detail.allServices.length === 0 && detail.rentalOptions.length === 0) {
+    return (
+      <div className="mb-6">
+        <h3 className="text-foreground text-[15px] mb-2.5" style={{ fontWeight: 600 }}>
+          Where to Watch
+        </h3>
+        <p className="text-muted-foreground text-[13px]">
+          Not currently available to stream in the UK.
+        </p>
+        <p className="text-muted-foreground/60 text-[12px] mt-1">
+          Check back later — availability changes frequently.
+        </p>
+      </div>
+    );
+  }
+
+  if (!hasAny) return null;
+
+  return (
+    <div className="mb-6">
+      <h3 className="text-foreground text-[15px] mb-2.5" style={{ fontWeight: 600 }}>
+        Where to Watch
+      </h3>
+
+      {/* Tier 1: On Your Services — orange glow */}
+      {tier1.length > 0 && (
+        <div className="mb-3">
+          <p className="text-muted-foreground text-[11px] tracking-wide mb-2" style={{ fontWeight: 600 }}>
+            On Your Services
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {tier1.map((service) => (
+              <span
+                key={service}
+                className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-secondary text-foreground text-[13px]"
+                style={{
+                  fontWeight: 600,
+                  border: '1.5px solid #e85d25',
+                  boxShadow: '0 0 0 2px rgba(232, 93, 37, 0.08), 0 0 12px rgba(232, 93, 37, 0.15)',
+                }}
+              >
+                <ServiceBadge service={service} size="sm" />
+                Watch on {serviceLabels[service]}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tier 2: Also Available On / Available On — neutral chips */}
+      {tier2.length > 0 && (
+        <div className="mb-3">
+          <p className="text-muted-foreground text-[11px] tracking-wide mb-2" style={{ fontWeight: 600 }}>
+            {tier1.length > 0 ? 'Also Available On' : 'Available On'}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {tier2.map((service) => (
+              <span
+                key={service}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary text-muted-foreground text-[13px]"
+                style={{
+                  fontWeight: 500,
+                  border: '1px solid var(--border-subtle)',
+                  minHeight: '44px',
+                }}
+              >
+                <ServiceBadge service={service} size="sm" />
+                {serviceLabels[service]}
+              </span>
+            ))}
+          </div>
+          <p className="text-muted-foreground/60 text-[12px] mt-1.5">
+            Not connected to your account
+          </p>
+        </div>
+      )}
+
+      {/* Tier 3: Rent or Buy — price list */}
+      {tier3.length > 0 && (
+        <RentBuyList options={tier3} />
+      )}
+    </div>
+  );
+}
+
+// ── Rent/Buy list with "Show more" toggle ──────────────
+
+function RentBuyList({ options }: { options: RentalOption[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? options : options.slice(0, 3);
+
+  return (
+    <div>
+      <p className="text-muted-foreground text-[11px] tracking-wide mb-2" style={{ fontWeight: 600 }}>
+        Rent or Buy
+      </p>
+      <div className="flex flex-col divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
+        {visible.map((option, i) => (
+          <div
+            key={`${option.serviceKey}-${option.type}-${i}`}
+            className="flex items-center justify-between py-3"
+            style={{ borderColor: 'var(--border-subtle)' }}
+          >
+            <div className="flex items-center gap-2.5">
+              <ServiceBadge service={option.serviceKey} size="sm" />
+              <span className="text-foreground text-[14px]" style={{ fontWeight: 500 }}>
+                {option.service}
+              </span>
+            </div>
+            <span className="text-[13px]" style={{ fontWeight: 500, color: '#e85d25' }}>
+              {option.price === 'Rent' || option.price === 'Buy'
+                ? `${option.type === 'rent' ? 'Rent' : 'Buy'}`
+                : `${option.type === 'rent' ? 'Rent from' : 'Buy from'} ${option.price}`
+              }
+            </span>
+          </div>
+        ))}
+      </div>
+      {options.length > 3 && (
+        <button
+          onClick={() => setShowAll(!showAll)}
+          className="flex items-center gap-1 text-[12px] mt-1.5"
+          style={{ fontWeight: 600, color: '#e85d25' }}
+        >
+          {showAll ? (
+            <>Show less <ChevronUp className="w-3.5 h-3.5" /></>
+          ) : (
+            <>Show {options.length - 3} more <ChevronDown className="w-3.5 h-3.5" /></>
+          )}
+        </button>
+      )}
     </div>
   );
 }

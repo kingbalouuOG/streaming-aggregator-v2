@@ -151,6 +151,30 @@ export const searchMulti = (query: string, page = 1) => {
   }, { results: [] });
 };
 
+export const searchMovies = (query: string, page = 1, year?: number) => {
+  if (!query || query.trim() === '') {
+    return Promise.resolve({ success: false, error: 'Search query is required', data: { results: [], total_pages: 0 } });
+  }
+  const requestParams: Record<string, unknown> = { query: query.trim(), page, include_adult: false, language: 'en-GB', region: 'GB' };
+  if (year) requestParams.primary_release_year = year;
+  return cachedRequest('search_movie', requestParams, async () => {
+    const response = await tmdbClient.get('/search/movie', { params: requestParams });
+    return response.data;
+  }, { results: [], total_pages: 0 });
+};
+
+export const searchTV = (query: string, page = 1, year?: number) => {
+  if (!query || query.trim() === '') {
+    return Promise.resolve({ success: false, error: 'Search query is required', data: { results: [], total_pages: 0 } });
+  }
+  const requestParams: Record<string, unknown> = { query: query.trim(), page, include_adult: false, language: 'en-GB' };
+  if (year) requestParams.first_air_date_year = year;
+  return cachedRequest('search_tv', requestParams, async () => {
+    const response = await tmdbClient.get('/search/tv', { params: requestParams });
+    return response.data;
+  }, { results: [], total_pages: 0 });
+};
+
 export const getContentWatchProviders = async (contentId: number, mediaType = 'movie', region = 'GB') => {
   return cachedRequest(`${mediaType}_${contentId}_wp4`, { region }, async () => {
     const response = await tmdbClient.get(`/${mediaType}/${contentId}/watch/providers`);

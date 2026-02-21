@@ -36,6 +36,8 @@ export function tmdbMovieToContentItem(movie: any): ContentItem {
     language: movie.original_language ? ISO_TO_LANGUAGE[movie.original_language] : undefined,
     genreIds: movie.genre_ids || [],
     originalLanguage: movie.original_language || undefined,
+    popularity: movie.popularity ?? undefined,
+    voteCount: movie.vote_count ?? undefined,
   };
 }
 
@@ -55,6 +57,8 @@ export function tmdbTVToContentItem(tvShow: any): ContentItem {
     language: tvShow.original_language ? ISO_TO_LANGUAGE[tvShow.original_language] : undefined,
     genreIds: tvShow.genre_ids || [],
     originalLanguage: tvShow.original_language || undefined,
+    popularity: tvShow.popularity ?? undefined,
+    voteCount: tvShow.vote_count ?? undefined,
   };
 }
 
