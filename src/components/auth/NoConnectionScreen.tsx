@@ -15,7 +15,13 @@ export default function NoConnectionScreen({ onRetry }: NoConnectionScreenProps)
   };
 
   return (
-    <div className="size-full bg-background flex flex-col items-center justify-center px-6">
+    <div
+      className="size-full bg-background flex flex-col items-center justify-center px-6"
+      style={{
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}
+    >
       <motion.div
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}

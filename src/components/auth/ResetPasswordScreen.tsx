@@ -43,7 +43,13 @@ export default function ResetPasswordScreen() {
   };
 
   return (
-    <div className="size-full flex flex-col px-6 overflow-y-auto no-scrollbar">
+    <div
+      className="size-full flex flex-col px-6 overflow-y-auto no-scrollbar"
+      style={{
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}
+    >
       <AnimatePresence mode="wait">
         {!success ? (
           <motion.div

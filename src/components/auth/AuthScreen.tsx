@@ -40,7 +40,13 @@ export default function AuthScreen({ onSignUpSuccess }: AuthScreenProps) {
   }, [view]);
 
   return (
-    <div className="size-full bg-background text-foreground overflow-hidden">
+    <div
+      className="size-full bg-background text-foreground overflow-hidden"
+      style={{
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}
+    >
       <div className="size-full max-w-md mx-auto">
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div

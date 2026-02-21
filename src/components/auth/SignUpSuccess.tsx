@@ -41,7 +41,13 @@ export default function SignUpSuccess({ username, onContinue }: SignUpSuccessPro
   }, []);
 
   return (
-    <div className="size-full bg-background flex flex-col items-center justify-center relative overflow-hidden px-6">
+    <div
+      className="size-full bg-background flex flex-col items-center justify-center relative overflow-hidden px-6"
+      style={{
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}
+    >
       {/* Checkmark */}
       <div className="relative mb-6">
         {/* Pulse ring */}
