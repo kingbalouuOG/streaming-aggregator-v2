@@ -31,3 +31,24 @@ const storage = {
 };
 
 export default storage;
+
+// ── Auth-state routing for dual-backend support ─────────────────
+
+let _isAuthenticated = false;
+let _userId: string | null = null;
+
+/** Called by AuthContext when auth state changes */
+export function setAuthState(authenticated: boolean, userId?: string | null): void {
+  _isAuthenticated = authenticated;
+  _userId = userId ?? null;
+}
+
+/** Check if Supabase should be used for storage operations */
+export function isSupabaseActive(): boolean {
+  return _isAuthenticated;
+}
+
+/** Get the current authenticated user's ID */
+export function getAuthUserId(): string | null {
+  return _userId;
+}

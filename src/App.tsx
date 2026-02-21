@@ -88,7 +88,7 @@ function AppContent() {
   }, [userPrefs.signOut]);
 
   // --- Watchlist ---
-  const wl = useWatchlist();
+  const wl = useWatchlist(userId);
 
   // --- Taste profile (continuous learning) ---
   const taste = useTasteProfile();

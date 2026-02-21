@@ -1,5 +1,6 @@
-import storage from '../storage';
+import storage, { isSupabaseActive } from '../storage';
 import { clearTasteProfile } from './tasteProfile';
+import * as supa from '../supabaseStorage';
 
 const DEBUG = __DEV__;
 
@@ -25,12 +26,28 @@ export interface UserPreferences {
 }
 
 export const saveUserProfile = async (profile: Partial<UserProfile> & { userId: string; name: string; email: string }) => {
+  if (isSupabaseActive()) {
+    try {
+      await supa.supaSaveUserProfile(profile);
+      if (DEBUG) console.log('[Storage] User profile saved to Supabase:', profile.userId);
+      return;
+    } catch (error) {
+      console.error('[Storage] Supabase saveUserProfile failed, falling back:', error);
+    }
+  }
   const profileData = { ...profile, createdAt: profile.createdAt || Date.now() };
   await storage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profileData));
   if (DEBUG) console.log('[Storage] User profile saved:', profileData.userId);
 };
 
 export const getUserProfile = async (): Promise<UserProfile | null> => {
+  if (isSupabaseActive()) {
+    try {
+      return await supa.supaGetUserProfile();
+    } catch (error) {
+      console.error('[Storage] Supabase getUserProfile failed, falling back:', error);
+    }
+  }
   try {
     const profile = await storage.getItem(STORAGE_KEYS.USER_PROFILE);
     if (!profile) return null;
@@ -42,11 +59,27 @@ export const getUserProfile = async (): Promise<UserProfile | null> => {
 };
 
 export const saveUserPreferences = async (preferences: UserPreferences) => {
+  if (isSupabaseActive()) {
+    try {
+      await supa.supaSaveUserPreferences(preferences);
+      if (DEBUG) console.log('[Storage] User preferences saved to Supabase:', preferences.region, `${preferences.platforms.length} platforms`);
+      return;
+    } catch (error) {
+      console.error('[Storage] Supabase saveUserPreferences failed, falling back:', error);
+    }
+  }
   await storage.setItem(STORAGE_KEYS.USER_PREFERENCES, JSON.stringify(preferences));
   if (DEBUG) console.log('[Storage] User preferences saved:', preferences.region, `${preferences.platforms.length} platforms`);
 };
 
 export const getUserPreferences = async (): Promise<UserPreferences | null> => {
+  if (isSupabaseActive()) {
+    try {
+      return await supa.supaGetUserPreferences();
+    } catch (error) {
+      console.error('[Storage] Supabase getUserPreferences failed, falling back:', error);
+    }
+  }
   try {
     const preferences = await storage.getItem(STORAGE_KEYS.USER_PREFERENCES);
     if (!preferences) return null;
@@ -58,6 +91,13 @@ export const getUserPreferences = async (): Promise<UserPreferences | null> => {
 };
 
 export const getSelectedPlatforms = async (): Promise<number[]> => {
+  if (isSupabaseActive()) {
+    try {
+      return await supa.supaGetSelectedPlatforms();
+    } catch (error) {
+      console.error('[Storage] Supabase getSelectedPlatforms failed, falling back:', error);
+    }
+  }
   try {
     const preferences = await getUserPreferences();
     if (!preferences?.platforms) return [];
@@ -71,6 +111,13 @@ export const getSelectedPlatforms = async (): Promise<number[]> => {
 export const DEFAULT_HOME_GENRES = [28, 35, 18, 53, 878, 27, 10749, 80];
 
 export const getHomeGenres = async (): Promise<number[]> => {
+  if (isSupabaseActive()) {
+    try {
+      return await supa.supaGetHomeGenres();
+    } catch (error) {
+      console.error('[Storage] Supabase getHomeGenres failed, falling back:', error);
+    }
+  }
   try {
     const preferences = await getUserPreferences();
     if (!preferences?.homeGenres?.length) return DEFAULT_HOME_GENRES;
@@ -81,11 +128,26 @@ export const getHomeGenres = async (): Promise<number[]> => {
 };
 
 export const setHomeGenres = async (genreIds: number[]) => {
+  if (isSupabaseActive()) {
+    try {
+      await supa.supaSetHomeGenres(genreIds);
+      return;
+    } catch (error) {
+      console.error('[Storage] Supabase setHomeGenres failed, falling back:', error);
+    }
+  }
   const preferences = await getUserPreferences();
   await saveUserPreferences({ ...preferences!, homeGenres: genreIds });
 };
 
 export const hasCompletedOnboarding = async (): Promise<boolean> => {
+  if (isSupabaseActive()) {
+    try {
+      return await supa.supaHasCompletedOnboarding();
+    } catch (error) {
+      console.error('[Storage] Supabase hasCompletedOnboarding failed, falling back:', error);
+    }
+  }
   try {
     const profile = await getUserProfile();
     const preferences = await getUserPreferences();

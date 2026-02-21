@@ -98,11 +98,11 @@ export function useUserPreferences(currentUserId?: string | null) {
       selectedClusters: data.clusters,
     });
 
-    // Save taste profile: quiz results if completed, otherwise seed from clusters
+    // Always initialise from clusters first (sets seed_vector in Supabase).
+    // Then overlay quiz results if the user completed the quiz.
+    await initializeFromClusters(data.clusters).catch(() => {});
     if (data.quizAnswers && data.tasteVector) {
       await saveQuizResults(data.quizAnswers, data.tasteVector).catch(() => {});
-    } else {
-      await initializeFromClusters(data.clusters).catch(() => {});
     }
 
     setProfile({ userId, name: data.name, email: data.email, createdAt: Date.now() });

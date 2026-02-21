@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import type { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { clearAllData } from '@/lib/storage/userPreferences';
+import { setAuthState } from '@/lib/storage';
 
 interface AuthContextValue {
   user: User | null;
@@ -48,6 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Check for existing session
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
+      setAuthState(!!s, s?.user?.id ?? null);
       // Check if we arrived via a recovery link (hash may already be processed)
       if (window.location.hash.includes('type=recovery')) {
         setIsPasswordRecovery(true);
@@ -61,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event: AuthChangeEvent, s) => {
         setSession(s);
+        setAuthState(!!s, s?.user?.id ?? null);
         if (event === 'PASSWORD_RECOVERY') {
           setIsPasswordRecovery(true);
         }

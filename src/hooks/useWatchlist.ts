@@ -10,17 +10,19 @@ import {
 import { watchlistItemToContentItem, parseContentItemId } from '@/lib/adapters/contentAdapter';
 import type { ContentItem } from '@/components/ContentCard';
 
-export function useWatchlist() {
+export function useWatchlist(currentUserId?: string | null) {
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    setLoading(true);
     const data = await getWatchlist();
     setItems(data.items);
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Re-fetch when auth state changes (e.g. sign-in restores Supabase data)
+  useEffect(() => { load(); }, [load, currentUserId]);
 
   // Derived lists as ContentItem[] — memoized to prevent render cascades
   const watchlist = useMemo<ContentItem[]>(

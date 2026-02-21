@@ -1,5 +1,6 @@
-import storage from '../storage';
+import storage, { isSupabaseActive } from '../storage';
 import { invalidateRecommendationCache } from './recommendations';
+import * as supa from '../supabaseStorage';
 
 const DEBUG = __DEV__;
 
@@ -40,7 +41,23 @@ interface WatchlistData {
 
 const DEFAULT_WATCHLIST: WatchlistData = { items: [], lastModified: Date.now(), schemaVersion: 1 };
 
+// ── Cache invalidation (always localStorage, regardless of backend) ──
+
+function invalidateCaches() {
+  invalidateRecommendationCache().catch(() => {});
+  storage.removeItem(HIDDEN_GEMS_CACHE_KEY).catch(() => {});
+}
+
+// ── CRUD ─────────────────────────────────────────────────────────
+
 export const getWatchlist = async (): Promise<WatchlistData> => {
+  if (isSupabaseActive()) {
+    try {
+      return await supa.supaGetWatchlist();
+    } catch (error) {
+      console.error('[Watchlist] Supabase getWatchlist failed, falling back:', error);
+    }
+  }
   try {
     const data = await storage.getItem(WATCHLIST_KEY);
     if (!data) return { ...DEFAULT_WATCHLIST };
@@ -55,6 +72,13 @@ const saveWatchlist = async (watchlist: WatchlistData) => {
 };
 
 export const getWatchlistItem = async (id: number, type: string): Promise<WatchlistItem | null> => {
+  if (isSupabaseActive()) {
+    try {
+      return await supa.supaGetWatchlistItem(id, type);
+    } catch (error) {
+      console.error('[Watchlist] Supabase getWatchlistItem failed, falling back:', error);
+    }
+  }
   const watchlist = await getWatchlist();
   return watchlist.items.find((item) => item.id === id && item.type === type) || null;
 };
@@ -64,6 +88,25 @@ export const isInWatchlist = async (id: number, type: string): Promise<boolean> 
 };
 
 export const addToWatchlist = async (id: number, type: 'movie' | 'tv', metadata: any, status: 'want_to_watch' | 'watched' = 'want_to_watch'): Promise<WatchlistItem> => {
+  if (isSupabaseActive()) {
+    try {
+      // Check for existing item first — if exists, update instead
+      const existing = await supa.supaGetWatchlistItem(id, type);
+      if (existing) {
+        const updated = await supa.supaUpdateWatchlistItem(id, type, { status, metadata });
+        invalidateCaches();
+        if (DEBUG) console.log('[Watchlist] Updated in Supabase:', metadata?.title || metadata?.name);
+        return updated!;
+      }
+      const item = await supa.supaAddToWatchlist(id, type, metadata, status);
+      invalidateCaches();
+      if (DEBUG) console.log('[Watchlist] Added to Supabase:', item.metadata.title);
+      return item;
+    } catch (error) {
+      console.error('[Watchlist] Supabase addToWatchlist failed, falling back:', error);
+    }
+  }
+
   const watchlist = await getWatchlist();
   const existingIndex = watchlist.items.findIndex((item) => item.id === id && item.type === type);
 
@@ -92,13 +135,22 @@ export const addToWatchlist = async (id: number, type: 'movie' | 'tv', metadata:
 
   watchlist.items.unshift(newItem);
   await saveWatchlist(watchlist);
-  invalidateRecommendationCache().catch(() => {});
-  storage.removeItem(HIDDEN_GEMS_CACHE_KEY).catch(() => {});
+  invalidateCaches();
   if (DEBUG) console.log('[Watchlist] Added:', newItem.metadata.title);
   return newItem;
 };
 
 export const updateWatchlistItem = async (id: number, type: string, updates: Partial<WatchlistItem>): Promise<WatchlistItem | null> => {
+  if (isSupabaseActive()) {
+    try {
+      const result = await supa.supaUpdateWatchlistItem(id, type, updates);
+      invalidateCaches();
+      return result;
+    } catch (error) {
+      console.error('[Watchlist] Supabase updateWatchlistItem failed, falling back:', error);
+    }
+  }
+
   const watchlist = await getWatchlist();
   const index = watchlist.items.findIndex((item) => item.id === id && item.type === type);
   if (index < 0) return null;
@@ -117,19 +169,27 @@ export const updateWatchlistItem = async (id: number, type: string, updates: Par
 
   watchlist.items[index] = updatedItem;
   await saveWatchlist(watchlist);
-  invalidateRecommendationCache().catch(() => {});
-  storage.removeItem(HIDDEN_GEMS_CACHE_KEY).catch(() => {});
+  invalidateCaches();
   return updatedItem;
 };
 
 export const removeFromWatchlist = async (id: number, type: string): Promise<boolean> => {
+  if (isSupabaseActive()) {
+    try {
+      const result = await supa.supaRemoveFromWatchlist(id, type);
+      invalidateCaches();
+      return result;
+    } catch (error) {
+      console.error('[Watchlist] Supabase removeFromWatchlist failed, falling back:', error);
+    }
+  }
+
   const watchlist = await getWatchlist();
   const initialLength = watchlist.items.length;
   watchlist.items = watchlist.items.filter((item) => !(item.id === id && item.type === type));
   if (watchlist.items.length === initialLength) return false;
   await saveWatchlist(watchlist);
-  invalidateRecommendationCache().catch(() => {});
-  storage.removeItem(HIDDEN_GEMS_CACHE_KEY).catch(() => {});
+  invalidateCaches();
   return true;
 };
 
@@ -166,5 +226,13 @@ export const getWatchlistStats = async () => {
 };
 
 export const clearWatchlist = async () => {
+  if (isSupabaseActive()) {
+    try {
+      await supa.supaClearWatchlist();
+      return;
+    } catch (error) {
+      console.error('[Watchlist] Supabase clearWatchlist failed, falling back:', error);
+    }
+  }
   await storage.removeItem(WATCHLIST_KEY);
 };

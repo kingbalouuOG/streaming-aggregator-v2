@@ -1,11 +1,11 @@
 /**
  * Taste Profile Storage
  *
- * Persists the user's taste vector, quiz answers, and interaction log
- * to localStorage. Handles initialization, updates, and migration.
+ * Persists the user's taste vector, quiz answers, and interaction log.
+ * Routes to Supabase when authenticated, localStorage otherwise.
  */
 
-import storage from '../storage';
+import storage, { isSupabaseActive } from '../storage';
 import {
   type TasteVector,
   createEmptyVector,
@@ -17,6 +17,7 @@ import {
   GENRE_DIMENSIONS,
 } from '../taste/tasteVector';
 import { contentToVector, type ContentMetadata } from '../taste/contentVectorMapping';
+import * as supa from '../supabaseStorage';
 
 // ── Storage key & version ───────────────────────────────────────
 
@@ -79,11 +80,17 @@ function getRecencyWeight(timestampStr: string): number {
 // ── CRUD ────────────────────────────────────────────────────────
 
 export async function getTasteProfile(): Promise<TasteProfile | null> {
+  if (isSupabaseActive()) {
+    try {
+      return await supa.supaGetTasteProfile();
+    } catch (error) {
+      console.error('[TasteProfile] Supabase getTasteProfile failed, falling back:', error);
+    }
+  }
   try {
     const raw = await storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const profile = JSON.parse(raw) as TasteProfile;
-    // Future migration: check profile.version here
     return profile;
   } catch {
     return null;
@@ -91,10 +98,26 @@ export async function getTasteProfile(): Promise<TasteProfile | null> {
 }
 
 export async function saveTasteProfile(profile: TasteProfile): Promise<void> {
+  if (isSupabaseActive()) {
+    try {
+      await supa.supaSaveTasteProfile(profile);
+      return;
+    } catch (error) {
+      console.error('[TasteProfile] Supabase saveTasteProfile failed, falling back:', error);
+    }
+  }
   await storage.setItem(STORAGE_KEY, JSON.stringify(profile));
 }
 
 export async function clearTasteProfile(): Promise<void> {
+  if (isSupabaseActive()) {
+    try {
+      await supa.supaClearTasteProfile();
+      return;
+    } catch (error) {
+      console.error('[TasteProfile] Supabase clearTasteProfile failed, falling back:', error);
+    }
+  }
   await storage.removeItem(STORAGE_KEY);
 }
 
@@ -123,15 +146,26 @@ export async function initializeFromClusters(clusterIds: string[]): Promise<Tast
   if (existing) return existing; // Don't overwrite
 
   const { computeClusterSeedVector } = await import('../taste/tasteClusters');
+  const seedVector = computeClusterSeedVector(clusterIds);
   const profile: TasteProfile = {
-    vector: computeClusterSeedVector(clusterIds),
+    vector: seedVector,
     quizCompleted: false,
     quizAnswers: [],
     interactionLog: [],
     lastUpdated: new Date().toISOString(),
     version: SCHEMA_VERSION,
   };
-  await saveTasteProfile(profile);
+
+  // Supabase path: pass clusters so seed_vector gets stored
+  if (isSupabaseActive()) {
+    try {
+      await supa.supaSaveTasteProfile(profile, clusterIds);
+      return profile;
+    } catch (error) {
+      console.error('[TasteProfile] Supabase initializeFromClusters failed, falling back:', error);
+    }
+  }
+  await storage.setItem(STORAGE_KEY, JSON.stringify(profile));
   return profile;
 }
 
@@ -213,23 +247,11 @@ export async function recomputeVector(): Promise<TasteProfile | null> {
   // Start from quiz vector if available, otherwise from genre defaults
   let vector: TasteVector;
   if (profile.quizCompleted && profile.quizAnswers.length > 0) {
-    // We can't re-derive the quiz vector without the quiz pairs config,
-    // so we store the quiz-generated vector and rebuild interactions on top.
-    // The approach: start from a genre-default base, apply quiz if we have the
-    // stored quiz vector as-is (it's already baked in), then re-apply interactions.
-    // Simplification: use the stored vector as base, then apply ONLY interaction adjustments.
-    // This means recomputation recalculates interaction drift from current base.
     vector = { ...profile.vector };
-
-    // Zero out interaction-contributed drift by reverting to quiz-only vector
-    // Since we can't separate quiz vs interaction contributions cleanly,
-    // we rebuild from the empty vector + quiz answers stored vector
-    // For now: use stored vector and re-apply recent interactions with recency weighting
   } else {
     vector = createEmptyVector();
-    // Apply genre defaults from any initial seeds
     for (const d of GENRE_DIMENSIONS) {
-      if (profile.vector[d] > 0) vector[d] = 0.2; // baseline unselected
+      if (profile.vector[d] > 0) vector[d] = 0.2;
     }
   }
 
