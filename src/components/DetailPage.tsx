@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, Check, CheckCircle2, Undo2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, Check, CheckCircle2, Undo2, AlertCircle, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
 import { TickIcon } from "./icons";
 import { motion } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
@@ -13,6 +13,7 @@ import { classifyProviders } from "@/lib/utils/providerClassifier";
 import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 import rottenTomatoesLogo from "@/assets/rotten-tomatoes-logo.png";
+import { ReportSheet } from "./ReportSheet";
 
 export type { DetailData };
 
@@ -62,6 +63,8 @@ interface DetailPageProps {
 export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = false, onToggleBookmark, onItemSelect, bookmarkedIds, onToggleBookmarkItem, connectedServices, userServices, watchedIds, onMoveToWatched, onMoveToWantToWatch, userRating, onRate }: DetailPageProps) {
   const { detail, similar, loading, error } = useContentDetail(itemId, connectedServices);
   const isWatched = watchedIds?.has(itemId) ?? false;
+  const [reportSheetOpen, setReportSheetOpen] = useState(false);
+  const [hasReported, setHasReported] = useState(false);
 
   // Loading state
   if (loading || !detail) {
@@ -355,6 +358,43 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
 
         {/* Where to Watch — 3-tier layout */}
         <WhereToWatch detail={detail} userServices={userServices} />
+
+        {/* Report availability */}
+        {detail.allServices.length > 0 && (
+          <button
+            onClick={() => !hasReported && setReportSheetOpen(true)}
+            className="flex items-center gap-1.5 mb-6 -mt-3"
+            style={{ cursor: hasReported ? "default" : "pointer" }}
+          >
+            {hasReported ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-muted-foreground/60" />
+                <span className="text-muted-foreground/60 text-[12px]">
+                  Report submitted — thanks for helping us improve!
+                </span>
+              </>
+            ) : (
+              <>
+                <MessageSquare className="w-3.5 h-3.5 text-muted-foreground/60" />
+                <span className="text-muted-foreground/60 text-[12px]">
+                  Services wrong? Report here to help us update
+                </span>
+              </>
+            )}
+          </button>
+        )}
+
+        <ReportSheet
+          isOpen={reportSheetOpen}
+          onClose={() => setReportSheetOpen(false)}
+          tmdbId={parseContentItemId(detail.id).tmdbId}
+          mediaType={detail.mediaType}
+          services={detail.allServices}
+          onReported={() => {
+            setHasReported(true);
+            setReportSheetOpen(false);
+          }}
+        />
 
         {/* Cast */}
         {detail.cast.length > 0 && (
