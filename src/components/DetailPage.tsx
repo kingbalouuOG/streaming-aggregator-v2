@@ -31,6 +31,13 @@ const languageCountryCodes: Record<string, string> = {
   Danish: "dk",
   Norwegian: "no",
   Swedish: "se",
+  Chinese: "cn",
+  Portuguese: "pt",
+  Thai: "th",
+  Polish: "pl",
+  Dutch: "nl",
+  Russian: "ru",
+  Arabic: "sa",
 };
 
 interface DetailPageProps {
@@ -160,7 +167,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
               <span className="mx-1.5">&middot;</span>
               <span className="inline-flex items-center gap-1">
                 {languageCountryCodes[detail.language] && (
-                  <span className={`fi fi-${languageCountryCodes[detail.language]} fis`} style={{ fontSize: '11px', borderRadius: '2px' }} />
+                  <span className={`fi fi-${languageCountryCodes[detail.language]}`} style={{ width: '16px', height: '12px', borderRadius: '2px', display: 'inline-block', backgroundSize: 'cover' }} />
                 )}
                 {detail.language}
               </span>

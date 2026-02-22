@@ -53,7 +53,8 @@ export function QuizQuestion({
   return (
     <div className="flex flex-col h-full">
       {/* Header: Back + Progress dots + Counter */}
-      <div className="flex items-center gap-2 px-5 pt-2 pb-3">
+      <div className="flex items-center gap-2 px-5 pb-3"
+           style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
         {/* Back button */}
         <div className="w-8">
           <AnimatePresence>
@@ -80,7 +81,7 @@ export function QuizQuestion({
                 className="h-full bg-primary rounded-full"
                 initial={{ width: "0%" }}
                 animate={{ width: questionNumber - 1 >= i ? "100%" : "0%" }}
-                transition={{ duration: 0.5, ease: "easeInOut", delay: questionNumber - 1 >= i ? i * 0.05 : 0 }}
+                transition={{ duration: i === questionNumber - 1 ? 0.5 : 0, ease: "easeInOut" }}
               />
             </div>
           ))}

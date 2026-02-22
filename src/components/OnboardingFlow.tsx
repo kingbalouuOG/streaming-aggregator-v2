@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowRight,
@@ -12,6 +12,8 @@ import { TasteQuiz } from "./quiz/TasteQuiz";
 import type { TasteVector } from "@/lib/taste/tasteVector";
 import type { QuizAnswer } from "@/lib/storage/tasteProfile";
 import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS, type TasteCluster } from "@/lib/taste/tasteClusters";
+import { logOnboardingEvent } from "@/lib/analytics/logger";
+import { ONBOARDING_EVENTS } from "@/lib/analytics/events";
 
 // ── Service definitions ──────────────────────────────────
 export type { PlatformDef as StreamingServiceDef };
@@ -29,6 +31,7 @@ export interface OnboardingData {
   clusters: string[];
   quizAnswers?: QuizAnswer[];
   tasteVector?: TasteVector;
+  onboardingStartTime?: number;
 }
 
 interface OnboardingFlowProps {
@@ -58,6 +61,11 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [direction, setDirection] = useState(0);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [selectedClusters, setSelectedClusters] = useState<string[]>([]);
+  const onboardingStartRef = useRef(Date.now());
+
+  useEffect(() => {
+    void logOnboardingEvent(ONBOARDING_EVENTS.ONBOARDING_STARTED, {});
+  }, []);
 
   const canContinue = [
     selectedServices.length > 0,
@@ -65,6 +73,18 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   ];
 
   const goNext = () => {
+    if (step === 0) {
+      void logOnboardingEvent(ONBOARDING_EVENTS.SERVICES_COMPLETED, {
+        service_count: selectedServices.length,
+        services: selectedServices,
+      });
+    }
+    if (step === 1) {
+      void logOnboardingEvent(ONBOARDING_EVENTS.CLUSTERS_COMPLETED, {
+        cluster_count: selectedClusters.length,
+        clusters: selectedClusters,
+      });
+    }
     if (step < 2) {
       setDirection(1);
       setStep((s) => s + 1);
@@ -84,14 +104,17 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       name: '', email: '',
       services: selectedServices, clusters: selectedClusters,
       quizAnswers, tasteVector,
+      onboardingStartTime: onboardingStartRef.current,
     });
   };
 
   // Quiz skip: complete onboarding without quiz data
   const handleQuizSkip = () => {
+    void logOnboardingEvent(ONBOARDING_EVENTS.QUIZ_SKIPPED, { questions_answered: 0 });
     onComplete({
       name: '', email: '',
       services: selectedServices, clusters: selectedClusters,
+      onboardingStartTime: onboardingStartRef.current,
     });
   };
 

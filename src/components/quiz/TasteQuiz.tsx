@@ -22,6 +22,8 @@ import { QuizQuestion } from './QuizQuestion';
 import { QuizInterstitial } from './QuizInterstitial';
 import { QuizCompletion } from './QuizCompletion';
 import { QuizClusterSelect } from './QuizClusterSelect';
+import { logOnboardingEvent } from '@/lib/analytics/logger';
+import { ONBOARDING_EVENTS } from '@/lib/analytics/events';
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -60,6 +62,8 @@ export function TasteQuiz({ onComplete, onSkip, showSkip, userClusters, showClus
 
   // Poster paths resolved from TMDb (keyed by tmdbId)
   const [posterUrls, setPosterUrls] = useState<Record<number, string>>({});
+
+  const quizStartRef = useRef(0);
 
   // Base vector from cluster selections
   const baseVector = useMemo(() => computeClusterSeedVector(localClusters), [localClusters.join(',')]);
@@ -158,6 +162,9 @@ export function TasteQuiz({ onComplete, onSkip, showSkip, userClusters, showClus
 
     // After Q10 (index 9): show completion
     if (qIndex === 9) {
+      void logOnboardingEvent(ONBOARDING_EVENTS.QUIZ_COMPLETED, {
+        duration_seconds: Math.round((Date.now() - quizStartRef.current) / 1000),
+      });
       const finalVector = computeQuizVector(baseVector, newAnswers, allPairs);
       const topGenres = getTopGenreNames(finalVector, 3);
       setStage({ type: 'completion', topGenres });
@@ -216,6 +223,8 @@ export function TasteQuiz({ onComplete, onSkip, showSkip, userClusters, showClus
           >
             <QuizIntro
               onStart={() => {
+                quizStartRef.current = Date.now();
+                void logOnboardingEvent(ONBOARDING_EVENTS.QUIZ_STARTED, {});
                 setDirection(1);
                 setStage({ type: 'question', index: 0 });
               }}

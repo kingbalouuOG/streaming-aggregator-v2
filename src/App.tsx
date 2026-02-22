@@ -35,6 +35,8 @@ import { App as CapApp } from "@capacitor/app";
 import { useTasteProfile } from "./hooks/useTasteProfile";
 import { migrateFromLegacyPreferences } from "./lib/storage/tasteProfile";
 import { IMMEDIATE_LOAD_COUNT } from "./lib/taste/tasteVector";
+import { logOnboardingEvent } from "./lib/analytics/logger";
+import { ONBOARDING_EVENTS } from "./lib/analytics/events";
 
 const categories = ["All", "Movies", "TV Shows", "Docs", "Anime"];
 
@@ -62,6 +64,7 @@ function AppContent() {
   const [showSignUpSuccess, setShowSignUpSuccess] = useState(false);
   const [authUsername, setAuthUsername] = useState<string | null>(null);
   const prevSessionRef = useRef<boolean>(false);
+  const justOnboardedRef = useRef(false);
 
   // --- User preferences (onboarding, profile) ---
   const userId = auth.loading ? null : (auth.user?.id ?? null);
@@ -135,6 +138,27 @@ function AppContent() {
 
   // --- Home content (lazy-loaded sections) ---
   const home = useHomeContent(connectedServices, homeFilters);
+
+  // --- First home view tracking (fires once after onboarding) ---
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- ref-gated single-fire, extra deps would cause re-fires
+  useEffect(() => {
+    if (justOnboardedRef.current && !home.loading && activeTab === 'home') {
+      justOnboardedRef.current = false;
+      // Update if homepage sections change
+      const sectionCount = [
+        home.forYou.items.length > 0,
+        home.recentlyAdded.items.length > 0,
+        home.highestRated.items.length > 0,
+        home.popular.items.length > 0,
+        home.hiddenGems.items.length > 0,
+      ].filter(Boolean).length + home.genreList.length;
+
+      void logOnboardingEvent(ONBOARDING_EVENTS.FIRST_HOME_VIEW, {
+        has_taste_vector: !!home.tasteVector,
+        section_count: sectionCount,
+      });
+    }
+  }, [home.loading, activeTab]);
 
   // --- Upcoming content (Coming Soon) ---
   const upcoming = useUpcoming(connectedServices, home.fetchMovies, home.fetchTV);
@@ -297,6 +321,11 @@ function AppContent() {
     const name = auth.username || auth.user?.email?.split('@')[0] || 'User';
     const email = auth.user?.email || '';
     await userPrefs.completeOnboarding({ ...data, name, email });
+
+    void logOnboardingEvent(ONBOARDING_EVENTS.ONBOARDING_COMPLETED, {
+      total_duration_seconds: Math.round((Date.now() - (data.onboardingStartTime || Date.now())) / 1000),
+    });
+    justOnboardedRef.current = true;
 
     // Mark onboarding complete in Supabase profile
     if (auth.user) {
