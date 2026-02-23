@@ -84,7 +84,7 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
   // 4. Rom-Coms & Love Stories
   {
     id: 'rom-coms-love-stories',
-    name: 'Rom-Coms & Love Stories',
+    name: 'Rom-Coms & Love',
     description: 'Romantic comedies and sweeping romances',
     emoji: '💕',
     vector: {
@@ -128,7 +128,7 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
   // 7. Mind-Bending Mysteries
   {
     id: 'mind-bending-mysteries',
-    name: 'Mind-Bending Mysteries',
+    name: 'Mind-Bending',
     description: 'Psychological puzzles and twist-driven stories',
     emoji: '🧠',
     vector: {
@@ -157,7 +157,7 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
   // 9. True Crime & Real Stories
   {
     id: 'true-crime-real-stories',
-    name: 'True Crime & Real Stories',
+    name: 'True Crime',
     description: 'Documentaries, docuseries, and based-on-true-events',
     emoji: '📰',
     vector: {
@@ -186,7 +186,7 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
   // 11. Prestige & Award-Winners
   {
     id: 'prestige-award-winners',
-    name: 'Prestige & Award-Winners',
+    name: 'Award-Winners',
     description: 'Critically acclaimed, Oscar- and BAFTA-calibre',
     emoji: '🏆',
     vector: {

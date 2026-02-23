@@ -355,9 +355,13 @@ function AppContent() {
 
   // Restore scroll position synchronously before paint
   useLayoutEffect(() => {
-    if (!selectedItem && scrollRef.current) {
-      const saved = savedScrollPositions.current[activeTab] ?? 0;
-      scrollRef.current.scrollTop = saved;
+    if (scrollRef.current) {
+      if (selectedItem) {
+        scrollRef.current.scrollTop = 0;
+      } else {
+        const saved = savedScrollPositions.current[activeTab] ?? 0;
+        scrollRef.current.scrollTop = saved;
+      }
     }
   }, [selectedItem, activeTab]);
 

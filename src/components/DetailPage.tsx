@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, Check, CheckCircle2, Undo2, AlertCircle, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
 import { TickIcon } from "./icons";
 import { motion } from "motion/react";
@@ -65,6 +65,30 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
   const isWatched = watchedIds?.has(itemId) ?? false;
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [hasReported, setHasReported] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
+  const [descOverflows, setDescOverflows] = useState(false);
+  const descRef = useRef<HTMLParagraphElement>(null);
+
+  useLayoutEffect(() => {
+    const el = descRef.current;
+    if (!el || descExpanded) return;
+    // Temporarily remove clamp to measure natural height (no flash — runs before paint)
+    const savedDisplay = el.style.display;
+    const savedOverflow = el.style.overflow;
+    const savedClamp = el.style.webkitLineClamp;
+    const savedOrient = el.style.webkitBoxOrient;
+    el.style.display = 'block';
+    el.style.overflow = 'visible';
+    el.style.webkitLineClamp = 'unset';
+    el.style.webkitBoxOrient = '';
+    const naturalHeight = el.scrollHeight;
+    // Restore
+    el.style.display = savedDisplay;
+    el.style.overflow = savedOverflow;
+    el.style.webkitLineClamp = savedClamp;
+    el.style.webkitBoxOrient = savedOrient;
+    setDescOverflows(naturalHeight > el.clientHeight + 1);
+  });
 
   // Loading state
   if (loading || !detail) {
@@ -352,9 +376,28 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
         </div>
 
         {/* Description */}
-        <p className="text-foreground/80 text-[14px] leading-relaxed mb-6">
+        <p
+          ref={descRef}
+          className="text-foreground/80 text-[14px] leading-relaxed"
+          style={!descExpanded ? {
+            display: '-webkit-box',
+            WebkitBoxOrient: 'vertical' as React.CSSProperties['WebkitBoxOrient'],
+            WebkitLineClamp: 3,
+            overflow: 'hidden',
+          } : undefined}
+        >
           {detail.description}
         </p>
+        {(descOverflows || descExpanded) && (
+          <button
+            onClick={() => setDescExpanded(!descExpanded)}
+            className="text-primary text-[13px] mt-1 mb-6"
+            style={{ fontWeight: 500 }}
+          >
+            {descExpanded ? 'Show less' : 'Show more'}
+          </button>
+        )}
+        {!descOverflows && !descExpanded && <div className="mb-6" />}
 
         {/* Where to Watch — 3-tier layout */}
         <WhereToWatch detail={detail} userServices={userServices} />
@@ -564,12 +607,11 @@ function RentBuyList({ options }: { options: RentalOption[] }) {
       <p className="text-muted-foreground text-[11px] tracking-wide mb-2" style={{ fontWeight: 600 }}>
         Rent or Buy
       </p>
-      <div className="flex flex-col divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
+      <div className="flex flex-col gap-2">
         {visible.map((option, i) => (
           <div
             key={`${option.serviceKey}-${option.type}-${i}`}
-            className="flex items-center justify-between py-3"
-            style={{ borderColor: 'var(--border-subtle)' }}
+            className="flex items-center justify-between bg-secondary rounded-xl px-3.5 py-3"
           >
             <div className="flex items-center gap-2.5">
               <ServiceBadge service={option.serviceKey} size="sm" />

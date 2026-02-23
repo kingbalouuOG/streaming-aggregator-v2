@@ -104,12 +104,12 @@ export function QuizClusterSelect({ initialClusters, onConfirm, onBack }: QuizCl
                 }`}
                 style={{ paddingLeft: '1rem', paddingRight: '2.5rem', borderColor: isSelected ? undefined : "var(--border-subtle)" }}
               >
-                <span className={`text-[22px] shrink-0 transition-transform duration-200 ${isSelected ? "scale-115" : ""}`}>
+                <span className={`text-[18px] shrink-0 transition-transform duration-200 ${isSelected ? "scale-115" : ""}`}>
                   {cluster.emoji}
                 </span>
                 <div className="flex flex-col items-start min-w-0 flex-1">
                   <span
-                    className={`text-[13px] leading-tight transition-colors duration-200 ${
+                    className={`text-[12px] leading-tight transition-colors duration-200 ${
                       isSelected ? "text-foreground" : "text-muted-foreground"
                     }`}
                     style={{ fontWeight: isSelected ? 600 : 500 }}
