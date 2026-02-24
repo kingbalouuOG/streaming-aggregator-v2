@@ -1,0 +1,160 @@
+{
+  "programmatic": {
+    "totalRuns": 200,
+    "outputDir": "./test-results/t2/programmatic",
+    "categories": {
+      "A_realistic": {
+        "runs": 80,
+        "description": "Realistic user archetypes with natural behaviour",
+        "subcategories": [
+          {
+            "runs": 20,
+            "clusterCount": 3,
+            "answerDistribution": { "A": 0.35, "B": 0.35, "Both": 0.15, "Neither": 0.15 }
+          },
+          {
+            "runs": 20,
+            "clusterCount": 4,
+            "answerDistribution": { "A": 0.30, "B": 0.30, "Both": 0.20, "Neither": 0.20 }
+          },
+          {
+            "runs": 20,
+            "clusterCount": 5,
+            "answerDistribution": { "A": 0.25, "B": 0.25, "Both": 0.25, "Neither": 0.25 }
+          },
+          {
+            "runs": 20,
+            "clusterCount": "random_3_to_5",
+            "answerDistribution": { "A": 0.40, "B": 0.40, "Both": 0.10, "Neither": 0.10 }
+          }
+        ]
+      },
+      "B_answer_extremes": {
+        "runs": 60,
+        "description": "Testing extreme answer patterns",
+        "subcategories": [
+          { "runs": 10, "label": "all_A", "fixedAnswers": "A" },
+          { "runs": 10, "label": "all_B", "fixedAnswers": "B" },
+          { "runs": 10, "label": "all_Both", "fixedAnswers": "Both" },
+          { "runs": 10, "label": "all_Neither", "fixedAnswers": "Neither" },
+          { "runs": 10, "label": "alternating_AB", "pattern": "alternating", "values": ["A", "B"] },
+          { "runs": 10, "label": "split_Both_Neither", "pattern": "split", "firstHalf": "Both", "secondHalf": "Neither" }
+        ]
+      },
+      "C_cluster_extremes": {
+        "runs": 30,
+        "description": "Testing cluster selection edge cases",
+        "subcategories": [
+          {
+            "runs": 10,
+            "label": "similar_clusters",
+            "description": "3 clusters from similar taste spaces",
+            "clusterStrategy": "min_distance",
+            "clusterCount": 3,
+            "answerDistribution": "random"
+          },
+          {
+            "runs": 10,
+            "label": "distant_clusters",
+            "description": "5 clusters spanning maximum taste distance",
+            "clusterStrategy": "max_distance",
+            "clusterCount": 5,
+            "answerDistribution": "random"
+          },
+          {
+            "runs": 10,
+            "label": "overlapping_clusters",
+            "description": "Clusters with highest vector overlap",
+            "clusterStrategy": "max_overlap",
+            "clusterCount": 4,
+            "answerDistribution": "random"
+          }
+        ]
+      },
+      "D_mismatch": {
+        "runs": 20,
+        "description": "Genre/cluster selections contradict quiz answers",
+        "subcategories": [
+          {
+            "runs": 10,
+            "label": "action_picks_cerebral",
+            "description": "Action-heavy clusters but consistently picks slow/cerebral quiz options",
+            "clusterBias": "high_intensity",
+            "answerBias": "low_intensity"
+          },
+          {
+            "runs": 10,
+            "label": "comedy_picks_dark",
+            "description": "Comedy/light clusters but picks dark/intense quiz options",
+            "clusterBias": "light_tone",
+            "answerBias": "dark_tone"
+          }
+        ]
+      },
+      "E_determinism": {
+        "runs": 10,
+        "description": "Identical inputs run twice to verify deterministic output",
+        "pairs": 5,
+        "note": "Each pair uses identical cluster selection, genres, services, and quiz answers"
+      }
+    }
+  },
+  "e2e": {
+    "totalRuns": 30,
+    "outputDir": "./test-results/t2/e2e",
+    "baseUrl": "http://localhost:3000",
+    "delayBetweenRuns": 3000,
+    "testUserPrefix": "_test_",
+    "scenarios": {
+      "happy_path": {
+        "runs": 10,
+        "description": "Varied realistic onboarding, natural quiz mix",
+        "services": "random_3_to_6",
+        "clusters": "random_3_to_5",
+        "genres": "random_3_to_8",
+        "answerDistribution": { "A": 0.35, "B": 0.35, "Both": 0.15, "Neither": 0.15 }
+      },
+      "speed_runner": {
+        "runs": 5,
+        "description": "Minimum viable selections, fastest path",
+        "services": 2,
+        "clusters": 3,
+        "genres": 3,
+        "answerDistribution": { "A": 0.50, "B": 0.50, "Both": 0, "Neither": 0 },
+        "interactionDelay": 100
+      },
+      "indecisive": {
+        "runs": 5,
+        "description": "Heavy Both/Neither, mid-range selections",
+        "services": "random_3_to_5",
+        "clusters": 4,
+        "genres": "random_4_to_6",
+        "answerDistribution": { "A": 0.10, "B": 0.10, "Both": 0.40, "Neither": 0.40 }
+      },
+      "maximalist": {
+        "runs": 5,
+        "description": "Maximum selections across the board",
+        "services": "all",
+        "clusters": 5,
+        "genres": "all",
+        "answerDistribution": { "A": 0.25, "B": 0.25, "Both": 0.25, "Neither": 0.25 }
+      },
+      "minimalist": {
+        "runs": 5,
+        "description": "Minimum selections, sparse preferences",
+        "services": 1,
+        "clusters": 3,
+        "genres": 2,
+        "answerDistribution": { "A": 0.30, "B": 0.30, "Both": 0.20, "Neither": 0.20 }
+      }
+    }
+  },
+  "report": {
+    "outputDir": "./test-results/t2/report",
+    "thresholds": {
+      "deadDimensionStdDev": 0.05,
+      "capCollisionWarning": 0.95,
+      "minClusterDifferentiation": 0.15
+    }
+  }
+}
