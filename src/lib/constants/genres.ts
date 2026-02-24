@@ -1,10 +1,9 @@
 // TMDb Genre IDs
 export const GENRES: Record<string, number> = {
-  // Movies & TV (20 taste-vector genres)
+  // Movies & TV (19 taste-vector genres)
   action: 28,
   adventure: 12,
   animation: 16,
-  anime: -1,           // Videx-defined (no TMDb ID — detected via language + genre heuristic)
   comedy: 35,
   crime: 80,
   documentary: 99,
@@ -22,7 +21,7 @@ export const GENRES: Record<string, number> = {
   war: 10752,
   western: 37,
 
-  // TV-specific (not in taste vector)
+  // TMDb genres not in taste vector (still used for API calls / display)
   actionAdventure: 10759,
   news: 10763,
   soap: 10766,
@@ -35,7 +34,6 @@ export const GENRE_NAMES: Record<number, string> = {
   28: 'Action',
   12: 'Adventure',
   16: 'Animation',
-  [-1]: 'Anime',
   35: 'Comedy',
   80: 'Crime',
   99: 'Documentary',
@@ -69,9 +67,9 @@ export const GENRE_NAME_TO_ID: Record<string, number> = {
   'Music': 10402,
 };
 
-// The 20 taste-vector genre IDs (for iteration in homepage ordering, etc.)
+// The 19 taste-vector genre IDs (for iteration in homepage ordering, etc.)
 export const TASTE_GENRE_IDS = [
-  28, 12, 16, -1, 35, 80, 99, 18, 10751, 14,
+  28, 12, 16, 35, 80, 99, 18, 10751, 14,
   36, 27, 10402, 9648, 10764, 10749, 878, 53, 10752, 37,
 ] as const;
 

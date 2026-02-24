@@ -4,7 +4,7 @@
  */
 
 const DEBUG_SERVER = 'http://localhost:3001';
-const IS_DEV = import.meta.env.DEV;
+const IS_DEV = import.meta.env?.DEV;
 
 // Buffer entries and flush periodically to reduce HTTP overhead
 let buffer: LogEntry[] = [];

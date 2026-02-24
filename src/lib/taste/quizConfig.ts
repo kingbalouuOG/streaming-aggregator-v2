@@ -37,6 +37,7 @@ export interface QuizPair {
   optionB: QuizOption;
   dimensionsTested: string[];
   triggerGenres?: string[];
+  triggerClusterIds?: string[];
 }
 
 // ── Fixed Pairs (3) ──────────────────────────────────────────────
@@ -54,7 +55,7 @@ const FIXED_PAIRS: QuizPair[] = [
       year: 2008,
       descriptor: 'Dark, intense superhero thriller',
       vectorPosition: {
-        action: 1.0, crime: 1.0, drama: 1.0, thriller: 1.0,
+        action: 0.8, crime: 0.5, drama: 0.4, thriller: 0.7,
         tone: -0.8, pacing: 0.7, era: 0.3, popularity: 0.9, intensity: 0.9,
       },
     },
@@ -65,7 +66,7 @@ const FIXED_PAIRS: QuizPair[] = [
       year: 2008,
       descriptor: 'Feel-good ABBA musical comedy',
       vectorPosition: {
-        comedy: 1.0, musical: 1.0, romance: 1.0, family: 1.0,
+        comedy: 0.6, musical: 0.8, romance: 0.5,
         tone: 0.9, pacing: 0.5, era: 0.3, popularity: 0.7, intensity: -0.6,
       },
     },
@@ -81,7 +82,7 @@ const FIXED_PAIRS: QuizPair[] = [
       year: 2010,
       descriptor: 'Mind-bending sci-fi heist thriller',
       vectorPosition: {
-        action: 1.0, scifi: 1.0, thriller: 1.0, adventure: 1.0,
+        action: 0.5, scifi: 0.8, thriller: 0.7, adventure: 0.4,
         tone: -0.4, pacing: 0.8, era: 0.5, popularity: 0.9, intensity: 0.8,
       },
     },
@@ -92,7 +93,7 @@ const FIXED_PAIRS: QuizPair[] = [
       year: 2005,
       descriptor: 'Elegant period romance drama',
       vectorPosition: {
-        romance: 1.0, drama: 1.0,
+        romance: 0.8, drama: 0.7,
         tone: 0.3, pacing: -0.6, era: -0.7, popularity: 0.5, intensity: -0.4,
       },
     },
@@ -100,7 +101,7 @@ const FIXED_PAIRS: QuizPair[] = [
   {
     id: 'fixed-3',
     phase: 'fixed',
-    dimensionsTested: ['scifi', 'horror', 'history', 'drama', 'pacing', 'era', 'popularity'],
+    dimensionsTested: ['scifi', 'horror', 'history', 'drama', 'pacing', 'era'],
     optionA: {
       tmdbId: 66732,
       mediaType: 'tv',
@@ -108,7 +109,7 @@ const FIXED_PAIRS: QuizPair[] = [
       year: 2016,
       descriptor: 'Supernatural sci-fi horror series',
       vectorPosition: {
-        scifi: 1.0, horror: 1.0, drama: 1.0, mystery: 1.0,
+        scifi: 0.7, horror: 0.7, drama: 0.5, mystery: 0.5,
         tone: -0.5, pacing: 0.6, era: 0.6, popularity: 0.9, intensity: 0.7,
       },
     },
@@ -119,14 +120,14 @@ const FIXED_PAIRS: QuizPair[] = [
       year: 2016,
       descriptor: 'Lavish royal historical drama',
       vectorPosition: {
-        drama: 1.0, history: 1.0,
+        drama: 0.7, history: 0.8,
         tone: -0.1, pacing: -0.7, era: -0.6, popularity: 0.7, intensity: -0.3,
       },
     },
   },
 ];
 
-// ── Genre-Responsive Pool (~12 pairs) ────────────────────────────
+// ── Genre-Responsive Pool (13 pairs) ────────────────────────────
 // Selected based on user's genre picks not already covered by fixed pairs.
 
 const GENRE_RESPONSIVE_POOL: QuizPair[] = [
@@ -142,7 +143,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 2018,
       descriptor: 'Stylish animated superhero adventure',
       vectorPosition: {
-        animation: 1.0, action: 1.0, adventure: 1.0, scifi: 1.0,
+        animation: 0.8, action: 0.6, adventure: 0.5, scifi: 0.3,
         tone: 0.3, pacing: 0.8, era: 0.8, popularity: 0.8, intensity: 0.5,
       },
     },
@@ -153,7 +154,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 2001,
       descriptor: 'Enchanting hand-drawn fantasy masterpiece',
       vectorPosition: {
-        animation: 1.0, anime: 1.0, fantasy: 1.0, adventure: 1.0, family: 1.0,
+        animation: 0.8, fantasy: 0.7, adventure: 0.5,
         tone: 0.2, pacing: -0.3, era: 0.0, popularity: 0.6, intensity: -0.1,
       },
     },
@@ -161,8 +162,8 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
   {
     id: 'genre-anime',
     phase: 'genre-responsive',
-    triggerGenres: ['anime'],
-    dimensionsTested: ['anime', 'action', 'family', 'tone', 'intensity'],
+    triggerGenres: ['animation'],
+    dimensionsTested: ['animation', 'action', 'tone', 'intensity'],
     optionA: {
       tmdbId: 1429,
       mediaType: 'tv',
@@ -170,7 +171,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 2013,
       descriptor: 'Brutal dark fantasy anime action',
       vectorPosition: {
-        anime: 1.0, animation: 1.0, action: 1.0, drama: 1.0, fantasy: 1.0,
+        animation: 0.8, action: 0.7, drama: 0.5, fantasy: 0.6,
         tone: -0.9, pacing: 0.8, era: 0.5, popularity: 0.7, intensity: 1.0,
       },
     },
@@ -181,7 +182,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 1988,
       descriptor: 'Gentle whimsical anime for all ages',
       vectorPosition: {
-        anime: 1.0, animation: 1.0, family: 1.0, fantasy: 1.0,
+        animation: 0.8, fantasy: 0.7,
         tone: 0.9, pacing: -0.5, era: -0.3, popularity: 0.6, intensity: -0.8,
       },
     },
@@ -190,7 +191,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
     id: 'genre-documentary',
     phase: 'genre-responsive',
     triggerGenres: ['documentary'],
-    dimensionsTested: ['documentary', 'tone', 'pacing', 'intensity'],
+    dimensionsTested: ['documentary', 'tone', 'pacing'],
     optionA: {
       tmdbId: 68595,
       mediaType: 'tv',
@@ -198,7 +199,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 2016,
       descriptor: 'Breathtaking nature documentary',
       vectorPosition: {
-        documentary: 1.0,
+        documentary: 0.8,
         tone: 0.4, pacing: -0.4, era: 0.6, popularity: 0.8, intensity: 0.1,
       },
     },
@@ -209,7 +210,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 2015,
       descriptor: 'Gripping true crime documentary',
       vectorPosition: {
-        documentary: 1.0, crime: 1.0,
+        documentary: 0.8, crime: 0.5,
         tone: -0.7, pacing: -0.2, era: 0.5, popularity: 0.6, intensity: 0.5,
       },
     },
@@ -220,14 +221,14 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
     triggerGenres: ['horror'],
     dimensionsTested: ['horror', 'comedy', 'tone', 'intensity', 'era'],
     optionA: {
-      tmdbId: 578,
+      tmdbId: 23827,
       mediaType: 'movie',
-      title: 'Jaws',
-      year: 1975,
-      descriptor: 'Iconic suspense horror blockbuster',
+      title: 'Paranormal Activity',
+      year: 2007,
+      descriptor: 'Low-budget found-footage supernatural horror',
       vectorPosition: {
-        horror: 1.0, thriller: 1.0, adventure: 1.0,
-        tone: -0.6, pacing: 0.4, era: -0.5, popularity: 0.9, intensity: 0.8,
+        horror: 0.8, thriller: 0.5, mystery: 0.3,
+        tone: -0.8, pacing: -0.3, era: 0.3, popularity: 0.7, intensity: 0.9,
       },
     },
     optionB: {
@@ -237,7 +238,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 2014,
       descriptor: 'Whimsical quirky comedy caper',
       vectorPosition: {
-        comedy: 1.0, drama: 1.0, adventure: 1.0, crime: 1.0,
+        comedy: 0.7, drama: 0.5, adventure: 0.4, crime: 0.4,
         tone: 0.5, pacing: 0.3, era: 0.4, popularity: 0.5, intensity: -0.3,
       },
     },
@@ -246,7 +247,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
     id: 'genre-comedy-drama',
     phase: 'genre-responsive',
     triggerGenres: ['comedy', 'drama'],
-    dimensionsTested: ['drama', 'comedy', 'tone', 'pacing', 'intensity'],
+    dimensionsTested: ['drama', 'comedy', 'tone', 'pacing'],
     optionA: {
       tmdbId: 278,
       mediaType: 'movie',
@@ -254,7 +255,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 1994,
       descriptor: 'Powerful prison drama about hope',
       vectorPosition: {
-        drama: 1.0, crime: 1.0,
+        drama: 0.8, crime: 0.5,
         tone: -0.3, pacing: -0.4, era: -0.2, popularity: 0.9, intensity: 0.5,
       },
     },
@@ -265,36 +266,8 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 2007,
       descriptor: 'Raunchy teen comedy mayhem',
       vectorPosition: {
-        comedy: 1.0,
+        comedy: 0.8,
         tone: 0.8, pacing: 0.6, era: 0.3, popularity: 0.7, intensity: -0.2,
-      },
-    },
-  },
-  {
-    id: 'genre-family',
-    phase: 'genre-responsive',
-    triggerGenres: ['family'],
-    dimensionsTested: ['family', 'animation', 'comedy', 'tone', 'era'],
-    optionA: {
-      tmdbId: 109445,
-      mediaType: 'movie',
-      title: 'Frozen',
-      year: 2013,
-      descriptor: 'Magical animated musical adventure',
-      vectorPosition: {
-        animation: 1.0, family: 1.0, musical: 1.0, fantasy: 1.0, adventure: 1.0,
-        tone: 0.8, pacing: 0.3, era: 0.5, popularity: 0.9, intensity: -0.3,
-      },
-    },
-    optionB: {
-      tmdbId: 771,
-      mediaType: 'movie',
-      title: 'Home Alone',
-      year: 1990,
-      descriptor: 'Classic slapstick family comedy',
-      vectorPosition: {
-        comedy: 1.0, family: 1.0,
-        tone: 0.9, pacing: 0.5, era: -0.3, popularity: 0.9, intensity: -0.1,
       },
     },
   },
@@ -310,7 +283,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 1972,
       descriptor: 'Epic mafia crime saga',
       vectorPosition: {
-        crime: 1.0, drama: 1.0,
+        crime: 0.8, drama: 0.7,
         tone: -0.8, pacing: -0.5, era: -0.7, popularity: 0.9, intensity: 0.7,
       },
     },
@@ -321,7 +294,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 2019,
       descriptor: 'Witty modern whodunit mystery',
       vectorPosition: {
-        crime: 1.0, mystery: 1.0, comedy: 1.0, thriller: 1.0,
+        crime: 0.6, mystery: 0.7, comedy: 0.5, thriller: 0.4,
         tone: 0.3, pacing: 0.4, era: 0.8, popularity: 0.7, intensity: 0.2,
       },
     },
@@ -338,7 +311,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 1998,
       descriptor: 'Visceral WWII combat epic',
       vectorPosition: {
-        war: 1.0, drama: 1.0, action: 1.0,
+        war: 0.8, drama: 0.6, action: 0.7,
         tone: -0.8, pacing: 0.5, era: -0.2, popularity: 0.9, intensity: 1.0,
       },
     },
@@ -349,7 +322,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 2014,
       descriptor: 'Cerebral wartime code-breaking drama',
       vectorPosition: {
-        drama: 1.0, history: 1.0, war: 1.0, thriller: 1.0,
+        drama: 0.7, history: 0.7, war: 0.4, thriller: 0.4,
         tone: -0.2, pacing: -0.3, era: 0.4, popularity: 0.7, intensity: -0.1,
       },
     },
@@ -358,7 +331,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
     id: 'genre-fantasy',
     phase: 'genre-responsive',
     triggerGenres: ['fantasy'],
-    dimensionsTested: ['fantasy', 'adventure', 'tone', 'intensity', 'popularity'],
+    dimensionsTested: ['fantasy', 'adventure', 'tone', 'popularity'],
     optionA: {
       tmdbId: 120,
       mediaType: 'movie',
@@ -366,7 +339,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 2001,
       descriptor: 'Grand epic fantasy quest',
       vectorPosition: {
-        fantasy: 1.0, adventure: 1.0, action: 1.0, drama: 1.0,
+        fantasy: 0.8, adventure: 0.7, action: 0.6, drama: 0.5,
         tone: -0.2, pacing: 0.3, era: 0.0, popularity: 0.9, intensity: 0.7,
       },
     },
@@ -377,7 +350,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 2001,
       descriptor: 'Magical coming-of-age school adventure',
       vectorPosition: {
-        fantasy: 1.0, adventure: 1.0, family: 1.0,
+        fantasy: 0.8, adventure: 0.6,
         tone: 0.5, pacing: 0.2, era: 0.0, popularity: 0.9, intensity: 0.1,
       },
     },
@@ -394,7 +367,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 2017,
       descriptor: 'Uplifting spectacle musical drama',
       vectorPosition: {
-        musical: 1.0, drama: 1.0, romance: 1.0, family: 1.0,
+        musical: 0.8, drama: 0.5, romance: 0.4,
         tone: 0.8, pacing: 0.5, era: 0.7, popularity: 0.8, intensity: 0.2,
       },
     },
@@ -405,36 +378,8 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 2002,
       descriptor: 'Sassy crime-world jazz musical',
       vectorPosition: {
-        musical: 1.0, comedy: 1.0, crime: 1.0, drama: 1.0,
+        musical: 0.8, comedy: 0.4, crime: 0.5, drama: 0.5,
         tone: 0.0, pacing: 0.4, era: 0.0, popularity: 0.6, intensity: 0.3,
-      },
-    },
-  },
-  {
-    id: 'genre-western',
-    phase: 'genre-responsive',
-    triggerGenres: ['western'],
-    dimensionsTested: ['western', 'action', 'tone', 'intensity', 'era'],
-    optionA: {
-      tmdbId: 68718,
-      mediaType: 'movie',
-      title: 'Django Unchained',
-      year: 2012,
-      descriptor: 'Explosive revisionist western revenge',
-      vectorPosition: {
-        western: 1.0, action: 1.0, drama: 1.0,
-        tone: -0.5, pacing: 0.5, era: 0.4, popularity: 0.8, intensity: 0.9,
-      },
-    },
-    optionB: {
-      tmdbId: 44264,
-      mediaType: 'movie',
-      title: 'True Grit',
-      year: 2010,
-      descriptor: 'Gritty classic-style frontier western',
-      vectorPosition: {
-        western: 1.0, adventure: 1.0, drama: 1.0,
-        tone: -0.4, pacing: -0.1, era: 0.3, popularity: 0.6, intensity: 0.4,
       },
     },
   },
@@ -442,7 +387,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
     id: 'genre-reality',
     phase: 'genre-responsive',
     triggerGenres: ['reality'],
-    dimensionsTested: ['reality', 'tone', 'pacing', 'intensity'],
+    dimensionsTested: ['reality', 'tone', 'pacing'],
     optionA: {
       tmdbId: 87012,
       mediaType: 'tv',
@@ -450,7 +395,7 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 2010,
       descriptor: 'Cosy wholesome baking competition',
       vectorPosition: {
-        reality: 1.0,
+        reality: 0.8,
         tone: 0.9, pacing: -0.2, era: 0.4, popularity: 0.7, intensity: -0.6,
       },
     },
@@ -461,14 +406,98 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       year: 2009,
       descriptor: 'Fierce glamorous performance competition',
       vectorPosition: {
-        reality: 1.0,
+        reality: 0.8,
         tone: 0.6, pacing: 0.4, era: 0.4, popularity: 0.7, intensity: 0.3,
+      },
+    },
+  },
+  {
+    id: 'genre-family',
+    phase: 'genre-responsive',
+    triggerGenres: ['family'],
+    dimensionsTested: ['family', 'animation', 'comedy', 'tone'],
+    optionA: {
+      tmdbId: 109445,
+      mediaType: 'movie',
+      title: 'Frozen',
+      year: 2013,
+      descriptor: 'Magical animated musical adventure',
+      vectorPosition: {
+        animation: 0.8, family: 0.8, adventure: 0.5, musical: 0.6,
+        tone: 0.7, pacing: 0.3, era: 0.6, popularity: 0.9, intensity: -0.2,
+      },
+    },
+    optionB: {
+      tmdbId: 771,
+      mediaType: 'movie',
+      title: 'Home Alone',
+      year: 1990,
+      descriptor: 'Slapstick family comedy classic',
+      vectorPosition: {
+        comedy: 0.8, family: 0.7,
+        tone: 0.8, pacing: 0.5, era: -0.3, popularity: 0.9, intensity: -0.3,
+      },
+    },
+  },
+  {
+    id: 'genre-western',
+    phase: 'genre-responsive',
+    triggerGenres: ['western'],
+    dimensionsTested: ['western', 'action', 'drama', 'tone'],
+    optionA: {
+      tmdbId: 68718,
+      mediaType: 'movie',
+      title: 'Django Unchained',
+      year: 2012,
+      descriptor: 'Stylish violent revenge western',
+      vectorPosition: {
+        western: 0.8, action: 0.7, drama: 0.6,
+        tone: -0.6, pacing: 0.3, era: 0.5, popularity: 0.8, intensity: 0.9,
+      },
+    },
+    optionB: {
+      tmdbId: 44264,
+      mediaType: 'movie',
+      title: 'True Grit',
+      year: 2010,
+      descriptor: 'Gritty frontier justice adventure',
+      vectorPosition: {
+        western: 0.8, adventure: 0.6, drama: 0.6,
+        tone: -0.3, pacing: 0.0, era: 0.4, popularity: 0.7, intensity: 0.5,
+      },
+    },
+  },
+  {
+    id: 'genre-cult-indie',
+    phase: 'genre-responsive',
+    triggerClusterIds: ['cult-indie'],
+    dimensionsTested: ['romance', 'crime', 'tone', 'popularity'],
+    optionA: {
+      tmdbId: 194,
+      mediaType: 'movie',
+      title: 'Amélie',
+      year: 2001,
+      descriptor: 'Whimsical arthouse romantic charm',
+      vectorPosition: {
+        comedy: 0.6, romance: 0.7,
+        tone: 0.8, pacing: -0.1, era: 0.0, popularity: -0.2, intensity: -0.5,
+      },
+    },
+    optionB: {
+      tmdbId: 115,
+      mediaType: 'movie',
+      title: 'The Big Lebowski',
+      year: 1998,
+      descriptor: 'Shaggy cult comedy classic',
+      vectorPosition: {
+        comedy: 0.8, crime: 0.4,
+        tone: 0.3, pacing: -0.1, era: -0.2, popularity: 0.3, intensity: -0.2,
       },
     },
   },
 ];
 
-// ── Adaptive Pool (~25 pairs) ────────────────────────────────────
+// ── Adaptive Pool (32 pairs) ────────────────────────────────────
 // Selected based on which dimensions of the interim vector are most ambiguous.
 
 const ADAPTIVE_POOL: QuizPair[] = [
@@ -484,7 +513,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2008,
       descriptor: 'Tense dark crime transformation saga',
       vectorPosition: {
-        crime: 1.0, drama: 1.0, thriller: 1.0,
+        crime: 0.7, drama: 0.6, thriller: 0.7,
         tone: -0.9, pacing: 0.4, era: 0.3, popularity: 0.9, intensity: 0.9,
       },
     },
@@ -495,7 +524,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 1994,
       descriptor: 'Classic feel-good sitcom',
       vectorPosition: {
-        comedy: 1.0, romance: 1.0,
+        comedy: 0.8, romance: 0.4,
         tone: 0.9, pacing: 0.3, era: -0.2, popularity: 0.9, intensity: -0.7,
       },
     },
@@ -511,7 +540,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 1997,
       descriptor: 'Sweeping romantic disaster epic',
       vectorPosition: {
-        romance: 1.0, drama: 1.0,
+        romance: 0.8, drama: 0.6,
         tone: -0.1, pacing: 0.1, era: -0.3, popularity: 0.9, intensity: 0.6,
       },
     },
@@ -522,7 +551,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 1999,
       descriptor: 'Revolutionary sci-fi action classic',
       vectorPosition: {
-        scifi: 1.0, action: 1.0,
+        scifi: 0.8, action: 0.7,
         tone: -0.5, pacing: 0.8, era: -0.2, popularity: 0.9, intensity: 0.8,
       },
     },
@@ -538,7 +567,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2013,
       descriptor: 'Stylish period gangster drama',
       vectorPosition: {
-        crime: 1.0, drama: 1.0,
+        crime: 0.7, drama: 0.6,
         tone: -0.7, pacing: 0.3, era: -0.4, popularity: 0.7, intensity: 0.7,
       },
     },
@@ -549,7 +578,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2020,
       descriptor: 'Warm-hearted optimistic sports comedy',
       vectorPosition: {
-        comedy: 1.0, drama: 1.0,
+        comedy: 0.7, drama: 0.5,
         tone: 0.9, pacing: 0.2, era: 0.8, popularity: 0.7, intensity: -0.5,
       },
     },
@@ -565,53 +594,53 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2004,
       descriptor: 'Sweeping tearjerker love story',
       vectorPosition: {
-        romance: 1.0, drama: 1.0,
+        romance: 0.8, drama: 0.6,
         tone: 0.2, pacing: -0.4, era: 0.1, popularity: 0.8, intensity: 0.2,
       },
     },
     optionB: {
-      tmdbId: 210577,
+      tmdbId: 807,
       mediaType: 'movie',
-      title: 'Gone Girl',
-      year: 2014,
-      descriptor: 'Twisted psychological marriage thriller',
+      title: 'Se7en',
+      year: 1995,
+      descriptor: 'Disturbing serial-killer psychological thriller',
       vectorPosition: {
-        thriller: 1.0, mystery: 1.0, drama: 1.0,
-        tone: -0.9, pacing: 0.3, era: 0.5, popularity: 0.8, intensity: 0.8,
+        thriller: 0.8, mystery: 0.6, crime: 0.6, drama: 0.5,
+        tone: -0.9, pacing: 0.3, era: -0.2, popularity: 0.8, intensity: 0.9,
       },
     },
   },
   {
     id: 'adaptive-5',
     phase: 'adaptive',
-    dimensionsTested: ['animation', 'horror', 'tone', 'family'],
+    dimensionsTested: ['western', 'crime', 'tone', 'mystery'],
     optionA: {
-      tmdbId: 862,
-      mediaType: 'movie',
-      title: 'Toy Story',
-      year: 1995,
-      descriptor: 'Beloved animated family classic',
+      tmdbId: 73586,
+      mediaType: 'tv',
+      title: 'Yellowstone',
+      year: 2018,
+      descriptor: 'Gritty modern western family power drama',
       vectorPosition: {
-        animation: 1.0, family: 1.0, comedy: 1.0, adventure: 1.0,
-        tone: 0.8, pacing: 0.3, era: -0.2, popularity: 0.9, intensity: -0.4,
+        western: 0.8, drama: 0.7, crime: 0.4,
+        tone: -0.5, pacing: 0.2, era: 0.7, popularity: 0.8, intensity: 0.6,
       },
     },
     optionB: {
-      tmdbId: 348,
-      mediaType: 'movie',
-      title: 'Alien',
-      year: 1979,
-      descriptor: 'Claustrophobic sci-fi horror landmark',
+      tmdbId: 43982,
+      mediaType: 'tv',
+      title: 'Line of Duty',
+      year: 2012,
+      descriptor: 'Tense British police corruption thriller',
       vectorPosition: {
-        horror: 1.0, scifi: 1.0, thriller: 1.0,
-        tone: -0.9, pacing: 0.2, era: -0.5, popularity: 0.8, intensity: 0.9,
+        crime: 0.8, mystery: 0.7, thriller: 0.6, drama: 0.5,
+        tone: -0.6, pacing: 0.5, era: 0.6, popularity: 0.7, intensity: 0.7,
       },
     },
   },
   {
     id: 'adaptive-6',
     phase: 'adaptive',
-    dimensionsTested: ['intensity', 'popularity', 'tone', 'comedy'],
+    dimensionsTested: ['popularity', 'tone', 'comedy', 'musical'],
     optionA: {
       tmdbId: 106646,
       mediaType: 'movie',
@@ -619,80 +648,80 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2013,
       descriptor: 'Excessive dark comedy crime saga',
       vectorPosition: {
-        comedy: 1.0, crime: 1.0, drama: 1.0,
+        comedy: 0.5, crime: 0.7, drama: 0.6,
         tone: -0.2, pacing: 0.6, era: 0.5, popularity: 0.8, intensity: 0.7,
       },
     },
     optionB: {
-      tmdbId: 194,
+      tmdbId: 621,
       mediaType: 'movie',
-      title: 'Amélie',
-      year: 2001,
-      descriptor: 'Whimsical romantic French charm',
+      title: 'Grease',
+      year: 1978,
+      descriptor: 'Iconic feel-good musical romance',
       vectorPosition: {
-        comedy: 1.0, romance: 1.0,
-        tone: 0.8, pacing: -0.1, era: 0.0, popularity: -0.2, intensity: -0.5,
+        comedy: 0.6, romance: 0.6, musical: 0.7,
+        tone: 0.8, pacing: 0.4, era: -0.7, popularity: 0.8, intensity: -0.5,
       },
     },
   },
   {
     id: 'adaptive-7',
     phase: 'adaptive',
-    dimensionsTested: ['fantasy', 'comedy', 'tone', 'intensity'],
+    dimensionsTested: ['war', 'history', 'fantasy', 'adventure'],
     optionA: {
-      tmdbId: 1399,
-      mediaType: 'tv',
-      title: 'Game of Thrones',
-      year: 2011,
-      descriptor: 'Brutal epic fantasy political drama',
+      tmdbId: 530915,
+      mediaType: 'movie',
+      title: '1917',
+      year: 2019,
+      descriptor: 'Immersive single-shot WWI survival thriller',
       vectorPosition: {
-        fantasy: 1.0, drama: 1.0, action: 1.0, adventure: 1.0,
-        tone: -0.8, pacing: 0.4, era: 0.4, popularity: 0.9, intensity: 0.9,
+        war: 0.9, history: 0.8, drama: 0.7, action: 0.5,
+        tone: -0.8, pacing: 0.6, era: 0.7, popularity: 0.7, intensity: 0.9,
       },
     },
     optionB: {
-      tmdbId: 2316,
+      tmdbId: 71912,
       mediaType: 'tv',
-      title: 'The Office',
-      year: 2005,
-      descriptor: 'Awkward workplace mockumentary comedy',
+      title: 'The Witcher',
+      year: 2019,
+      descriptor: 'Dark epic fantasy monster-hunting adventure',
       vectorPosition: {
-        comedy: 1.0,
-        tone: 0.7, pacing: 0.1, era: 0.2, popularity: 0.8, intensity: -0.6,
+        fantasy: 0.8, adventure: 0.7, action: 0.6, drama: 0.5,
+        tone: -0.5, pacing: 0.5, era: -0.3, popularity: 0.8, intensity: 0.7,
       },
     },
   },
   {
     id: 'adaptive-8',
     phase: 'adaptive',
-    dimensionsTested: ['scifi', 'musical', 'tone', 'pacing'],
+    dimensionsTested: ['reality', 'documentary', 'tone', 'pacing'],
     optionA: {
-      tmdbId: 157336,
-      mediaType: 'movie',
-      title: 'Interstellar',
-      year: 2014,
-      descriptor: 'Emotional epic space exploration',
+      tmdbId: 66636,
+      mediaType: 'tv',
+      title: 'Love Island',
+      year: 2015,
+      descriptor: 'Addictive reality dating competition',
       vectorPosition: {
-        scifi: 1.0, drama: 1.0, adventure: 1.0,
-        tone: -0.3, pacing: 0.1, era: 0.5, popularity: 0.9, intensity: 0.7,
+        reality: 0.9, romance: 0.4,
+        tone: 0.6, pacing: 0.3, era: 0.8, popularity: 0.8, intensity: -0.3,
       },
     },
     optionB: {
-      tmdbId: 313369,
-      mediaType: 'movie',
-      title: 'La La Land',
-      year: 2016,
-      descriptor: 'Dreamy romantic musical drama',
+      tmdbId: 79525,
+      mediaType: 'tv',
+      title: 'The Last Dance',
+      year: 2020,
+      descriptor: 'Epic Michael Jordan basketball documentary',
       vectorPosition: {
-        musical: 1.0, romance: 1.0, drama: 1.0, comedy: 1.0,
-        tone: 0.4, pacing: 0.0, era: 0.7, popularity: 0.8, intensity: -0.2,
+        documentary: 0.9, drama: 0.4,
+        tone: 0.2, pacing: 0.4, era: 0.6, popularity: 0.8, intensity: 0.5,
       },
     },
   },
   {
     id: 'adaptive-9',
     phase: 'adaptive',
-    dimensionsTested: ['thriller', 'family', 'tone', 'popularity'],
+    dimensionsTested: ['thriller', 'comedy', 'animation', 'family', 'tone', 'popularity'],
     optionA: {
       tmdbId: 496243,
       mediaType: 'movie',
@@ -700,26 +729,26 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2019,
       descriptor: 'Sharp social thriller dark comedy',
       vectorPosition: {
-        thriller: 1.0, drama: 1.0, comedy: 1.0,
+        thriller: 0.7, drama: 0.6, comedy: 0.4,
         tone: -0.6, pacing: 0.4, era: 0.8, popularity: 0.5, intensity: 0.7,
       },
     },
     optionB: {
-      tmdbId: 346648,
+      tmdbId: 808,
       mediaType: 'movie',
-      title: 'Paddington 2',
-      year: 2017,
-      descriptor: 'Charming wholesome family adventure',
+      title: 'Shrek',
+      year: 2001,
+      descriptor: 'Irreverent animated fairy-tale comedy',
       vectorPosition: {
-        family: 1.0, comedy: 1.0, adventure: 1.0, animation: 1.0,
-        tone: 0.9, pacing: 0.2, era: 0.7, popularity: 0.6, intensity: -0.6,
+        animation: 0.8, comedy: 0.7, adventure: 0.5, fantasy: 0.5, family: 0.7,
+        tone: 0.7, pacing: 0.4, era: 0.0, popularity: 0.9, intensity: -0.4,
       },
     },
   },
   {
     id: 'adaptive-10',
     phase: 'adaptive',
-    dimensionsTested: ['scifi', 'reality', 'tone', 'intensity'],
+    dimensionsTested: ['scifi', 'reality', 'tone'],
     optionA: {
       tmdbId: 42009,
       mediaType: 'tv',
@@ -727,7 +756,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2011,
       descriptor: 'Disturbing technology dystopia anthology',
       vectorPosition: {
-        scifi: 1.0, thriller: 1.0, drama: 1.0,
+        scifi: 0.7, thriller: 0.6, drama: 0.5,
         tone: -0.9, pacing: 0.2, era: 0.5, popularity: 0.7, intensity: 0.8,
       },
     },
@@ -738,7 +767,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2018,
       descriptor: 'Uplifting feel-good lifestyle makeover',
       vectorPosition: {
-        reality: 1.0,
+        reality: 0.8,
         tone: 0.9, pacing: 0.1, era: 0.8, popularity: 0.6, intensity: -0.6,
       },
     },
@@ -755,7 +784,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 1999,
       descriptor: 'Creepy slow-burn psychological thriller',
       vectorPosition: {
-        thriller: 1.0, mystery: 1.0, drama: 1.0,
+        thriller: 0.7, mystery: 0.6, drama: 0.5,
         tone: -0.6, pacing: -0.4, era: -0.2, popularity: 0.8, intensity: 0.4,
       },
     },
@@ -766,7 +795,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2014,
       descriptor: 'Relentless stylish action revenge thriller',
       vectorPosition: {
-        action: 1.0, thriller: 1.0, crime: 1.0,
+        action: 0.8, thriller: 0.6, crime: 0.4,
         tone: -0.5, pacing: 0.9, era: 0.5, popularity: 0.8, intensity: 1.0,
       },
     },
@@ -783,7 +812,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2011,
       descriptor: 'Hilarious raunchy comedy with heart',
       vectorPosition: {
-        comedy: 1.0, romance: 1.0,
+        comedy: 0.8, romance: 0.4,
         tone: 0.7, pacing: 0.5, era: 0.4, popularity: 0.7, intensity: -0.1,
       },
     },
@@ -794,7 +823,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2011,
       descriptor: 'Atmospheric Gothic period romance',
       vectorPosition: {
-        romance: 1.0, drama: 1.0,
+        romance: 0.7, drama: 0.7,
         tone: -0.3, pacing: -0.6, era: -0.8, popularity: 0.3, intensity: 0.1,
       },
     },
@@ -805,14 +834,14 @@ const ADAPTIVE_POOL: QuizPair[] = [
     phase: 'adaptive',
     dimensionsTested: ['era', 'drama', 'tone', 'popularity'],
     optionA: {
-      tmdbId: 389,
-      mediaType: 'movie',
-      title: '12 Angry Men',
-      year: 1957,
-      descriptor: 'Riveting classic courtroom drama',
+      tmdbId: 1398,
+      mediaType: 'tv',
+      title: 'The Sopranos',
+      year: 1999,
+      descriptor: 'Definitive crime family drama saga',
       vectorPosition: {
-        drama: 1.0, crime: 1.0,
-        tone: -0.3, pacing: 0.1, era: -0.9, popularity: 0.6, intensity: 0.3,
+        crime: 0.8, drama: 0.7,
+        tone: -0.7, pacing: -0.1, era: -0.3, popularity: 0.8, intensity: 0.7,
       },
     },
     optionB: {
@@ -822,7 +851,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2023,
       descriptor: 'Sprawling modern crime epic',
       vectorPosition: {
-        crime: 1.0, drama: 1.0, history: 1.0, thriller: 1.0,
+        crime: 0.6, drama: 0.7, history: 0.6, thriller: 0.4,
         tone: -0.6, pacing: -0.3, era: 0.9, popularity: 0.7, intensity: 0.5,
       },
     },
@@ -831,7 +860,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
   {
     id: 'adaptive-14',
     phase: 'adaptive',
-    dimensionsTested: ['adventure', 'action', 'intensity', 'popularity'],
+    dimensionsTested: ['adventure', 'action', 'animation', 'family', 'popularity'],
     optionA: {
       tmdbId: 361743,
       mediaType: 'movie',
@@ -839,7 +868,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2022,
       descriptor: 'High-octane blockbuster action spectacle',
       vectorPosition: {
-        action: 1.0, adventure: 1.0, drama: 1.0,
+        action: 0.8, adventure: 0.5, drama: 0.4,
         tone: 0.1, pacing: 0.9, era: 0.9, popularity: 0.9, intensity: 0.8,
       },
     },
@@ -850,44 +879,44 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 1994,
       descriptor: 'Beloved animated coming-of-age fable',
       vectorPosition: {
-        animation: 1.0, family: 1.0, drama: 1.0, adventure: 1.0, musical: 1.0,
+        animation: 0.8, drama: 0.5, adventure: 0.5, musical: 0.5, family: 0.7,
         tone: 0.3, pacing: 0.2, era: -0.2, popularity: 0.9, intensity: 0.1,
       },
     },
   },
-  // ── Comedy subtype: dark comedy vs slapstick ─────────────────────
+  // ── Comedy subtype: teen vs animated ─────────────────────────────
   {
     id: 'adaptive-15',
     phase: 'adaptive',
-    dimensionsTested: ['comedy', 'tone', 'intensity', 'pacing'],
+    dimensionsTested: ['comedy', 'animation', 'family', 'tone', 'pacing'],
     optionA: {
-      tmdbId: 153,
+      tmdbId: 10625,
       mediaType: 'movie',
-      title: 'Lost in Translation',
-      year: 2003,
-      descriptor: 'Quiet melancholic comedy-drama',
+      title: 'Mean Girls',
+      year: 2004,
+      descriptor: 'Iconic sharp teen comedy satire',
       vectorPosition: {
-        comedy: 1.0, drama: 1.0, romance: 1.0,
-        tone: -0.1, pacing: -0.7, era: 0.1, popularity: 0.3, intensity: -0.6,
+        comedy: 0.8, romance: 0.3,
+        tone: 0.6, pacing: 0.5, era: 0.1, popularity: 0.8, intensity: -0.3,
       },
     },
     optionB: {
-      tmdbId: 950,
+      tmdbId: 425,
       mediaType: 'movie',
       title: 'Ice Age',
       year: 2002,
       descriptor: 'Fun animated slapstick adventure',
       vectorPosition: {
-        animation: 1.0, comedy: 1.0, family: 1.0, adventure: 1.0,
+        animation: 0.7, comedy: 0.6, adventure: 0.5, family: 0.6,
         tone: 0.8, pacing: 0.4, era: 0.0, popularity: 0.8, intensity: -0.3,
       },
     },
   },
-  // ── TV drama subtype: prestige slow-burn vs bingeable thriller ──
+  // ── TV drama subtype: historical action vs lighthearted sitcom ──
   {
     id: 'adaptive-16',
     phase: 'adaptive',
-    dimensionsTested: ['drama', 'thriller', 'pacing', 'intensity', 'tone'],
+    dimensionsTested: ['drama', 'action', 'history', 'pacing', 'tone'],
     optionA: {
       tmdbId: 44217,
       mediaType: 'tv',
@@ -895,7 +924,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2013,
       descriptor: 'Brutal historical action drama',
       vectorPosition: {
-        drama: 1.0, action: 1.0, history: 1.0, war: 1.0, adventure: 1.0,
+        drama: 0.7, action: 0.7, history: 0.7, war: 0.6, adventure: 0.5,
         tone: -0.7, pacing: 0.4, era: -0.5, popularity: 0.7, intensity: 0.8,
       },
     },
@@ -906,7 +935,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2007,
       descriptor: 'Nerdy lighthearted sitcom',
       vectorPosition: {
-        comedy: 1.0,
+        comedy: 0.8,
         tone: 0.7, pacing: 0.2, era: 0.3, popularity: 0.9, intensity: -0.6,
       },
     },
@@ -915,27 +944,27 @@ const ADAPTIVE_POOL: QuizPair[] = [
   {
     id: 'adaptive-17',
     phase: 'adaptive',
-    dimensionsTested: ['popularity', 'tone', 'drama', 'pacing'],
+    dimensionsTested: ['history', 'romance', 'musical', 'tone', 'pacing', 'popularity'],
     optionA: {
-      tmdbId: 68726,
+      tmdbId: 98,
       mediaType: 'movie',
-      title: 'Pacific Rim',
-      year: 2013,
-      descriptor: 'Giant robot blockbuster spectacle',
+      title: 'Gladiator',
+      year: 2000,
+      descriptor: 'Epic historical action drama',
       vectorPosition: {
-        action: 1.0, scifi: 1.0, adventure: 1.0,
-        tone: 0.1, pacing: 0.8, era: 0.5, popularity: 0.8, intensity: 0.7,
+        action: 0.7, drama: 0.7, history: 0.7, adventure: 0.5,
+        tone: -0.3, pacing: 0.4, era: -0.5, popularity: 0.9, intensity: 0.8,
       },
     },
     optionB: {
-      tmdbId: 843,
+      tmdbId: 88,
       mediaType: 'movie',
-      title: 'In the Mood for Love',
-      year: 2000,
-      descriptor: 'Exquisite restrained romantic drama',
+      title: 'Dirty Dancing',
+      year: 1987,
+      descriptor: 'Feel-good romantic musical drama',
       vectorPosition: {
-        romance: 1.0, drama: 1.0,
-        tone: -0.1, pacing: -0.8, era: 0.0, popularity: -0.5, intensity: -0.5,
+        romance: 0.7, drama: 0.5, musical: 0.6,
+        tone: 0.6, pacing: 0.2, era: -0.5, popularity: 0.8, intensity: -0.2,
       },
     },
   },
@@ -943,7 +972,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
   {
     id: 'adaptive-18',
     phase: 'adaptive',
-    dimensionsTested: ['mystery', 'crime', 'tone', 'intensity'],
+    dimensionsTested: ['mystery', 'crime', 'tone'],
     optionA: {
       tmdbId: 37165,
       mediaType: 'movie',
@@ -951,7 +980,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 1998,
       descriptor: 'Thought-provoking satirical comedy-drama',
       vectorPosition: {
-        comedy: 1.0, drama: 1.0, scifi: 1.0,
+        comedy: 0.6, drama: 0.6, scifi: 0.4,
         tone: 0.1, pacing: 0.0, era: -0.2, popularity: 0.7, intensity: 0.1,
       },
     },
@@ -962,7 +991,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 1994,
       descriptor: 'Stylish non-linear crime anthology',
       vectorPosition: {
-        crime: 1.0, thriller: 1.0, comedy: 1.0,
+        crime: 0.8, thriller: 0.5, comedy: 0.4,
         tone: -0.5, pacing: 0.4, era: -0.2, popularity: 0.9, intensity: 0.7,
       },
     },
@@ -971,16 +1000,16 @@ const ADAPTIVE_POOL: QuizPair[] = [
   {
     id: 'adaptive-19',
     phase: 'adaptive',
-    dimensionsTested: ['scifi', 'action', 'pacing', 'intensity'],
+    dimensionsTested: ['scifi', 'action', 'adventure', 'pacing', 'popularity'],
     optionA: {
-      tmdbId: 335984,
+      tmdbId: 19995,
       mediaType: 'movie',
-      title: 'Blade Runner 2049',
-      year: 2017,
-      descriptor: 'Atmospheric philosophical sci-fi noir',
+      title: 'Avatar',
+      year: 2009,
+      descriptor: 'Visually stunning sci-fi blockbuster spectacle',
       vectorPosition: {
-        scifi: 1.0, drama: 1.0, mystery: 1.0, thriller: 1.0,
-        tone: -0.7, pacing: -0.5, era: 0.7, popularity: 0.5, intensity: 0.3,
+        scifi: 0.7, action: 0.7, adventure: 0.7,
+        tone: 0.1, pacing: 0.5, era: 0.5, popularity: 0.9, intensity: 0.6,
       },
     },
     optionB: {
@@ -990,7 +1019,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 1977,
       descriptor: 'Iconic space opera adventure',
       vectorPosition: {
-        scifi: 1.0, action: 1.0, adventure: 1.0, fantasy: 1.0,
+        scifi: 0.7, action: 0.7, adventure: 0.7, fantasy: 0.5,
         tone: 0.3, pacing: 0.6, era: -0.5, popularity: 0.9, intensity: 0.5,
       },
     },
@@ -1001,14 +1030,14 @@ const ADAPTIVE_POOL: QuizPair[] = [
     phase: 'adaptive',
     dimensionsTested: ['horror', 'thriller', 'tone', 'pacing'],
     optionA: {
-      tmdbId: 493922,
+      tmdbId: 346364,
       mediaType: 'movie',
-      title: 'Hereditary',
-      year: 2018,
-      descriptor: 'Unsettling slow-burn psychological horror',
+      title: 'IT',
+      year: 2017,
+      descriptor: 'Blockbuster supernatural coming-of-age horror',
       vectorPosition: {
-        horror: 1.0, thriller: 1.0, mystery: 1.0,
-        tone: -1.0, pacing: -0.3, era: 0.7, popularity: 0.4, intensity: 0.9,
+        horror: 0.8, thriller: 0.5, drama: 0.4,
+        tone: -0.7, pacing: 0.4, era: 0.7, popularity: 0.9, intensity: 0.8,
       },
     },
     optionB: {
@@ -1018,7 +1047,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 1996,
       descriptor: 'Self-aware witty slasher horror',
       vectorPosition: {
-        horror: 1.0, mystery: 1.0, thriller: 1.0,
+        horror: 0.7, mystery: 0.5, thriller: 0.5,
         tone: -0.3, pacing: 0.6, era: -0.2, popularity: 0.8, intensity: 0.6,
       },
     },
@@ -1035,7 +1064,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2023,
       descriptor: 'Emotional post-apocalyptic survival drama',
       vectorPosition: {
-        drama: 1.0, action: 1.0, scifi: 1.0, adventure: 1.0,
+        drama: 0.7, action: 0.6, scifi: 0.5, adventure: 0.5,
         tone: -0.7, pacing: 0.3, era: 0.9, popularity: 0.9, intensity: 0.8,
       },
     },
@@ -1046,7 +1075,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2010,
       descriptor: 'Elegant British period ensemble drama',
       vectorPosition: {
-        drama: 1.0, romance: 1.0, history: 1.0,
+        drama: 0.8, romance: 0.4, history: 0.7,
         tone: 0.1, pacing: -0.6, era: -0.5, popularity: 0.7, intensity: -0.3,
       },
     },
@@ -1055,7 +1084,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
   {
     id: 'adaptive-22',
     phase: 'adaptive',
-    dimensionsTested: ['documentary', 'tone', 'intensity', 'pacing'],
+    dimensionsTested: ['documentary', 'tone', 'pacing'],
     optionA: {
       tmdbId: 83880,
       mediaType: 'tv',
@@ -1063,19 +1092,19 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2019,
       descriptor: 'Stunning nature conservation documentary',
       vectorPosition: {
-        documentary: 1.0,
+        documentary: 0.8,
         tone: 0.3, pacing: -0.5, era: 0.8, popularity: 0.7, intensity: 0.0,
       },
     },
     optionB: {
-      tmdbId: 1430,
+      tmdbId: 656690,
       mediaType: 'movie',
-      title: 'Bowling for Columbine',
-      year: 2002,
-      descriptor: 'Provocative social issue documentary',
+      title: 'The Social Dilemma',
+      year: 2020,
+      descriptor: 'Alarming tech-industry investigative documentary',
       vectorPosition: {
-        documentary: 1.0,
-        tone: -0.6, pacing: 0.1, era: 0.0, popularity: 0.4, intensity: 0.5,
+        documentary: 0.8,
+        tone: -0.5, pacing: 0.2, era: 0.9, popularity: 0.6, intensity: 0.4,
       },
     },
   },
@@ -1083,7 +1112,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
   {
     id: 'adaptive-23',
     phase: 'adaptive',
-    dimensionsTested: ['action', 'drama', 'pacing', 'tone', 'intensity'],
+    dimensionsTested: ['drama', 'animation', 'family', 'pacing', 'tone'],
     optionA: {
       tmdbId: 550,
       mediaType: 'movie',
@@ -1091,19 +1120,19 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 1999,
       descriptor: 'Anarchic twist-driven psychological thriller',
       vectorPosition: {
-        drama: 1.0, thriller: 1.0,
+        drama: 0.6, thriller: 0.7,
         tone: -0.8, pacing: 0.5, era: -0.2, popularity: 0.8, intensity: 0.8,
       },
     },
     optionB: {
-      tmdbId: 508442,
+      tmdbId: 20352,
       mediaType: 'movie',
-      title: 'Soul',
-      year: 2020,
-      descriptor: 'Existential animated musical journey',
+      title: 'Despicable Me',
+      year: 2010,
+      descriptor: 'Colourful animated family comedy',
       vectorPosition: {
-        animation: 1.0, family: 1.0, comedy: 1.0, fantasy: 1.0, musical: 1.0,
-        tone: 0.6, pacing: -0.1, era: 0.8, popularity: 0.7, intensity: -0.3,
+        animation: 0.8, comedy: 0.6, family: 0.7,
+        tone: 0.7, pacing: 0.4, era: 0.5, popularity: 0.9, intensity: -0.4,
       },
     },
   },
@@ -1119,7 +1148,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2021,
       descriptor: 'Brutal survival thriller sensation',
       vectorPosition: {
-        thriller: 1.0, drama: 1.0, action: 1.0, mystery: 1.0,
+        thriller: 0.8, drama: 0.6, action: 0.5, mystery: 0.5,
         tone: -0.8, pacing: 0.7, era: 0.8, popularity: 0.9, intensity: 1.0,
       },
     },
@@ -1130,7 +1159,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2015,
       descriptor: 'Heartwarming quirky family comedy',
       vectorPosition: {
-        comedy: 1.0,
+        comedy: 0.8,
         tone: 0.8, pacing: 0.1, era: 0.6, popularity: 0.5, intensity: -0.6,
       },
     },
@@ -1147,7 +1176,7 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2001,
       descriptor: 'Slick stylish ensemble heist caper',
       vectorPosition: {
-        crime: 1.0, thriller: 1.0, comedy: 1.0,
+        crime: 0.7, thriller: 0.4, comedy: 0.5,
         tone: 0.4, pacing: 0.6, era: 0.0, popularity: 0.8, intensity: 0.2,
       },
     },
@@ -1158,8 +1187,198 @@ const ADAPTIVE_POOL: QuizPair[] = [
       year: 2007,
       descriptor: 'Obsessive methodical serial killer investigation',
       vectorPosition: {
-        crime: 1.0, mystery: 1.0, thriller: 1.0, drama: 1.0,
+        crime: 0.7, mystery: 0.7, thriller: 0.6, drama: 0.5,
         tone: -0.7, pacing: -0.4, era: 0.2, popularity: 0.5, intensity: 0.5,
+      },
+    },
+  },
+  // ── New pairs: expanded coverage ─────────────────────────────────
+  {
+    id: 'adaptive-26',
+    phase: 'adaptive',
+    dimensionsTested: ['animation', 'romance', 'tone', 'era'],
+    optionA: {
+      tmdbId: 13916,
+      mediaType: 'tv',
+      title: 'Death Note',
+      year: 2006,
+      descriptor: 'Dark cerebral supernatural anime thriller',
+      vectorPosition: {
+        animation: 0.8, thriller: 0.7, mystery: 0.6, crime: 0.5,
+        tone: -0.8, pacing: 0.6, era: 0.4, popularity: 0.7, intensity: 0.8,
+      },
+    },
+    optionB: {
+      tmdbId: 91239,
+      mediaType: 'tv',
+      title: 'Bridgerton',
+      year: 2020,
+      descriptor: 'Lavish Regency-era romance drama',
+      vectorPosition: {
+        romance: 0.8, drama: 0.7, history: 0.4,
+        tone: 0.4, pacing: 0.2, era: -0.3, popularity: 0.8, intensity: 0.1,
+      },
+    },
+  },
+  {
+    id: 'adaptive-27',
+    phase: 'adaptive',
+    dimensionsTested: ['animation', 'crime', 'tone', 'intensity', 'pacing'],
+    optionA: {
+      tmdbId: 129,
+      mediaType: 'movie',
+      title: 'Spirited Away',
+      year: 2001,
+      descriptor: 'Enchanting hand-drawn fantasy masterpiece',
+      vectorPosition: {
+        animation: 0.8, fantasy: 0.7, adventure: 0.5,
+        tone: 0.2, pacing: -0.3, era: 0.0, popularity: 0.6, intensity: -0.1,
+      },
+    },
+    optionB: {
+      tmdbId: 69740,
+      mediaType: 'tv',
+      title: 'Ozark',
+      year: 2017,
+      descriptor: 'Gripping dark money-laundering crime thriller',
+      vectorPosition: {
+        crime: 0.8, drama: 0.7, thriller: 0.6,
+        tone: -0.8, pacing: 0.3, era: 0.7, popularity: 0.7, intensity: 0.8,
+      },
+    },
+  },
+  {
+    id: 'adaptive-28',
+    phase: 'adaptive',
+    dimensionsTested: ['documentary', 'comedy', 'drama', 'tone'],
+    optionA: {
+      tmdbId: 100698,
+      mediaType: 'tv',
+      title: 'Tiger King',
+      year: 2020,
+      descriptor: 'Outrageous true crime documentary sensation',
+      vectorPosition: {
+        documentary: 0.8, crime: 0.4,
+        tone: -0.3, pacing: 0.3, era: 0.8, popularity: 0.8, intensity: 0.5,
+      },
+    },
+    optionB: {
+      tmdbId: 67070,
+      mediaType: 'tv',
+      title: 'Fleabag',
+      year: 2016,
+      descriptor: 'Razor-sharp witty comedy-drama',
+      vectorPosition: {
+        comedy: 0.8, drama: 0.6,
+        tone: 0.3, pacing: 0.3, era: 0.8, popularity: 0.6, intensity: -0.2,
+      },
+    },
+  },
+  {
+    id: 'adaptive-29',
+    phase: 'adaptive',
+    dimensionsTested: ['war', 'comedy', 'tone', 'intensity', 'era'],
+    optionA: {
+      tmdbId: 4613,
+      mediaType: 'tv',
+      title: 'Band of Brothers',
+      year: 2001,
+      descriptor: 'Harrowing WWII brotherhood miniseries',
+      vectorPosition: {
+        war: 0.8, drama: 0.7, action: 0.6, history: 0.7,
+        tone: -0.8, pacing: 0.5, era: -0.3, popularity: 0.8, intensity: 0.9,
+      },
+    },
+    optionB: {
+      tmdbId: 1400,
+      mediaType: 'tv',
+      title: 'Seinfeld',
+      year: 1989,
+      descriptor: 'Legendary observational comedy classic',
+      vectorPosition: {
+        comedy: 0.8,
+        tone: 0.8, pacing: 0.3, era: -0.3, popularity: 0.9, intensity: -0.7,
+      },
+    },
+  },
+  {
+    id: 'adaptive-30',
+    phase: 'adaptive',
+    dimensionsTested: ['reality', 'drama', 'tone', 'popularity'],
+    optionA: {
+      tmdbId: 14658,
+      mediaType: 'tv',
+      title: 'Survivor',
+      year: 2000,
+      descriptor: 'Iconic strategic survival competition',
+      vectorPosition: {
+        reality: 0.8, adventure: 0.3,
+        tone: 0.2, pacing: 0.4, era: 0.0, popularity: 0.7, intensity: 0.3,
+      },
+    },
+    optionB: {
+      tmdbId: 76331,
+      mediaType: 'tv',
+      title: 'Succession',
+      year: 2018,
+      descriptor: 'Ruthless media dynasty power drama',
+      vectorPosition: {
+        drama: 0.8, comedy: 0.3,
+        tone: -0.5, pacing: -0.1, era: 0.8, popularity: 0.7, intensity: 0.5,
+      },
+    },
+  },
+  {
+    id: 'adaptive-31',
+    phase: 'adaptive',
+    dimensionsTested: ['history', 'animation', 'comedy', 'tone'],
+    optionA: {
+      tmdbId: 87108,
+      mediaType: 'tv',
+      title: 'Chernobyl',
+      year: 2019,
+      descriptor: 'Devastating nuclear disaster historical drama',
+      vectorPosition: {
+        drama: 0.8, history: 0.8, thriller: 0.5,
+        tone: -0.9, pacing: -0.2, era: 0.8, popularity: 0.7, intensity: 0.9,
+      },
+    },
+    optionB: {
+      tmdbId: 60625,
+      mediaType: 'tv',
+      title: 'Rick and Morty',
+      year: 2013,
+      descriptor: 'Anarchic animated sci-fi comedy',
+      vectorPosition: {
+        animation: 0.8, comedy: 0.7, scifi: 0.6, adventure: 0.4,
+        tone: 0.3, pacing: 0.6, era: 0.7, popularity: 0.8, intensity: 0.3,
+      },
+    },
+  },
+  {
+    id: 'adaptive-32',
+    phase: 'adaptive',
+    dimensionsTested: ['scifi', 'drama', 'pacing', 'era'],
+    optionA: {
+      tmdbId: 335984,
+      mediaType: 'movie',
+      title: 'Blade Runner 2049',
+      year: 2017,
+      descriptor: 'Atmospheric philosophical sci-fi noir',
+      vectorPosition: {
+        scifi: 0.8, drama: 0.5, mystery: 0.5, thriller: 0.3,
+        tone: -0.7, pacing: -0.5, era: 0.7, popularity: 0.5, intensity: 0.3,
+      },
+    },
+    optionB: {
+      tmdbId: 627,
+      mediaType: 'movie',
+      title: 'Trainspotting',
+      year: 1996,
+      descriptor: 'Raw cult British drama',
+      vectorPosition: {
+        drama: 0.7, comedy: 0.4, crime: 0.3,
+        tone: -0.6, pacing: 0.5, era: -0.3, popularity: 0.3, intensity: 0.7,
       },
     },
   },
@@ -1193,7 +1412,8 @@ export function getFixedPairs(): QuizPair[] {
  */
 export function selectGenreResponsivePairs(
   userGenreKeys: string[],
-  fixedPairIds: string[]
+  fixedPairIds: string[],
+  selectedClusterIds: string[] = [],
 ): QuizPair[] {
   const fixedIds = new Set(fixedPairIds);
 
@@ -1209,15 +1429,24 @@ export function selectGenreResponsivePairs(
     }
   }
 
-  // Score each genre-responsive pair by how many uncovered genres it triggers
+  // Score each genre-responsive pair by genre coverage + cluster match
   const scoredPairs = GENRE_RESPONSIVE_POOL.map((pair) => {
     const triggers = pair.triggerGenres || [];
+    const clusterTriggers = pair.triggerClusterIds || [];
     let score = 0;
     for (const trigger of triggers) {
       if (uncoveredGenres.includes(trigger)) {
         score += 2; // Strong match: user picked this genre and it's uncovered
       } else if (userGenreKeys.includes(trigger)) {
         score += 1; // Weaker match: user picked it but fixed pairs already cover it
+      }
+    }
+    // Cluster-based scoring: explicit cluster selection is a stronger signal
+    // than derived genre keys. Score 3 guarantees a slot unless a genre pair
+    // matches 2+ uncovered genres (score 4).
+    for (const clusterId of clusterTriggers) {
+      if (selectedClusterIds.includes(clusterId)) {
+        score += 3;
       }
     }
     return { pair, score };

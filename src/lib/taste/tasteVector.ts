@@ -1,8 +1,8 @@
 /**
  * Taste Vector Model
  *
- * 25-dimensional preference vector:
- * - 20 genre dimensions (0.0 to 1.0) — how much the user likes each genre
+ * 24-dimensional preference vector:
+ * - 19 genre dimensions (0.0 to 1.0) — how much the user likes each genre
  * - 5 meta dimensions (-1.0 to +1.0) — cross-genre preference axes
  *
  * User vectors use continuous values; content vectors use binary genre values (1.0/0.0).
@@ -11,7 +11,7 @@
 
 // ── Genre dimension keys (match TMDb genre mapping) ─────────────
 export const GENRE_DIMENSIONS = [
-  'action', 'adventure', 'animation', 'anime', 'comedy', 'crime',
+  'action', 'adventure', 'animation', 'comedy', 'crime',
   'documentary', 'drama', 'family', 'fantasy', 'history', 'horror',
   'musical', 'mystery', 'reality', 'romance', 'scifi', 'thriller',
   'war', 'western',
@@ -38,7 +38,7 @@ export type TasteVector = Record<Dimension, number>;
 // ── Similarity weights per dimension (for weighted cosine) ──────
 export const DIMENSION_WEIGHTS: Record<Dimension, number> = {
   // Genre dimensions: 1.0 each (primary signal)
-  action: 1.0, adventure: 1.0, animation: 1.0, anime: 1.0,
+  action: 1.0, adventure: 1.0, animation: 1.0,
   comedy: 1.0, crime: 1.0, documentary: 1.0, drama: 1.0,
   family: 1.0, fantasy: 1.0, history: 1.0, horror: 1.0,
   musical: 1.0, mystery: 1.0, reality: 1.0, romance: 1.0,
@@ -69,7 +69,7 @@ export function createDefaultVector(selectedGenres: string[]): TasteVector {
   const selected = new Set(selectedGenres.map((g) => genreNameToKey(g)));
 
   for (const dim of GENRE_DIMENSIONS) {
-    v[dim] = selected.has(dim) ? 0.5 : 0.2;
+    v[dim] = selected.has(dim) ? 0.5 : 0.25;
   }
   // Meta dimensions stay at 0.0 (neutral)
   return v;
@@ -197,7 +197,7 @@ export function isNonZero(v: TasteVector): boolean {
 
 const NAME_TO_KEY: Record<string, GenreDimension> = {
   'Action': 'action', 'Adventure': 'adventure', 'Animation': 'animation',
-  'Anime': 'anime', 'Comedy': 'comedy', 'Crime': 'crime',
+  'Comedy': 'comedy', 'Crime': 'crime',
   'Documentary': 'documentary', 'Drama': 'drama', 'Family': 'family',
   'Fantasy': 'fantasy', 'History': 'history', 'Horror': 'horror',
   'Musical': 'musical', 'Music': 'musical', // backwards compat
@@ -207,7 +207,7 @@ const NAME_TO_KEY: Record<string, GenreDimension> = {
 
 const KEY_TO_NAME: Record<GenreDimension, string> = {
   action: 'Action', adventure: 'Adventure', animation: 'Animation',
-  anime: 'Anime', comedy: 'Comedy', crime: 'Crime',
+  comedy: 'Comedy', crime: 'Crime',
   documentary: 'Documentary', drama: 'Drama', family: 'Family',
   fantasy: 'Fantasy', history: 'History', horror: 'Horror',
   musical: 'Musical', mystery: 'Mystery', reality: 'Reality',

@@ -626,7 +626,7 @@ export async function generateRecommendations(
     const dismissedIds = await getDismissedIds();
     const filteredByDismissed = filteredByWatchlist.filter((item) => !dismissedIds.has(`${item.type}-${item.id}`));
 
-    const diverse = applyDiversityFilter(filteredByDismissed, 3, 20);
+    const diverse = applyDiversityFilter(filteredByDismissed, 3, 25);
 
     const recommendations: Recommendation[] = diverse.map((item) => ({
       id: item.id,

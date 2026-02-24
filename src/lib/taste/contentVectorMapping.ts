@@ -25,7 +25,6 @@ export const TMDB_GENRE_TO_DIM: Record<number, GenreDimension> = {
   80: 'crime',
   99: 'documentary',
   18: 'drama',
-  10751: 'family',
   14: 'fantasy',
   36: 'history',
   27: 'horror',
@@ -35,6 +34,7 @@ export const TMDB_GENRE_TO_DIM: Record<number, GenreDimension> = {
   878: 'scifi',
   53: 'thriller',
   10752: 'war',
+  10751: 'family',
   37: 'western',
   // TV-specific genres that map to our dimensions
   10759: 'action',     // Action & Adventure → action (adventure handled in post-loop)
@@ -222,12 +222,11 @@ export function contentToVector(meta: ContentMetadata): TasteVector {
     if (dim) v[dim] = 1.0;
   }
 
-  // ─ Anime detection: Japanese + Animation genre ─
+  // ─ Japanese animation: ensure animation dimension is active ─
   if (
     meta.originalLanguage === 'ja' &&
     genreSet.has(16) // Animation
   ) {
-    v.anime = 1.0;
     v.animation = 1.0;
   }
 

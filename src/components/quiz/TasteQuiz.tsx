@@ -73,7 +73,7 @@ export function TasteQuiz({ onComplete, onSkip, showSkip, userClusters, showClus
     const fixed = getFixedPairs();
     const fixedIds = fixed.map((p) => p.id);
     const topGenreKeys = getTopGenreKeysFromClusters(localClusters, 3);
-    const genreResponsive = selectGenreResponsivePairs(topGenreKeys, fixedIds);
+    const genreResponsive = selectGenreResponsivePairs(topGenreKeys, fixedIds, localClusters);
     const pairs = [...fixed, ...genreResponsive];
     setPhase1Pairs(pairs);
 

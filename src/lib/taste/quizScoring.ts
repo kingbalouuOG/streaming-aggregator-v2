@@ -50,6 +50,15 @@ const CAP_AWARE_THRESHOLD = 0.5;
 
 const META_DIM_SET = new Set<string>(META_DIMENSIONS);
 
+/**
+ * Genre cap-aware scaling threshold.
+ * Genre dimensions use a tighter threshold (0.25) because their 0-1 range
+ * is half the width of meta dimensions' -1 to +1 range.
+ */
+const GENRE_CAP_AWARE_THRESHOLD = 0.25;
+
+const GENRE_DIM_SET = new Set<string>(GENRE_DIMENSIONS);
+
 // ── Compute delta for a single answer ───────────────────────────
 
 function computeAnswerDelta(pair: QuizPair, choice: QuizAnswer['chosenOption']): TasteVector {
@@ -156,11 +165,34 @@ export function computeQuizVector(
     const delta = computeAnswerDelta(pair, answer.chosenOption);
     const phaseWeight = PHASE_WEIGHTS[answer.phase] ?? 1.0;
 
-    // Accumulate with cap-aware scaling for meta dimensions
+    // Accumulate with cap-aware scaling
     for (const d of ALL_DIMENSIONS) {
       let weightedDelta = delta[d] * phaseWeight;
 
-      if (META_DIM_SET.has(d) && weightedDelta !== 0) {
+      if (GENRE_DIM_SET.has(d) && weightedDelta !== 0) {
+        // Genre dims: 0-1 range → headroom toward ceiling or floor
+        const currentValue = vector[d];
+        const headroom = weightedDelta > 0
+          ? (1.0 - currentValue)   // toward ceiling
+          : currentValue;          // toward floor (0.0)
+        const scale = Math.max(0, Math.min(
+          1.0,
+          headroom / GENRE_CAP_AWARE_THRESHOLD,
+          headroom / Math.abs(weightedDelta),
+        ));
+
+        if (scale < 1.0) {
+          debug.info('QuizScoring', `Genre cap-aware scaling on ${d}`, {
+            current: currentValue,
+            rawDelta: weightedDelta,
+            scale: scale,
+            effective: weightedDelta * scale,
+          });
+        }
+
+        weightedDelta *= scale;
+      } else if (META_DIM_SET.has(d) && weightedDelta !== 0) {
+        // Meta dims: -1 to +1 range → headroom toward ±1.0 boundary
         const currentValue = vector[d];
         const headroom = weightedDelta > 0
           ? (1.0 - currentValue)
@@ -172,7 +204,7 @@ export function computeQuizVector(
         ));
 
         if (scale < 1.0) {
-          debug.info('QuizScoring', `Cap-aware scaling on ${d}`, {
+          debug.info('QuizScoring', `Meta cap-aware scaling on ${d}`, {
             current: currentValue,
             rawDelta: weightedDelta,
             scale: scale,

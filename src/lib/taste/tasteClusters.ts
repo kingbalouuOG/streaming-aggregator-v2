@@ -1,8 +1,8 @@
 /**
  * Taste Clusters
  *
- * 14 taste archetypes that replace raw genre selection in onboarding.
- * Each cluster maps to a partial 25D vector encoding genre affinities
+ * 16 taste archetypes that replace raw genre selection in onboarding.
+ * Each cluster maps to a partial 24D vector encoding genre affinities
  * AND meta dimensions (tone, pacing, era, popularity, intensity).
  *
  * Users select 3-5 clusters. Their partial vectors are averaged into
@@ -35,6 +35,9 @@ export const MAX_CLUSTERS = 5;
  * IMPORTANT: Only include a dimension if it carries meaningful signal.
  * - Omitting a dimension = "no opinion" (excluded from averaging)
  * - Setting 0.0 = "explicitly neutral" (included in averaging, drags others toward zero)
+ *
+ * Genre seed magnitudes are compressed (val >= 0.5 → val * 0.6 + 0.1)
+ * to leave headroom for the quiz to refine without hitting cap collisions.
  */
 export const TASTE_CLUSTERS: TasteCluster[] = [
   // 1. Feel-Good & Funny
@@ -44,7 +47,7 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     description: 'Light comedies, sitcoms, and uplifting stories',
     emoji: '😍',
     vector: {
-      comedy: 0.9,
+      comedy: 0.64,
       drama: 0.2,
       tone: 0.8,
       intensity: -0.4,
@@ -58,8 +61,8 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     description: 'Explosions, fights, and high-stakes chases',
     emoji: '🚀',
     vector: {
-      action: 0.9,
-      adventure: 0.5,
+      action: 0.64,
+      adventure: 0.4,
       thriller: 0.3,
       intensity: 0.75,
       pacing: 0.9,
@@ -73,8 +76,8 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     description: 'Tense, gritty crime and suspense',
     emoji: '🔪',
     vector: {
-      thriller: 0.9,
-      crime: 0.6,
+      thriller: 0.64,
+      crime: 0.46,
       mystery: 0.3,
       tone: -0.8,
       intensity: 0.7,
@@ -88,8 +91,8 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     description: 'Romantic comedies and sweeping romances',
     emoji: '💕',
     vector: {
-      romance: 0.9,
-      comedy: 0.6,
+      romance: 0.64,
+      comedy: 0.46,
       drama: 0.3,
       tone: 0.7,
       intensity: -0.3,
@@ -102,9 +105,9 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     description: 'Grand worlds, speculative stories, and mythic adventures',
     emoji: '🔮',
     vector: {
-      scifi: 0.8,
-      fantasy: 0.8,
-      adventure: 0.5,
+      scifi: 0.58,
+      fantasy: 0.58,
+      adventure: 0.4,
       intensity: 0.2,
       pacing: -0.2,
       era: -0.2,
@@ -117,7 +120,7 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     description: 'Scary, creepy, and unsettling',
     emoji: '👻',
     vector: {
-      horror: 0.9,
+      horror: 0.64,
       thriller: 0.4,
       mystery: 0.2,
       tone: -0.9,
@@ -132,8 +135,8 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     description: 'Psychological puzzles and twist-driven stories',
     emoji: '🧠',
     vector: {
-      mystery: 0.9,
-      thriller: 0.5,
+      mystery: 0.64,
+      thriller: 0.4,
       scifi: 0.2,
       tone: -0.5,
       intensity: 0.5,
@@ -147,7 +150,7 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     description: 'Character-driven emotional stories',
     emoji: '💚',
     vector: {
-      drama: 0.9,
+      drama: 0.64,
       romance: 0.2,
       tone: 0.3,
       intensity: 0.2,
@@ -161,8 +164,8 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     description: 'Documentaries, docuseries, and based-on-true-events',
     emoji: '📰',
     vector: {
-      documentary: 0.9,
-      crime: 0.5,
+      documentary: 0.64,
+      crime: 0.4,
       history: 0.3,
       tone: -0.5,
       intensity: 0.5,
@@ -176,7 +179,7 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     description: 'Anime, animated series, and animated films',
     emoji: '🍥',
     vector: {
-      animation: 0.9,
+      animation: 0.64,
       action: 0.3,
       fantasy: 0.3,
       intensity: 0.3,
@@ -190,7 +193,7 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     description: 'Critically acclaimed, Oscar- and BAFTA-calibre',
     emoji: '🏆',
     vector: {
-      drama: 0.7,
+      drama: 0.52,
       history: 0.2,
       documentary: 0.2,
       tone: -0.3,
@@ -206,9 +209,9 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     description: 'Period pieces, historical epics, and war stories',
     emoji: '⚔️',
     vector: {
-      history: 0.9,
-      war: 0.7,
-      drama: 0.6,
+      history: 0.64,
+      war: 0.52,
+      drama: 0.46,
       tone: -0.3,
       intensity: 0.5,
       pacing: -0.5,
@@ -222,7 +225,7 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     description: 'Competition shows, reality TV, and entertainment',
     emoji: '📺',
     vector: {
-      reality: 0.9,
+      reality: 0.64,
       comedy: 0.2,
       tone: 0.5,
       pacing: 0.6,
@@ -244,12 +247,45 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       intensity: 0.2,
     },
   },
+  // 15. Family & Kids
+  {
+    id: 'family-kids',
+    name: 'Family & Kids',
+    description: 'Animated films, family adventures, and kid-friendly fun',
+    emoji: '👨‍👩‍👧‍👦',
+    vector: {
+      family: 0.64,
+      animation: 0.46,
+      comedy: 0.3,
+      adventure: 0.3,
+      tone: 0.8,
+      intensity: -0.6,
+      pacing: 0.3,
+    },
+  },
+  // 16. Westerns & Frontier
+  {
+    id: 'westerns-frontier',
+    name: 'Westerns & Frontier',
+    description: 'Cowboys, outlaws, and rugged frontier tales',
+    emoji: '🤠',
+    vector: {
+      western: 0.64,
+      action: 0.4,
+      adventure: 0.3,
+      drama: 0.3,
+      tone: -0.3,
+      intensity: 0.5,
+      pacing: 0.2,
+      era: 0.5,
+    },
+  },
 ];
 
 // ── Computation ──────────────────────────────────────────────────
 
 /**
- * Average the partial vectors of selected clusters into a full 25D seed vector.
+ * Average the partial vectors of selected clusters into a full 24D seed vector.
  *
  * For each dimension:
  * - Gather all non-undefined values from selected clusters
