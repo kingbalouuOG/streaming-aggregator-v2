@@ -50,3 +50,21 @@ nul
 
 # V1 archive (local reference only)
 _archive/
+
+# Test results & artifacts (local reference only)
+test-results/
+
+# Claude Code workspace (user-specific)
+.claude/
+
+# Playwright
+playwright-report/
+playwright/.cache/
+
+# Temporary / scratch files
+temp_*.json
+quiz_logs.json
+temp_logs.json
+
+# One-off analysis scripts (superseded by scripts/taste-tests/)
+scripts/quiz-report-*.js
