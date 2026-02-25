@@ -143,7 +143,8 @@ const fetchServicesFromAPI = async (
     }
 
     return [];
-  } catch {
+  } catch (err) {
+    console.error('[ServiceCache] getCachedServices failed:', err);
     return [];
   }
 };
@@ -155,7 +156,10 @@ export const prefetchServices = async (
   items: Array<{ id: string; type?: string }>,
 ): Promise<void> => {
   const promises = items.map((item) =>
-    getCachedServices(item.id, item.type || 'movie').catch(() => []),
+    getCachedServices(item.id, item.type || 'movie').catch((err) => {
+      console.error('[ServiceCache] prefetch failed for', item.id, err);
+      return [];
+    }),
   );
   await Promise.allSettled(promises);
 };

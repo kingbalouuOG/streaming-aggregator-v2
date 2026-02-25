@@ -35,6 +35,17 @@ export type Dimension = typeof ALL_DIMENSIONS[number];
 // ── TasteVector type ────────────────────────────────────────────
 export type TasteVector = Record<Dimension, number>;
 
+// ── ConfidenceVector type ───────────────────────────────────────
+/** Per-dimension evidence strength (0.0 = no data, 1.0 = fully evidenced) */
+export type ConfidenceVector = Record<Dimension, number>;
+
+/** Create an empty confidence vector (all dimensions at 0 — no evidence) */
+export function createEmptyConfidence(): ConfidenceVector {
+  const c = {} as ConfidenceVector;
+  for (const d of ALL_DIMENSIONS) c[d] = 0;
+  return c;
+}
+
 // ── Similarity weights per dimension (for weighted cosine) ──────
 export const DIMENSION_WEIGHTS: Record<Dimension, number> = {
   // Genre dimensions: 1.0 each (primary signal)
@@ -91,18 +102,43 @@ export function clampVector(v: TasteVector): TasteVector {
 
 // ── Vector math ─────────────────────────────────────────────────
 
-/** Weighted cosine similarity (0–100 scale) */
+const MIN_CONFIDENCE = 0.05;
+
+/**
+ * Compute effective per-dimension weights by modulating base weights with confidence.
+ * Dimensions with no evidence get near-zero weight (MIN_CONFIDENCE floor).
+ */
+export function computeEffectiveWeights(
+  confidence: ConfidenceVector,
+  minConfidence: number = MIN_CONFIDENCE
+): Record<Dimension, number> {
+  const out = {} as Record<Dimension, number>;
+  for (const d of ALL_DIMENSIONS) {
+    out[d] = DIMENSION_WEIGHTS[d] * Math.max(minConfidence, confidence[d]);
+  }
+  return out;
+}
+
+/**
+ * Weighted cosine similarity (0–100 scale).
+ * When confidence is provided, effective weights = DIMENSION_WEIGHTS × max(minConfidence, confidence).
+ */
 export function cosineSimilarity(
   a: TasteVector,
   b: TasteVector,
-  weights: Record<Dimension, number> = DIMENSION_WEIGHTS
+  weights: Record<Dimension, number> = DIMENSION_WEIGHTS,
+  confidence?: ConfidenceVector
 ): number {
+  const effectiveWeights = confidence
+    ? computeEffectiveWeights(confidence)
+    : weights;
+
   let dotProduct = 0;
   let magA = 0;
   let magB = 0;
 
   for (const d of ALL_DIMENSIONS) {
-    const w = weights[d];
+    const w = effectiveWeights[d];
     const wa = a[d] * w;
     const wb = b[d] * w;
     dotProduct += wa * wb;

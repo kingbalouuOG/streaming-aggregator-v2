@@ -1394,6 +1394,14 @@ const FIXED_PAIR_GENRES = new Set<string>([
 // ── Selection Functions ──────────────────────────────────────────
 
 /**
+ * Returns all quiz pairs from all pools (fixed + genre-responsive + adaptive).
+ * Used by computeQuizConfidence to match answers by pairId.
+ */
+export function getQuizPairs(): QuizPair[] {
+  return [...FIXED_PAIRS, ...GENRE_RESPONSIVE_POOL, ...ADAPTIVE_POOL];
+}
+
+/**
  * Returns the 3 fixed pairs shown to every user.
  */
 export function getFixedPairs(): QuizPair[] {

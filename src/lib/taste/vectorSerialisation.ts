@@ -12,7 +12,7 @@
  * - 24D (current): anime removed, family/western restored → direct ALL_DIMENSIONS
  */
 
-import { ALL_DIMENSIONS, type TasteVector, type Dimension, createEmptyVector } from './tasteVector';
+import { ALL_DIMENSIONS, type TasteVector, type ConfidenceVector, type Dimension, createEmptyVector, createEmptyConfidence } from './tasteVector';
 
 // Frozen positional order from the original 25D vector model.
 // Used to correctly read legacy Supabase float4[25] arrays.
@@ -66,4 +66,19 @@ export function arrayToVector(arr: number[]): TasteVector {
   }
 
   return vector;
+}
+
+/** Convert a named ConfidenceVector to a positional array for Supabase */
+export function confidenceToArray(confidence: ConfidenceVector): number[] {
+  return ALL_DIMENSIONS.map(dim => confidence[dim] ?? 0);
+}
+
+/** Convert a positional array from Supabase to a named ConfidenceVector */
+export function arrayToConfidence(arr: number[]): ConfidenceVector {
+  const confidence = createEmptyConfidence();
+  // Only current 24D format — no legacy confidence arrays exist
+  ALL_DIMENSIONS.forEach((dim, i) => {
+    confidence[dim] = arr[i] ?? 0;
+  });
+  return confidence;
 }

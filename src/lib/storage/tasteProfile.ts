@@ -8,7 +8,9 @@
 import storage, { isSupabaseActive } from '../storage';
 import {
   type TasteVector,
+  type ConfidenceVector,
   createEmptyVector,
+  createEmptyConfidence,
   createDefaultVector,
   clampVector,
   blendVector,
@@ -22,12 +24,13 @@ import * as supa from '../supabaseStorage';
 // ── Storage key & version ───────────────────────────────────────
 
 const STORAGE_KEY = '@taste_profile';
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 // ── Interfaces (per spec Part 3) ────────────────────────────────
 
 export interface TasteProfile {
   vector: TasteVector;
+  confidence?: ConfidenceVector;  // per-dimension evidence strength (0.0-1.0)
   quizCompleted: boolean;
   quizAnswers: QuizAnswer[];
   interactionLog: Interaction[];
@@ -58,13 +61,65 @@ const MAX_INTERACTIONS = 500;
 
 export const INTERACTION_WEIGHTS: Record<Interaction['action'], number> = {
   thumbs_up: 1.0,
-  thumbs_down: 0.8,
-  watchlist_add: 0.4,
-  watched: 0.3,
-  removed: 0.2,
+  thumbs_down: 0.6,
+  watchlist_add: 0.3,
+  watched: 0.5,
+  removed: 0.4,
 };
 
 const LEARNING_RATE = 0.1;
+
+// ── Confidence accumulation from interactions ────────────────────
+
+const CONFIDENCE_GAINS: Record<Interaction['action'], number> = {
+  thumbs_up: 0.05,
+  watched: 0.04,
+  thumbs_down: 0.04,
+  watchlist_add: 0.02,
+  removed: 0.03,
+};
+
+/**
+ * Update confidence vector based on an interaction.
+ * Dimensions touched by the content's vector get a confidence boost.
+ * Asymptotic formula: conf[d] + gain * (1.0 - conf[d])
+ */
+function updateConfidenceFromInteraction(
+  confidence: ConfidenceVector,
+  contentVector: TasteVector,
+  action: Interaction['action']
+): ConfidenceVector {
+  const gain = CONFIDENCE_GAINS[action];
+  const out = { ...confidence };
+  for (const d of ALL_DIMENSIONS) {
+    if (contentVector[d] !== 0) {
+      out[d] = Math.min(1.0, out[d] + gain * (1.0 - out[d]));
+    }
+  }
+  return out;
+}
+
+/**
+ * Ensure a profile has a confidence vector.
+ * If missing (v1 schema), creates one and seeds from quiz answers if available.
+ */
+async function ensureConfidence(profile: TasteProfile): Promise<ConfidenceVector> {
+  if (profile.confidence) return profile.confidence;
+
+  // New confidence — seed from quiz if available
+  if (profile.quizCompleted && profile.quizAnswers.length > 0) {
+    try {
+      const { computeQuizConfidence } = await import('../taste/quizScoring');
+      const { getQuizPairs } = await import('../taste/quizConfig');
+      const pairs = getQuizPairs();
+      return computeQuizConfidence(profile.quizAnswers, pairs);
+    } catch (err) {
+      console.error('[TasteProfile] Failed to compute confidence from quiz:', err);
+    }
+  }
+
+  return createEmptyConfidence();
+}
 
 // ── Recency weights (per spec Part 3) ───────────────────────────
 
@@ -80,21 +135,33 @@ function getRecencyWeight(timestampStr: string): number {
 // ── CRUD ────────────────────────────────────────────────────────
 
 export async function getTasteProfile(): Promise<TasteProfile | null> {
+  let profile: TasteProfile | null = null;
+
   if (isSupabaseActive()) {
     try {
-      return await supa.supaGetTasteProfile();
+      profile = await supa.supaGetTasteProfile();
     } catch (error) {
       console.error('[TasteProfile] Supabase getTasteProfile failed, falling back:', error);
     }
   }
-  try {
-    const raw = await storage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const profile = JSON.parse(raw) as TasteProfile;
-    return profile;
-  } catch {
-    return null;
+
+  if (!profile) {
+    try {
+      const raw = await storage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      profile = JSON.parse(raw) as TasteProfile;
+    } catch {
+      return null;
+    }
   }
+
+  // Migration: ensure confidence vector exists (v1 → v2)
+  if (profile && !profile.confidence) {
+    profile.confidence = await ensureConfidence(profile);
+    profile.version = SCHEMA_VERSION;
+  }
+
+  return profile;
 }
 
 export async function saveTasteProfile(profile: TasteProfile): Promise<void> {
@@ -175,8 +242,22 @@ export async function saveQuizResults(
   quizVector: TasteVector
 ): Promise<TasteProfile> {
   const existing = await getTasteProfile();
+
+  // Compute confidence from quiz answers
+  let confidence: ConfidenceVector;
+  try {
+    const { computeQuizConfidence } = await import('../taste/quizScoring');
+    const { getQuizPairs } = await import('../taste/quizConfig');
+    const pairs = getQuizPairs();
+    confidence = computeQuizConfidence(quizAnswers, pairs);
+  } catch (err) {
+    console.error('[TasteProfile] Failed to compute confidence in saveQuizResults:', err);
+    confidence = createEmptyConfidence();
+  }
+
   const profile: TasteProfile = {
     vector: quizVector,
+    confidence,
     quizCompleted: true,
     quizAnswers,
     interactionLog: existing?.interactionLog || [],
@@ -209,6 +290,10 @@ export async function recordInteraction(
     ? blendVectorAway(profile.vector, contentVector, weight, LEARNING_RATE)
     : blendVector(profile.vector, contentVector, weight, LEARNING_RATE);
 
+  // Update confidence
+  const currentConfidence = profile.confidence || createEmptyConfidence();
+  const newConfidence = updateConfidenceFromInteraction(currentConfidence, contentVector, action);
+
   // Append to interaction log
   const interaction: Interaction = {
     contentId: contentMeta.contentId,
@@ -227,6 +312,7 @@ export async function recordInteraction(
   const updated: TasteProfile = {
     ...profile,
     vector: newVector,
+    confidence: newConfidence,
     interactionLog: log,
     lastUpdated: new Date().toISOString(),
   };
@@ -246,13 +332,25 @@ export async function recomputeVector(): Promise<TasteProfile | null> {
 
   // Start from quiz vector if available, otherwise from genre defaults
   let vector: TasteVector;
+  let confidence: ConfidenceVector;
   if (profile.quizCompleted && profile.quizAnswers.length > 0) {
     vector = { ...profile.vector };
+    // Seed confidence from quiz
+    try {
+      const { computeQuizConfidence } = await import('../taste/quizScoring');
+      const { getQuizPairs } = await import('../taste/quizConfig');
+      const pairs = getQuizPairs();
+      confidence = computeQuizConfidence(profile.quizAnswers, pairs);
+    } catch (err) {
+      console.error('[TasteProfile] Failed to compute confidence in recomputeVector:', err);
+      confidence = createEmptyConfidence();
+    }
   } else {
     vector = createEmptyVector();
     for (const d of GENRE_DIMENSIONS) {
       if (profile.vector[d] > 0) vector[d] = 0.2;
     }
+    confidence = createEmptyConfidence();
   }
 
   // Apply each interaction with recency weighting
@@ -267,11 +365,15 @@ export async function recomputeVector(): Promise<TasteProfile | null> {
     } else {
       vector = blendVector(vector, interaction.contentVector, effectiveWeight, LEARNING_RATE);
     }
+
+    // Replay confidence accumulation
+    confidence = updateConfidenceFromInteraction(confidence, interaction.contentVector, interaction.action);
   }
 
   const updated: TasteProfile = {
     ...profile,
     vector: clampVector(vector),
+    confidence,
     lastUpdated: new Date().toISOString(),
   };
   await saveTasteProfile(updated);
@@ -301,6 +403,18 @@ export async function retakeQuiz(
     return saveQuizResults(newAnswers, newQuizVector);
   }
 
+  // Compute fresh confidence from new quiz answers
+  let confidence: ConfidenceVector;
+  try {
+    const { computeQuizConfidence } = await import('../taste/quizScoring');
+    const { getQuizPairs } = await import('../taste/quizConfig');
+    const pairs = getQuizPairs();
+    confidence = computeQuizConfidence(newAnswers, pairs);
+  } catch (err) {
+    console.error('[TasteProfile] Failed to compute confidence in retakeQuiz:', err);
+    confidence = createEmptyConfidence();
+  }
+
   // Start from new quiz vector, then replay all interactions on top
   let vector = { ...newQuizVector };
   for (const interaction of existing.interactionLog) {
@@ -314,10 +428,14 @@ export async function retakeQuiz(
     } else {
       vector = blendVector(vector, interaction.contentVector, effectiveWeight, LEARNING_RATE);
     }
+
+    // Replay confidence accumulation
+    confidence = updateConfidenceFromInteraction(confidence, interaction.contentVector, interaction.action);
   }
 
   const updated: TasteProfile = {
     vector: clampVector(vector),
+    confidence,
     quizCompleted: true,
     quizAnswers: newAnswers,
     interactionLog: existing.interactionLog,

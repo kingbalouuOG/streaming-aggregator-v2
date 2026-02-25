@@ -24,7 +24,7 @@ import {
 import { discoverMovies, discoverTV, getSimilarMovies, getSimilarTV } from '@/lib/api/tmdb';
 import { GENRE_NAMES, GENRE_KEY_TO_TMDB, convertMovieGenresToTV, VALID_TV_GENRE_IDS, MOVIE_TO_TV_GENRE } from '@/lib/constants/genres';
 import { getTasteProfile } from '@/lib/storage/tasteProfile';
-import type { TasteVector } from '@/lib/taste/tasteVector';
+import type { TasteVector, ConfidenceVector } from '@/lib/taste/tasteVector';
 import { cosineSimilarity, DIMENSION_WEIGHTS, getGenresFromVector } from '@/lib/taste/tasteVector';
 import { contentToVector } from '@/lib/taste/contentVectorMapping';
 import { generateGenreCombinations } from '@/lib/taste/genreBlending';
@@ -403,7 +403,7 @@ async function fetchSimilarContent(
   }
 }
 
-function scoreCandidate(item: ScoredCandidate, affinities: GenreAffinities, tasteVector?: TasteVector | null): number {
+function scoreCandidate(item: ScoredCandidate, affinities: GenreAffinities, tasteVector?: TasteVector | null, confidence?: ConfidenceVector | null): number {
   let score = 0;
 
   if (tasteVector) {
@@ -417,7 +417,7 @@ function scoreCandidate(item: ScoredCandidate, affinities: GenreAffinities, tast
       originalLanguage: (item as any).original_language || null,
     };
     const contentVector = contentToVector(contentMeta);
-    const similarity = cosineSimilarity(tasteVector, contentVector, DIMENSION_WEIGHTS); // 0-100
+    const similarity = cosineSimilarity(tasteVector, contentVector, DIMENSION_WEIGHTS, confidence || undefined); // 0-100
 
     if (item.source === 'similar') {
       score += similarity * VECTOR_WEIGHTS.TASTE_VECTOR;
@@ -492,7 +492,7 @@ function applyDiversityFilter(rankedItems: ScoredCandidate[], maxPerGenre = 3, t
   return result;
 }
 
-function generateReasonText(item: ScoredCandidate, affinities: GenreAffinities, tasteVector?: TasteVector | null): string {
+function generateReasonText(item: ScoredCandidate, affinities: GenreAffinities, tasteVector?: TasteVector | null, confidence?: ConfidenceVector | null): string {
   if (item.source === 'similar' && item.similarTo) {
     return `Similar to ${item.similarTo}`;
   }
@@ -508,7 +508,7 @@ function generateReasonText(item: ScoredCandidate, affinities: GenreAffinities, 
       originalLanguage: (item as any).original_language || null,
     };
     const contentVector = contentToVector(contentMeta);
-    const similarity = cosineSimilarity(tasteVector, contentVector, DIMENSION_WEIGHTS);
+    const similarity = cosineSimilarity(tasteVector, contentVector, DIMENSION_WEIGHTS, confidence || undefined);
 
     if (similarity >= 80) {
       // Find strongest matching genre
@@ -581,6 +581,7 @@ export async function generateRecommendations(
       getTasteProfile(),
     ]);
     const tasteVector = tasteProfile?.vector || null;
+    const confidence = tasteProfile?.confidence || null;
     const topGenres = getTopGenres(affinities, 3);
     const likedItems = await getTopLikedItems(3);
 
@@ -598,7 +599,7 @@ export async function generateRecommendations(
     const allCandidates = [...genreContent, ...similarContent];
     const scored = allCandidates.map((item) => ({
       ...item,
-      score: scoreCandidate(item, affinities, tasteVector),
+      score: scoreCandidate(item, affinities, tasteVector, confidence),
     }));
 
     scored.sort((a, b) => b.score - a.score);
@@ -632,7 +633,7 @@ export async function generateRecommendations(
       id: item.id,
       type: item.type,
       score: item.score,
-      reason: generateReasonText(item, affinities, tasteVector),
+      reason: generateReasonText(item, affinities, tasteVector, confidence),
       source: item.source,
       metadata: {
         title: item.title || item.name || 'Unknown',
@@ -703,6 +704,7 @@ export async function generateHiddenGems(
       getTasteProfile(),
     ]);
     const tasteVector = tasteProfile?.vector || null;
+    const confidence = tasteProfile?.confidence || null;
     const topGenres = getTopGenres(affinities, 3);
 
     const providerParam = userPlatforms.length > 0
@@ -771,7 +773,7 @@ export async function generateHiddenGems(
         const bDate = b.release_date || b.first_air_date || '';
         const aVec = contentToVector({ genreIds: a.genre_ids || [], popularity: a.popularity || 0, voteCount: a.vote_count || 50, releaseYear: aDate ? parseInt(aDate.slice(0, 4)) || null : null, originalLanguage: a.original_language || null });
         const bVec = contentToVector({ genreIds: b.genre_ids || [], popularity: b.popularity || 0, voteCount: b.vote_count || 50, releaseYear: bDate ? parseInt(bDate.slice(0, 4)) || null : null, originalLanguage: b.original_language || null });
-        return cosineSimilarity(tasteVector, bVec, DIMENSION_WEIGHTS) - cosineSimilarity(tasteVector, aVec, DIMENSION_WEIGHTS);
+        return cosineSimilarity(tasteVector, bVec, DIMENSION_WEIGHTS, confidence || undefined) - cosineSimilarity(tasteVector, aVec, DIMENSION_WEIGHTS, confidence || undefined);
       });
     }
 

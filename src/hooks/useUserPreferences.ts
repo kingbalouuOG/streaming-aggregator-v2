@@ -100,9 +100,11 @@ export function useUserPreferences(currentUserId?: string | null) {
 
     // Always initialise from clusters first (sets seed_vector in Supabase).
     // Then overlay quiz results if the user completed the quiz.
-    await initializeFromClusters(data.clusters).catch(() => {});
+    await initializeFromClusters(data.clusters)
+      .catch((e) => console.error('[Onboarding] initializeFromClusters failed:', e));
     if (data.quizAnswers && data.tasteVector) {
-      await saveQuizResults(data.quizAnswers, data.tasteVector).catch(() => {});
+      await saveQuizResults(data.quizAnswers, data.tasteVector)
+        .catch((e) => console.error('[Onboarding] saveQuizResults failed:', e));
     }
 
     setProfile({ userId, name: data.name, email: data.email, createdAt: Date.now() });

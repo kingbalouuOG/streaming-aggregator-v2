@@ -8,7 +8,7 @@
 
 import { supabase } from './supabase';
 import { getAuthUserId } from './storage';
-import { vectorToArray, arrayToVector } from './taste/vectorSerialisation';
+import { vectorToArray, arrayToVector, confidenceToArray, arrayToConfidence } from './taste/vectorSerialisation';
 import { providerIdToServiceId, serviceIdToProviderId } from './adapters/platformAdapter';
 import { UK_PROVIDERS_ARRAY } from './constants/platforms';
 import type { ServiceId } from '@/components/platformLogos';
@@ -503,6 +503,7 @@ export async function supaGetTasteProfile(): Promise<TasteProfile | null> {
 
   return {
     vector: arrayToVector(data.vector),
+    confidence: data.confidence ? arrayToConfidence(data.confidence) : undefined,
     quizCompleted: data.quiz_completed || false,
     quizAnswers: (data.quiz_answers as QuizAnswer[]) || [],
     interactionLog: (data.interaction_log as Interaction[]) || [],
@@ -521,6 +522,7 @@ export async function supaSaveTasteProfile(
   const row: Record<string, any> = {
     user_id: userId,
     vector: vectorToArray(profile.vector),
+    confidence: profile.confidence ? confidenceToArray(profile.confidence) : null,
     quiz_completed: profile.quizCompleted,
     quiz_answers: profile.quizAnswers,
     interaction_log: profile.interactionLog,

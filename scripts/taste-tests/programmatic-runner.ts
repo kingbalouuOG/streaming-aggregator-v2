@@ -42,7 +42,7 @@ import {
   selectAdaptivePairs,
 } from '../../../../src/lib/taste/quizConfig';
 
-import { computeQuizVector } from '../../../../src/lib/taste/quizScoring';
+import { computeQuizVector, computeQuizConfidence } from '../../../../src/lib/taste/quizScoring';
 
 import type { QuizAnswer as RealQuizAnswer } from '../../../../src/lib/storage/tasteProfile';
 
@@ -82,6 +82,13 @@ interface TestRunOutput {
   adaptivePairsSelected: string[];
   cappedDimensions: string[];
   vectorMagnitude: number;
+  confidenceVector: Record<string, number>;
+  confidenceStats: {
+    mean: number;
+    dimsAbove50: number;
+    dimsAbove20: number;
+    zeroDims: number;
+  };
   timestamp: string;
 }
 
@@ -489,6 +496,16 @@ function executeRun(input: TestRunInput): TestRunOutput {
   const vectorArray = ALL_DIMENSIONS.map(d => finalVector[d]);
   const magnitude = Math.sqrt(vectorArray.reduce((sum, v) => sum + v * v, 0));
 
+  // 11. Compute quiz confidence
+  const confidence = computeQuizConfidence(allAnswers, allPairs);
+  const confRecord: Record<string, number> = {};
+  const confValues: number[] = [];
+  for (const dim of ALL_DIMENSIONS) {
+    confRecord[dim] = confidence[dim];
+    confValues.push(confidence[dim]);
+  }
+  const confMean = confValues.reduce((s, v) => s + v, 0) / confValues.length;
+
   return {
     id: input.id,
     category: input.category,
@@ -506,6 +523,13 @@ function executeRun(input: TestRunInput): TestRunOutput {
     adaptivePairsSelected: adaptivePairs.map(p => p.id),
     cappedDimensions,
     vectorMagnitude: magnitude,
+    confidenceVector: confRecord,
+    confidenceStats: {
+      mean: confMean,
+      dimsAbove50: confValues.filter(v => v > 0.5).length,
+      dimsAbove20: confValues.filter(v => v > 0.2).length,
+      zeroDims: confValues.filter(v => v === 0).length,
+    },
     timestamp: new Date().toISOString(),
   };
 }
@@ -592,6 +616,27 @@ async function main() {
     }
   }
 
+  // Aggregate confidence stats
+  const allConfMeans = results.map(r => r.confidenceStats.mean);
+  const allDimsAbove50 = results.map(r => r.confidenceStats.dimsAbove50);
+  const allDimsAbove20 = results.map(r => r.confidenceStats.dimsAbove20);
+  const avgConfMean = allConfMeans.reduce((s, v) => s + v, 0) / allConfMeans.length;
+  const avgDimsAbove50 = allDimsAbove50.reduce((s, v) => s + v, 0) / allDimsAbove50.length;
+  const avgDimsAbove20 = allDimsAbove20.reduce((s, v) => s + v, 0) / allDimsAbove20.length;
+
+  // Quiz blind spots: dims with zero confidence in >80% of runs
+  const dimZeroCounts: Record<string, number> = {};
+  for (const dim of ALL_DIMENSIONS) dimZeroCounts[dim] = 0;
+  for (const result of results) {
+    for (const dim of ALL_DIMENSIONS) {
+      if (result.confidenceVector[dim] === 0) dimZeroCounts[dim]++;
+    }
+  }
+  const blindSpotThreshold = results.length * 0.8;
+  const quizBlindSpots = ALL_DIMENSIONS
+    .filter(dim => dimZeroCounts[dim] > blindSpotThreshold)
+    .map(dim => dim as string);
+
   // Write results
   writeFileSync(
     join(outDir, 'results.json'),
@@ -613,6 +658,18 @@ async function main() {
       runsWithNearZeroVector: zeroVectorCount,
       determinismPassed,
       determinismFailed
+    },
+    confidence: {
+      avgConfidenceMean: +avgConfMean.toFixed(4),
+      avgDimsAbove50: +avgDimsAbove50.toFixed(1),
+      avgDimsAbove20: +avgDimsAbove20.toFixed(1),
+      quizBlindSpots,
+      perDimensionAvg: Object.fromEntries(
+        ALL_DIMENSIONS.map(dim => [
+          dim,
+          +(results.reduce((s, r) => s + r.confidenceVector[dim], 0) / results.length).toFixed(4)
+        ])
+      ),
     }
   };
 
@@ -626,6 +683,15 @@ async function main() {
   console.log(`Runs with capped dimensions (±0.95): ${cappedCount}`);
   console.log(`Runs with near-zero vector (<0.1 magnitude): ${zeroVectorCount}`);
   console.log(`Determinism checks: ${determinismPassed} passed, ${determinismFailed} failed`);
+  console.log(`\n=== Confidence ===`);
+  console.log(`Avg confidence mean: ${avgConfMean.toFixed(4)}`);
+  console.log(`Avg dims with confidence > 0.5: ${avgDimsAbove50.toFixed(1)} / ${ALL_DIMENSIONS.length}`);
+  console.log(`Avg dims with confidence > 0.2: ${avgDimsAbove20.toFixed(1)} / ${ALL_DIMENSIONS.length}`);
+  if (quizBlindSpots.length > 0) {
+    console.log(`⚠ Quiz blind spots (zero conf in >80% of runs): ${quizBlindSpots.join(', ')}`);
+  } else {
+    console.log(`No quiz blind spots detected`);
+  }
   console.log(`\nResults written to: ${outDir}`);
 }
 

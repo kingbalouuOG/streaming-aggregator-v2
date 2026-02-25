@@ -1,7 +1,7 @@
 {
   "programmatic": {
     "totalRuns": 200,
-    "outputDir": "./test-results/t2/programmatic",
+    "outputDir": "./test-results/t5/programmatic",
     "categories": {
       "A_realistic": {
         "runs": 80,
@@ -101,7 +101,7 @@
   },
   "e2e": {
     "totalRuns": 30,
-    "outputDir": "./test-results/t2/e2e",
+    "outputDir": "./test-results/t5/e2e",
     "baseUrl": "http://localhost:3000",
     "delayBetweenRuns": 3000,
     "testUserPrefix": "_test_",
@@ -150,7 +150,7 @@
     }
   },
   "report": {
-    "outputDir": "./test-results/t2/report",
+    "outputDir": "./test-results/t5/report",
     "thresholds": {
       "deadDimensionStdDev": 0.05,
       "capCollisionWarning": 0.95,

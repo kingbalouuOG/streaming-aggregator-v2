@@ -253,6 +253,72 @@ function analyseAdaptivePairs(results: any[]): any {
   };
 }
 
+function analyseConfidenceCoverage(results: any[]): any {
+  if (results.length === 0 || !results[0].confidenceVector) {
+    return {
+      avgConfidenceMean: 0,
+      avgDimsAbove50: 0,
+      avgDimsAbove20: 0,
+      totalDimensions: 0,
+      runsWithGoodCoverage: 0,
+      quizBlindSpots: [],
+      perDimensionAvg: {},
+    };
+  }
+
+  const dims = Object.keys(results[0].confidenceVector);
+  const totalDims = dims.length;
+
+  // Per-dimension averages and zero counts
+  const dimSums: Record<string, number> = {};
+  const dimZeroCounts: Record<string, number> = {};
+  for (const dim of dims) {
+    dimSums[dim] = 0;
+    dimZeroCounts[dim] = 0;
+  }
+
+  let totalConfMean = 0;
+  let totalDimsAbove50 = 0;
+  let totalDimsAbove20 = 0;
+  let runsWithGoodCoverage = 0;
+
+  for (const result of results) {
+    const conf = result.confidenceVector;
+    const values = dims.map(d => conf[d] as number);
+    const runMean = values.reduce((s: number, v: number) => s + v, 0) / values.length;
+    const above50 = values.filter((v: number) => v > 0.5).length;
+    const above20 = values.filter((v: number) => v > 0.2).length;
+
+    totalConfMean += runMean;
+    totalDimsAbove50 += above50;
+    totalDimsAbove20 += above20;
+    if (above20 > totalDims * 0.5) runsWithGoodCoverage++;
+
+    for (const dim of dims) {
+      dimSums[dim] += conf[dim] as number;
+      if (conf[dim] === 0) dimZeroCounts[dim]++;
+    }
+  }
+
+  const n = results.length;
+  const blindSpotThreshold = n * 0.8;
+
+  return {
+    avgConfidenceMean: totalConfMean / n,
+    avgDimsAbove50: totalDimsAbove50 / n,
+    avgDimsAbove20: totalDimsAbove20 / n,
+    totalDimensions: totalDims,
+    runsWithGoodCoverage,
+    quizBlindSpots: dims.filter(d => dimZeroCounts[d] > blindSpotThreshold),
+    perDimensionAvg: Object.fromEntries(
+      dims.map(d => [d, +(dimSums[d] / n).toFixed(4)])
+    ),
+    perDimensionZeroRate: Object.fromEntries(
+      dims.map(d => [d, +(dimZeroCounts[d] / n).toFixed(4)])
+    ),
+  };
+}
+
 function generateDimensionCSV(stats: DimensionStats[]): string {
   const headers = ['dimension', 'mean', 'median', 'std_dev', 'min', 'max', 'cap_collisions', 'is_dead'];
   const rows = stats.map(s => [
@@ -375,6 +441,22 @@ async function main() {
     console.log(`  Most selected: ${adaptivePairs.mostSelected[0].pairId} (${adaptivePairs.mostSelected[0].count} times)`);
   }
 
+  // === CONFIDENCE COVERAGE ===
+  console.log('\nAnalysing confidence coverage...');
+  const confidenceCoverage = analyseConfidenceCoverage(programmaticResults);
+  writeFileSync(
+    join(outputDir, 'confidence-coverage.json'),
+    JSON.stringify(confidenceCoverage, null, 2)
+  );
+
+  console.log(`  Avg confidence mean: ${confidenceCoverage.avgConfidenceMean.toFixed(4)}`);
+  console.log(`  Avg dims with conf > 0.5: ${confidenceCoverage.avgDimsAbove50.toFixed(1)} / ${confidenceCoverage.totalDimensions}`);
+  console.log(`  Avg dims with conf > 0.2: ${confidenceCoverage.avgDimsAbove20.toFixed(1)} / ${confidenceCoverage.totalDimensions}`);
+  console.log(`  Runs with >50% dims above 0.2: ${confidenceCoverage.runsWithGoodCoverage} / ${programmaticResults.length}`);
+  if (confidenceCoverage.quizBlindSpots.length > 0) {
+    console.log(`  ⚠ Quiz blind spots (zero conf in >80% of runs): ${confidenceCoverage.quizBlindSpots.join(', ')}`);
+  }
+
   // === E2E SUMMARY ===
   if (e2eResults.length > 0) {
     console.log('\nE2E Results:');
@@ -404,6 +486,12 @@ async function main() {
       poorClusterPairs: clusterDiff.poorDifferentiation.length,
       adaptivePairsUsed: adaptivePairs.totalUniquePairsUsed
     },
+    confidence: {
+      avgConfidenceMean: +confidenceCoverage.avgConfidenceMean.toFixed(4),
+      avgDimsAbove50: +confidenceCoverage.avgDimsAbove50.toFixed(1),
+      avgDimsAbove20: +confidenceCoverage.avgDimsAbove20.toFixed(1),
+      quizBlindSpots: confidenceCoverage.quizBlindSpots,
+    },
     e2e: {
       totalRuns: e2eResults.length,
       passed: e2eResults.filter(r => r.errors.length === 0).length,
@@ -427,6 +515,9 @@ async function main() {
   }
   if (clusterDiff.poorDifferentiation.length > 0) {
     summary.warnings.push(`${clusterDiff.poorDifferentiation.length} cluster pair(s) produce insufficiently distinct vectors`);
+  }
+  if (confidenceCoverage.quizBlindSpots.length > 0) {
+    summary.warnings.push(`Quiz blind spots (zero confidence in >80% of runs): ${confidenceCoverage.quizBlindSpots.join(', ')}`);
   }
 
   writeFileSync(

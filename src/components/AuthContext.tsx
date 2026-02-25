@@ -55,7 +55,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsPasswordRecovery(true);
       }
       setLoading(false);
-    }).catch(() => {
+    }).catch((err) => {
+      console.error('[Auth] Session check failed:', err);
+      setSession(null);
+      setAuthState(false, null);
       setLoading(false);
     });
 

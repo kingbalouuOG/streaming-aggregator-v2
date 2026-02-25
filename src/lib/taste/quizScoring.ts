@@ -14,8 +14,10 @@
 
 import {
   type TasteVector,
+  type ConfidenceVector,
   type GenreDimension,
   createEmptyVector,
+  createEmptyConfidence,
   clampVector,
   getTopGenres,
   genreKeyToName,
@@ -149,7 +151,7 @@ function computeAnswerDelta(pair: QuizPair, choice: QuizAnswer['chosenOption']):
  *
  * @param baseVector - Initial vector from genre selections (selected=0.5, unselected=0.2)
  * @param answers - The 10 quiz answers
- * @param pairs - The 10 quiz pairs (in order matching answers)
+ * @param pairs - Quiz pairs (matched to answers by pairId)
  * @returns The adjusted taste vector
  */
 export function computeQuizVector(
@@ -158,10 +160,11 @@ export function computeQuizVector(
   pairs: QuizPair[]
 ): TasteVector {
   let vector = { ...baseVector };
+  const pairMap = new Map(pairs.map(p => [p.id, p]));
 
-  for (let i = 0; i < answers.length && i < pairs.length; i++) {
-    const answer = answers[i];
-    const pair = pairs[i];
+  for (const answer of answers) {
+    const pair = pairMap.get(answer.pairId);
+    if (!pair) continue;
     const delta = computeAnswerDelta(pair, answer.chosenOption);
     const phaseWeight = PHASE_WEIGHTS[answer.phase] ?? 1.0;
 
@@ -227,6 +230,48 @@ export function computeQuizVector(
     .map(([k, v]) => `${k}:${(v as number).toFixed(3)}`);
   debug.info('QuizScoring', `Final vector (${answers.length} answers)`, { topDimensions: topDims });
   return final;
+}
+
+// ── Quiz confidence computation ──────────────────────────────────
+
+// Confidence gains per answer type:
+// A/B = clear directional signal (highest)
+// both = user likes the range but less precise
+// neither = preferences outside the pair's range — weak signal
+// skip = no information
+const QUIZ_CONFIDENCE_GAINS: Record<QuizAnswer['chosenOption'], number> = {
+  A: 0.20,
+  B: 0.20,
+  both: 0.10,
+  neither: 0.05,
+  skip: 0.00,
+};
+
+/**
+ * Compute per-dimension confidence from quiz answers.
+ * Each answered pair contributes confidence to its tested dimensions.
+ * Matches answers to pairs by pairId (not array index).
+ * Values are additive and clamped to [0.0, 1.0].
+ */
+export function computeQuizConfidence(
+  answers: QuizAnswer[],
+  pairs: QuizPair[]
+): ConfidenceVector {
+  const confidence = createEmptyConfidence();
+  const pairMap = new Map(pairs.map(p => [p.id, p]));
+
+  for (const answer of answers) {
+    const pair = pairMap.get(answer.pairId);
+    if (!pair) continue;
+    const gain = QUIZ_CONFIDENCE_GAINS[answer.chosenOption];
+    if (gain === 0) continue;
+
+    for (const dim of pair.dimensionsTested) {
+      confidence[dim] = Math.min(1.0, confidence[dim] + gain);
+    }
+  }
+
+  return confidence;
 }
 
 // ── Get top genre names from vector ─────────────────────────────

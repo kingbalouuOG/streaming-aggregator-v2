@@ -4,7 +4,8 @@
  * Maps TMDb content metadata to a TasteVector so we can compute
  * similarity between user preferences and content items.
  *
- * Content vectors use binary genre values (1.0 or 0.0).
+ * Content vectors use positional genre weighting — primary genres (earlier in
+ * TMDb's relevance-ordered array) get higher weights than secondary ones.
  * Meta dimensions are derived from genre combinations + metadata signals.
  */
 
@@ -188,13 +189,25 @@ export interface ContentMetadata {
   runtime?: number | null;
 }
 
+// ── Positional genre weights ────────────────────────────────────
+// TMDb returns genres in relevance order (confirmed via D3 investigation).
+// Primary genres get full weight, secondary/tertiary progressively less.
+
+const POSITIONAL_WEIGHTS = [1.0, 0.7, 0.5, 0.3];
+
+function getPositionalWeight(index: number): number {
+  return POSITIONAL_WEIGHTS[Math.min(index, POSITIONAL_WEIGHTS.length - 1)];
+}
+
 // ── In-memory cache ─────────────────────────────────────────────
 
 const vectorCache = new Map<string, TasteVector>();
 const MAX_CACHE_SIZE = 500;
+const CACHE_VERSION = 2; // v2: positional weighting (was binary)
 
 function getCacheKey(meta: ContentMetadata): string {
-  return `${meta.genreIds.sort().join(',')}_${meta.popularity ?? ''}_${meta.voteCount ?? ''}_${meta.releaseYear ?? ''}_${meta.originalLanguage ?? ''}`;
+  // Don't sort genreIds — ordering carries relevance information
+  return `cv${CACHE_VERSION}_${meta.genreIds.join(',')}_${meta.popularity ?? ''}_${meta.voteCount ?? ''}_${meta.releaseYear ?? ''}_${meta.originalLanguage ?? ''}`;
 }
 
 export function clearContentVectorCache() {
@@ -205,7 +218,8 @@ export function clearContentVectorCache() {
 
 /**
  * Map TMDb content metadata to a TasteVector.
- * Content vectors use binary genre values (1.0 or 0.0).
+ * Genre dimensions use positional weighting — primary genres (first in TMDb's
+ * relevance-ordered array) score higher than secondary ones.
  * Meta dimensions derived from genre combos + metadata.
  */
 export function contentToVector(meta: ContentMetadata): TasteVector {
@@ -216,10 +230,14 @@ export function contentToVector(meta: ContentMetadata): TasteVector {
   const v = createEmptyVector();
   const genreSet = new Set(meta.genreIds);
 
-  // ─ Genre dimensions: binary 1.0/0.0 ─
-  for (const genreId of meta.genreIds) {
+  // ─ Genre dimensions: positional weighting ─
+  // TMDb genre order is relevance-based (primary first).
+  // max() prevents a later lower-weighted occurrence from overwriting a higher one.
+  for (let i = 0; i < meta.genreIds.length; i++) {
+    const genreId = meta.genreIds[i];
     const dim = TMDB_GENRE_TO_DIM[genreId];
-    if (dim) v[dim] = 1.0;
+    const weight = getPositionalWeight(i);
+    if (dim) v[dim] = Math.max(v[dim], weight);
   }
 
   // ─ Japanese animation: ensure animation dimension is active ─
@@ -227,19 +245,24 @@ export function contentToVector(meta: ContentMetadata): TasteVector {
     meta.originalLanguage === 'ja' &&
     genreSet.has(16) // Animation
   ) {
-    v.animation = 1.0;
+    v.animation = Math.max(v.animation, 1.0);
   }
 
   // ─ Compound TV genres: activate BOTH component dimensions ─
+  // Use the positional weight of the compound genre's position in the array.
   if (genreSet.has(10765)) {
-    // Sci-Fi & Fantasy (TV): ensure both dimensions are active
-    v.scifi = 1.0;
-    v.fantasy = 1.0;
+    // Sci-Fi & Fantasy (TV): ensure both dimensions get the compound's weight
+    const idx = meta.genreIds.indexOf(10765);
+    const weight = idx >= 0 ? getPositionalWeight(idx) : 0.5;
+    v.scifi = Math.max(v.scifi, weight);
+    v.fantasy = Math.max(v.fantasy, weight);
   }
   if (genreSet.has(10759)) {
-    // Action & Adventure (TV): ensure both dimensions are active
-    v.action = 1.0;
-    v.adventure = 1.0;
+    // Action & Adventure (TV): ensure both dimensions get the compound's weight
+    const idx = meta.genreIds.indexOf(10759);
+    const weight = idx >= 0 ? getPositionalWeight(idx) : 0.5;
+    v.action = Math.max(v.action, weight);
+    v.adventure = Math.max(v.adventure, weight);
   }
 
   // ─ Meta dimensions ─

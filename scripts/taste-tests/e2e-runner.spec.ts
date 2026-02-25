@@ -63,6 +63,7 @@ interface E2EResult {
   homepageSections: string[];
   forYouTitles: string[];
   errors: string[];
+  consoleErrors: string[];
   duration: number;
   timestamp: string;
 }
@@ -118,9 +119,9 @@ const AVAILABLE_SERVICES = [
 // Cluster display names from tasteClusters.ts
 const AVAILABLE_CLUSTERS = [
   'Feel-Good & Funny', 'Action & Adrenaline', 'Dark Thrillers',
-  'Rom-Coms & Love Stories', 'Epic Sci-Fi & Fantasy', 'Horror & Supernatural',
-  'Mind-Bending Mysteries', 'Heartfelt Drama', 'True Crime & Real Stories',
-  'Anime & Animation', 'Prestige & Award-Winners', 'History & War',
+  'Rom-Coms & Love', 'Epic Sci-Fi & Fantasy', 'Horror & Supernatural',
+  'Mind-Bending', 'Heartfelt Drama', 'True Crime',
+  'Anime & Animation', 'Award-Winners', 'History & War',
   'Reality & Entertainment', 'Cult & Indie', 'Family & Kids',
   'Westerns & Frontier',
 ];
@@ -254,6 +255,7 @@ async function selectServices(page: Page, scenario: E2EScenario) {
   for (const service of scenario.services) {
     try {
       const serviceButton = page.locator('button.rounded-2xl').filter({ hasText: service }).first();
+      await serviceButton.scrollIntoViewIfNeeded();
       await serviceButton.click();
       await page.waitForTimeout(100);
     } catch (e) {
@@ -262,6 +264,7 @@ async function selectServices(page: Page, scenario: E2EScenario) {
   }
 
   const continueBtn = page.locator('button').filter({ hasText: 'Continue' }).last();
+  await continueBtn.scrollIntoViewIfNeeded();
   await continueBtn.click();
   await page.waitForTimeout(scenario.interactionDelay);
 }
@@ -278,6 +281,7 @@ async function selectClusters(page: Page, scenario: E2EScenario) {
   for (const cluster of scenario.clusters) {
     try {
       const clusterButton = page.locator('button.rounded-2xl').filter({ hasText: cluster }).first();
+      await clusterButton.scrollIntoViewIfNeeded();
       await clusterButton.click();
       await page.waitForTimeout(100);
     } catch (e) {
@@ -286,6 +290,7 @@ async function selectClusters(page: Page, scenario: E2EScenario) {
   }
 
   const continueBtn = page.locator('button').filter({ hasText: 'Continue' }).last();
+  await continueBtn.scrollIntoViewIfNeeded();
   await continueBtn.click();
   await page.waitForTimeout(scenario.interactionDelay);
 }
@@ -390,9 +395,10 @@ async function extractHomepageData(page: Page): Promise<{
   try {
     const forYouH2 = page.locator('h2').filter({ hasText: 'For You' });
     if (await forYouH2.isVisible()) {
-      // Navigate up to the section container, then extract card alt texts
+      // Navigate up to the <section> container (h2 → header div → section)
       const section = forYouH2.locator('..').locator('..');
-      const titles = await section.locator('img').evaluateAll(
+      // Only poster images (w-full), not service badge icons (w-5)
+      const titles = await section.locator('img.w-full').evaluateAll(
         (imgs) => imgs.map(img => img.getAttribute('alt')).filter(Boolean)
       );
       forYouTitles.push(...titles as string[]);
@@ -405,18 +411,37 @@ async function extractHomepageData(page: Page): Promise<{
 }
 
 /**
- * Extract the taste profile from localStorage.
- * Storage key: @taste_profile (from src/lib/storage/tasteProfile.ts)
+ * Extract the taste profile from Supabase (authenticated users store there, not localStorage).
+ * Reads the session token from localStorage, then fetches from the Supabase REST API.
  */
 async function extractTasteProfile(page: Page): Promise<any | null> {
   try {
-    const profile = await page.evaluate(() => {
-      const raw = localStorage.getItem('@taste_profile');
-      return raw ? JSON.parse(raw) : null;
-    });
+    const profile = await page.evaluate(async ({ url, anonKey }) => {
+      // Find Supabase auth session in localStorage
+      const keys = Object.keys(localStorage);
+      const sessionKey = keys.find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+      if (!sessionKey) return null;
+      const session = JSON.parse(localStorage.getItem(sessionKey)!);
+      const accessToken = session?.access_token;
+      const userId = session?.user?.id;
+      if (!accessToken || !userId) return null;
+
+      const res = await fetch(
+        `${url}/rest/v1/taste_profiles?user_id=eq.${userId}&select=*`,
+        {
+          headers: {
+            'apikey': anonKey,
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
+      if (!res.ok) return null;
+      const rows = await res.json();
+      return rows[0] || null;
+    }, { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY });
     return profile;
   } catch (e) {
-    console.warn('Could not extract taste profile from localStorage');
+    console.warn('Could not extract taste profile from Supabase');
     return null;
   }
 }
@@ -446,6 +471,12 @@ test.describe('Taste Profile E2E Tests', () => {
       const startTime = Date.now();
       const errors: string[] = [];
 
+      // Capture console errors from the app
+      const consoleErrors: string[] = [];
+      page.on('console', msg => {
+        if (msg.type() === 'error') consoleErrors.push(msg.text());
+      });
+
       try {
         // Navigate to app
         await page.goto(e2eConfig.baseUrl, { waitUntil: 'networkidle' });
@@ -467,7 +498,18 @@ test.describe('Taste Profile E2E Tests', () => {
 
         // Step 3: Extract results from homepage
         const { sections, forYouTitles } = await extractHomepageData(page);
-        const tasteProfile = await extractTasteProfile(page);
+
+        // Extract from Supabase with retry (profile may still be writing)
+        let tasteProfile = await extractTasteProfile(page);
+        if (tasteProfile && !tasteProfile.quiz_completed) {
+          await page.waitForTimeout(5000);
+          tasteProfile = await extractTasteProfile(page);
+        }
+
+        // Attach taste/storage console errors for debugging
+        if (consoleErrors.length > 0) {
+          errors.push(...consoleErrors.filter(e => e.includes('[TasteProfile]') || e.includes('[SupaStorage]')));
+        }
 
         const result: E2EResult = {
           id: scenario.id,
@@ -482,6 +524,7 @@ test.describe('Taste Profile E2E Tests', () => {
           homepageSections: sections,
           forYouTitles,
           errors,
+          consoleErrors,
           duration: Date.now() - startTime,
           timestamp: new Date().toISOString()
         };
@@ -510,6 +553,7 @@ test.describe('Taste Profile E2E Tests', () => {
           homepageSections: [],
           forYouTitles: [],
           errors,
+          consoleErrors,
           duration: Date.now() - startTime,
           timestamp: new Date().toISOString()
         });
