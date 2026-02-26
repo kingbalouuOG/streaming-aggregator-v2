@@ -3,10 +3,9 @@
  *
  * Defines quiz pair pools and selection algorithms for the onboarding taste quiz.
  *
- * Three phases:
- * 1. Fixed pairs (3) — identical for every user, cover broad dimensions
- * 2. Genre-responsive pairs (2) — chosen based on user's genre selections
- * 3. Adaptive pairs (5) — chosen based on interim vector to resolve ambiguity
+ * Two phases:
+ * 1. Fixed pairs (5) — identical for every user, cover broad dimensions
+ * 2. Adaptive pairs (5) — chosen based on interim vector to resolve ambiguity
  *
  * Each pair presents two titles. The user can pick A, B, Both, or Neither.
  * The preference signal is used to refine the user's TasteVector.
@@ -14,7 +13,6 @@
 
 import {
   type TasteVector,
-  createEmptyVector,
   GENRE_DIMENSIONS,
   META_DIMENSIONS,
 } from './tasteVector';
@@ -40,7 +38,7 @@ export interface QuizPair {
   triggerClusterIds?: string[];
 }
 
-// ── Fixed Pairs (3) ──────────────────────────────────────────────
+// ── Fixed Pairs (5) ──────────────────────────────────────────────
 // Shown to every user in order. Cover the broadest dimensional spread.
 
 const FIXED_PAIRS: QuizPair[] = [
@@ -125,16 +123,71 @@ const FIXED_PAIRS: QuizPair[] = [
       },
     },
   },
+  {
+    id: 'fixed-4',
+    phase: 'fixed',
+    dimensionsTested: ['comedy', 'crime', 'thriller', 'tone', 'popularity', 'intensity'],
+    optionA: {
+      tmdbId: 1396,
+      mediaType: 'tv',
+      title: 'Breaking Bad',
+      year: 2008,
+      descriptor: 'Intense crime drama masterpiece',
+      vectorPosition: {
+        crime: 0.8, drama: 0.7, thriller: 0.8,
+        tone: -0.9, pacing: 0.6, era: 0.5, popularity: 0.9, intensity: 1.0,
+      },
+    },
+    optionB: {
+      tmdbId: 1668,
+      mediaType: 'tv',
+      title: 'Friends',
+      year: 1994,
+      descriptor: 'Beloved sitcom comfort classic',
+      vectorPosition: {
+        comedy: 0.9, romance: 0.4,
+        tone: 0.9, pacing: 0.3, era: -0.2, popularity: 1.0, intensity: -0.7,
+      },
+    },
+  },
+  {
+    id: 'fixed-5',
+    phase: 'fixed',
+    dimensionsTested: ['animation', 'adventure', 'family', 'war', 'tone', 'era', 'intensity'],
+    optionA: {
+      tmdbId: 14160,
+      mediaType: 'movie',
+      title: 'Up',
+      year: 2009,
+      descriptor: 'Heartfelt animated adventure',
+      vectorPosition: {
+        animation: 0.8, adventure: 0.7, family: 0.8, comedy: 0.4,
+        tone: 0.6, pacing: 0.2, era: 0.4, popularity: 0.8, intensity: -0.2,
+      },
+    },
+    optionB: {
+      tmdbId: 4613,
+      mediaType: 'tv',
+      title: 'Band of Brothers',
+      year: 2001,
+      descriptor: 'Harrowing WWII brotherhood epic',
+      vectorPosition: {
+        war: 0.9, drama: 0.8, history: 0.7, action: 0.7,
+        tone: -0.8, pacing: 0.3, era: 0.0, popularity: 0.8, intensity: 0.9,
+      },
+    },
+  },
 ];
 
-// ── Genre-Responsive Pool (13 pairs) ────────────────────────────
-// Selected based on user's genre picks not already covered by fixed pairs.
+// ── Legacy Pairs ─────────────────────────────────────────────────
+// Retained for backward compatibility: users who completed the quiz
+// before U7 may have answers referencing these pairIds. Not selectable
+// for new quizzes — only used for vector/confidence computation lookups.
 
-const GENRE_RESPONSIVE_POOL: QuizPair[] = [
+const LEGACY_PAIRS: QuizPair[] = [
   {
     id: 'genre-animation',
     phase: 'genre-responsive',
-    triggerGenres: ['animation'],
     dimensionsTested: ['animation', 'action', 'adventure', 'tone', 'era'],
     optionA: {
       tmdbId: 324857,
@@ -160,37 +213,8 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
     },
   },
   {
-    id: 'genre-anime',
-    phase: 'genre-responsive',
-    triggerGenres: ['animation'],
-    dimensionsTested: ['animation', 'action', 'tone', 'intensity'],
-    optionA: {
-      tmdbId: 1429,
-      mediaType: 'tv',
-      title: 'Attack on Titan',
-      year: 2013,
-      descriptor: 'Brutal dark fantasy anime action',
-      vectorPosition: {
-        animation: 0.8, action: 0.7, drama: 0.5, fantasy: 0.6,
-        tone: -0.9, pacing: 0.8, era: 0.5, popularity: 0.7, intensity: 1.0,
-      },
-    },
-    optionB: {
-      tmdbId: 8392,
-      mediaType: 'movie',
-      title: 'My Neighbour Totoro',
-      year: 1988,
-      descriptor: 'Gentle whimsical anime for all ages',
-      vectorPosition: {
-        animation: 0.8, fantasy: 0.7,
-        tone: 0.9, pacing: -0.5, era: -0.3, popularity: 0.6, intensity: -0.8,
-      },
-    },
-  },
-  {
     id: 'genre-documentary',
     phase: 'genre-responsive',
-    triggerGenres: ['documentary'],
     dimensionsTested: ['documentary', 'tone', 'pacing'],
     optionA: {
       tmdbId: 68595,
@@ -216,177 +240,8 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
     },
   },
   {
-    id: 'genre-horror',
-    phase: 'genre-responsive',
-    triggerGenres: ['horror'],
-    dimensionsTested: ['horror', 'comedy', 'tone', 'intensity', 'era'],
-    optionA: {
-      tmdbId: 23827,
-      mediaType: 'movie',
-      title: 'Paranormal Activity',
-      year: 2007,
-      descriptor: 'Low-budget found-footage supernatural horror',
-      vectorPosition: {
-        horror: 0.8, thriller: 0.5, mystery: 0.3,
-        tone: -0.8, pacing: -0.3, era: 0.3, popularity: 0.7, intensity: 0.9,
-      },
-    },
-    optionB: {
-      tmdbId: 120467,
-      mediaType: 'movie',
-      title: 'The Grand Budapest Hotel',
-      year: 2014,
-      descriptor: 'Whimsical quirky comedy caper',
-      vectorPosition: {
-        comedy: 0.7, drama: 0.5, adventure: 0.4, crime: 0.4,
-        tone: 0.5, pacing: 0.3, era: 0.4, popularity: 0.5, intensity: -0.3,
-      },
-    },
-  },
-  {
-    id: 'genre-comedy-drama',
-    phase: 'genre-responsive',
-    triggerGenres: ['comedy', 'drama'],
-    dimensionsTested: ['drama', 'comedy', 'tone', 'pacing'],
-    optionA: {
-      tmdbId: 278,
-      mediaType: 'movie',
-      title: 'The Shawshank Redemption',
-      year: 1994,
-      descriptor: 'Powerful prison drama about hope',
-      vectorPosition: {
-        drama: 0.8, crime: 0.5,
-        tone: -0.3, pacing: -0.4, era: -0.2, popularity: 0.9, intensity: 0.5,
-      },
-    },
-    optionB: {
-      tmdbId: 8363,
-      mediaType: 'movie',
-      title: 'Superbad',
-      year: 2007,
-      descriptor: 'Raunchy teen comedy mayhem',
-      vectorPosition: {
-        comedy: 0.8,
-        tone: 0.8, pacing: 0.6, era: 0.3, popularity: 0.7, intensity: -0.2,
-      },
-    },
-  },
-  {
-    id: 'genre-crime',
-    phase: 'genre-responsive',
-    triggerGenres: ['crime'],
-    dimensionsTested: ['crime', 'mystery', 'tone', 'era', 'pacing'],
-    optionA: {
-      tmdbId: 238,
-      mediaType: 'movie',
-      title: 'The Godfather',
-      year: 1972,
-      descriptor: 'Epic mafia crime saga',
-      vectorPosition: {
-        crime: 0.8, drama: 0.7,
-        tone: -0.8, pacing: -0.5, era: -0.7, popularity: 0.9, intensity: 0.7,
-      },
-    },
-    optionB: {
-      tmdbId: 546554,
-      mediaType: 'movie',
-      title: 'Knives Out',
-      year: 2019,
-      descriptor: 'Witty modern whodunit mystery',
-      vectorPosition: {
-        crime: 0.6, mystery: 0.7, comedy: 0.5, thriller: 0.4,
-        tone: 0.3, pacing: 0.4, era: 0.8, popularity: 0.7, intensity: 0.2,
-      },
-    },
-  },
-  {
-    id: 'genre-war-history',
-    phase: 'genre-responsive',
-    triggerGenres: ['war', 'history'],
-    dimensionsTested: ['war', 'history', 'drama', 'intensity', 'pacing'],
-    optionA: {
-      tmdbId: 857,
-      mediaType: 'movie',
-      title: 'Saving Private Ryan',
-      year: 1998,
-      descriptor: 'Visceral WWII combat epic',
-      vectorPosition: {
-        war: 0.8, drama: 0.6, action: 0.7,
-        tone: -0.8, pacing: 0.5, era: -0.2, popularity: 0.9, intensity: 1.0,
-      },
-    },
-    optionB: {
-      tmdbId: 205596,
-      mediaType: 'movie',
-      title: 'The Imitation Game',
-      year: 2014,
-      descriptor: 'Cerebral wartime code-breaking drama',
-      vectorPosition: {
-        drama: 0.7, history: 0.7, war: 0.4, thriller: 0.4,
-        tone: -0.2, pacing: -0.3, era: 0.4, popularity: 0.7, intensity: -0.1,
-      },
-    },
-  },
-  {
-    id: 'genre-fantasy',
-    phase: 'genre-responsive',
-    triggerGenres: ['fantasy'],
-    dimensionsTested: ['fantasy', 'adventure', 'tone', 'popularity'],
-    optionA: {
-      tmdbId: 120,
-      mediaType: 'movie',
-      title: 'The Lord of the Rings: The Fellowship of the Ring',
-      year: 2001,
-      descriptor: 'Grand epic fantasy quest',
-      vectorPosition: {
-        fantasy: 0.8, adventure: 0.7, action: 0.6, drama: 0.5,
-        tone: -0.2, pacing: 0.3, era: 0.0, popularity: 0.9, intensity: 0.7,
-      },
-    },
-    optionB: {
-      tmdbId: 671,
-      mediaType: 'movie',
-      title: "Harry Potter and the Philosopher's Stone",
-      year: 2001,
-      descriptor: 'Magical coming-of-age school adventure',
-      vectorPosition: {
-        fantasy: 0.8, adventure: 0.6,
-        tone: 0.5, pacing: 0.2, era: 0.0, popularity: 0.9, intensity: 0.1,
-      },
-    },
-  },
-  {
-    id: 'genre-musical',
-    phase: 'genre-responsive',
-    triggerGenres: ['musical'],
-    dimensionsTested: ['musical', 'drama', 'tone', 'era', 'popularity'],
-    optionA: {
-      tmdbId: 316029,
-      mediaType: 'movie',
-      title: 'The Greatest Showman',
-      year: 2017,
-      descriptor: 'Uplifting spectacle musical drama',
-      vectorPosition: {
-        musical: 0.8, drama: 0.5, romance: 0.4,
-        tone: 0.8, pacing: 0.5, era: 0.7, popularity: 0.8, intensity: 0.2,
-      },
-    },
-    optionB: {
-      tmdbId: 1574,
-      mediaType: 'movie',
-      title: 'Chicago',
-      year: 2002,
-      descriptor: 'Sassy crime-world jazz musical',
-      vectorPosition: {
-        musical: 0.8, comedy: 0.4, crime: 0.5, drama: 0.5,
-        tone: 0.0, pacing: 0.4, era: 0.0, popularity: 0.6, intensity: 0.3,
-      },
-    },
-  },
-  {
     id: 'genre-reality',
     phase: 'genre-responsive',
-    triggerGenres: ['reality'],
     dimensionsTested: ['reality', 'tone', 'pacing'],
     optionA: {
       tmdbId: 87012,
@@ -414,7 +269,6 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
   {
     id: 'genre-family',
     phase: 'genre-responsive',
-    triggerGenres: ['family'],
     dimensionsTested: ['family', 'animation', 'comedy', 'tone'],
     optionA: {
       tmdbId: 109445,
@@ -439,96 +293,13 @@ const GENRE_RESPONSIVE_POOL: QuizPair[] = [
       },
     },
   },
-  {
-    id: 'genre-western',
-    phase: 'genre-responsive',
-    triggerGenres: ['western'],
-    dimensionsTested: ['western', 'action', 'drama', 'tone'],
-    optionA: {
-      tmdbId: 68718,
-      mediaType: 'movie',
-      title: 'Django Unchained',
-      year: 2012,
-      descriptor: 'Stylish violent revenge western',
-      vectorPosition: {
-        western: 0.8, action: 0.7, drama: 0.6,
-        tone: -0.6, pacing: 0.3, era: 0.5, popularity: 0.8, intensity: 0.9,
-      },
-    },
-    optionB: {
-      tmdbId: 44264,
-      mediaType: 'movie',
-      title: 'True Grit',
-      year: 2010,
-      descriptor: 'Gritty frontier justice adventure',
-      vectorPosition: {
-        western: 0.8, adventure: 0.6, drama: 0.6,
-        tone: -0.3, pacing: 0.0, era: 0.4, popularity: 0.7, intensity: 0.5,
-      },
-    },
-  },
-  {
-    id: 'genre-cult-indie',
-    phase: 'genre-responsive',
-    triggerClusterIds: ['cult-indie'],
-    dimensionsTested: ['romance', 'crime', 'tone', 'popularity'],
-    optionA: {
-      tmdbId: 194,
-      mediaType: 'movie',
-      title: 'Amélie',
-      year: 2001,
-      descriptor: 'Whimsical arthouse romantic charm',
-      vectorPosition: {
-        comedy: 0.6, romance: 0.7,
-        tone: 0.8, pacing: -0.1, era: 0.0, popularity: -0.2, intensity: -0.5,
-      },
-    },
-    optionB: {
-      tmdbId: 115,
-      mediaType: 'movie',
-      title: 'The Big Lebowski',
-      year: 1998,
-      descriptor: 'Shaggy cult comedy classic',
-      vectorPosition: {
-        comedy: 0.8, crime: 0.4,
-        tone: 0.3, pacing: -0.1, era: -0.2, popularity: 0.3, intensity: -0.2,
-      },
-    },
-  },
 ];
 
-// ── Adaptive Pool (32 pairs) ────────────────────────────────────
+// ── Adaptive Pool (39 pairs) ────────────────────────────────────
 // Selected based on which dimensions of the interim vector are most ambiguous.
 
 const ADAPTIVE_POOL: QuizPair[] = [
   // ── Tone + intensity probes ─────────────────────────────────────
-  {
-    id: 'adaptive-1',
-    phase: 'adaptive',
-    dimensionsTested: ['tone', 'intensity', 'pacing', 'crime', 'comedy'],
-    optionA: {
-      tmdbId: 1396,
-      mediaType: 'tv',
-      title: 'Breaking Bad',
-      year: 2008,
-      descriptor: 'Tense dark crime transformation saga',
-      vectorPosition: {
-        crime: 0.7, drama: 0.6, thriller: 0.7,
-        tone: -0.9, pacing: 0.4, era: 0.3, popularity: 0.9, intensity: 0.9,
-      },
-    },
-    optionB: {
-      tmdbId: 1668,
-      mediaType: 'tv',
-      title: 'Friends',
-      year: 1994,
-      descriptor: 'Classic feel-good sitcom',
-      vectorPosition: {
-        comedy: 0.8, romance: 0.4,
-        tone: 0.9, pacing: 0.3, era: -0.2, popularity: 0.9, intensity: -0.7,
-      },
-    },
-  },
   {
     id: 'adaptive-2',
     phase: 'adaptive',
@@ -1275,33 +1046,6 @@ const ADAPTIVE_POOL: QuizPair[] = [
     },
   },
   {
-    id: 'adaptive-29',
-    phase: 'adaptive',
-    dimensionsTested: ['war', 'comedy', 'tone', 'intensity', 'era'],
-    optionA: {
-      tmdbId: 4613,
-      mediaType: 'tv',
-      title: 'Band of Brothers',
-      year: 2001,
-      descriptor: 'Harrowing WWII brotherhood miniseries',
-      vectorPosition: {
-        war: 0.8, drama: 0.7, action: 0.6, history: 0.7,
-        tone: -0.8, pacing: 0.5, era: -0.3, popularity: 0.8, intensity: 0.9,
-      },
-    },
-    optionB: {
-      tmdbId: 1400,
-      mediaType: 'tv',
-      title: 'Seinfeld',
-      year: 1989,
-      descriptor: 'Legendary observational comedy classic',
-      vectorPosition: {
-        comedy: 0.8,
-        tone: 0.8, pacing: 0.3, era: -0.3, popularity: 0.9, intensity: -0.7,
-      },
-    },
-  },
-  {
     id: 'adaptive-30',
     phase: 'adaptive',
     dimensionsTested: ['reality', 'drama', 'tone', 'popularity'],
@@ -1382,139 +1126,267 @@ const ADAPTIVE_POOL: QuizPair[] = [
       },
     },
   },
+  // ── Merged from genre-responsive pool (U7) ────────────────────────
+  {
+    id: 'genre-anime',
+    phase: 'adaptive',
+    dimensionsTested: ['animation', 'action', 'tone', 'intensity'],
+    optionA: {
+      tmdbId: 1429,
+      mediaType: 'tv',
+      title: 'Attack on Titan',
+      year: 2013,
+      descriptor: 'Brutal dark fantasy anime action',
+      vectorPosition: {
+        animation: 0.8, action: 0.7, drama: 0.5, fantasy: 0.6,
+        tone: -0.9, pacing: 0.8, era: 0.5, popularity: 0.7, intensity: 1.0,
+      },
+    },
+    optionB: {
+      tmdbId: 8392,
+      mediaType: 'movie',
+      title: 'My Neighbour Totoro',
+      year: 1988,
+      descriptor: 'Gentle whimsical anime for all ages',
+      vectorPosition: {
+        animation: 0.8, fantasy: 0.7,
+        tone: 0.9, pacing: -0.5, era: -0.3, popularity: 0.6, intensity: -0.8,
+      },
+    },
+  },
+  {
+    id: 'genre-horror',
+    phase: 'adaptive',
+    dimensionsTested: ['horror', 'comedy', 'tone', 'intensity', 'era'],
+    optionA: {
+      tmdbId: 23827,
+      mediaType: 'movie',
+      title: 'Paranormal Activity',
+      year: 2007,
+      descriptor: 'Low-budget found-footage supernatural horror',
+      vectorPosition: {
+        horror: 0.8, thriller: 0.5, mystery: 0.3,
+        tone: -0.8, pacing: -0.3, era: 0.3, popularity: 0.7, intensity: 0.9,
+      },
+    },
+    optionB: {
+      tmdbId: 120467,
+      mediaType: 'movie',
+      title: 'The Grand Budapest Hotel',
+      year: 2014,
+      descriptor: 'Whimsical quirky comedy caper',
+      vectorPosition: {
+        comedy: 0.7, drama: 0.5, adventure: 0.4, crime: 0.4,
+        tone: 0.5, pacing: 0.3, era: 0.4, popularity: 0.5, intensity: -0.3,
+      },
+    },
+  },
+  {
+    id: 'genre-comedy-drama',
+    phase: 'adaptive',
+    dimensionsTested: ['drama', 'comedy', 'tone', 'pacing'],
+    optionA: {
+      tmdbId: 278,
+      mediaType: 'movie',
+      title: 'The Shawshank Redemption',
+      year: 1994,
+      descriptor: 'Powerful prison drama about hope',
+      vectorPosition: {
+        drama: 0.8, crime: 0.5,
+        tone: -0.3, pacing: -0.4, era: -0.2, popularity: 0.9, intensity: 0.5,
+      },
+    },
+    optionB: {
+      tmdbId: 8363,
+      mediaType: 'movie',
+      title: 'Superbad',
+      year: 2007,
+      descriptor: 'Raunchy teen comedy mayhem',
+      vectorPosition: {
+        comedy: 0.8,
+        tone: 0.8, pacing: 0.6, era: 0.3, popularity: 0.7, intensity: -0.2,
+      },
+    },
+  },
+  {
+    id: 'genre-crime',
+    phase: 'adaptive',
+    dimensionsTested: ['crime', 'mystery', 'tone', 'era', 'pacing'],
+    optionA: {
+      tmdbId: 238,
+      mediaType: 'movie',
+      title: 'The Godfather',
+      year: 1972,
+      descriptor: 'Epic mafia crime saga',
+      vectorPosition: {
+        crime: 0.8, drama: 0.7,
+        tone: -0.8, pacing: -0.5, era: -0.7, popularity: 0.9, intensity: 0.7,
+      },
+    },
+    optionB: {
+      tmdbId: 546554,
+      mediaType: 'movie',
+      title: 'Knives Out',
+      year: 2019,
+      descriptor: 'Witty modern whodunit mystery',
+      vectorPosition: {
+        crime: 0.6, mystery: 0.7, comedy: 0.5, thriller: 0.4,
+        tone: 0.3, pacing: 0.4, era: 0.8, popularity: 0.7, intensity: 0.2,
+      },
+    },
+  },
+  {
+    id: 'genre-war-history',
+    phase: 'adaptive',
+    dimensionsTested: ['war', 'history', 'drama', 'intensity', 'pacing'],
+    optionA: {
+      tmdbId: 857,
+      mediaType: 'movie',
+      title: 'Saving Private Ryan',
+      year: 1998,
+      descriptor: 'Visceral WWII combat epic',
+      vectorPosition: {
+        war: 0.8, drama: 0.6, action: 0.7,
+        tone: -0.8, pacing: 0.5, era: -0.2, popularity: 0.9, intensity: 1.0,
+      },
+    },
+    optionB: {
+      tmdbId: 205596,
+      mediaType: 'movie',
+      title: 'The Imitation Game',
+      year: 2014,
+      descriptor: 'Cerebral wartime code-breaking drama',
+      vectorPosition: {
+        drama: 0.7, history: 0.7, war: 0.4, thriller: 0.4,
+        tone: -0.2, pacing: -0.3, era: 0.4, popularity: 0.7, intensity: -0.1,
+      },
+    },
+  },
+  {
+    id: 'genre-fantasy',
+    phase: 'adaptive',
+    dimensionsTested: ['fantasy', 'adventure', 'tone', 'popularity'],
+    optionA: {
+      tmdbId: 120,
+      mediaType: 'movie',
+      title: 'The Lord of the Rings: The Fellowship of the Ring',
+      year: 2001,
+      descriptor: 'Grand epic fantasy quest',
+      vectorPosition: {
+        fantasy: 0.8, adventure: 0.7, action: 0.6, drama: 0.5,
+        tone: -0.2, pacing: 0.3, era: 0.0, popularity: 0.9, intensity: 0.7,
+      },
+    },
+    optionB: {
+      tmdbId: 671,
+      mediaType: 'movie',
+      title: "Harry Potter and the Philosopher's Stone",
+      year: 2001,
+      descriptor: 'Magical coming-of-age school adventure',
+      vectorPosition: {
+        fantasy: 0.8, adventure: 0.6,
+        tone: 0.5, pacing: 0.2, era: 0.0, popularity: 0.9, intensity: 0.1,
+      },
+    },
+  },
+  {
+    id: 'genre-musical',
+    phase: 'adaptive',
+    dimensionsTested: ['musical', 'drama', 'tone', 'era', 'popularity'],
+    optionA: {
+      tmdbId: 316029,
+      mediaType: 'movie',
+      title: 'The Greatest Showman',
+      year: 2017,
+      descriptor: 'Uplifting spectacle musical drama',
+      vectorPosition: {
+        musical: 0.8, drama: 0.5, romance: 0.4,
+        tone: 0.8, pacing: 0.5, era: 0.7, popularity: 0.8, intensity: 0.2,
+      },
+    },
+    optionB: {
+      tmdbId: 1574,
+      mediaType: 'movie',
+      title: 'Chicago',
+      year: 2002,
+      descriptor: 'Sassy crime-world jazz musical',
+      vectorPosition: {
+        musical: 0.8, comedy: 0.4, crime: 0.5, drama: 0.5,
+        tone: 0.0, pacing: 0.4, era: 0.0, popularity: 0.6, intensity: 0.3,
+      },
+    },
+  },
+  {
+    id: 'genre-western',
+    phase: 'adaptive',
+    dimensionsTested: ['western', 'action', 'drama', 'tone'],
+    optionA: {
+      tmdbId: 68718,
+      mediaType: 'movie',
+      title: 'Django Unchained',
+      year: 2012,
+      descriptor: 'Stylish violent revenge western',
+      vectorPosition: {
+        western: 0.8, action: 0.7, drama: 0.6,
+        tone: -0.6, pacing: 0.3, era: 0.5, popularity: 0.8, intensity: 0.9,
+      },
+    },
+    optionB: {
+      tmdbId: 44264,
+      mediaType: 'movie',
+      title: 'True Grit',
+      year: 2010,
+      descriptor: 'Gritty frontier justice adventure',
+      vectorPosition: {
+        western: 0.8, adventure: 0.6, drama: 0.6,
+        tone: -0.3, pacing: 0.0, era: 0.4, popularity: 0.7, intensity: 0.5,
+      },
+    },
+  },
+  {
+    id: 'genre-cult-indie',
+    phase: 'adaptive',
+    dimensionsTested: ['romance', 'crime', 'tone', 'popularity'],
+    optionA: {
+      tmdbId: 194,
+      mediaType: 'movie',
+      title: 'Amélie',
+      year: 2001,
+      descriptor: 'Whimsical arthouse romantic charm',
+      vectorPosition: {
+        comedy: 0.6, romance: 0.7,
+        tone: 0.8, pacing: -0.1, era: 0.0, popularity: -0.2, intensity: -0.5,
+      },
+    },
+    optionB: {
+      tmdbId: 115,
+      mediaType: 'movie',
+      title: 'The Big Lebowski',
+      year: 1998,
+      descriptor: 'Shaggy cult comedy classic',
+      vectorPosition: {
+        comedy: 0.8, crime: 0.4,
+        tone: 0.3, pacing: -0.1, era: -0.2, popularity: 0.3, intensity: -0.2,
+      },
+    },
+  },
 ];
-
-// ── Genres covered by fixed pairs ────────────────────────────────
-// Used to determine which user genres still need probing.
-
-const FIXED_PAIR_GENRES = new Set<string>([
-  'action', 'scifi', 'thriller', 'horror', 'romance', 'drama', 'musical', 'history',
-]);
 
 // ── Selection Functions ──────────────────────────────────────────
 
 /**
- * Returns all quiz pairs from all pools (fixed + genre-responsive + adaptive).
+ * Returns all quiz pairs from all pools (fixed + adaptive + legacy).
  * Used by computeQuizConfidence to match answers by pairId.
  */
 export function getQuizPairs(): QuizPair[] {
-  return [...FIXED_PAIRS, ...GENRE_RESPONSIVE_POOL, ...ADAPTIVE_POOL];
+  return [...FIXED_PAIRS, ...ADAPTIVE_POOL, ...LEGACY_PAIRS];
 }
 
 /**
- * Returns the 3 fixed pairs shown to every user.
+ * Returns the 5 fixed pairs shown to every user.
  */
 export function getFixedPairs(): QuizPair[] {
   return [...FIXED_PAIRS];
-}
-
-/**
- * Select 2 genre-responsive pairs based on user's top genre dimensions.
- *
- * Strategy:
- * 1. Accepts genre dimension keys directly (e.g. "scifi", "thriller")
- * 2. Find user genres NOT already covered by fixed pairs
- * 3. Match uncovered genres to pool via triggerGenres
- * 4. Pick 2 pairs with best coverage and no title overlap
- * 5. If all user genres are covered, pick within-genre subtype pairs
- */
-export function selectGenreResponsivePairs(
-  userGenreKeys: string[],
-  fixedPairIds: string[],
-  selectedClusterIds: string[] = [],
-): QuizPair[] {
-  const fixedIds = new Set(fixedPairIds);
-
-  // Find user genres not covered by the fixed pairs
-  const uncoveredGenres = userGenreKeys.filter((g) => !FIXED_PAIR_GENRES.has(g));
-
-  // Collect all TMDb IDs from fixed pairs to avoid title repeats
-  const usedTmdbIds = new Set<number>();
-  for (const pair of FIXED_PAIRS) {
-    if (fixedIds.has(pair.id)) {
-      usedTmdbIds.add(pair.optionA.tmdbId);
-      usedTmdbIds.add(pair.optionB.tmdbId);
-    }
-  }
-
-  // Score each genre-responsive pair by genre coverage + cluster match
-  const scoredPairs = GENRE_RESPONSIVE_POOL.map((pair) => {
-    const triggers = pair.triggerGenres || [];
-    const clusterTriggers = pair.triggerClusterIds || [];
-    let score = 0;
-    for (const trigger of triggers) {
-      if (uncoveredGenres.includes(trigger)) {
-        score += 2; // Strong match: user picked this genre and it's uncovered
-      } else if (userGenreKeys.includes(trigger)) {
-        score += 1; // Weaker match: user picked it but fixed pairs already cover it
-      }
-    }
-    // Cluster-based scoring: explicit cluster selection is a stronger signal
-    // than derived genre keys. Score 3 guarantees a slot unless a genre pair
-    // matches 2+ uncovered genres (score 4).
-    for (const clusterId of clusterTriggers) {
-      if (selectedClusterIds.includes(clusterId)) {
-        score += 3;
-      }
-    }
-    return { pair, score };
-  });
-
-  // Sort by score descending
-  scoredPairs.sort((a, b) => b.score - a.score);
-
-  // Pick top pairs avoiding title overlap
-  const selected: QuizPair[] = [];
-  const selectedTmdbIds = new Set(usedTmdbIds);
-
-  for (const { pair } of scoredPairs) {
-    if (selected.length >= 2) break;
-
-    const aId = pair.optionA.tmdbId;
-    const bId = pair.optionB.tmdbId;
-
-    // Skip if either title was already used
-    if (selectedTmdbIds.has(aId) || selectedTmdbIds.has(bId)) continue;
-
-    selected.push(pair);
-    selectedTmdbIds.add(aId);
-    selectedTmdbIds.add(bId);
-  }
-
-  // If we couldn't find 2 (all genres covered), fall back to highest-scored
-  // available pairs even if the genres are already covered
-  if (selected.length < 2) {
-    for (const { pair } of scoredPairs) {
-      if (selected.length >= 2) break;
-      if (selected.some((s) => s.id === pair.id)) continue;
-
-      const aId = pair.optionA.tmdbId;
-      const bId = pair.optionB.tmdbId;
-      if (selectedTmdbIds.has(aId) || selectedTmdbIds.has(bId)) continue;
-
-      selected.push(pair);
-      selectedTmdbIds.add(aId);
-      selectedTmdbIds.add(bId);
-    }
-  }
-
-  // Last resort: take any available pair
-  if (selected.length < 2) {
-    for (const pair of GENRE_RESPONSIVE_POOL) {
-      if (selected.length >= 2) break;
-      if (selected.some((s) => s.id === pair.id)) continue;
-
-      const aId = pair.optionA.tmdbId;
-      const bId = pair.optionB.tmdbId;
-      if (selectedTmdbIds.has(aId) || selectedTmdbIds.has(bId)) continue;
-
-      selected.push(pair);
-      selectedTmdbIds.add(aId);
-      selectedTmdbIds.add(bId);
-    }
-  }
-
-  return selected;
 }
 
 /**
@@ -1567,7 +1439,7 @@ export function selectAdaptivePairs(
   // ── Step 2: Collect all TMDb IDs from used pairs ──
 
   const usedTmdbIds = new Set<number>();
-  const allPools = [...FIXED_PAIRS, ...GENRE_RESPONSIVE_POOL, ...ADAPTIVE_POOL];
+  const allPools = [...FIXED_PAIRS, ...ADAPTIVE_POOL, ...LEGACY_PAIRS];
   for (const pair of allPools) {
     if (usedPairIds.has(pair.id)) {
       usedTmdbIds.add(pair.optionA.tmdbId);
@@ -1642,4 +1514,4 @@ export function selectAdaptivePairs(
 
 // ── Exports for testing / direct access ──────────────────────────
 
-export { FIXED_PAIRS, GENRE_RESPONSIVE_POOL, ADAPTIVE_POOL, FIXED_PAIR_GENRES };
+export { FIXED_PAIRS, ADAPTIVE_POOL, LEGACY_PAIRS };

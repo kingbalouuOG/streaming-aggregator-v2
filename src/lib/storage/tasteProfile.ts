@@ -41,6 +41,7 @@ export interface TasteProfile {
 export interface QuizAnswer {
   pairId: string;
   chosenOption: 'A' | 'B' | 'neither' | 'skip' | 'both';
+  // 'genre-responsive' retained for backward compat with pre-U7 stored answers
   phase: 'fixed' | 'genre-responsive' | 'adaptive';
   timestamp: string;
 }

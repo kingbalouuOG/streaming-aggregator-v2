@@ -2,8 +2,8 @@
  * Quiz Scoring Engine
  *
  * Processes quiz answers into taste vector adjustments.
- * Phase 1-2 (fixed + genre-responsive) pairs apply full-weight deltas.
- * Phase 3 (adaptive) pairs apply 70% weight deltas.
+ * Phase 1 (fixed) pairs apply full-weight deltas.
+ * Phase 2 (adaptive) pairs apply 70% weight deltas.
  *
  * Answer types:
  * - A / B: Winner-loser delta with negative damping on tested dimensions
@@ -31,10 +31,10 @@ import { debug } from '../debugLogger';
 
 // ── Phase weights ───────────────────────────────────────────────
 
-const PHASE_WEIGHTS: Record<QuizAnswer['phase'], number> = {
+const PHASE_WEIGHTS: Record<'fixed' | 'adaptive' | 'genre-responsive', number> = {
   'fixed': 1.0,
-  'genre-responsive': 1.0,
   'adaptive': 0.7,
+  'genre-responsive': 1.0, // backward compat: old stored answers retain full weight
 };
 
 // Negative deltas on tested dimensions are softened — choosing Dark Knight

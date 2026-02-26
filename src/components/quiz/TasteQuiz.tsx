@@ -3,7 +3,7 @@
  *
  * State machine: intro → question(1-5) → interstitial → question(6-10) → completion
  *
- * On mount: selects fixed (3) + genre-responsive (2) pairs.
+ * On mount: loads 5 fixed pairs.
  * After Q5: computes interim vector, selects 5 adaptive pairs.
  * After Q10: computes final vector, shows completion screen.
  */
@@ -11,9 +11,9 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { TasteVector } from '@/lib/taste/tasteVector';
-import { computeClusterSeedVector, getTopGenreKeysFromClusters } from '@/lib/taste/tasteClusters';
+import { computeClusterSeedVector } from '@/lib/taste/tasteClusters';
 import type { QuizPair } from '@/lib/taste/quizConfig';
-import { getFixedPairs, selectGenreResponsivePairs, selectAdaptivePairs } from '@/lib/taste/quizConfig';
+import { getFixedPairs, selectAdaptivePairs } from '@/lib/taste/quizConfig';
 import { computeQuizVector, getTopGenreNames } from '@/lib/taste/quizScoring';
 import { getMostAmbiguousDimensions } from '@/lib/taste/quizScoring';
 import type { QuizAnswer } from '@/lib/storage/tasteProfile';
@@ -56,7 +56,7 @@ export function TasteQuiz({ onComplete, onSkip, showSkip, userClusters, showClus
   // Local clusters: start from userClusters, can be updated by cluster-select stage
   const [localClusters, setLocalClusters] = useState<string[]>(userClusters);
 
-  // Pairs: first 5 (fixed+genre-responsive) selected on mount, last 5 (adaptive) after Q5
+  // Pairs: first 5 (fixed) loaded on mount, last 5 (adaptive) after Q5
   const [phase1Pairs, setPhase1Pairs] = useState<QuizPair[]>([]);
   const [phase2Pairs, setPhase2Pairs] = useState<QuizPair[]>([]);
 
@@ -68,18 +68,12 @@ export function TasteQuiz({ onComplete, onSkip, showSkip, userClusters, showClus
   // Base vector from cluster selections
   const baseVector = useMemo(() => computeClusterSeedVector(localClusters), [localClusters.join(',')]);
 
-  // ── Initialize phase 1 pairs (fixed + genre-responsive) ──
+  // ── Initialize phase 1 pairs (5 fixed) ──
   useEffect(() => {
     const fixed = getFixedPairs();
-    const fixedIds = fixed.map((p) => p.id);
-    const topGenreKeys = getTopGenreKeysFromClusters(localClusters, 3);
-    const genreResponsive = selectGenreResponsivePairs(topGenreKeys, fixedIds, localClusters);
-    const pairs = [...fixed, ...genreResponsive];
-    setPhase1Pairs(pairs);
-
-    // Fetch posters for phase 1 pairs
-    fetchPosters(pairs);
-  }, [localClusters.join(',')]);
+    setPhase1Pairs(fixed);
+    fetchPosters(fixed);
+  }, []); // Fixed pairs are static — no dependency on clusters
 
   // ── Fetch poster paths from TMDb ──
   const fetchPosters = useCallback(async (pairs: QuizPair[]) => {

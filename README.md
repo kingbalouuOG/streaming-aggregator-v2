@@ -11,9 +11,9 @@ Netflix, Amazon Prime Video, Apple TV+, Disney+, NOW, Sky Go, Paramount+, BBC iP
 - **React 18** with TypeScript
 - **Vite 6** for build tooling
 - **Tailwind CSS v4** for styling
-- **Supabase** for authentication and database
+- **Supabase** for authentication, database, and cloud sync
 - **Capacitor 8** for native Android deployment
-- **Framer Motion** (`motion/react`) for animations
+- **Motion** (`motion/react`) for animations
 - **Sonner** for toast notifications
 - **Lucide React** for icons
 
@@ -22,7 +22,7 @@ Netflix, Amazon Prime Video, Apple TV+, Disney+, NOW, Sky Go, Paramount+, BBC iP
 - **TMDb** - Content metadata, streaming availability, discover/search
 - **OMDB** - Rotten Tomatoes and IMDb ratings
 - **WatchMode** - Rent/buy pricing information
-- **Supabase Auth** - Email/password authentication, session management
+- **Supabase** - Authentication, user data sync, analytics, availability reports
 
 ## Getting Started
 
@@ -89,133 +89,212 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
 videx/
   src/
-    App.tsx                  Main app shell (routing, global state)
-    main.tsx                 Entry point
-    index.css                Tailwind + custom styles
-    assets/                  Platform logo PNGs (11 services)
-    components/              Feature components
-      auth/                  Authentication screens
-        AuthScreen.tsx       Auth view router with slide transitions
-        SignInScreen.tsx      Email/password sign-in
-        SignUpScreen.tsx      Registration with username validation
+    App.tsx                    Main app shell (routing, global state)
+    main.tsx                   Entry point
+    index.css                  Tailwind + custom styles
+    assets/                    Platform logo PNGs (10 services)
+    components/
+      auth/                    Authentication screens
+        AuthScreen.tsx           Auth view router with slide transitions
+        SignInScreen.tsx          Email/password sign-in
+        SignUpScreen.tsx          Registration with username validation
         ForgotPasswordScreen.tsx  Password reset request (send email)
-        ResetPasswordScreen.tsx  Set new password (from recovery link)
-        SignUpSuccess.tsx     Auto-advancing success interstitial
-        NoConnectionScreen.tsx  Offline state for authenticated users
-      quiz/
-        TasteQuiz.tsx        10-question taste quiz orchestrator
-        QuizQuestion.tsx     Pair-choice UI (A/B/Both/Neither)
-      AuthContext.tsx         Supabase auth provider + useAuth hook
-      OnboardingFlow.tsx     3-step onboarding (services, clusters, quiz)
-      BrowsePage.tsx         Search + filter + grid browse
-      DetailPage.tsx         Content detail with ratings, cast, availability
-      WatchlistPage.tsx      Want to Watch / Watched tabs with rating system
-      ProfilePage.tsx        User settings, service management, account deletion
-      CalendarPage.tsx       Coming Soon calendar with date/service filters
-      SpendDashboard.tsx     Monthly spend tracker with tier selection
-      FeaturedHero.tsx       Parallax hero banner
-      FilterSheet.tsx        Bottom sheet with service/genre/rating filters
-      LazyGenreSection.tsx   Lazy-loaded genre-based content rows
-      ComingSoonCard.tsx     Upcoming release card with date badge
-      GridCard.tsx           Grid layout card variant
-      BottomNav.tsx          Tab navigation bar
-      ContentCard.tsx        Poster card component
-      BrowseCard.tsx         Grid browse card variant
-      ContentRow.tsx         Horizontal scrollable content row
-      CategoryFilter.tsx     Category pill bar
-      ImageSkeleton.tsx      Image loading placeholder
-      ServiceBadge.tsx       Platform logo badge
-      ThemeContext.tsx        Dark/light theme provider
-      platformLogos.ts       Platform metadata and logo mapping
-      icons.tsx              Custom SVG icons (TickIcon, EyeIcon)
-    hooks/                   React hooks (service layer)
-      useBrowse.ts           Browse/discover logic
-      useContentDetail.ts    Detail page data fetching
-      useContentService.ts   Core content service (trending, popular, etc.)
-      useNetworkStatus.ts    Online/offline detection (Capacitor Network)
-      useRecommendations.ts  Personalized recommendations
-      useSearch.ts           Search with debounce
-      useUpcoming.ts         Coming Soon / Calendar data
-      useUserPreferences.ts  User preferences management
-      useWatchlist.ts        Watchlist CRUD with memoized derived state
-    lib/                     Business logic
-      supabase.ts            Supabase client singleton
-      storage.ts             localStorage adapter (AsyncStorage-compatible)
-      adapters/              TMDb data model -> UI interface bridges
-        contentAdapter.ts    ContentItem ↔ WatchlistItem conversion
-        detailAdapter.ts     TMDb detail → DetailData conversion
-        platformAdapter.ts   TMDb provider IDs ↔ ServiceId strings
-      api/                   API clients (TMDb, OMDB, WatchMode) + caching
-      constants/             Config, genres, platform definitions
+        ResetPasswordScreen.tsx   Set new password (from recovery link)
+        SignUpSuccess.tsx         Auto-advancing success interstitial
+        NoConnectionScreen.tsx    Offline state for authenticated users
+      quiz/                    Taste quiz components
+        TasteQuiz.tsx            10-question taste quiz orchestrator
+        QuizQuestion.tsx         Pair-choice UI (A/B/Both/Neither)
+        QuizIntro.tsx            Quiz introduction screen
+        QuizInterstitial.tsx     Phase transition interstitial
+        QuizCompletion.tsx       Results summary screen
+        QuizClusterSelect.tsx    Taste cluster picker (onboarding step 2)
+      AuthContext.tsx           Supabase auth provider + useAuth hook
+      OnboardingFlow.tsx       3-step onboarding (services, clusters, quiz)
+      BrowsePage.tsx           Search + filter + grid browse
+      DetailPage.tsx           Content detail with ratings, cast, availability
+      WatchlistPage.tsx        Want to Watch / Watched tabs with rating system
+      ProfilePage.tsx          User settings, service management, account deletion
+      CalendarPage.tsx         Coming Soon calendar with date/service filters
+      SpendDashboard.tsx       Monthly spend tracker with tier selection
+      FeaturedHero.tsx         Parallax hero banner
+      FilterSheet.tsx          Bottom sheet with service/genre/rating filters
+      ReportSheet.tsx          Report incorrect availability bottom sheet
+      LazyGenreSection.tsx     Lazy-loaded genre-based content rows
+      ComingSoonCard.tsx       Upcoming release card with date badge
+      BottomNav.tsx            Tab navigation bar
+      ContentCard.tsx          Poster card component + ContentItem interface
+      BrowseCard.tsx           Grid browse card variant
+      ContentRow.tsx           Horizontal scrollable content row
+      CategoryFilter.tsx       Category pill bar
+      ImageSkeleton.tsx        Image loading placeholder
+      ServiceBadge.tsx         Platform logo badge
+      ThemeContext.tsx          Dark/light theme provider
+      platformLogos.ts         Platform metadata and logo mapping
+      icons.tsx                Custom SVG icons (TickIcon, EyeIcon)
+    hooks/                     React hooks (service layer)
+      useHomeContent.ts        Home page data orchestration (sections, genres, taste)
+      useBrowse.ts             Browse/discover logic
+      useContentDetail.ts      Detail page data fetching
+      useContentService.ts     Core content service (trending, popular, etc.)
+      useHiddenGems.ts         Hidden gems discovery
+      useRecommendations.ts    Personalised recommendations
+      useTasteProfile.ts       Taste profile state + continuous learning
+      useSectionData.ts        Lazy-loaded home section data
+      useSearch.ts             Search with debounce
+      useUpcoming.ts           Coming Soon / Calendar data
+      useWatchlist.ts          Watchlist CRUD with memoized derived state
+      useUserPreferences.ts    User preferences management
+      useNetworkStatus.ts      Online/offline detection (Capacitor Network)
+      useIntersectionObserver.ts  Viewport intersection for lazy loading
+    lib/                       Business logic
+      supabase.ts              Supabase client singleton
+      supabaseStorage.ts       Supabase CRUD operations (cloud sync layer)
+      storage.ts               localStorage adapter with auth-aware routing
+      debugLogger.ts           Debug logging (Supabase POST in dev)
+      sectionSessionCache.ts   In-memory session cache for home sections
+      adapters/                TMDb data model -> UI interface bridges
+        contentAdapter.ts        ContentItem <-> WatchlistItem conversion
+        detailAdapter.ts         TMDb detail -> DetailData conversion
+        platformAdapter.ts       TMDb provider IDs <-> ServiceId strings
+      api/                     API clients + caching
+        tmdb.ts                  TMDb API client (discover, search, details, providers)
+        omdb.ts                  OMDB API client (IMDb/RT ratings)
+        watchmode.ts             WatchMode API client (rent/buy pricing)
+        cache.ts                 HTTP response cache layer
+      analytics/               Onboarding funnel instrumentation
+        events.ts                Event type definitions and metadata
+        logger.ts                Supabase event logging
+      constants/               Configuration
+        config.ts                App-wide constants
+        genres.ts                Genre ID mappings (TMDb, taste vector keys)
+        platforms.ts             UK provider definitions, variant ID maps
       data/
-        platformPricing.ts   UK subscription pricing data (10 services)
-      taste/                 Taste vector system
-        tasteVector.ts       25D vector model, cosine similarity, dimension weights
-        quizConfig.ts        Quiz pair pools (41 pairs) and selection algorithms
-        quizScoring.ts       Quiz answer → vector delta computation
-        contentVectorMapping.ts  Content metadata → taste vector mapping
-        genreBlending.ts     Genre combination logic for diverse discovery
-      storage/               Persistence (watchlist, preferences, recommendations)
-        tasteProfile.ts      Taste profile CRUD, quiz results, interaction logging
-        watchlist.ts         Watchlist CRUD with recommendation auto-invalidation
-        preferences.ts       User preferences persistence
-        recommendations.ts   Recommendation cache management
-      utils/                 Error handling, recommendation engine, service cache
-        recommendationEngine.ts  Genre affinity + similar content algorithm
-        serviceCache.ts      Streaming provider lazy-loading cache
-        errorUtils.ts        Error handling utilities
+        platformPricing.ts       UK subscription pricing data (10 services)
+      reports/                 User feedback
+        reportService.ts         Availability report submission (Supabase)
+      taste/                   Taste vector system
+        tasteVector.ts           24D vector model, cosine similarity, confidence weights
+        tasteClusters.ts         16 taste archetype definitions
+        quizConfig.ts            Quiz pair pools (5 fixed + 39 adaptive + 4 legacy) and selection algorithms
+        quizScoring.ts           Quiz answer -> vector + confidence computation
+        contentVectorMapping.ts  Content metadata -> taste vector mapping
+        genreBlending.ts         Genre combination logic for diverse discovery
+        vectorSerialisation.ts   Vector <-> array serialisation for Supabase
+      storage/                 Persistence (localStorage + Supabase routing)
+        tasteProfile.ts          Taste profile CRUD, quiz results, interaction logging
+        watchlist.ts             Watchlist CRUD with recommendation auto-invalidation
+        userPreferences.ts       User preferences and onboarding state
+        recommendations.ts       Recommendation cache management
+      utils/                   Shared utilities
+        recommendationEngine.ts  Multi-signal recommendation scoring
+        serviceCache.ts          Streaming provider lazy-loading cache
+        searchUtils.ts           Search query normalisation
+        providerClassifier.ts    TMDb provider monetisation classification
+        errorHandler.ts          Error handling utilities
     styles/
-      globals.css            Tailwind source styles + dark/light themes
-  android/                   Capacitor native Android project
-  docs/                      Design references and historical notes
+      globals.css              Tailwind source styles + dark/light themes
+  android/                     Capacitor native Android project
+  docs/                        Design references and historical notes
 ```
 
 ## Features
 
-### Core
-- **Authentication**: Email/password sign-up/sign-in via Supabase, password reset (email link → set new password screen), account deletion, session persistence with localStorage-preserved preferences across sign-out/sign-in
-- **Onboarding**: Streaming service selection, taste cluster preferences, 10-question taste quiz (3 steps)
-- **Home**: Featured hero, trending, popular, top rated, genre-based rows, taste-vector-driven "For You" and "Hidden Gems" sections
-- **Browse**: Search with auto-suggestions, category filters, service/genre/rating filter sheet
-- **Detail View**: Hero image, IMDb/RT ratings, genre tags, streaming availability, rent/buy prices, cast, similar content
-- **Watchlist**: Want to Watch / Watched tabs, category filters, sort options, grid layout
-- **Profile**: Username/email display, manage services, genre preferences, dark/light/system theme, account deletion
+### Authentication
+Email/password sign-up/sign-in via Supabase, password reset (email link to set new password screen), account deletion, session persistence. User preferences and watchlist data are preserved in localStorage across sign-out/sign-in and synced to Supabase for authenticated users.
 
-### Sprint 1 Features
-- **Rating System**: Thumbs up/down on watched content (Detail Page + Watchlist cards). Ratings feed into the recommendation engine via genre affinity scoring.
-- **Hidden Gems**: Curated row of lesser-known, highly-rated content matching user genre preferences. Uses TMDb discover with popularity ≤15 and vote count ≤500.
-- **Coming Soon / Calendar**: Upcoming releases for connected services with date pills, service filter, and bookmark buttons. Calendar view groups releases by date.
-- **Spend Dashboard**: Monthly subscription cost tracker on the Profile page. Shows per-service breakdown with tier selection, annual projection, and daily rate.
-- **Recommendation Auto-Invalidation**: Watchlist changes (add, remove, rate, move status) automatically invalidate the recommendation and hidden gems caches, so the next home page load reflects updated preferences.
+### Onboarding
+Three-step flow: streaming service selection, taste cluster selection (3-5 of 16 archetypes), and 10-question taste quiz. Progress is tracked and can be resumed if interrupted.
 
-### Taste Quiz & Vector System
+### Home
+Featured hero banner with parallax scrolling, trending, popular, top rated, and genre-based content rows. When a taste vector exists, personalised "For You" and "Hidden Gems" sections appear. Genre rows are ordered by the user's taste vector affinities and lazy-loaded on scroll.
 
-A 10-question onboarding quiz builds a 25-dimensional taste vector (20 genre dimensions + 5 meta dimensions: tone, pacing, era, popularity, intensity). Three phases:
+### Browse & Search
+Full-text search with debounced auto-suggestions (recent + trending), category pills (All/Movies/TV Shows), and a filter sheet with streaming service, genre, and rating filters. Results display in a 2-column poster grid filtered to UK availability.
 
-1. **Fixed pairs (3)** — identical for all users, cover broad dimensions
-2. **Genre-responsive (2)** — selected based on user's genre picks
-3. **Adaptive (5)** — chosen to resolve the most ambiguous dimensions from the interim vector
+### Detail View
+Hero image, IMDb/Rotten Tomatoes ratings, genre tags, streaming availability with service badges, rent/buy pricing, cast carousel, and "More Like This" recommendations. Includes report button for incorrect availability data.
 
-Each pair offers four choices: **A**, **B**, **Both** (two independent positive signals), or **Neither** (reduces affinity for both options' genres). The resulting vector drives personalised For You and Hidden Gems sections.
+### Watchlist
+Want to Watch / Watched tabs with category filters, sort options, and grid layout. Thumbs up/down rating on watched content feeds into the recommendation engine. Watchlist changes auto-invalidate recommendation and hidden gems caches.
 
-### Recommendation Engine
+### Coming Soon / Calendar
+Upcoming releases for connected services with date pills, service filter, and bookmark buttons. Calendar view groups releases by date.
 
-When a taste vector exists (post-quiz), the engine uses a three-signal approach:
+### Profile
+Username/email display, manage streaming services, taste cluster preferences, dark/light/system theme toggle, spend dashboard, and account deletion.
 
-- **60% Taste Vector**: Cosine similarity between the user's 25D vector and content vectors, with genre-combination blending for diverse discovery.
+### Spend Dashboard
+Monthly subscription cost tracker on the Profile page. Shows per-service breakdown with tier selection, annual projection, and daily rate.
+
+### Report Incorrect Availability
+Users can flag content that isn't actually available on a listed service. Reports are submitted to Supabase with rate limiting (one report per title per 24 hours).
+
+### Cloud Sync
+Authenticated users get automatic cloud sync via Supabase. Watchlist, preferences, taste profile, and quiz results are persisted server-side with Row Level Security. The storage layer routes reads/writes to either localStorage (anonymous) or Supabase (authenticated) transparently.
+
+### Onboarding Analytics
+Funnel instrumentation tracks progression through each onboarding step (services, clusters, quiz start/complete/skip, first home view) via Supabase event logging.
+
+## Taste Quiz & Vector System
+
+### 24-Dimensional Taste Vector
+
+The taste system models user preferences as a 24-dimensional vector:
+- **19 genre dimensions** (0-1 scale): action, adventure, animation, comedy, crime, documentary, drama, family, fantasy, history, horror, musical, mystery, reality, romance, scifi, thriller, war, western
+- **5 meta dimensions** (-1 to +1 scale): tone, pacing, era, popularity, intensity
+
+### Taste Clusters
+
+Before the quiz, users select 3-5 of 16 taste archetypes (e.g. "Action Junkie", "Comfort Classics", "Mind Benders"). Each cluster maps to a partial 24D vector. The selected clusters are averaged to create a seed vector that primes the quiz and recommendation engine.
+
+### Quiz Structure
+
+A 10-question quiz with 48 total pairs across two phases:
+
+1. **Fixed pairs (5)** — identical for all users, cover broad dimensions (tone, action, scifi, romance, horror, comedy, crime, animation, war, etc.)
+2. **Adaptive pairs (5 of 39)** — chosen after Q5 to resolve the most uncertain dimensions from the interim vector
+
+Each pair offers four choices: **A**, **B**, **Both** (two independent positive signals), or **Neither** (reduces affinity for both options' genres). An additional 4 legacy pairs are retained for backward compatibility with stored quiz data.
+
+### Per-Dimension Confidence
+
+Each quiz answer updates a confidence vector alongside the taste vector. Confidence values (0-1 per dimension) track how well each dimension has been probed by the quiz. Dimensions that were never touched by any quiz pair retain low confidence.
+
+### Continuous Learning
+
+Post-quiz interactions (thumbs up/down, watchlist add, watched, removed) update both the taste vector and confidence via exponential moving average. Each interaction includes a content vector derived from TMDb metadata, so the system learns from every rating.
+
+## Recommendation Engine
+
+### With Taste Vector (post-quiz)
+
+Three-signal weighted scoring with confidence-aware similarity:
+
+- **60% Taste Vector**: Cosine similarity between the user's 24D vector and content vectors. Similarity is weighted by per-dimension confidence — dimensions the system is less sure about contribute less to the score. Genre-combination blending ensures diverse discovery.
 - **25% Similar Content**: TMDb "Similar" titles for the user's top-rated items.
 - **15% Trending/Recency**: Boost for popular and recently released content.
 
-Fallback (no taste vector): 70% genre affinity from watchlist ratings + 30% similar content.
+### Without Taste Vector (fallback)
 
-User filters (content type, genre, service) thread through all discovery queries. Results are cached for 6 hours but auto-invalidated on any watchlist change. Items already on the watchlist or previously dismissed are filtered out.
+- **70% Genre Affinity**: Derived from watchlist thumbs-up/down ratings.
+- **30% Similar Content**: TMDb "Similar" titles.
+
+### Hidden Gems
+
+A curated row of lesser-known, highly-rated content matching user preferences. Uses TMDb discover with popularity and vote count caps to surface quality content that isn't mainstream.
+
+### Caching & Invalidation
+
+Results are cached for 6 hours but auto-invalidated on any watchlist change (add, remove, rate, move status). Items already on the watchlist or previously dismissed are filtered out.
 
 ## Design System
 
 - **Theme**: Dark (#0a0a0f) / Light (#f5f4f1) with system preference detection
 - **Accent**: Warm coral (var(--primary))
 - **Font**: DM Sans (via Google Fonts CDN)
-- **Animations**: Framer Motion spring physics, parallax scrolling, expandable sections
+- **Animations**: Motion spring physics, parallax scrolling, expandable sections
+- **Mobile-first**: Capacitor-ready CSS with safe area insets, touch optimisations, no tap delay
 
 ## License
 
