@@ -1,0 +1,1780 @@
+{
+  "meta": {
+    "timestamp": "2026-02-25T18:45:38.619Z",
+    "poolSize": 48,
+    "topNCoverage": 20,
+    "simRuns": 500
+  },
+  "stage1": [
+    {
+      "rank": 1,
+      "pairIds": [
+        "fixed-1",
+        "fixed-3",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Stranger Things vs The Crown",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 21,
+      "genreDimsCovered": 16,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "action",
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "drama",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "horror",
+        "intensity",
+        "musical",
+        "mystery",
+        "pacing",
+        "popularity",
+        "scifi",
+        "thriller",
+        "tone",
+        "war",
+        "western"
+      ],
+      "missingDims": [
+        "documentary",
+        "reality",
+        "romance"
+      ],
+      "spreadScore": 19.3,
+      "avgSpreadPerPair": 3.86
+    },
+    {
+      "rank": 2,
+      "pairIds": [
+        "fixed-1",
+        "fixed-3",
+        "genre-crime",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Stranger Things vs The Crown",
+        "The Godfather vs Knives Out",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "action",
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "drama",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "horror",
+        "intensity",
+        "musical",
+        "mystery",
+        "pacing",
+        "popularity",
+        "scifi",
+        "thriller",
+        "tone",
+        "war"
+      ],
+      "missingDims": [
+        "documentary",
+        "reality",
+        "romance",
+        "western"
+      ],
+      "spreadScore": 21.7,
+      "avgSpreadPerPair": 4.34
+    },
+    {
+      "rank": 3,
+      "pairIds": [
+        "fixed-1",
+        "fixed-3",
+        "adaptive-7",
+        "adaptive-9",
+        "adaptive-25"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Stranger Things vs The Crown",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek",
+        "Ocean's Eleven vs Zodiac"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "action",
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "drama",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "horror",
+        "intensity",
+        "musical",
+        "mystery",
+        "pacing",
+        "popularity",
+        "scifi",
+        "thriller",
+        "tone",
+        "war"
+      ],
+      "missingDims": [
+        "documentary",
+        "reality",
+        "romance",
+        "western"
+      ],
+      "spreadScore": 20.1,
+      "avgSpreadPerPair": 4.02
+    },
+    {
+      "rank": 4,
+      "pairIds": [
+        "fixed-1",
+        "fixed-2",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Inception vs Pride & Prejudice",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "action",
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "intensity",
+        "musical",
+        "mystery",
+        "pacing",
+        "popularity",
+        "romance",
+        "scifi",
+        "thriller",
+        "tone",
+        "war",
+        "western"
+      ],
+      "missingDims": [
+        "documentary",
+        "drama",
+        "horror",
+        "reality"
+      ],
+      "spreadScore": 19.8,
+      "avgSpreadPerPair": 3.96
+    },
+    {
+      "rank": 5,
+      "pairIds": [
+        "fixed-2",
+        "fixed-3",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "Inception vs Pride & Prejudice",
+        "Stranger Things vs The Crown",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "drama",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "horror",
+        "intensity",
+        "mystery",
+        "pacing",
+        "popularity",
+        "romance",
+        "scifi",
+        "thriller",
+        "tone",
+        "war",
+        "western"
+      ],
+      "missingDims": [
+        "action",
+        "documentary",
+        "musical",
+        "reality"
+      ],
+      "spreadScore": 19.7,
+      "avgSpreadPerPair": 3.94
+    },
+    {
+      "rank": 6,
+      "pairIds": [
+        "fixed-1",
+        "fixed-3",
+        "adaptive-7",
+        "adaptive-8",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Stranger Things vs The Crown",
+        "1917 vs The Witcher",
+        "Love Island vs The Last Dance",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "action",
+        "adventure",
+        "animation",
+        "comedy",
+        "documentary",
+        "drama",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "horror",
+        "intensity",
+        "musical",
+        "pacing",
+        "popularity",
+        "reality",
+        "scifi",
+        "thriller",
+        "tone",
+        "war"
+      ],
+      "missingDims": [
+        "crime",
+        "mystery",
+        "romance",
+        "western"
+      ],
+      "spreadScore": 19.6,
+      "avgSpreadPerPair": 3.92
+    },
+    {
+      "rank": 7,
+      "pairIds": [
+        "fixed-1",
+        "fixed-3",
+        "genre-cult-indie",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Stranger Things vs The Crown",
+        "Amélie vs The Big Lebowski",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "action",
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "drama",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "horror",
+        "intensity",
+        "musical",
+        "pacing",
+        "popularity",
+        "romance",
+        "scifi",
+        "thriller",
+        "tone",
+        "war"
+      ],
+      "missingDims": [
+        "documentary",
+        "mystery",
+        "reality",
+        "western"
+      ],
+      "spreadScore": 19.4,
+      "avgSpreadPerPair": 3.88
+    },
+    {
+      "rank": 8,
+      "pairIds": [
+        "fixed-1",
+        "fixed-3",
+        "adaptive-7",
+        "adaptive-9",
+        "adaptive-18"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Stranger Things vs The Crown",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek",
+        "The Truman Show vs Pulp Fiction"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "action",
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "drama",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "horror",
+        "intensity",
+        "musical",
+        "mystery",
+        "pacing",
+        "popularity",
+        "scifi",
+        "thriller",
+        "tone",
+        "war"
+      ],
+      "missingDims": [
+        "documentary",
+        "reality",
+        "romance",
+        "western"
+      ],
+      "spreadScore": 18.7,
+      "avgSpreadPerPair": 3.74
+    },
+    {
+      "rank": 9,
+      "pairIds": [
+        "fixed-3",
+        "genre-anime",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "Stranger Things vs The Crown",
+        "Attack on Titan vs My Neighbour Totoro",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "action",
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "drama",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "horror",
+        "intensity",
+        "mystery",
+        "pacing",
+        "popularity",
+        "scifi",
+        "thriller",
+        "tone",
+        "war",
+        "western"
+      ],
+      "missingDims": [
+        "documentary",
+        "musical",
+        "reality",
+        "romance"
+      ],
+      "spreadScore": 18.6,
+      "avgSpreadPerPair": 3.72
+    },
+    {
+      "rank": 10,
+      "pairIds": [
+        "fixed-2",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9",
+        "adaptive-16"
+      ],
+      "pairTitles": [
+        "Inception vs Pride & Prejudice",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek",
+        "Vikings vs The Big Bang Theory"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "action",
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "drama",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "intensity",
+        "mystery",
+        "pacing",
+        "popularity",
+        "romance",
+        "scifi",
+        "thriller",
+        "tone",
+        "war",
+        "western"
+      ],
+      "missingDims": [
+        "documentary",
+        "horror",
+        "musical",
+        "reality"
+      ],
+      "spreadScore": 18.5,
+      "avgSpreadPerPair": 3.7
+    },
+    {
+      "rank": 11,
+      "pairIds": [
+        "fixed-1",
+        "fixed-3",
+        "adaptive-5",
+        "adaptive-8",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Stranger Things vs The Crown",
+        "Yellowstone vs Line of Duty",
+        "Love Island vs The Last Dance",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "action",
+        "animation",
+        "comedy",
+        "crime",
+        "documentary",
+        "drama",
+        "era",
+        "family",
+        "history",
+        "horror",
+        "intensity",
+        "musical",
+        "mystery",
+        "pacing",
+        "popularity",
+        "reality",
+        "scifi",
+        "thriller",
+        "tone",
+        "western"
+      ],
+      "missingDims": [
+        "adventure",
+        "fantasy",
+        "romance",
+        "war"
+      ],
+      "spreadScore": 18.4,
+      "avgSpreadPerPair": 3.68
+    },
+    {
+      "rank": 12,
+      "pairIds": [
+        "fixed-2",
+        "genre-crime",
+        "genre-western",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "Inception vs Pride & Prejudice",
+        "The Godfather vs Knives Out",
+        "Django Unchained vs True Grit",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "action",
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "drama",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "intensity",
+        "mystery",
+        "pacing",
+        "popularity",
+        "romance",
+        "scifi",
+        "thriller",
+        "tone",
+        "war",
+        "western"
+      ],
+      "missingDims": [
+        "documentary",
+        "horror",
+        "musical",
+        "reality"
+      ],
+      "spreadScore": 18.2,
+      "avgSpreadPerPair": 3.64
+    },
+    {
+      "rank": 13,
+      "pairIds": [
+        "fixed-3",
+        "adaptive-4",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "Stranger Things vs The Crown",
+        "The Notebook vs Se7en",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "drama",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "horror",
+        "intensity",
+        "mystery",
+        "pacing",
+        "popularity",
+        "romance",
+        "scifi",
+        "thriller",
+        "tone",
+        "war",
+        "western"
+      ],
+      "missingDims": [
+        "action",
+        "documentary",
+        "musical",
+        "reality"
+      ],
+      "spreadScore": 17.7,
+      "avgSpreadPerPair": 3.54
+    },
+    {
+      "rank": 14,
+      "pairIds": [
+        "fixed-2",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9",
+        "adaptive-28"
+      ],
+      "pairTitles": [
+        "Inception vs Pride & Prejudice",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek",
+        "Tiger King vs Fleabag"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "documentary",
+        "drama",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "intensity",
+        "mystery",
+        "pacing",
+        "popularity",
+        "romance",
+        "scifi",
+        "thriller",
+        "tone",
+        "war",
+        "western"
+      ],
+      "missingDims": [
+        "action",
+        "horror",
+        "musical",
+        "reality"
+      ],
+      "spreadScore": 17.6,
+      "avgSpreadPerPair": 3.52
+    },
+    {
+      "rank": 15,
+      "pairIds": [
+        "fixed-1",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9",
+        "adaptive-32"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek",
+        "Blade Runner 2049 vs Trainspotting"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "action",
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "drama",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "intensity",
+        "musical",
+        "mystery",
+        "pacing",
+        "popularity",
+        "scifi",
+        "thriller",
+        "tone",
+        "war",
+        "western"
+      ],
+      "missingDims": [
+        "documentary",
+        "horror",
+        "reality",
+        "romance"
+      ],
+      "spreadScore": 17.4,
+      "avgSpreadPerPair": 3.48
+    },
+    {
+      "rank": 16,
+      "pairIds": [
+        "fixed-3",
+        "adaptive-4",
+        "adaptive-5",
+        "adaptive-14",
+        "adaptive-29"
+      ],
+      "pairTitles": [
+        "Stranger Things vs The Crown",
+        "The Notebook vs Se7en",
+        "Yellowstone vs Line of Duty",
+        "Top Gun: Maverick vs The Lion King",
+        "Band of Brothers vs Seinfeld"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "action",
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "drama",
+        "era",
+        "family",
+        "history",
+        "horror",
+        "intensity",
+        "mystery",
+        "pacing",
+        "popularity",
+        "romance",
+        "scifi",
+        "thriller",
+        "tone",
+        "war",
+        "western"
+      ],
+      "missingDims": [
+        "documentary",
+        "fantasy",
+        "musical",
+        "reality"
+      ],
+      "spreadScore": 17.4,
+      "avgSpreadPerPair": 3.48
+    },
+    {
+      "rank": 17,
+      "pairIds": [
+        "fixed-3",
+        "adaptive-5",
+        "adaptive-14",
+        "adaptive-17",
+        "adaptive-29"
+      ],
+      "pairTitles": [
+        "Stranger Things vs The Crown",
+        "Yellowstone vs Line of Duty",
+        "Top Gun: Maverick vs The Lion King",
+        "Gladiator vs Dirty Dancing",
+        "Band of Brothers vs Seinfeld"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "action",
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "drama",
+        "era",
+        "family",
+        "history",
+        "horror",
+        "intensity",
+        "musical",
+        "mystery",
+        "pacing",
+        "popularity",
+        "romance",
+        "scifi",
+        "tone",
+        "war",
+        "western"
+      ],
+      "missingDims": [
+        "documentary",
+        "fantasy",
+        "reality",
+        "thriller"
+      ],
+      "spreadScore": 17.2,
+      "avgSpreadPerPair": 3.44
+    },
+    {
+      "rank": 18,
+      "pairIds": [
+        "fixed-2",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-8",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "Inception vs Pride & Prejudice",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Love Island vs The Last Dance",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "documentary",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "intensity",
+        "mystery",
+        "pacing",
+        "popularity",
+        "reality",
+        "romance",
+        "scifi",
+        "thriller",
+        "tone",
+        "war",
+        "western"
+      ],
+      "missingDims": [
+        "action",
+        "drama",
+        "horror",
+        "musical"
+      ],
+      "spreadScore": 17.1,
+      "avgSpreadPerPair": 3.42
+    },
+    {
+      "rank": 19,
+      "pairIds": [
+        "fixed-2",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9",
+        "adaptive-30"
+      ],
+      "pairTitles": [
+        "Inception vs Pride & Prejudice",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek",
+        "Survivor vs Succession"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "drama",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "intensity",
+        "mystery",
+        "pacing",
+        "popularity",
+        "reality",
+        "romance",
+        "scifi",
+        "thriller",
+        "tone",
+        "war",
+        "western"
+      ],
+      "missingDims": [
+        "action",
+        "documentary",
+        "horror",
+        "musical"
+      ],
+      "spreadScore": 17.1,
+      "avgSpreadPerPair": 3.42
+    },
+    {
+      "rank": 20,
+      "pairIds": [
+        "fixed-3",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9",
+        "adaptive-11"
+      ],
+      "pairTitles": [
+        "Stranger Things vs The Crown",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek",
+        "The Sixth Sense vs John Wick"
+      ],
+      "dimsCovered": 20,
+      "genreDimsCovered": 15,
+      "metaDimsCovered": 5,
+      "coveredDims": [
+        "action",
+        "adventure",
+        "animation",
+        "comedy",
+        "crime",
+        "drama",
+        "era",
+        "family",
+        "fantasy",
+        "history",
+        "horror",
+        "intensity",
+        "mystery",
+        "pacing",
+        "popularity",
+        "scifi",
+        "thriller",
+        "tone",
+        "war",
+        "western"
+      ],
+      "missingDims": [
+        "documentary",
+        "musical",
+        "reality",
+        "romance"
+      ],
+      "spreadScore": 17.1,
+      "avgSpreadPerPair": 3.42
+    }
+  ],
+  "stage2": [
+    {
+      "rank": 17,
+      "pairIds": [
+        "fixed-3",
+        "adaptive-5",
+        "adaptive-14",
+        "adaptive-17",
+        "adaptive-29"
+      ],
+      "pairTitles": [
+        "Stranger Things vs The Crown",
+        "Yellowstone vs Line of Duty",
+        "Top Gun: Maverick vs The Lion King",
+        "Gladiator vs Dirty Dancing",
+        "Band of Brothers vs Seinfeld"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "documentary",
+        "fantasy",
+        "reality",
+        "thriller"
+      ],
+      "spreadScore": 17.2,
+      "confidenceMean": 0.3022,
+      "dimsAbove50": 4.2,
+      "dimsAbove20": 11.1,
+      "zeroDims": 3,
+      "vectorMagnitude": 2.0418,
+      "vectorStdDev": 0.3109,
+      "blindSpots": [
+        "documentary",
+        "fantasy",
+        "reality"
+      ],
+      "winRateVsControl": 66.2,
+      "confDeltaVsControl": 0.0089,
+      "zeroDimsDeltaVsControl": -3.2
+    },
+    {
+      "rank": 2,
+      "pairIds": [
+        "fixed-1",
+        "fixed-3",
+        "genre-crime",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Stranger Things vs The Crown",
+        "The Godfather vs Knives Out",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "documentary",
+        "reality",
+        "romance",
+        "western"
+      ],
+      "spreadScore": 21.7,
+      "confidenceMean": 0.3013,
+      "dimsAbove50": 4.3,
+      "dimsAbove20": 10.8,
+      "zeroDims": 3.1,
+      "vectorMagnitude": 2.068,
+      "vectorStdDev": 0.3129,
+      "blindSpots": [
+        "documentary",
+        "reality",
+        "western"
+      ],
+      "winRateVsControl": 66.2,
+      "confDeltaVsControl": 0.008,
+      "zeroDimsDeltaVsControl": -3.1
+    },
+    {
+      "rank": 5,
+      "pairIds": [
+        "fixed-2",
+        "fixed-3",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "Inception vs Pride & Prejudice",
+        "Stranger Things vs The Crown",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "action",
+        "documentary",
+        "musical",
+        "reality"
+      ],
+      "spreadScore": 19.7,
+      "confidenceMean": 0.3008,
+      "dimsAbove50": 4.2,
+      "dimsAbove20": 11.3,
+      "zeroDims": 3,
+      "vectorMagnitude": 2.0507,
+      "vectorStdDev": 0.3119,
+      "blindSpots": [
+        "documentary",
+        "reality"
+      ],
+      "winRateVsControl": 62.8,
+      "confDeltaVsControl": 0.0075,
+      "zeroDimsDeltaVsControl": -3.3
+    },
+    {
+      "rank": 1,
+      "pairIds": [
+        "fixed-1",
+        "fixed-3",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Stranger Things vs The Crown",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 21,
+      "missingDims": [
+        "documentary",
+        "reality",
+        "romance"
+      ],
+      "spreadScore": 19.3,
+      "confidenceMean": 0.2974,
+      "dimsAbove50": 3.9,
+      "dimsAbove20": 10.7,
+      "zeroDims": 2.2,
+      "vectorMagnitude": 2.0463,
+      "vectorStdDev": 0.3082,
+      "blindSpots": [
+        "documentary",
+        "reality"
+      ],
+      "winRateVsControl": 57.2,
+      "confDeltaVsControl": 0.004,
+      "zeroDimsDeltaVsControl": -4
+    },
+    {
+      "rank": 7,
+      "pairIds": [
+        "fixed-1",
+        "fixed-3",
+        "genre-cult-indie",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Stranger Things vs The Crown",
+        "Amélie vs The Big Lebowski",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "documentary",
+        "mystery",
+        "reality",
+        "western"
+      ],
+      "spreadScore": 19.4,
+      "confidenceMean": 0.2973,
+      "dimsAbove50": 4.2,
+      "dimsAbove20": 11.2,
+      "zeroDims": 3.7,
+      "vectorMagnitude": 2.0247,
+      "vectorStdDev": 0.3032,
+      "blindSpots": [
+        "documentary",
+        "mystery",
+        "reality",
+        "western"
+      ],
+      "winRateVsControl": 56.8,
+      "confDeltaVsControl": 0.004,
+      "zeroDimsDeltaVsControl": -2.5
+    },
+    {
+      "rank": 3,
+      "pairIds": [
+        "fixed-1",
+        "fixed-3",
+        "adaptive-7",
+        "adaptive-9",
+        "adaptive-25"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Stranger Things vs The Crown",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek",
+        "Ocean's Eleven vs Zodiac"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "documentary",
+        "reality",
+        "romance",
+        "western"
+      ],
+      "spreadScore": 20.1,
+      "confidenceMean": 0.2963,
+      "dimsAbove50": 4.1,
+      "dimsAbove20": 10.7,
+      "zeroDims": 3.1,
+      "vectorMagnitude": 2.0449,
+      "vectorStdDev": 0.3105,
+      "blindSpots": [
+        "documentary",
+        "reality",
+        "western"
+      ],
+      "winRateVsControl": 53,
+      "confDeltaVsControl": 0.003,
+      "zeroDimsDeltaVsControl": -3.1
+    },
+    {
+      "rank": 6,
+      "pairIds": [
+        "fixed-1",
+        "fixed-3",
+        "adaptive-7",
+        "adaptive-8",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Stranger Things vs The Crown",
+        "1917 vs The Witcher",
+        "Love Island vs The Last Dance",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "crime",
+        "mystery",
+        "romance",
+        "western"
+      ],
+      "spreadScore": 19.6,
+      "confidenceMean": 0.2953,
+      "dimsAbove50": 3.9,
+      "dimsAbove20": 10.3,
+      "zeroDims": 2.3,
+      "vectorMagnitude": 2.0435,
+      "vectorStdDev": 0.3038,
+      "blindSpots": [
+        "mystery",
+        "western"
+      ],
+      "winRateVsControl": 49.8,
+      "confDeltaVsControl": 0.002,
+      "zeroDimsDeltaVsControl": -3.9
+    },
+    {
+      "rank": 20,
+      "pairIds": [
+        "fixed-3",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9",
+        "adaptive-11"
+      ],
+      "pairTitles": [
+        "Stranger Things vs The Crown",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek",
+        "The Sixth Sense vs John Wick"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "documentary",
+        "musical",
+        "reality",
+        "romance"
+      ],
+      "spreadScore": 17.1,
+      "confidenceMean": 0.2944,
+      "dimsAbove50": 4.1,
+      "dimsAbove20": 10.8,
+      "zeroDims": 2.9,
+      "vectorMagnitude": 2.0461,
+      "vectorStdDev": 0.3115,
+      "blindSpots": [
+        "documentary",
+        "reality"
+      ],
+      "winRateVsControl": 49.2,
+      "confDeltaVsControl": 0.0011,
+      "zeroDimsDeltaVsControl": -3.3
+    },
+    {
+      "rank": 16,
+      "pairIds": [
+        "fixed-3",
+        "adaptive-4",
+        "adaptive-5",
+        "adaptive-14",
+        "adaptive-29"
+      ],
+      "pairTitles": [
+        "Stranger Things vs The Crown",
+        "The Notebook vs Se7en",
+        "Yellowstone vs Line of Duty",
+        "Top Gun: Maverick vs The Lion King",
+        "Band of Brothers vs Seinfeld"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "documentary",
+        "fantasy",
+        "musical",
+        "reality"
+      ],
+      "spreadScore": 17.4,
+      "confidenceMean": 0.2931,
+      "dimsAbove50": 4.1,
+      "dimsAbove20": 10.8,
+      "zeroDims": 3.5,
+      "vectorMagnitude": 2.0446,
+      "vectorStdDev": 0.3163,
+      "blindSpots": [
+        "documentary",
+        "fantasy",
+        "reality"
+      ],
+      "winRateVsControl": 47.4,
+      "confDeltaVsControl": -0.0003,
+      "zeroDimsDeltaVsControl": -2.8
+    },
+    {
+      "rank": 13,
+      "pairIds": [
+        "fixed-3",
+        "adaptive-4",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "Stranger Things vs The Crown",
+        "The Notebook vs Se7en",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "action",
+        "documentary",
+        "musical",
+        "reality"
+      ],
+      "spreadScore": 17.7,
+      "confidenceMean": 0.292,
+      "dimsAbove50": 3.8,
+      "dimsAbove20": 10.9,
+      "zeroDims": 2.9,
+      "vectorMagnitude": 2.0383,
+      "vectorStdDev": 0.3102,
+      "blindSpots": [
+        "documentary",
+        "reality"
+      ],
+      "winRateVsControl": 46.2,
+      "confDeltaVsControl": -0.0013,
+      "zeroDimsDeltaVsControl": -3.3
+    },
+    {
+      "rank": 9,
+      "pairIds": [
+        "fixed-3",
+        "genre-anime",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "Stranger Things vs The Crown",
+        "Attack on Titan vs My Neighbour Totoro",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "documentary",
+        "musical",
+        "reality",
+        "romance"
+      ],
+      "spreadScore": 18.6,
+      "confidenceMean": 0.2922,
+      "dimsAbove50": 3.8,
+      "dimsAbove20": 11,
+      "zeroDims": 2.9,
+      "vectorMagnitude": 2.0493,
+      "vectorStdDev": 0.313,
+      "blindSpots": [
+        "documentary",
+        "reality"
+      ],
+      "winRateVsControl": 46,
+      "confDeltaVsControl": -0.0011,
+      "zeroDimsDeltaVsControl": -3.3
+    },
+    {
+      "rank": 11,
+      "pairIds": [
+        "fixed-1",
+        "fixed-3",
+        "adaptive-5",
+        "adaptive-8",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Stranger Things vs The Crown",
+        "Yellowstone vs Line of Duty",
+        "Love Island vs The Last Dance",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "adventure",
+        "fantasy",
+        "romance",
+        "war"
+      ],
+      "spreadScore": 18.4,
+      "confidenceMean": 0.291,
+      "dimsAbove50": 3.9,
+      "dimsAbove20": 9.8,
+      "zeroDims": 2.5,
+      "vectorMagnitude": 2.0256,
+      "vectorStdDev": 0.3029,
+      "blindSpots": [
+        "fantasy"
+      ],
+      "winRateVsControl": 44.4,
+      "confDeltaVsControl": -0.0023,
+      "zeroDimsDeltaVsControl": -3.7
+    },
+    {
+      "rank": 12,
+      "pairIds": [
+        "fixed-2",
+        "genre-crime",
+        "genre-western",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "Inception vs Pride & Prejudice",
+        "The Godfather vs Knives Out",
+        "Django Unchained vs True Grit",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "documentary",
+        "horror",
+        "musical",
+        "reality"
+      ],
+      "spreadScore": 18.2,
+      "confidenceMean": 0.2909,
+      "dimsAbove50": 4.1,
+      "dimsAbove20": 10.6,
+      "zeroDims": 3.5,
+      "vectorMagnitude": 2.0422,
+      "vectorStdDev": 0.3135,
+      "blindSpots": [
+        "documentary",
+        "horror",
+        "reality"
+      ],
+      "winRateVsControl": 43,
+      "confDeltaVsControl": -0.0024,
+      "zeroDimsDeltaVsControl": -2.8
+    },
+    {
+      "rank": 8,
+      "pairIds": [
+        "fixed-1",
+        "fixed-3",
+        "adaptive-7",
+        "adaptive-9",
+        "adaptive-18"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Stranger Things vs The Crown",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek",
+        "The Truman Show vs Pulp Fiction"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "documentary",
+        "reality",
+        "romance",
+        "western"
+      ],
+      "spreadScore": 18.7,
+      "confidenceMean": 0.291,
+      "dimsAbove50": 3.9,
+      "dimsAbove20": 10.7,
+      "zeroDims": 3.1,
+      "vectorMagnitude": 2.0263,
+      "vectorStdDev": 0.3097,
+      "blindSpots": [
+        "documentary",
+        "reality",
+        "western"
+      ],
+      "winRateVsControl": 42.4,
+      "confDeltaVsControl": -0.0023,
+      "zeroDimsDeltaVsControl": -3.1
+    },
+    {
+      "rank": 4,
+      "pairIds": [
+        "fixed-1",
+        "fixed-2",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Inception vs Pride & Prejudice",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "documentary",
+        "drama",
+        "horror",
+        "reality"
+      ],
+      "spreadScore": 19.8,
+      "confidenceMean": 0.2907,
+      "dimsAbove50": 3.8,
+      "dimsAbove20": 10.3,
+      "zeroDims": 2.9,
+      "vectorMagnitude": 2.0456,
+      "vectorStdDev": 0.3099,
+      "blindSpots": [
+        "documentary",
+        "horror",
+        "reality"
+      ],
+      "winRateVsControl": 42.2,
+      "confDeltaVsControl": -0.0026,
+      "zeroDimsDeltaVsControl": -3.4
+    },
+    {
+      "rank": 10,
+      "pairIds": [
+        "fixed-2",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9",
+        "adaptive-16"
+      ],
+      "pairTitles": [
+        "Inception vs Pride & Prejudice",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek",
+        "Vikings vs The Big Bang Theory"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "documentary",
+        "horror",
+        "musical",
+        "reality"
+      ],
+      "spreadScore": 18.5,
+      "confidenceMean": 0.2902,
+      "dimsAbove50": 4,
+      "dimsAbove20": 10.8,
+      "zeroDims": 3.4,
+      "vectorMagnitude": 2.0372,
+      "vectorStdDev": 0.3103,
+      "blindSpots": [
+        "documentary",
+        "horror",
+        "reality"
+      ],
+      "winRateVsControl": 41.8,
+      "confDeltaVsControl": -0.0031,
+      "zeroDimsDeltaVsControl": -2.8
+    },
+    {
+      "rank": 14,
+      "pairIds": [
+        "fixed-2",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9",
+        "adaptive-28"
+      ],
+      "pairTitles": [
+        "Inception vs Pride & Prejudice",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek",
+        "Tiger King vs Fleabag"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "action",
+        "horror",
+        "musical",
+        "reality"
+      ],
+      "spreadScore": 17.6,
+      "confidenceMean": 0.2857,
+      "dimsAbove50": 3.8,
+      "dimsAbove20": 10.2,
+      "zeroDims": 2.9,
+      "vectorMagnitude": 2.0344,
+      "vectorStdDev": 0.311,
+      "blindSpots": [
+        "horror",
+        "reality"
+      ],
+      "winRateVsControl": 32.8,
+      "confDeltaVsControl": -0.0076,
+      "zeroDimsDeltaVsControl": -3.3
+    },
+    {
+      "rank": 19,
+      "pairIds": [
+        "fixed-2",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9",
+        "adaptive-30"
+      ],
+      "pairTitles": [
+        "Inception vs Pride & Prejudice",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek",
+        "Survivor vs Succession"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "action",
+        "documentary",
+        "horror",
+        "musical"
+      ],
+      "spreadScore": 17.1,
+      "confidenceMean": 0.2862,
+      "dimsAbove50": 3.8,
+      "dimsAbove20": 10.4,
+      "zeroDims": 3,
+      "vectorMagnitude": 2.0239,
+      "vectorStdDev": 0.3067,
+      "blindSpots": [
+        "documentary",
+        "horror"
+      ],
+      "winRateVsControl": 32.4,
+      "confDeltaVsControl": -0.0071,
+      "zeroDimsDeltaVsControl": -3.3
+    },
+    {
+      "rank": 18,
+      "pairIds": [
+        "fixed-2",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-8",
+        "adaptive-9"
+      ],
+      "pairTitles": [
+        "Inception vs Pride & Prejudice",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Love Island vs The Last Dance",
+        "Parasite vs Shrek"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "action",
+        "drama",
+        "horror",
+        "musical"
+      ],
+      "spreadScore": 17.1,
+      "confidenceMean": 0.2848,
+      "dimsAbove50": 3.6,
+      "dimsAbove20": 9.7,
+      "zeroDims": 2.1,
+      "vectorMagnitude": 2.0224,
+      "vectorStdDev": 0.3024,
+      "blindSpots": [
+        "horror"
+      ],
+      "winRateVsControl": 31.8,
+      "confDeltaVsControl": -0.0085,
+      "zeroDimsDeltaVsControl": -4.1
+    },
+    {
+      "rank": 15,
+      "pairIds": [
+        "fixed-1",
+        "adaptive-5",
+        "adaptive-7",
+        "adaptive-9",
+        "adaptive-32"
+      ],
+      "pairTitles": [
+        "The Dark Knight vs Mamma Mia!",
+        "Yellowstone vs Line of Duty",
+        "1917 vs The Witcher",
+        "Parasite vs Shrek",
+        "Blade Runner 2049 vs Trainspotting"
+      ],
+      "dimsCovered": 20,
+      "missingDims": [
+        "documentary",
+        "horror",
+        "reality",
+        "romance"
+      ],
+      "spreadScore": 17.4,
+      "confidenceMean": 0.2852,
+      "dimsAbove50": 3.8,
+      "dimsAbove20": 10.2,
+      "zeroDims": 3.1,
+      "vectorMagnitude": 2.0319,
+      "vectorStdDev": 0.3079,
+      "blindSpots": [
+        "documentary",
+        "horror",
+        "reality"
+      ],
+      "winRateVsControl": 31.6,
+      "confDeltaVsControl": -0.0081,
+      "zeroDimsDeltaVsControl": -3.1
+    }
+  ]
+}
