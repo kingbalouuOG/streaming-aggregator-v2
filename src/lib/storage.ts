@@ -14,7 +14,21 @@ const storage = {
   },
 
   async setItem(key: string, value: string): Promise<void> {
-    localStorage.setItem(key, value);
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      if (e instanceof DOMException && (e.code === 22 || e.name === 'QuotaExceededError')) {
+        // Evict ~30% of cache entries (prefixed keys) and retry
+        const cacheKeys = Object.keys(localStorage).filter(
+          (k) => k.startsWith('tmdb_') || k.startsWith('omdb_') || k.startsWith('watchmode_'),
+        );
+        const toRemove = Math.max(1, Math.ceil(cacheKeys.length * 0.3));
+        cacheKeys.slice(0, toRemove).forEach((k) => localStorage.removeItem(k));
+        localStorage.setItem(key, value); // retry — let it throw if still full
+      } else {
+        throw e;
+      }
+    }
   },
 
   async removeItem(key: string): Promise<void> {

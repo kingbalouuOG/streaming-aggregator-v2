@@ -17,6 +17,16 @@ export default defineConfig(({ command }) => ({
   build: {
     target: 'esnext',
     outDir: 'dist',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          capacitor: ['@capacitor/core', '@capacitor/app', '@capacitor/network'],
+          supabase: ['@supabase/supabase-js'],
+        },
+      },
+    },
   },
   server: {
     port: 3000,

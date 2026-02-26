@@ -19,26 +19,26 @@ export type { DetailData };
 
 const serviceLabels = platformServiceLabels;
 
-const languageCountryCodes: Record<string, string> = {
-  English: "gb",
-  Japanese: "jp",
-  Korean: "kr",
-  Spanish: "es",
-  French: "fr",
-  German: "de",
-  Hindi: "in",
-  Italian: "it",
-  Turkish: "tr",
-  Danish: "dk",
-  Norwegian: "no",
-  Swedish: "se",
-  Chinese: "cn",
-  Portuguese: "pt",
-  Thai: "th",
-  Polish: "pl",
-  Dutch: "nl",
-  Russian: "ru",
-  Arabic: "sa",
+const languageFlags: Record<string, string> = {
+  English: "\uD83C\uDDEC\uD83C\uDDE7",
+  Japanese: "\uD83C\uDDEF\uD83C\uDDF5",
+  Korean: "\uD83C\uDDF0\uD83C\uDDF7",
+  Spanish: "\uD83C\uDDEA\uD83C\uDDF8",
+  French: "\uD83C\uDDEB\uD83C\uDDF7",
+  German: "\uD83C\uDDE9\uD83C\uDDEA",
+  Hindi: "\uD83C\uDDEE\uD83C\uDDF3",
+  Italian: "\uD83C\uDDEE\uD83C\uDDF9",
+  Turkish: "\uD83C\uDDF9\uD83C\uDDF7",
+  Danish: "\uD83C\uDDE9\uD83C\uDDF0",
+  Norwegian: "\uD83C\uDDF3\uD83C\uDDF4",
+  Swedish: "\uD83C\uDDF8\uD83C\uDDEA",
+  Chinese: "\uD83C\uDDE8\uD83C\uDDF3",
+  Portuguese: "\uD83C\uDDF5\uD83C\uDDF9",
+  Thai: "\uD83C\uDDF9\uD83C\uDDED",
+  Polish: "\uD83C\uDDF5\uD83C\uDDF1",
+  Dutch: "\uD83C\uDDF3\uD83C\uDDF1",
+  Russian: "\uD83C\uDDF7\uD83C\uDDFA",
+  Arabic: "\uD83C\uDDF8\uD83C\uDDE6",
 };
 
 interface DetailPageProps {
@@ -193,8 +193,8 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             <>
               <span className="mx-1.5">&middot;</span>
               <span className="inline-flex items-center gap-1">
-                {languageCountryCodes[detail.language] && (
-                  <span className={`fi fi-${languageCountryCodes[detail.language]}`} style={{ width: '16px', height: '12px', borderRadius: '2px', display: 'inline-block', backgroundSize: 'cover' }} />
+                {languageFlags[detail.language] && (
+                  <span style={{ fontSize: '14px', lineHeight: 1 }}>{languageFlags[detail.language]}</span>
                 )}
                 {detail.language}
               </span>

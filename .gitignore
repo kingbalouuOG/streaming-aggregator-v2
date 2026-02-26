@@ -66,5 +66,7 @@ temp_*.json
 quiz_logs.json
 temp_logs.json
 
-# One-off analysis scripts (superseded by scripts/taste-tests/)
+# One-off analysis scripts & test data
 scripts/quiz-report-*.js
+scripts/*-results.json
+p2-*.csv

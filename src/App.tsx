@@ -37,16 +37,20 @@ import { migrateFromLegacyPreferences } from "./lib/storage/tasteProfile";
 import { IMMEDIATE_LOAD_COUNT } from "./lib/taste/tasteVector";
 import { logOnboardingEvent } from "./lib/analytics/logger";
 import { ONBOARDING_EVENTS } from "./lib/analytics/events";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { maintainCache } from "./lib/api/cache";
 
 const categories = ["All", "Movies", "TV Shows", "Docs", "Anime"];
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ThemeProvider>
-        <AppContent />
-      </ThemeProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <ThemeProvider>
+          <AppContent />
+        </ThemeProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
@@ -65,6 +69,9 @@ function AppContent() {
   const [authUsername, setAuthUsername] = useState<string | null>(null);
   const prevSessionRef = useRef<boolean>(false);
   const justOnboardedRef = useRef(false);
+
+  // --- Prune stale cache entries on startup ---
+  useEffect(() => { maintainCache(); }, []);
 
   // --- User preferences (onboarding, profile) ---
   const userId = auth.loading ? null : (auth.user?.id ?? null);
