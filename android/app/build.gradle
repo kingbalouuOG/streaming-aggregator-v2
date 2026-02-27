@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.videx.app"
+    namespace = "app.videx.streaming"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.videx.app"
+        applicationId "app.videx.streaming"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

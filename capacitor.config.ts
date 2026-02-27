@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.videx.app',
+  appId: 'app.videx.streaming',
   appName: 'Videx',
   webDir: 'dist',
   plugins: {

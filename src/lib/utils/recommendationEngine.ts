@@ -104,6 +104,7 @@ export interface Recommendation {
     voteAverage: number;
     genreIds: number[];
     popularity: number;
+    originalLanguage: string;
   };
 }
 
@@ -644,6 +645,7 @@ export async function generateRecommendations(
         voteAverage: item.vote_average || 0,
         genreIds: item.genre_ids || [],
         popularity: item.popularity || 0,
+        originalLanguage: item.original_language || 'en',
       },
     }));
 
@@ -806,6 +808,7 @@ export async function generateHiddenGems(
           voteAverage: item.vote_average || 0,
           genreIds: item.genre_ids || [],
           popularity: item.popularity || 0,
+          originalLanguage: item.original_language || 'en',
         },
       };
     });

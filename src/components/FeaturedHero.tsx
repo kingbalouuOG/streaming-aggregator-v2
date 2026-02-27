@@ -17,12 +17,13 @@ interface FeaturedHeroProps {
   tags: string[];
   bookmarked?: boolean;
   onToggleBookmark?: () => void;
+  onInfoClick?: () => void;
   scrollY?: number;
   watched?: boolean;
   userServices?: ServiceId[];
 }
 
-export function FeaturedHero({ title, subtitle, image, itemId, services, tags, bookmarked, onToggleBookmark, scrollY = 0, watched = false, userServices }: FeaturedHeroProps) {
+export function FeaturedHero({ title, subtitle, image, itemId, services, tags, bookmarked, onToggleBookmark, onInfoClick, scrollY = 0, watched = false, userServices }: FeaturedHeroProps) {
   const [loadedServices, setLoadedServices] = useState<ServiceId[]>(services);
 
   useEffect(() => {
@@ -134,7 +135,7 @@ export function FeaturedHero({ title, subtitle, image, itemId, services, tags, b
               </span>
             </motion.button>
           )}
-          <button className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm text-white/80 hover:bg-white/20 transition-all">
+          <button onClick={onInfoClick} className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm text-white/80 hover:bg-white/20 transition-all">
             <Info className="w-5 h-5" />
           </button>
         </div>

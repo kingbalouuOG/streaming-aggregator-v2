@@ -3,6 +3,8 @@ import { useRecommendations } from './useRecommendations';
 import { useHiddenGems } from './useHiddenGems';
 import { useSectionData } from './useSectionData';
 import { clearSectionCache } from '@/lib/sectionSessionCache';
+import { prefetchServices } from '@/lib/utils/serviceCache';
+import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import { invalidateRecommendationCache } from '@/lib/storage/recommendations';
 import storage from '@/lib/storage';
 import { getHomeGenres } from '@/lib/storage/userPreferences';
@@ -279,6 +281,25 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
       })();
     }
   }, [tasteVector, recs.reload, hiddenGems.reload]);
+
+  // --- Prefetch services for visible items (fire-and-forget) ---
+  const prefetchedRef = useRef(false);
+  useEffect(() => {
+    if (prefetchedRef.current || loading) return;
+    const allItems = [
+      ...dedupedSections.popular.slice(0, 5),
+      ...dedupedSections.recentlyAdded.slice(0, 5),
+      ...dedupedSections.highestRated.slice(0, 5),
+      ...dedupedSections.forYou.slice(0, 5),
+    ];
+    if (allItems.length === 0) return;
+    prefetchedRef.current = true;
+    const parsed = allItems.map((item) => {
+      const { tmdbId, mediaType } = parseContentItemId(item.id);
+      return { id: String(tmdbId), type: mediaType };
+    });
+    void prefetchServices(parsed);
+  }, [loading, dedupedSections.popular, dedupedSections.recentlyAdded, dedupedSections.highestRated, dedupedSections.forYou]);
 
   // --- Reload all (pull-to-refresh) ---
   const reload = useCallback(async () => {

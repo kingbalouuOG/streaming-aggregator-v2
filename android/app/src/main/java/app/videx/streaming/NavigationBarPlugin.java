@@ -1,4 +1,4 @@
-package com.videx.app;
+package app.videx.streaming;
 
 import android.graphics.Color;
 import android.os.Build;

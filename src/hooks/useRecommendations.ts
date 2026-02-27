@@ -12,6 +12,7 @@ function recommendationToContentItem(rec: Recommendation): ContentItem {
     rating: rec.metadata.voteAverage || undefined,
     year: rec.metadata.releaseDate ? parseInt(rec.metadata.releaseDate.substring(0, 4), 10) : undefined,
     type: rec.type === 'tv' ? 'tv' : 'movie',
+    language: rec.metadata.originalLanguage,
   };
 }
 

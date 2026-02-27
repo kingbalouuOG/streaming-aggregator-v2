@@ -121,6 +121,7 @@ export function LazyGenreSection({
           >
             <ContentRow
               title={genreName}
+              sectionKey={`genre-${genreId}`}
               items={filteredItems}
               onItemSelect={onItemSelect}
               bookmarkedIds={bookmarkedIds}

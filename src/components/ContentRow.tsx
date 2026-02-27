@@ -1,11 +1,13 @@
-import React, { useRef, useCallback } from "react";
+import React, { useRef, useCallback, useLayoutEffect, useEffect } from "react";
 import { ContentCard, ContentItem } from "./ContentCard";
 import type { ServiceId } from "./platformLogos";
+import { getScrollPosition, setScrollPosition } from "@/lib/sectionSessionCache";
 
 interface ContentRowProps {
   title: string;
   items: ContentItem[];
   variant?: "default" | "wide";
+  sectionKey?: string;
   onItemSelect?: (item: ContentItem) => void;
   bookmarkedIds?: Set<string>;
   onToggleBookmark?: (item: ContentItem) => void;
@@ -16,12 +18,34 @@ interface ContentRowProps {
   hasMore?: boolean;
 }
 
-export function ContentRow({ title, items, variant = "default", onItemSelect, bookmarkedIds, onToggleBookmark, userServices, watchedIds, onLoadMore, loadingMore, hasMore }: ContentRowProps) {
+export function ContentRow({ title, items, variant = "default", sectionKey, onItemSelect, bookmarkedIds, onToggleBookmark, userServices, watchedIds, onLoadMore, loadingMore, hasMore }: ContentRowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadMoreCalledRef = useRef(false);
+  const scrollLeftRef = useRef(0);
+
+  // Restore horizontal scroll position on mount
+  useLayoutEffect(() => {
+    if (sectionKey && scrollRef.current && items.length > 0) {
+      const saved = getScrollPosition(sectionKey);
+      if (saved > 0) {
+        scrollRef.current.scrollLeft = saved;
+      }
+    }
+  }, [sectionKey, items.length > 0]);
+
+  // Save scroll position on unmount
+  useEffect(() => {
+    const key = sectionKey;
+    return () => {
+      if (key) setScrollPosition(key, scrollLeftRef.current);
+    };
+  }, [sectionKey]);
 
   const handleScroll = useCallback(() => {
-    if (!scrollRef.current || !onLoadMore || !hasMore || loadingMore) return;
+    if (!scrollRef.current) return;
+    scrollLeftRef.current = scrollRef.current.scrollLeft;
+
+    if (!onLoadMore || !hasMore || loadingMore) return;
 
     const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
     const distanceFromEnd = scrollWidth - scrollLeft - clientWidth;

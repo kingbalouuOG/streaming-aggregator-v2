@@ -90,13 +90,13 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
     setDescOverflows(naturalHeight > el.clientHeight + 1);
   });
 
-  // Loading state
+  // Loading state — show known data from card immediately, skeleton for enriched content
   if (loading || !detail) {
     return (
       <div className="flex flex-col min-h-full">
-        <div className="relative w-full aspect-[4/3] shrink-0 bg-secondary animate-pulse">
+        <div className="relative w-full aspect-[4/3] shrink-0 bg-secondary">
           {itemImage && (
-            <img src={itemImage} alt={itemTitle || ''} className="w-full h-full object-cover opacity-30" />
+            <ImageSkeleton src={itemImage} alt={itemTitle || ''} className="w-full h-full object-cover" />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
           <button
@@ -108,7 +108,11 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
           </button>
         </div>
         <div className="px-5 pb-8 -mt-4 relative z-10">
-          <div className="h-7 w-48 bg-secondary rounded animate-pulse mb-2" />
+          {itemTitle ? (
+            <h1 className="text-foreground text-[22px] leading-tight mb-2" style={{ fontWeight: 800 }}>{itemTitle}</h1>
+          ) : (
+            <div className="h-7 w-48 bg-secondary rounded animate-pulse mb-2" />
+          )}
           <div className="h-4 w-24 bg-secondary rounded animate-pulse mb-4" />
           <div className="flex gap-2 mb-4">
             <div className="h-8 w-20 bg-secondary rounded-lg animate-pulse" />
@@ -224,8 +228,8 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             )}
           </div>
 
-          {/* Thumbs rating buttons — only when watched */}
-          {watchedIds?.has(itemId) && onRate && (
+          {/* Thumbs rating buttons — always visible */}
+          {onRate && (
             <div className="flex flex-col items-end gap-1">
               <div className="flex items-center gap-1.5">
                 <motion.button

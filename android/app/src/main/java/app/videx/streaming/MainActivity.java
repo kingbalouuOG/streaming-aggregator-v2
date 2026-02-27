@@ -1,4 +1,4 @@
-package com.videx.app;
+package app.videx.streaming;
 
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;

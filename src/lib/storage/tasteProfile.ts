@@ -31,6 +31,7 @@ const SCHEMA_VERSION = 2;
 export interface TasteProfile {
   vector: TasteVector;
   confidence?: ConfidenceVector;  // per-dimension evidence strength (0.0-1.0)
+  seedVector?: TasteVector;       // cluster seed vector (quiz baseline anchor)
   quizCompleted: boolean;
   quizAnswers: QuizAnswer[];
   interactionLog: Interaction[];
@@ -68,7 +69,7 @@ export const INTERACTION_WEIGHTS: Record<Interaction['action'], number> = {
   removed: 0.4,
 };
 
-const LEARNING_RATE = 0.1;
+const LEARNING_RATE = 0.05;
 
 // ── Confidence accumulation from interactions ────────────────────
 
@@ -217,6 +218,7 @@ export async function initializeFromClusters(clusterIds: string[]): Promise<Tast
   const seedVector = computeClusterSeedVector(clusterIds);
   const profile: TasteProfile = {
     vector: seedVector,
+    seedVector,
     quizCompleted: false,
     quizAnswers: [],
     interactionLog: [],
@@ -259,6 +261,7 @@ export async function saveQuizResults(
   const profile: TasteProfile = {
     vector: quizVector,
     confidence,
+    seedVector: existing?.seedVector,
     quizCompleted: true,
     quizAnswers,
     interactionLog: existing?.interactionLog || [],
@@ -331,19 +334,22 @@ export async function recomputeVector(): Promise<TasteProfile | null> {
   const profile = await getTasteProfile();
   if (!profile || profile.interactionLog.length === 0) return profile;
 
-  // Start from quiz vector if available, otherwise from genre defaults
+  // Reconstruct quiz-only baseline, then replay interactions on top.
+  // Previous implementation used { ...profile.vector } which was already shifted
+  // by incremental recordInteraction() calls, causing double-application.
   let vector: TasteVector;
   let confidence: ConfidenceVector;
   if (profile.quizCompleted && profile.quizAnswers.length > 0) {
-    vector = { ...profile.vector };
-    // Seed confidence from quiz
     try {
-      const { computeQuizConfidence } = await import('../taste/quizScoring');
+      const { computeQuizVector, computeQuizConfidence } = await import('../taste/quizScoring');
       const { getQuizPairs } = await import('../taste/quizConfig');
       const pairs = getQuizPairs();
+      const seed = profile.seedVector || createEmptyVector();
+      vector = computeQuizVector(seed, profile.quizAnswers, pairs);
       confidence = computeQuizConfidence(profile.quizAnswers, pairs);
     } catch (err) {
-      console.error('[TasteProfile] Failed to compute confidence in recomputeVector:', err);
+      console.error('[TasteProfile] Failed to recompute quiz baseline, using stored vector:', err);
+      vector = { ...profile.vector };
       confidence = createEmptyConfidence();
     }
   } else {
@@ -437,6 +443,7 @@ export async function retakeQuiz(
   const updated: TasteProfile = {
     vector: clampVector(vector),
     confidence,
+    seedVector: existing.seedVector,
     quizCompleted: true,
     quizAnswers: newAnswers,
     interactionLog: existing.interactionLog,

@@ -30,6 +30,7 @@ Desktop.ini
 
 # Capacitor Android build artifacts
 android/app/build/
+android/app/release/
 android/.gradle/
 android/build/
 android/captures/
@@ -69,4 +70,5 @@ temp_logs.json
 # One-off analysis scripts & test data
 scripts/quiz-report-*.js
 scripts/*-results.json
+scripts/audit-results/*.json
 p2-*.csv

@@ -206,7 +206,11 @@ function AppContent() {
     setSelectedItem(item);
   };
 
+  const pendingScrollRestore = useRef<number | null>(null);
+
   const handleDetailBack = () => {
+    // Save the scroll position we want to restore AFTER the exit animation finishes
+    pendingScrollRestore.current = savedScrollPositions.current[activeTab] ?? 0;
     setSelectedItem(null);
   };
 
@@ -299,12 +303,32 @@ function AppContent() {
 
   const handleRate = useCallback(async (id: string, rating: 'up' | 'down' | null) => {
     try {
+      const isInWatchlist = wl.bookmarkedIds.has(id);
+      const isWatched = watchedIds.has(id);
+      let autoMarked = false;
+
+      // Auto-add to watchlist and mark as watched if needed
+      if (rating !== null && !isWatched) {
+        if (!isInWatchlist && selectedItem) {
+          await wl.toggleBookmark(selectedItem);
+        }
+        await wl.moveToWatched(id);
+        autoMarked = true;
+        // Taste tracking for the auto-watched action
+        const trackItem = (selectedItem?.genreIds?.length ? selectedItem : null) || selectedItem;
+        if (trackItem) taste.trackInteraction(buildTasteMeta(trackItem), 'watched');
+      }
+
       const storageRating = rating === 'up' ? 1 : rating === 'down' ? -1 : 0;
       await wl.setRating(id, storageRating as -1 | 0 | 1);
       if (rating === 'up') {
-        toast.success("Thumbs up!", { description: "Thanks! This improves your recommendations.", icon: "\u{1F44D}" });
+        toast.success(autoMarked ? "Marked as watched — Thumbs up!" : "Thumbs up!", {
+          description: "Thanks! This improves your recommendations.", icon: "\u{1F44D}",
+        });
       } else if (rating === 'down') {
-        toast.success("Thumbs down", { description: "Thanks! This improves your recommendations.", icon: "\u{1F44E}" });
+        toast.success(autoMarked ? "Marked as watched — Thumbs down" : "Thumbs down", {
+          description: "Thanks! This improves your recommendations.", icon: "\u{1F44E}",
+        });
       } else {
         toast("Rating removed", { description: "Your rating has been cleared.", icon: "\u{1F504}" });
       }
@@ -321,7 +345,7 @@ function AppContent() {
       console.error('[handleRate]', err);
       toast.error("Something went wrong");
     }
-  }, [wl.setRating, wl.watchlist, wl.watched, selectedItem, taste.trackInteraction, buildTasteMeta]);
+  }, [wl.setRating, wl.toggleBookmark, wl.moveToWatched, wl.bookmarkedIds, watchedIds, wl.watchlist, wl.watched, selectedItem, taste.trackInteraction, buildTasteMeta]);
 
   const handleOnboardingComplete = useCallback(async (data: OnboardingData) => {
     // Populate name/email from auth context (onboarding no longer collects them)
@@ -342,11 +366,13 @@ function AppContent() {
     }
 
     setActiveTab("home");
+    // Force all home sections to refetch with the new taste profile
+    void home.reload();
     toast.success(`Welcome, ${name}!`, {
       icon: "\u{1F389}",
       description: "Your profile is all set. Let's find something to watch!",
     });
-  }, [userPrefs.completeOnboarding, auth.username, auth.user]);
+  }, [userPrefs.completeOnboarding, auth.username, auth.user, home.reload]);
 
   // --- Scroll tracking for hero parallax ---
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -371,6 +397,23 @@ function AppContent() {
       }
     }
   }, [selectedItem, activeTab]);
+
+  // Delayed scroll restore — covers AnimatePresence exit animation (0.18s)
+  // The useLayoutEffect above fires before the exit animation finishes,
+  // so the browser clamps scrollTop to 0 when content swaps. This re-applies after.
+  useEffect(() => {
+    if (selectedItem || pendingScrollRestore.current === null) return;
+    const target = pendingScrollRestore.current;
+    pendingScrollRestore.current = null;
+
+    // Wait for exit animation (0.18s) + enter animation start + one frame
+    const timer = setTimeout(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = target;
+      }
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [selectedItem]);
 
   // ── Android back button ──
   useEffect(() => {
@@ -611,6 +654,7 @@ function AppContent() {
                       scrollY={scrollY}
                       watched={watchedIds.has(featured.id)}
                       userServices={connectedServiceIds}
+                      onInfoClick={() => handleItemSelect(featured)}
                     />
                   ) : home.loading ? (
                     <div className="w-full aspect-[4/3] bg-secondary/80 overflow-hidden">
@@ -639,13 +683,13 @@ function AppContent() {
                   ) : (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
                       {home.forYou.items.length > 0 && (
-                        <ContentRow title="For You" items={filterLanguage(filterWatched(home.forYou.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                        <ContentRow title="For You" sectionKey="for-you" items={filterLanguage(filterWatched(home.forYou.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       )}
-                      <ContentRow title="Recently Added" items={filterLanguage(filterWatched(home.recentlyAdded.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.recentlyAdded.loadMore} loadingMore={home.recentlyAdded.loadingMore} hasMore={home.recentlyAdded.hasMore} />
-                      <ContentRow title="Highest Rated" items={filterLanguage(filterWatched(home.highestRated.items))} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.highestRated.loadMore} loadingMore={home.highestRated.loadingMore} hasMore={home.highestRated.hasMore} />
-                      <ContentRow title="Popular on Your Services" items={filterLanguage(filterWatched(home.popular.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.popular.loadMore} loadingMore={home.popular.loadingMore} hasMore={home.popular.hasMore} />
+                      <ContentRow title="Recently Added" sectionKey="recently-added" items={filterLanguage(filterWatched(home.recentlyAdded.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.recentlyAdded.loadMore} loadingMore={home.recentlyAdded.loadingMore} hasMore={home.recentlyAdded.hasMore} />
+                      <ContentRow title="Highest Rated" sectionKey="highest-rated" items={filterLanguage(filterWatched(home.highestRated.items))} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.highestRated.loadMore} loadingMore={home.highestRated.loadingMore} hasMore={home.highestRated.hasMore} />
+                      <ContentRow title="Popular on Your Services" sectionKey="popular" items={filterLanguage(filterWatched(home.popular.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.popular.loadMore} loadingMore={home.popular.loadingMore} hasMore={home.popular.hasMore} />
                       {home.hiddenGems.items.length > 0 && (
-                        <ContentRow title="Hidden Gems" items={filterLanguage(filterWatched(home.hiddenGems.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                        <ContentRow title="Hidden Gems" sectionKey="hidden-gems" items={filterLanguage(filterWatched(home.hiddenGems.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       )}
                       {reorderedUpcoming.length > 0 && (
                         <div className="mb-6 overflow-hidden">
