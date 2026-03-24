@@ -1,10 +1,11 @@
 /**
  * Detail Adapter
- * Maps TMDb detail responses + OMDB ratings + WatchMode pricing
+ * Maps TMDb detail responses + OMDB ratings + streaming pricing
  * to the DetailData interface used by DetailPage.tsx.
  */
 
 import type { ServiceId } from '@/components/platformLogos';
+import type { StreamingLink } from '../api/supabaseContent';
 import { buildBackdropUrl, buildPosterUrl, buildImageUrl } from '../api/tmdb';
 import { providerIdsToServiceIds, providerIdToServiceId } from './platformAdapter';
 import { mapProviderIdToCanonical, normalizePlatformName, networkNameToProviderId } from '../constants/platforms';
@@ -21,6 +22,12 @@ export interface RentalOption {
   serviceKey: ServiceId;
   price: string;
   type: 'buy' | 'rent';
+  deepLinkUrl?: string;
+}
+
+export interface ServiceLink {
+  url: string;
+  type: 'exact' | 'search';
 }
 
 export interface DetailData {
@@ -36,6 +43,7 @@ export interface DetailData {
   services: ServiceId[];
   allServices: ServiceId[];
   rentalOptions: RentalOption[];
+  serviceLinks: Record<string, ServiceLink>;
   cast: CastMember[];
   runtime?: string;
   seasons?: number;
@@ -72,13 +80,16 @@ function resolveServiceKey(providerName: string, providerId?: number): ServiceId
 }
 
 /**
- * Build a DetailData object from TMDb detail, OMDB ratings, and WatchMode prices.
+ * Build a DetailData object from TMDb detail, OMDB ratings, and Supabase streaming links.
+ * - TMDb watch/providers → service detection (all 10 UK services)
+ * - streamingLinks (from Supabase/SA API) → deep link URLs + rent/buy pricing
+ * - BBC iPlayer + Sky Go → search URL fallbacks (not in SA API)
  */
 export function buildDetailData(
   tmdbDetail: any,
   mediaType: 'movie' | 'tv',
   omdbRatings?: any,
-  watchModePrices?: any,
+  streamingLinks?: StreamingLink[],
   userPlatformIds?: number[]
 ): DetailData {
   const id = `${mediaType}-${tmdbDetail.id}`;
@@ -142,39 +153,46 @@ export function buildDetailData(
     image: member.profile_path ? buildImageUrl(member.profile_path, 'w185') || '' : '',
   }));
 
-  // Rental options — excluding services already available via streaming (any service, not just user's)
-  const flatrateServiceSet = new Set(allServices);
-  const rentalOptions: RentalOption[] = [];
-  if (watchModePrices) {
-    (watchModePrices.rent || []).forEach((opt: any) => {
-      if (opt.price !== null) {
-        const key = resolveServiceKey(opt.name);
-        if (key && !flatrateServiceSet.has(key)) {
-          rentalOptions.push({
-            service: opt.name,
-            serviceKey: key,
-            price: `£${opt.price.toFixed(2)}`,
-            type: 'rent',
-          });
+  // ── Service links (deep link URLs from SA API, search fallbacks for BBC/Sky) ──
+  const serviceLinks: Record<string, ServiceLink> = {};
+
+  // Overlay SA API deep links for subscription/free services
+  if (streamingLinks?.length) {
+    for (const link of streamingLinks) {
+      if ((link.streamType === 'subscription' || link.streamType === 'free') && link.deepLinkUrl) {
+        // Only store the first (best quality) link per service
+        if (!serviceLinks[link.serviceId]) {
+          serviceLinks[link.serviceId] = { url: link.deepLinkUrl, type: 'exact' };
         }
       }
-    });
-    (watchModePrices.buy || []).forEach((opt: any) => {
-      if (opt.price !== null) {
-        const key = resolveServiceKey(opt.name);
-        if (key && !flatrateServiceSet.has(key)) {
-          rentalOptions.push({
-            service: opt.name,
-            serviceKey: key,
-            price: `£${opt.price.toFixed(2)}`,
-            type: 'buy',
-          });
-        }
-      }
-    });
+    }
   }
 
-  // Also include TMDb rent/buy providers if WatchMode data is unavailable
+  // ── Rental options from SA API streaming links ──
+  const flatrateServiceSet = new Set(allServices);
+  const rentalOptions: RentalOption[] = [];
+
+  if (streamingLinks?.length) {
+    const seenRentBuy = new Set<string>();
+    for (const link of streamingLinks) {
+      if (link.streamType !== 'rent' && link.streamType !== 'buy') continue;
+      const key = `${link.serviceId}-${link.streamType}`;
+      if (seenRentBuy.has(key)) continue;
+      seenRentBuy.add(key);
+
+      if (!flatrateServiceSet.has(link.serviceId)) {
+        rentalOptions.push({
+          service: link.serviceId,
+          serviceKey: link.serviceId,
+          price: link.priceFormatted || (link.streamType === 'rent' ? 'Rent — check price' : 'Buy — check price'),
+          type: link.streamType as 'rent' | 'buy',
+          deepLinkUrl: link.deepLinkUrl,
+        });
+      }
+    }
+  }
+
+  // Fallback to TMDb rent/buy labels if no SA API data
   if (rentalOptions.length === 0 && providers) {
     (providers.rent || []).forEach((p: any) => {
       const key = resolveServiceKey(p.provider_name, p.provider_id);
@@ -182,7 +200,7 @@ export function buildDetailData(
         rentalOptions.push({
           service: p.provider_name,
           serviceKey: key,
-          price: 'Rent',
+          price: 'Rent — check price',
           type: 'rent',
         });
       }
@@ -193,7 +211,7 @@ export function buildDetailData(
         rentalOptions.push({
           service: p.provider_name,
           serviceKey: key,
-          price: 'Buy',
+          price: 'Buy — check price',
           type: 'buy',
         });
       }
@@ -212,6 +230,6 @@ export function buildDetailData(
   return {
     id, title, heroImage, year, contentRating,
     imdbRating, rottenTomatoes, description: tmdbDetail.overview || '',
-    genres, services, allServices, rentalOptions, cast, runtime, seasons, language, mediaType,
+    genres, services, allServices, rentalOptions, serviceLinks, cast, runtime, seasons, language, mediaType,
   };
 }

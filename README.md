@@ -19,17 +19,24 @@ Netflix, Amazon Prime Video, Apple TV+, Disney+, NOW, Sky Go, Paramount+, BBC iP
 
 ### APIs
 
-- **TMDb** - Content metadata, streaming availability, discover/search
+- **TMDb** - Content metadata, discover/search, streaming service detection (all 10 UK services)
 - **OMDB** - Rotten Tomatoes and IMDb ratings
-- **WatchMode** - Rent/buy pricing information
-- **Supabase** - Authentication, user data sync, analytics, availability reports
+- **Streaming Availability API** (Movie of the Night) - Deep link URLs, rent/buy pricing (9 of 10 UK services; server-side only)
+- **Supabase** - Authentication, user data sync, content cache, analytics, availability reports
+
+### Content Cache (Supabase)
+
+Streaming availability and deep link URLs are cached in Supabase, populated by a sync pipeline:
+- **Initial population**: `npx tsx scripts/sync-content.ts` (TMDb → SA API → OMDB, 3-stage pipeline)
+- **Daily incremental sync**: Supabase Edge Function at `supabase/functions/sync-incremental/` using SA API `/changes` endpoint
+- The app reads from Supabase (fast, no API quota per user) — TMDb remains the primary source for service detection
 
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js 18+
-- API keys from [TMDb](https://www.themoviedb.org/settings/api), [OMDB](http://www.omdbapi.com/apikey.aspx), and [WatchMode](https://api.watchmode.com/)
+- API keys from [TMDb](https://www.themoviedb.org/settings/api), [OMDB](http://www.omdbapi.com/apikey.aspx), and [Streaming Availability API](https://rapidapi.com/movie-of-the-night-movie-of-the-night-default/api/streaming-availability) (via RapidAPI)
 - [Supabase](https://supabase.com/) project with email auth enabled
 
 ### Setup
@@ -153,15 +160,18 @@ videx/
       storage.ts               localStorage adapter with auth-aware routing
       debugLogger.ts           Debug logging (Supabase POST in dev)
       sectionSessionCache.ts   In-memory session cache for home sections
-      adapters/                TMDb data model -> UI interface bridges
+      adapters/                Data model bridges (TMDb + SA API → UI interfaces)
         contentAdapter.ts        ContentItem <-> WatchlistItem conversion
-        detailAdapter.ts         TMDb detail -> DetailData conversion
-        platformAdapter.ts       TMDb provider IDs <-> ServiceId strings
+        detailAdapter.ts         TMDb detail + streaming links -> DetailData (with serviceLinks for deep linking)
+        platformAdapter.ts       TMDb provider IDs <-> ServiceId strings + SA API slug mapping
+      deepLinks.ts             Deep link URL resolution (exact SA API link or search fallback)
+      openDeepLink.ts          Platform-aware link opener (AppLauncher on native / window.open on web)
       api/                     API clients + caching
         tmdb.ts                  TMDb API client (discover, search, details, providers)
         omdb.ts                  OMDB API client (IMDb/RT ratings)
-        watchmode.ts             WatchMode API client (rent/buy pricing)
-        cache.ts                 HTTP response cache layer
+        streamingAvailability.ts  SA API types + client (server-side only, no API key in bundle)
+        supabaseContent.ts       Supabase content cache queries (streaming links, deep links)
+        cache.ts                 HTTP response cache layer (TMDb, OMDB, SA prefixes)
       analytics/               Onboarding funnel instrumentation
         events.ts                Event type definitions and metadata
         logger.ts                Supabase event logging
@@ -194,8 +204,14 @@ videx/
         errorHandler.ts          Error handling utilities
     styles/
       globals.css              Tailwind source styles + dark/light themes
+  scripts/                     Development and sync scripts
+    sync-content.ts              Bulk content sync (TMDb → SA API → OMDB)
   android/                     Capacitor native Android project
-  docs/                        Design references and historical notes
+  supabase/                    Supabase infrastructure
+    migrations/                  SQL schema migrations (content cache tables)
+    functions/
+      sync-incremental/          Edge Function for daily incremental sync
+  docs/                        Design references, plans, and solutions
 ```
 
 ## Features
@@ -213,7 +229,7 @@ Featured hero banner with parallax scrolling, trending, popular, top rated, and 
 Full-text search with debounced auto-suggestions (recent + trending), category pills (All/Movies/TV Shows), and a filter sheet with streaming service, genre, and rating filters. Results display in a 2-column poster grid filtered to UK availability.
 
 ### Detail View
-Hero image, IMDb/Rotten Tomatoes ratings, genre tags, streaming availability with service badges, rent/buy pricing, cast carousel, and "More Like This" recommendations. Includes report button for incorrect availability data.
+Hero image, IMDb/Rotten Tomatoes ratings, genre tags, streaming availability with tappable service pills (deep links open the streaming app directly via Android App Links, or fall back to the service's search/browse page). Rent/buy pricing with exact £ amounts where available, or "check price" labels when pricing data is unavailable. Cast carousel and "More Like This" recommendations. Includes report button for incorrect availability data.
 
 ### Watchlist
 Want to Watch / Watched tabs with category filters, sort options, and grid layout. Thumbs up/down rating on watched content feeds into the recommendation engine. Watchlist changes auto-invalidate recommendation and hidden gems caches.

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
-import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, Check, CheckCircle2, Undo2, AlertCircle, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
+import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, Check, CheckCircle2, Undo2, AlertCircle, ChevronDown, ChevronUp, MessageSquare, ExternalLink } from "lucide-react";
 import { TickIcon } from "./icons";
 import { motion } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
@@ -8,7 +8,9 @@ import { ImageSkeleton } from "./ImageSkeleton";
 import type { ServiceId } from "./platformLogos";
 import { serviceLabels as platformServiceLabels } from "./platformLogos";
 import { useContentDetail } from "@/hooks/useContentDetail";
-import type { DetailData, RentalOption } from "@/lib/adapters/detailAdapter";
+import type { DetailData, RentalOption, ServiceLink } from "@/lib/adapters/detailAdapter";
+import { getDeepLink } from "@/lib/deepLinks";
+import { openDeepLink } from "@/lib/openDeepLink";
 import { classifyProviders } from "@/lib/utils/providerClassifier";
 import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
@@ -403,7 +405,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
         )}
         {!descOverflows && !descExpanded && <div className="mb-6" />}
 
-        {/* Where to Watch — 3-tier layout */}
+        {/* Where to Watch — 3-tier layout with deep linking */}
         <WhereToWatch detail={detail} userServices={userServices} />
 
         {/* Report availability */}
@@ -533,13 +535,19 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
 
   if (!hasAny) return null;
 
+  const handleServiceTap = async (service: ServiceId) => {
+    const link = detail.serviceLinks[service];
+    const deepLink = getDeepLink(service, link?.url || null, detail.title, detail.year);
+    await openDeepLink(deepLink.url);
+  };
+
   return (
     <div className="mb-6">
       <h3 className="text-foreground text-[15px] mb-2.5" style={{ fontWeight: 600 }}>
         Where to Watch
       </h3>
 
-      {/* Tier 1: On Your Services — orange glow */}
+      {/* Tier 1: On Your Services — orange glow, tappable */}
       {tier1.length > 0 && (
         <div className="mb-3">
           <p className="text-muted-foreground text-[11px] tracking-wide mb-2" style={{ fontWeight: 600 }}>
@@ -547,9 +555,10 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
           </p>
           <div className="flex flex-wrap gap-2">
             {tier1.map((service) => (
-              <span
+              <button
                 key={service}
-                className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-secondary text-foreground text-[13px]"
+                onClick={() => handleServiceTap(service)}
+                className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-secondary text-foreground text-[13px] active:scale-[0.97] transition-transform"
                 style={{
                   fontWeight: 600,
                   border: '1.5px solid #e85d25',
@@ -558,13 +567,14 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
               >
                 <ServiceBadge service={service} size="sm" />
                 Watch on {serviceLabels[service]}
-              </span>
+                <ExternalLink className="w-3 h-3 opacity-40 ml-auto" />
+              </button>
             ))}
           </div>
         </div>
       )}
 
-      {/* Tier 2: Also Available On / Available On — neutral chips */}
+      {/* Tier 2: Also Available On / Available On — neutral chips, tappable */}
       {tier2.length > 0 && (
         <div className="mb-3">
           <p className="text-muted-foreground text-[11px] tracking-wide mb-2" style={{ fontWeight: 600 }}>
@@ -572,9 +582,10 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
           </p>
           <div className="flex flex-wrap gap-2">
             {tier2.map((service) => (
-              <span
+              <button
                 key={service}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary text-muted-foreground text-[13px]"
+                onClick={() => handleServiceTap(service)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary text-muted-foreground text-[13px] active:scale-[0.97] transition-transform"
                 style={{
                   fontWeight: 500,
                   border: '1px solid var(--border-subtle)',
@@ -583,7 +594,8 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
               >
                 <ServiceBadge service={service} size="sm" />
                 {serviceLabels[service]}
-              </span>
+                <ExternalLink className="w-3 h-3 opacity-40 ml-auto" />
+              </button>
             ))}
           </div>
           <p className="text-muted-foreground/60 text-[12px] mt-1.5">
@@ -592,9 +604,9 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
         </div>
       )}
 
-      {/* Tier 3: Rent or Buy — price list */}
+      {/* Tier 3: Rent or Buy — price list, tappable */}
       {tier3.length > 0 && (
-        <RentBuyList options={tier3} />
+        <RentBuyList options={tier3} title={detail.title} year={detail.year} serviceLinks={detail.serviceLinks} />
       )}
     </div>
   );
@@ -602,9 +614,15 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
 
 // ── Rent/Buy list with "Show more" toggle ──────────────
 
-function RentBuyList({ options }: { options: RentalOption[] }) {
+function RentBuyList({ options, title, year, serviceLinks }: { options: RentalOption[]; title?: string; year?: number; serviceLinks?: Record<string, ServiceLink> }) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? options : options.slice(0, 3);
+
+  const handleRentBuyTap = async (option: RentalOption) => {
+    const saLink = option.deepLinkUrl || serviceLinks?.[option.serviceKey]?.url || null;
+    const deepLink = getDeepLink(option.serviceKey, saLink, title || '', year);
+    await openDeepLink(deepLink.url);
+  };
 
   return (
     <div>
@@ -613,23 +631,27 @@ function RentBuyList({ options }: { options: RentalOption[] }) {
       </p>
       <div className="flex flex-col gap-2">
         {visible.map((option, i) => (
-          <div
+          <button
             key={`${option.serviceKey}-${option.type}-${i}`}
-            className="flex items-center justify-between bg-secondary rounded-xl px-3.5 py-3"
+            onClick={() => handleRentBuyTap(option)}
+            className="flex items-center justify-between bg-secondary rounded-xl px-3.5 py-3 active:scale-[0.98] transition-transform"
           >
             <div className="flex items-center gap-2.5">
               <ServiceBadge service={option.serviceKey} size="sm" />
               <span className="text-foreground text-[14px]" style={{ fontWeight: 500 }}>
-                {option.service}
+                {serviceLabels[option.serviceKey] || option.service}
               </span>
             </div>
-            <span className="text-[13px]" style={{ fontWeight: 500, color: '#e85d25' }}>
-              {option.price === 'Rent' || option.price === 'Buy'
-                ? `${option.type === 'rent' ? 'Rent' : 'Buy'}`
-                : `${option.type === 'rent' ? 'Rent from' : 'Buy from'} ${option.price}`
-              }
-            </span>
-          </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[13px]" style={{ fontWeight: 500, color: '#e85d25' }}>
+                {option.price.startsWith('£')
+                  ? `${option.type === 'rent' ? 'Rent from' : 'Buy from'} ${option.price}`
+                  : option.price
+                }
+              </span>
+              <ExternalLink className="w-3 h-3 opacity-40" />
+            </div>
+          </button>
         ))}
       </div>
       {options.length > 3 && (

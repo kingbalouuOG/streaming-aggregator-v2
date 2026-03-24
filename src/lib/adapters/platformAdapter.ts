@@ -1,7 +1,7 @@
 /**
  * Platform Adapter
- * Bidirectional mapping between TMDb provider IDs (numbers)
- * and the UI's ServiceId strings.
+ * Bidirectional mapping between TMDb provider IDs (numbers),
+ * SA API service slugs (strings), and the UI's ServiceId strings.
  */
 
 import type { ServiceId } from '@/components/platformLogos';
@@ -68,6 +68,46 @@ export function providerIdsToServiceIds(providerIds: number[]): ServiceId[] {
   return result;
 }
 
+// ── SA API service slug → ServiceId ─────────────────────
+// Verified from live /countries/gb + /shows/search/filters responses (March 2026).
+// Sky Go is not in the SA API. BBC iPlayer is listed but has an empty catalogue.
+// IMPORTANT: This mapping is also duplicated in:
+//   - scripts/sync-content.ts (SA_TO_VIDEX)
+//   - supabase/functions/sync-incremental/index.ts (SA_TO_VIDEX)
+// Keep all three in sync when adding/removing services.
+const SA_SERVICE_TO_VIDEX: Record<string, ServiceId> = {
+  netflix: 'netflix',
+  prime: 'prime',
+  apple: 'apple',
+  disney: 'disney',
+  now: 'now',
+  paramount: 'paramount',
+  itvx: 'itvx',
+  all4: 'channel4',
+  iplayer: 'bbc',       // Listed in API but catalogue empty as of March 2026
+};
+
+// ServiceId → SA API service slug (reverse mapping)
+const VIDEX_TO_SA_SERVICE: Record<ServiceId, string> = Object.fromEntries(
+  Object.entries(SA_SERVICE_TO_VIDEX).map(([saId, videxId]) => [videxId, saId])
+) as Record<ServiceId, string>;
+
+/**
+ * Convert an SA API service slug to a ServiceId.
+ * Returns null for unrecognised services.
+ */
+export function saServiceToServiceId(saServiceId: string): ServiceId | null {
+  return SA_SERVICE_TO_VIDEX[saServiceId] ?? null;
+}
+
+/**
+ * Convert a ServiceId to an SA API service slug.
+ */
+export function serviceIdToSaService(serviceId: ServiceId): string | null {
+  return VIDEX_TO_SA_SERVICE[serviceId] ?? null;
+}
+
+// ── TMDb discover variant IDs ───────────────────────────
 // Extra TMDb provider IDs to include in discover queries.
 // TMDb's discover endpoint sometimes recognizes different IDs than the
 // canonical ones returned by watch/providers. E.g., ITVX discover data

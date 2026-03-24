@@ -585,6 +585,19 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
         <LogOut className="w-4 h-4" />
         Sign Out
       </button>
+
+      {/* ── Data Sources ────────────────────────── */}
+      <p className="text-muted-foreground/40 text-[11px] text-center mt-6 leading-relaxed">
+        Streaming availability data provided by{' '}
+        <a href="https://www.movieofthenight.com/about/api" target="_blank" rel="noopener noreferrer" className="underline">
+          Streaming Availability API by Movie of the Night
+        </a>
+        . Content data from{' '}
+        <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" className="underline">
+          TMDb
+        </a>
+        . Streaming availability data powered by JustWatch.
+      </p>
     </div>
   );
 }

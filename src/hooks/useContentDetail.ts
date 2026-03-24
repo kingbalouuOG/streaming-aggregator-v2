@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getMovieDetails, getTVDetails, getSimilarMovies, getSimilarTV, getMovieRecommendations, getTVRecommendations, discoverMovies, discoverTV } from '@/lib/api/tmdb';
 import { getRatings } from '@/lib/api/omdb';
-import { getTitlePrices } from '@/lib/api/watchmode';
+import { getStreamingLinks } from '@/lib/api/supabaseContent';
 import { buildDetailData, type DetailData } from '@/lib/adapters/detailAdapter';
 import { tmdbMovieToContentItem, tmdbTVToContentItem } from '@/lib/adapters/contentAdapter';
 import { contentToVector } from '@/lib/taste/contentVectorMapping';
@@ -39,6 +39,9 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
     setState((s) => ({ ...s, loading: true, error: null }));
 
     try {
+      // Fire Supabase streaming links immediately (only needs tmdbId + mediaType, no TMDb data)
+      const streamingPromise = getStreamingLinks(tmdbId, mediaType);
+
       // Fetch TMDb detail with credits and providers appended
       const detailFn = mediaType === 'movie' ? getMovieDetails : getTVDetails;
       const detailResponse = await detailFn(tmdbId);
@@ -49,22 +52,22 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
         return;
       }
 
-      // Fetch OMDB ratings and WatchMode prices in parallel (non-blocking)
+      // Fetch OMDB ratings (needs imdb_id from TMDb) + await streaming links (already in-flight)
       const imdbId = tmdbDetail.external_ids?.imdb_id || tmdbDetail.imdb_id;
-      const [omdbResult, watchModePrices] = await Promise.allSettled([
+      const [omdbResult, streamingResult] = await Promise.allSettled([
         imdbId ? getRatings(imdbId, mediaType) : Promise.resolve(null),
-        getTitlePrices(tmdbId, mediaType),
+        streamingPromise,
       ]);
 
       const omdbRatings = omdbResult.status === 'fulfilled' && omdbResult.value?.success
         ? omdbResult.value.data
         : undefined;
 
-      const prices = watchModePrices.status === 'fulfilled'
-        ? watchModePrices.value
+      const streamingLinks = streamingResult.status === 'fulfilled'
+        ? streamingResult.value
         : undefined;
 
-      const detail = buildDetailData(tmdbDetail, mediaType, omdbRatings, prices, userPlatformIds);
+      const detail = buildDetailData(tmdbDetail, mediaType, omdbRatings, streamingLinks, userPlatformIds);
 
       // Extract source characteristics (needed for discover params + scoring)
       const sourceGenres: number[] = tmdbDetail.genres?.map((g: any) => g.id) || tmdbDetail.genre_ids || [];

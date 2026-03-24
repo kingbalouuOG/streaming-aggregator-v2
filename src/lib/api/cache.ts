@@ -7,18 +7,18 @@ const DEBUG = __DEV__;
 const CACHE_PREFIXES = {
   TMDB: 'tmdb_',
   OMDB: 'omdb_',
-  WATCHMODE: 'watchmode_',
+  SA: 'sa_',
 };
 
 const CACHE_TTL = {
   TMDB: 24 * 60 * 60 * 1000,       // 24 hours
   OMDB: 7 * 24 * 60 * 60 * 1000,   // 7 days
-  WATCHMODE: 24 * 60 * 60 * 1000,  // 24 hours
+  SA: 24 * 60 * 60 * 1000,         // 24 hours
 };
 
 const inferTTLFromKey = (key: string): number => {
   if (key.startsWith(CACHE_PREFIXES.OMDB)) return CACHE_TTL.OMDB;
-  if (key.startsWith(CACHE_PREFIXES.WATCHMODE)) return CACHE_TTL.WATCHMODE;
+  if (key.startsWith(CACHE_PREFIXES.SA)) return CACHE_TTL.SA;
   return CACHE_TTL.TMDB;
 };
 
@@ -103,7 +103,7 @@ export const clearCache = async (prefix: string | null = null) => {
         (key) =>
           key.startsWith(CACHE_PREFIXES.TMDB) ||
           key.startsWith(CACHE_PREFIXES.OMDB) ||
-          key.startsWith(CACHE_PREFIXES.WATCHMODE)
+          key.startsWith(CACHE_PREFIXES.SA)
       );
       await storage.multiRemove(cacheKeys);
     }
@@ -119,7 +119,7 @@ export const clearExpired = async (): Promise<number> => {
       (key) =>
         key.startsWith(CACHE_PREFIXES.TMDB) ||
         key.startsWith(CACHE_PREFIXES.OMDB) ||
-        key.startsWith(CACHE_PREFIXES.WATCHMODE)
+        key.startsWith(CACHE_PREFIXES.SA)
     );
 
     const keysToRemove: string[] = [];
@@ -150,7 +150,7 @@ export const clearOldestPercentage = async (percentage: number): Promise<number>
       (key) =>
         key.startsWith(CACHE_PREFIXES.TMDB) ||
         key.startsWith(CACHE_PREFIXES.OMDB) ||
-        key.startsWith(CACHE_PREFIXES.WATCHMODE)
+        key.startsWith(CACHE_PREFIXES.SA)
     );
 
     const entries: { key: string; timestamp: number }[] = [];
@@ -186,7 +186,7 @@ export const maintainCache = async (maxEntries = 1000) => {
       (key) =>
         key.startsWith(CACHE_PREFIXES.TMDB) ||
         key.startsWith(CACHE_PREFIXES.OMDB) ||
-        key.startsWith(CACHE_PREFIXES.WATCHMODE)
+        key.startsWith(CACHE_PREFIXES.SA)
     );
     if (cacheKeys.length > maxEntries) {
       await clearOldestPercentage(30);
