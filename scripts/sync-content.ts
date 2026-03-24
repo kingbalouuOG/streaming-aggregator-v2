@@ -64,9 +64,30 @@ const limitArg = args.includes('--limit') ? parseInt(args[args.indexOf('--limit'
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function rateLimitedFetch(url: string, options: RequestInit, delayMs: number): Promise<Response> {
+async function rateLimitedFetch(url: string, options: RequestInit, delayMs: number, maxRetries = 3): Promise<Response> {
   await delay(delayMs);
-  return fetch(url, options);
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok || res.status === 404) return res;
+      if ((res.status >= 500 || res.status === 429) && attempt < maxRetries) {
+        const backoff = Math.pow(2, attempt) * 1000;
+        console.log(`  Retry ${attempt + 1}/${maxRetries} after ${backoff}ms (HTTP ${res.status})`);
+        await delay(backoff);
+        continue;
+      }
+      return res; // Return non-retryable errors as-is
+    } catch (err: any) {
+      if (attempt < maxRetries) {
+        const backoff = Math.pow(2, attempt) * 1000;
+        console.log(`  Retry ${attempt + 1}/${maxRetries} after ${backoff}ms (network error)`);
+        await delay(backoff);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error(`Max retries exceeded: ${url}`);
 }
 
 // ── TMDb helpers ─────────────────────────────────────────

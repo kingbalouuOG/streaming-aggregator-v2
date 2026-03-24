@@ -55,13 +55,42 @@ const CHANGE_TYPES = ['new', 'updated', 'removed', 'expiring'] as const;
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok || res.status === 404) return res;
+      // Retry on server errors and rate limits
+      if (res.status >= 500 || res.status === 429) {
+        if (attempt < maxRetries) {
+          const backoff = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+          console.log(`Retry ${attempt + 1}/${maxRetries} after ${backoff}ms (HTTP ${res.status})`);
+          await delay(backoff);
+          continue;
+        }
+      }
+      throw new Error(`HTTP ${res.status}: ${url}`);
+    } catch (err: any) {
+      if (attempt < maxRetries && err.message?.includes('fetch failed')) {
+        const backoff = Math.pow(2, attempt) * 1000;
+        console.log(`Retry ${attempt + 1}/${maxRetries} after ${backoff}ms (network error)`);
+        await delay(backoff);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error(`Max retries exceeded: ${url}`);
+}
+
 async function saApiFetch(path: string): Promise<any> {
   const url = `https://${SA_API_HOST}${path}`;
-  const res = await fetch(url, { headers: SA_HEADERS });
-  if (!res.ok) {
-    if (res.status === 404) return null;
-    throw new Error(`SA API ${res.status}: ${path}`);
-  }
+  const res = await fetchWithRetry(url, { headers: SA_HEADERS });
+  if (res.status === 404) return null;
   return res.json();
 }
 
