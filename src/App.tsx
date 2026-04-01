@@ -39,6 +39,8 @@ import { logOnboardingEvent } from "./lib/analytics/logger";
 import { ONBOARDING_EVENTS } from "./lib/analytics/events";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { maintainCache } from "./lib/api/cache";
+import { parseContentItemId } from "./lib/adapters/contentAdapter";
+import { emitContentInteraction } from "./lib/storage/interactions";
 
 const categories = ["All", "Movies", "TV Shows", "Docs", "Anime"];
 
@@ -266,6 +268,10 @@ function AppContent() {
       const item = [...wl.watchlist, ...wl.watched].find((i) => i.id === id);
       await wl.removeBookmark(id);
       toast("Removed from Watchlist", { description: item?.title || "Title removed", icon: "\u{1F5D1}\u{FE0F}" });
+      if (item) {
+        const { tmdbId, mediaType } = parseContentItemId(id);
+        emitContentInteraction('removed', tmdbId, mediaType, { title: item.title });
+      }
     } catch (err) {
       console.error('[handleRemoveBookmark]', err);
       toast.error("Something went wrong");

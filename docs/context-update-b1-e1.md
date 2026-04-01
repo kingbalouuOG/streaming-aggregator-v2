@@ -188,3 +188,74 @@ Supabase CLI was installed via Homebrew and linked to project `fmusugdcnnwiuzkbj
 
 - **Removal tracking test** — `removed` change type events will only appear when catalogue removals actually occur; not yet observed in production. Verify the history row and RLS policy for this case when next removals are detected.
 - **`content_vector` schema cache** — Supabase caches the PostgREST schema; if the `content_vector` column was added while a schema cache was stale, queries may silently drop the column. Monitor for NULL vectors on titles that should have them.
+
+---
+
+# C1.6 — User Interactions Event Log
+
+**Date:** April 2026
+**Status:** Implemented
+
+## What Was Built
+
+### Migration 010 — `user_interactions` table
+
+`supabase/migrations/010_user_interactions.sql` adds an immutable, append-only event log for all user behavioural signals:
+
+- `user_interactions` table with columns: `id` (UUID PK), `user_id` (FK → `profiles`, CASCADE DELETE), `event_type` (TEXT), `content_id` (INTEGER, nullable — TMDb ID), `media_type` (TEXT, nullable — `'movie'` / `'tv'`), `metadata` (JSONB), `created_at` (TIMESTAMPTZ)
+- **No UPDATE or DELETE RLS policies** — events are immutable; the only deletion path is account deletion via CASCADE
+- RLS: INSERT and SELECT restricted to the owning user via `auth.uid() = user_id`
+- 3 indexes: `(user_id, created_at DESC)` for timeline queries, `(user_id, event_type)` for type-filtered queries, `(user_id, content_id, media_type)` for per-content lookups
+
+### New module — `src/lib/storage/interactions.ts`
+
+Central emitter module. All interaction tracking goes through this file.
+
+**Event types** (`InteractionEventType`):
+| Event type | Trigger |
+|---|---|
+| `thumbs_up` | Rating a watched item positively |
+| `thumbs_down` | Rating a watched item negatively |
+| `watchlist_add` | Adding a title to Want to Watch |
+| `watched` | Moving a title to Watched |
+| `removed` | Removing a title from the watchlist |
+| `quiz_answer` | Each individual quiz pair answer |
+| `quiz_completed` | Quiz finished (includes answer count + top genres) |
+| `detail_view` | Opening a title's detail page |
+| `search` | Executing a search query (includes query string + result count) |
+| `dismiss` | (Reserved — not yet wired) |
+
+**Core function:** `emitInteraction(event)` — fire-and-forget, never throws, no-op for unauthenticated users.
+
+**Convenience emitters** (thin wrappers around `emitInteraction`):
+- `emitContentInteraction(eventType, contentId, mediaType, metadata?)` — for watchlist/rating events
+- `emitQuizAnswer(pairId, chosen, phase)` — per-answer quiz events
+- `emitQuizCompleted(answerCount, topGenres)` — quiz completion summary
+- `emitDetailView(contentId, mediaType, title, source?)` — detail page views
+- `emitSearch(query, resultCount)` — search events
+
+**Query helpers** (for future analytics/replay):
+- `getUserInteractions(limit?, eventTypes?)` — paginated event history
+- `getInteractionCounts()` — event type frequency map
+
+### Integration points
+
+| File | What was added |
+|---|---|
+| `src/hooks/useTasteProfile.ts` | Imports `emitContentInteraction`; called after every taste vector update (thumbs up/down, watchlist_add, watched, removed) with the content vector delta as metadata |
+| `src/App.tsx` | Imports `emitContentInteraction`; called in `handleRemoveBookmark` for the `removed` event (second removal path not covered by `useTasteProfile`) |
+| `src/lib/storage/tasteProfile.ts` | Imports `emitQuizAnswer` + `emitQuizCompleted`; called inside `saveQuizResults` — one `quiz_answer` event per answer, then `quiz_completed` when all answers saved |
+| `src/hooks/useContentDetail.ts` | Imports `emitDetailView`; called when detail data resolves successfully |
+| `src/hooks/useSearch.ts` | Imports `emitSearch`; called after search results are ranked and returned |
+
+## Relationship to `taste_profiles.interaction_log`
+
+The existing `taste_profiles.interaction_log` (JSONB array) continues to be written in parallel. It serves a different purpose: it is the compact, vector-delta log used by the recommendation engine for fast local reads. The new `user_interactions` table is the raw, granular event log intended for future analytics, replay, and model retraining. Both are written on every user action; neither depends on the other.
+
+## Key Decisions
+
+- **Fire-and-forget:** `emitInteraction` never awaits the result in call sites — it returns `void` and `.catch(() => {})` silences any unhandled rejection. Interaction logging must never degrade the user action that triggered it.
+- **No-op for guests:** `isSupabaseActive()` is checked first; unauthenticated users produce no events and no errors.
+- **Immutability enforced at the DB layer:** No UPDATE or DELETE RLS policies exist on `user_interactions`. The only way rows are removed is via CASCADE when the parent `profiles` row is deleted (account deletion).
+- **`content_id` is nullable** by design — quiz and search events have no associated TMDb content ID.
+- **Dual-write instead of migration:** `taste_profiles.interaction_log` was not removed. The event log is additive; removing the existing log would require changes to the recommendation engine that were out of scope.

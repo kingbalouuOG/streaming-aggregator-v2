@@ -7,6 +7,7 @@ import { tmdbMovieToContentItem, tmdbTVToContentItem } from '@/lib/adapters/cont
 import { contentToVector } from '@/lib/taste/contentVectorMapping';
 import { cosineSimilarity, DIMENSION_WEIGHTS } from '@/lib/taste/tasteVector';
 import { getTasteProfile } from '@/lib/storage/tasteProfile';
+import { emitDetailView } from '@/lib/storage/interactions';
 import type { ContentItem } from '@/components/ContentCard';
 
 interface ContentDetailState {
@@ -199,6 +200,7 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
         .slice(0, 10);
 
       setState({ detail, similar, loading: false, error: null });
+      emitDetailView(tmdbId, mediaType, detail.title);
     } catch (err: any) {
       setState((s) => ({ ...s, loading: false, error: err.message || 'Failed to load details' }));
     }

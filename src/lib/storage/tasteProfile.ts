@@ -6,6 +6,7 @@
  */
 
 import storage, { isSupabaseActive } from '../storage';
+import { emitQuizAnswer, emitQuizCompleted } from './interactions';
 import {
   type TasteVector,
   type ConfidenceVector,
@@ -269,6 +270,19 @@ export async function saveQuizResults(
     version: SCHEMA_VERSION,
   };
   await saveTasteProfile(profile);
+
+  // Emit quiz events (fire-and-forget)
+  try {
+    const { getTopGenreNames } = await import('../taste/quizScoring');
+    const topGenres = getTopGenreNames(quizVector, 3);
+    for (const answer of quizAnswers) {
+      emitQuizAnswer(answer.pairId, answer.chosenOption, answer.phase ?? 'fixed');
+    }
+    emitQuizCompleted(quizAnswers.length, topGenres);
+  } catch (err) {
+    console.error('[TasteProfile] Failed to emit quiz events:', err);
+  }
+
   return profile;
 }
 

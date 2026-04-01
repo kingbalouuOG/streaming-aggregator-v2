@@ -6,6 +6,7 @@ import { extractYearFromQuery, reRankSearchResults } from '@/lib/utils/searchUti
 import type { ContentItem } from '@/components/ContentCard';
 import type { ServiceId } from '@/components/platformLogos';
 import { API_CONFIG } from '@/lib/constants/config';
+import { emitSearch } from '@/lib/storage/interactions';
 
 const BADGE_FLUSH_INTERVAL_MS = 200;
 
@@ -145,6 +146,7 @@ export function useSearch(userServices?: ServiceId[], initialQuery?: string, ini
         setResults(prev => [...prev, ...ranked]);
       } else {
         setResults(ranked);
+        emitSearch(cleanQuery, ranked.length);
       }
       setPage(searchPage);
       setHasMore(searchPage < maxTotalPages);

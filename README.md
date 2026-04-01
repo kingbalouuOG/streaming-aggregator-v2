@@ -199,6 +199,7 @@ videx/
         vectorSerialisation.ts   Vector <-> array serialisation for Supabase
       storage/                 Persistence (localStorage + Supabase routing)
         tasteProfile.ts          Taste profile CRUD, quiz results, interaction logging
+        interactions.ts          User interactions event log (fire-and-forget Supabase emitter)
         watchlist.ts             Watchlist CRUD with recommendation auto-invalidation
         userPreferences.ts       User preferences and onboarding state
         recommendations.ts       Recommendation cache management

@@ -17,6 +17,7 @@ import {
 } from '@/lib/storage/tasteProfile';
 import type { ContentMetadata } from '@/lib/taste/contentVectorMapping';
 import { invalidateRecommendationCache } from '@/lib/storage/recommendations';
+import { emitContentInteraction } from '@/lib/storage/interactions';
 import storage from '@/lib/storage';
 
 const HIDDEN_GEMS_CACHE_KEY = '@app_hidden_gems';
@@ -54,6 +55,10 @@ export function useTasteProfile() {
     try {
       const updated = await recordInteraction(contentMeta, action);
       if (updated) {
+        emitContentInteraction(action, contentMeta.contentId, contentMeta.contentType, {
+          title: contentMeta.title,
+          genre_ids: contentMeta.genreIds || [],
+        });
         setProfile(updated);
         // Invalidate recommendation caches so next load uses new vector
         await Promise.all([
