@@ -28,7 +28,12 @@ Netflix, Amazon Prime Video, Apple TV+, Disney+, NOW, Sky Go, Paramount+, BBC iP
 
 Streaming availability and deep link URLs are cached in Supabase, populated by a sync pipeline:
 - **Initial population**: `npx tsx scripts/sync-content.ts` (TMDb → SA API → OMDB, 3-stage pipeline)
-- **Daily incremental sync**: Supabase Edge Function at `supabase/functions/sync-incremental/` using SA API `/changes` endpoint
+  - `--stage tmdb` — fetch titles and metadata from TMDb discover (also computes and stores `content_vector`)
+  - `--stage sa` — fetch streaming availability and deep links from SA API
+  - `--stage omdb` — fetch IMDb/RT ratings from OMDB
+  - `--stage vectors` — backfill `content_vector` for any existing titles where it is NULL
+- **Daily incremental sync**: Supabase Edge Function at `supabase/functions/sync-incremental/` using SA API `/changes` endpoint; writes availability changes to `streaming_history` (append-only log) for historical tracking
+- Shared logic used across Edge Functions lives in `supabase/functions/_shared/` as self-contained modules (required for remote CLI deployment without Docker, which cannot resolve paths outside the `supabase/functions/` tree)
 - The app reads from Supabase (fast, no API quota per user) — TMDb remains the primary source for service detection
 
 ## Getting Started
@@ -188,7 +193,8 @@ videx/
         tasteClusters.ts         16 taste archetype definitions
         quizConfig.ts            Quiz pair pools (5 fixed + 39 adaptive + 4 legacy) and selection algorithms
         quizScoring.ts           Quiz answer -> vector + confidence computation
-        contentVectorMapping.ts  Content metadata -> taste vector mapping
+        computeContentVector.ts  Pure isomorphic function: TMDb metadata → 24D vector (no cache, used by sync scripts)
+        contentVectorMapping.ts  Cached wrapper around computeContentVector (used by client code)
         genreBlending.ts         Genre combination logic for diverse discovery
         vectorSerialisation.ts   Vector <-> array serialisation for Supabase
       storage/                 Persistence (localStorage + Supabase routing)

@@ -13,6 +13,23 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { contentToVector, ALL_DIMENSIONS } from '../_shared/computeContentVector.ts';
+
+// ── Types ─────────────────────────────────────────────────
+
+interface HistoryEvent {
+  tmdb_id: number;
+  media_type: string;
+  service_id: string;
+  event_type: 'added' | 'removed' | 'updated' | 'price_changed';
+  stream_type: string | null;
+  quality: string | null;
+  link: string | null;
+  price_amount: number | null;
+  price_currency: string | null;
+  old_price_amount: number | null;
+  sync_run_id: string | null;
+}
 
 // ── Config ───────────────────────────────────────────────
 
@@ -123,63 +140,68 @@ function extractTmdbId(saApiTmdbId: string): { tmdbId: number; mediaType: 'movie
   };
 }
 
-async function upsertAvailability(
+/**
+ * Compute and store a content vector for a title using its existing DB metadata.
+ * Returns 'vectorised' | 'skipped' | 'error'.
+ * Skips if the title isn't in the titles table yet — it will be vectorised
+ * during the next full stageTmdb() run.
+ */
+async function insertHistoryBatch(events: HistoryEvent[]): Promise<void> {
+  if (events.length === 0) return;
+  const BATCH_SIZE = 100;
+  for (let i = 0; i < events.length; i += BATCH_SIZE) {
+    const result = await supabase
+      .from('streaming_history')
+      .insert(events.slice(i, i + BATCH_SIZE));
+    if (result?.error) console.error('History batch insert error:', result.error.message);
+  }
+}
+
+async function computeAndStoreVector(
   tmdbId: number,
-  mediaType: string,
-  streamingOptions: any[]
-): Promise<number> {
-  const rows = streamingOptions.map((opt: any) => ({
-    tmdb_id: tmdbId,
-    media_type: mediaType,
-    service_id: SA_TO_VIDEX[opt.service.id] || opt.service.id,
-    sa_service_id: opt.service.id,
-    stream_type: opt.type,
-    deep_link_url: opt.link,
-    video_link_url: opt.videoLink || null,
-    quality: opt.quality || 'default',
-    price_amount: opt.price ? parseFloat(opt.price.amount) : null,
-    price_currency: opt.price?.currency || null,
-    price_formatted: opt.price?.formatted || null,
-    addon_id: opt.addon?.id || null,
-    addon_name: opt.addon?.name || null,
-    expires_soon: opt.expiresSoon || false,
-    expires_on: opt.expiresOn
-      ? new Date(opt.expiresOn * 1000).toISOString()
-      : null,
-    available_since: opt.availableSince
-      ? new Date(opt.availableSince * 1000).toISOString()
-      : null,
-    last_verified_at: new Date().toISOString(),
-  }));
+  mediaType: string
+): Promise<'vectorised' | 'skipped' | 'error'> {
+  try {
+    const { data } = await supabase
+      .from('titles')
+      .select('genre_ids, popularity, vote_count, release_year, original_language, runtime')
+      .eq('tmdb_id', tmdbId)
+      .eq('media_type', mediaType)
+      .single();
 
-  // Deduplicate by (service_id, stream_type, quality)
-  const seen = new Set<string>();
-  const uniqueRows = rows.filter((r: any) => {
-    const key = `${r.service_id}-${r.stream_type}-${r.quality}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+    if (!data) {
+      // Title not yet in the titles table — log gap, skip silently
+      console.log(`Vector gap: (${tmdbId}, ${mediaType}) not found in titles — will be vectorised on next full sync`);
+      return 'skipped';
+    }
 
-  if (uniqueRows.length > 0) {
-    // Delete existing rows for this title+service, then insert fresh data.
-    // The COALESCE functional unique index can't be used with Supabase JS onConflict.
-    await supabase
-      .from('streaming_availability')
-      .delete()
+    const vector = contentToVector({
+      genreIds: data.genre_ids || [],
+      popularity: data.popularity,
+      voteCount: data.vote_count,
+      releaseYear: data.release_year,
+      originalLanguage: data.original_language,
+      runtime: data.runtime ?? null,
+    });
+
+    const { error: updateError } = await supabase
+      .from('titles')
+      .update({ content_vector: ALL_DIMENSIONS.map(d => vector[d]) })
       .eq('tmdb_id', tmdbId)
       .eq('media_type', mediaType);
 
-    const { error } = await supabase
-      .from('streaming_availability')
-      .insert(uniqueRows);
-    if (error) throw error;
-  }
+    if (updateError) {
+      console.error(`Vector update failed for (${tmdbId}, ${mediaType}):`, updateError.message);
+      return 'error';
+    }
 
-  return uniqueRows.length;
+    return 'vectorised';
+  } catch {
+    return 'error';
+  }
 }
 
-async function runIncrementalSync(sinceOverride?: number): Promise<{
+async function runIncrementalSync(sinceOverride?: number, syncId?: string): Promise<{
   processed: number;
   added: number;
   updated: number;
@@ -188,7 +210,8 @@ async function runIncrementalSync(sinceOverride?: number): Promise<{
   timedOut: boolean;
 }> {
   const since = sinceOverride || await getLastSyncTimestamp();
-  const stats = { processed: 0, added: 0, updated: 0, removed: 0, errors: 0, timedOut: false };
+  const stats = { processed: 0, added: 0, updated: 0, removed: 0, errors: 0, timedOut: false, vectorised: 0, vectorGaps: 0 };
+  const historyEvents: HistoryEvent[] = [];
   const startTime = Date.now();
 
   console.log(`Incremental sync since ${new Date(since * 1000).toISOString()}`);
@@ -215,32 +238,149 @@ async function runIncrementalSync(sinceOverride?: number): Promise<{
 
           for (const change of result.changes || []) {
             try {
-              const { tmdbId, mediaType } = extractTmdbId(change.show.tmdbId);
+              // SA API new format: showId is a plain numeric string (e.g. "28584"),
+              // showType is "movie" or "series" as a separate field.
+              // Old format had show.tmdbId = "movie/238" — keep fallback for safety.
+              let tmdbId: number;
+              let mediaType: 'movie' | 'tv';
+              if (change.showId && change.showType) {
+                tmdbId = parseInt(change.showId, 10);
+                mediaType = change.showType === 'series' ? 'tv' : 'movie';
+              } else if (change.show?.tmdbId) {
+                ({ tmdbId, mediaType } = extractTmdbId(change.show.tmdbId));
+              } else {
+                stats.errors++;
+                console.error(`Skipping change: missing showId/showType. Keys: ${Object.keys(change).join(', ')}`);
+                continue;
+              }
+              if (!tmdbId || isNaN(tmdbId)) {
+                stats.errors++;
+                console.error(`Skipping change: invalid tmdbId "${change.showId}"`);
+                continue;
+              }
+              const saServiceId = change.service?.id || service;
+              const serviceId = SA_TO_VIDEX[saServiceId] || saServiceId;
+              const streamType = change.streamingOptionType as string;
 
               if (changeType === 'removed') {
-                // Remove availability for this title on this service
+                // Capture existing rows before deletion for history
+                const { data: existingRows } = await supabase
+                  .from('streaming_availability')
+                  .select('service_id, stream_type, quality, deep_link_url, price_amount, price_currency')
+                  .eq('tmdb_id', tmdbId)
+                  .eq('media_type', mediaType)
+                  .eq('service_id', serviceId)
+                  .eq('stream_type', streamType);
+
+                for (const row of existingRows || []) {
+                  historyEvents.push({
+                    tmdb_id: tmdbId, media_type: mediaType,
+                    service_id: row.service_id,
+                    event_type: 'removed',
+                    stream_type: row.stream_type, quality: row.quality,
+                    link: row.deep_link_url,
+                    price_amount: row.price_amount, price_currency: row.price_currency,
+                    old_price_amount: null, sync_run_id: syncId || null,
+                  });
+                }
+
                 await supabase
                   .from('streaming_availability')
                   .delete()
                   .eq('tmdb_id', tmdbId)
                   .eq('media_type', mediaType)
-                  .eq('sa_service_id', service);
+                  .eq('service_id', serviceId)
+                  .eq('stream_type', streamType);
                 stats.removed++;
               } else {
-                // Upsert availability from the change data
-                const gbOptions = change.show.streamingOptions?.gb || [];
-                const serviceOptions = gbOptions.filter((o: any) => o.service.id === service);
-                if (serviceOptions.length > 0) {
-                  const count = await upsertAvailability(tmdbId, mediaType, serviceOptions);
-                  if (changeType === 'new') stats.added += count;
-                  else stats.updated += count;
+                // new / updated / expiring: upsert this individual streaming option.
+                // For 'updated': read existing row before delete for price comparison.
+                let existingRow: { price_amount: number | null; price_currency: string | null } | null = null;
+                if (changeType === 'updated') {
+                  const { data } = await supabase
+                    .from('streaming_availability')
+                    .select('price_amount, price_currency')
+                    .eq('tmdb_id', tmdbId)
+                    .eq('media_type', mediaType)
+                    .eq('service_id', serviceId)
+                    .eq('stream_type', streamType)
+                    .limit(1)
+                    .maybeSingle();
+                  existingRow = data;
+                }
+
+                // Delete existing row(s) for this option, then insert fresh.
+                // Scoped to service_id + stream_type (not whole title) to avoid
+                // clobbering other services' rows as the old upsertAvailability did.
+                await supabase
+                  .from('streaming_availability')
+                  .delete()
+                  .eq('tmdb_id', tmdbId)
+                  .eq('media_type', mediaType)
+                  .eq('service_id', serviceId)
+                  .eq('stream_type', streamType);
+
+                const newRow = {
+                  tmdb_id: tmdbId,
+                  media_type: mediaType,
+                  service_id: serviceId,
+                  sa_service_id: saServiceId,
+                  stream_type: streamType,
+                  deep_link_url: change.link,
+                  video_link_url: change.videoLink || null,
+                  quality: change.quality || null,
+                  price_amount: change.price ? parseFloat(change.price.amount) : null,
+                  price_currency: change.price?.currency || null,
+                  price_formatted: change.price?.formatted || null,
+                  addon_id: change.addon?.id || null,
+                  addon_name: change.addon?.name || null,
+                  expires_soon: change.expiresSoon || false,
+                  expires_on: change.expiresOn ? new Date(change.expiresOn * 1000).toISOString() : null,
+                  available_since: change.timestamp ? new Date(change.timestamp * 1000).toISOString() : null,
+                  last_verified_at: new Date().toISOString(),
+                };
+
+                const { error: insertError } = await supabase
+                  .from('streaming_availability')
+                  .insert(newRow);
+                if (insertError) throw insertError;
+
+                // Log history event
+                const newPrice = change.price ? parseFloat(change.price.amount) : null;
+                const oldPrice = existingRow?.price_amount ?? null;
+                const isPriceChanged = changeType === 'updated' && existingRow && newPrice !== null && oldPrice !== null && newPrice !== oldPrice;
+                historyEvents.push({
+                  tmdb_id: tmdbId, media_type: mediaType, service_id: serviceId,
+                  event_type: changeType === 'new' ? 'added' : isPriceChanged ? 'price_changed' : 'updated',
+                  stream_type: streamType,
+                  quality: change.quality || null,
+                  link: change.link,
+                  price_amount: newPrice, price_currency: change.price?.currency || null,
+                  old_price_amount: isPriceChanged ? oldPrice : null,
+                  sync_run_id: syncId || null,
+                });
+
+                if (changeType === 'new') stats.added++;
+                else stats.updated++;
+
+                // Vectorize for new and updated only
+                if (changeType === 'new' || changeType === 'updated') {
+                  const vectorResult = await computeAndStoreVector(tmdbId, mediaType);
+                  if (vectorResult === 'vectorised') stats.vectorised++;
+                  else if (vectorResult === 'skipped') stats.vectorGaps++;
                 }
               }
               stats.processed++;
             } catch (err: any) {
               stats.errors++;
-              console.error(`Error processing ${changeType} for ${change.show?.tmdbId}:`, err.message);
+              console.error(`Error processing ${changeType} for ${change.showId ?? change.show?.tmdbId}:`, err.message);
             }
+          }
+
+          // Flush history after each page to stay well within the 2-min timeout.
+          if (historyEvents.length >= 200) {
+            await insertHistoryBatch(historyEvents);
+            historyEvents.length = 0;
           }
 
           hasMore = result.hasMore || false;
@@ -255,6 +395,9 @@ async function runIncrementalSync(sinceOverride?: number): Promise<{
     }
   }
 
+  await insertHistoryBatch(historyEvents);
+  console.log(`History: ${historyEvents.length} events logged`);
+
   return stats;
 }
 
@@ -263,9 +406,19 @@ async function runIncrementalSync(sinceOverride?: number): Promise<{
 const MAX_RUNTIME_MS = 120_000; // 2 min — leave 30s buffer before Edge Function timeout
 
 Deno.serve(async (req) => {
-  // Verify caller is authorized (service_role key required)
+  // Verify caller has service_role — check the JWT role claim rather than doing
+  // a raw string comparison against the env var (which varies by invocation method).
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ') || authHeader.split(' ')[1] !== SUPABASE_SERVICE_ROLE_KEY) {
+  if (!authHeader?.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ status: 'error', message: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  try {
+    const payload = JSON.parse(atob(authHeader.split(' ')[1].split('.')[1]));
+    if (payload.role !== 'service_role') throw new Error('not service_role');
+  } catch {
     return new Response(JSON.stringify({ status: 'error', message: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
@@ -288,7 +441,7 @@ Deno.serve(async (req) => {
     const syncId = syncLog?.id;
 
     // Run the sync
-    const stats = await runIncrementalSync(since);
+    const stats = await runIncrementalSync(since, syncId);
 
     // Update sync log
     if (syncId) {
@@ -306,7 +459,7 @@ Deno.serve(async (req) => {
         .eq('id', syncId);
     }
 
-    console.log(`Sync complete:`, stats);
+    console.log(`Sync complete: processed=${stats.processed} added=${stats.added} updated=${stats.updated} removed=${stats.removed} errors=${stats.errors} vectorised=${stats.vectorised} vectorGaps=${stats.vectorGaps}`);
 
     return new Response(JSON.stringify({ status: 'ok', ...stats }), {
       headers: { 'Content-Type': 'application/json' },

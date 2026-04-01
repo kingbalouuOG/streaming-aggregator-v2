@@ -18,7 +18,7 @@
 ### Supabase Content Cache
 
 New Supabase tables store cached content data:
-- **`titles`** — 20,000 TMDb titles with metadata, IMDb IDs, OMDB ratings
+- **`titles`** — 20,000 TMDb titles with metadata, IMDb IDs, OMDB ratings, and `content_vector float4[24]` (pre-computed 24D taste vector per title)
 - **`streaming_availability`** — ~40,000 deep link entries with pricing (one row per title-service-type-quality combo)
 - **`title_genres`**, **`title_credits`** — schema exists but not yet populated
 - **`sync_log`** — sync run tracking
@@ -27,8 +27,9 @@ New Supabase tables store cached content data:
 
 ### Sync Pipeline
 
-- **Bulk sync:** `npx tsx scripts/sync-content.ts` with stages: `--stage tmdb`, `--stage imdb`, `--stage sa`, `--stage omdb`
-- **Daily incremental:** Supabase Edge Function at `supabase/functions/sync-incremental/index.ts` using SA API `/changes` endpoint
+- **Bulk sync:** `npx tsx scripts/sync-content.ts` with stages: `--stage tmdb`, `--stage imdb`, `--stage sa`, `--stage omdb`, `--stage vectors`
+  - `--stage vectors` backfills `content_vector` for any titles where it is NULL (idempotent, safe to re-run)
+- **Daily incremental:** Supabase Edge Function at `supabase/functions/sync-incremental/index.ts` using SA API `/changes` endpoint; also computes `content_vector` for new/updated titles using existing titles metadata
 - **Monitoring views:** `sync_history`, `data_freshness`, `deep_link_coverage`, `ratings_coverage`
 
 ### Deep Linking
@@ -90,6 +91,8 @@ SA-to-Videx mapping is duplicated in 3 files (keep in sync):
 | `scripts/sync-content.ts` | Bulk content sync (TMDb → SA API → OMDB) |
 | `supabase/functions/sync-incremental/index.ts` | Daily incremental sync Edge Function |
 | `supabase/migrations/001-005` | Schema, constraint fixes, monitoring, data quality, RLS |
+| `supabase/migrations/008_content_vectors.sql` | Adds `content_vector float4[]` with 24D constraint to `titles` |
+| `src/lib/taste/computeContentVector.ts` | Pure isomorphic vector computation (no cache) — shared by client, sync script, Edge Function |
 | `docs/solutions/` | 3 solution docs (RLS bug, cache bug, SA API coverage) |
 
 ## Key Patterns & Gotchas
@@ -103,6 +106,15 @@ SA-to-Videx mapping is duplicated in 3 files (keep in sync):
 - **Prime Video**: `FORCE_SEARCH_FALLBACK` set in `deepLinks.ts` — always uses search URL instead of SA API deep link.
 
 ## Completed Since Initial Deployment
+
+### B1.4: Content vectors pre-computed server-side (migration 008)
+
+- **`content_vector float4[24]`** added to `titles` table — stores a pre-computed 24D taste vector per title
+- **Shared module** `src/lib/taste/computeContentVector.ts` — pure isomorphic function, no cache, no browser APIs. Imported by the sync script, Edge Function, and (via the cache wrapper in `contentVectorMapping.ts`) by the client.
+- **`stageTmdb()`** in `sync-content.ts` now computes and upserts the vector for every title (runtime is NULL at this stage since TMDb /discover doesn't return it; pacing is derived from genre signals only)
+- **`--stage vectors`** in `sync-content.ts` backfills vectors for all existing titles with `content_vector IS NULL`; uses `runtime` from the DB if present
+- **Incremental sync** computes vectors for `new` and `updated` change types using existing `titles` metadata; skips (and logs) titles not yet in the table
+- **Vector serialisation**: `ALL_DIMENSIONS.map(d => vector[d])` gives a canonical 24-float array in guaranteed dimension order
 
 ### Final tasks (commit `d004a58`)
 - **B1.7:** pg_cron daily sync scheduled at 06:00 UTC (migration 006)
@@ -120,14 +132,59 @@ SA-to-Videx mapping is duplicated in 3 files (keep in sync):
 - **Price formatting** — always formats from `price_amount` as `£X.XX`, not from SA API's `"X.XX GBP"` format. Missing prices show "Buy — check price".
 - **Stale SA cache** — one-time flush on app load via `sa_cache_flushed_v1` localStorage flag.
 
-### Data quality baseline (from `run_data_quality_check()`)
-- 3,560 titles with IMDb ID but no SA API data (niche/older content — normal)
-- 0 orphaned availability rows (clean data integrity)
-- 1,544 stale entries from initial test batch (will be refreshed by daily cron)
-- 16,152 TMDb-unconfirmed entries (expected — `tmdb_confirmed` not yet populated)
-
 ## Remaining Operational Tasks
 
 - Run OMDB ratings daily (`npx tsx scripts/sync-content.ts --stage omdb`) until all 20K titles covered (~20 days at 950/day cap)
 - Downgrade SA API from Pro to free tier (initial population complete)
 - Monitor daily cron sync via `SELECT * FROM sync_history;` in SQL Editor
+
+---
+
+# C1.5 — Historical Data Retention
+
+**Date:** March 2026
+**Status:** Implemented and verified
+
+## What Was Built
+
+### Migration 009 — `streaming_history` table
+
+`supabase/migrations/009_streaming_history.sql` adds an append-only log of streaming availability changes:
+- `streaming_history` table with columns for `sync_id`, `title_id`, `service`, `change_type` (`added`/`updated`/`removed`/`expiring`), `option_type`, `quality`, `price_amount`, `price_currency`, `leave_date`, and `recorded_at`
+- 3 indexes: on `title_id`, `service`, and `recorded_at` (for range queries)
+- RLS policies: `anon` + `authenticated` = SELECT, `service_role` = ALL
+
+### Edge Function updates (`sync-incremental/index.ts`)
+
+- **`HistoryEvent` interface** — typed shape for a single history log entry
+- **`insertHistoryBatch()`** — inserts in batches of 100; flushes automatically every 200 events during a sync run to avoid holding large arrays in memory
+- **History events logged** for `added`, `updated`, `removed`, and `expiring` change types, with `sync_id` passed through for traceability
+- **SA API format change handled** — the new SA API format sends `showId` (numeric string) + `showType` (`"movie"` / `"series"`) as separate fields, replacing the old `show.tmdbId` (`"movie/238"`) combined format. The Edge Function was updated to parse both fields correctly and derive the numeric TMDb ID and media type from them. The old `upsertAvailability()` helper was removed; replaced with per-option insert logic that matches the new format.
+- **Auth check** updated from raw string comparison to JWT role claim check (more robust against header tampering)
+
+### Shared module — `_shared/computeContentVector.ts`
+
+A self-contained copy of the content vector computation function lives at `supabase/functions/_shared/computeContentVector.ts`. It inlines the `tasteVector` types rather than importing from `src/lib/taste/`, because the Supabase CLI remote deployment path (no Docker) cannot resolve paths outside the `supabase/functions/` tree. The Edge Function import was updated from `../../../src/lib/taste/computeContentVector.ts` to `../_shared/computeContentVector.ts`.
+
+This establishes a pattern: any logic shared across multiple Edge Functions should live in `supabase/functions/_shared/` as a self-contained module.
+
+### Supabase CLI setup
+
+Supabase CLI was installed via Homebrew and linked to project `fmusugdcnnwiuzkbjquo`. Migrations 001–008 were marked as applied via `supabase migration repair` so the CLI's migration state matches the actual database state.
+
+## Key Decisions
+
+- **SA API format change discovered during C1.5 work.** The API switched from `show.tmdbId` (e.g. `"movie/238"`) to separate `showId` + `showType` fields. This is a breaking change in the API response shape; handled in the Edge Function but worth checking if the bulk sync script (`scripts/sync-content.ts`) also needs updating if it reads this field.
+- **`_shared/` module pattern for CLI deployment.** Remote deploy without Docker cannot cross the `supabase/functions/` boundary. Self-contained copies in `_shared/` are the correct pattern. If `computeContentVector` logic changes in `src/lib/taste/`, the `_shared/` copy must be kept in sync manually.
+- **Incremental history flushing** (every 200 events) keeps peak memory bounded during large syncs. The batch insert size (100 rows) is a separate concern from the flush threshold.
+
+## Current Status
+
+- Migration 009 deployed and verified
+- History events are being written on each incremental sync run
+- Import path for `computeContentVector` fixed in the Edge Function
+
+## Pending
+
+- **Removal tracking test** — `removed` change type events will only appear when catalogue removals actually occur; not yet observed in production. Verify the history row and RLS policy for this case when next removals are detected.
+- **`content_vector` schema cache** — Supabase caches the PostgREST schema; if the `content_vector` column was added while a schema cache was stale, queries may silently drop the column. Monitor for NULL vectors on titles that should have them.
