@@ -14,6 +14,7 @@ import { openDeepLink } from "@/lib/openDeepLink";
 import { classifyProviders } from "@/lib/utils/providerClassifier";
 import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
+import { startDwell, exitDwell, setLastAction } from "@/lib/instrumentation/dwellTimer";
 import rottenTomatoesLogo from "@/assets/rotten-tomatoes-logo.png";
 import { ReportSheet } from "./ReportSheet";
 
@@ -70,6 +71,22 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
   const [descExpanded, setDescExpanded] = useState(false);
   const [descOverflows, setDescOverflows] = useState(false);
   const descRef = useRef<HTMLParagraphElement>(null);
+
+  // Dwell timer lifecycle (IN-001 / Task 8). Starts when the detail
+  // page mounts and fires a dwell_event on unmount with the most
+  // recent action set via setLastAction(), defaulting to
+  // 'back_to_previous' if the user just backed out. The cleanup
+  // function is called on unmount regardless of cause (back button,
+  // tab change, app close).
+  useEffect(() => {
+    const { tmdbId, mediaType } = parseContentItemId(itemId);
+    startDwell(tmdbId, mediaType);
+    return () => {
+      // exitDwell is idempotent — if an action path (deep link click,
+      // not_interested button) already exited, this is a no-op.
+      exitDwell();
+    };
+  }, [itemId]);
 
   useLayoutEffect(() => {
     const el = descRef.current;
@@ -235,7 +252,10 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             <div className="flex flex-col items-end gap-1">
               <div className="flex items-center gap-1.5">
                 <motion.button
-                  onClick={() => onRate(itemId, userRating === 'up' ? null : 'up')}
+                  onClick={() => {
+                    setLastAction('thumbs_up');
+                    onRate(itemId, userRating === 'up' ? null : 'up');
+                  }}
                   whileTap={{ scale: 0.8 }}
                   animate={userRating === 'up' ? { scale: [1, 1.2, 1] } : undefined}
                   transition={{ duration: 0.3 }}
@@ -249,7 +269,10 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
                   <ThumbsUp className={`w-3.5 h-3.5 ${userRating === 'up' ? 'fill-current' : ''}`} />
                 </motion.button>
                 <motion.button
-                  onClick={() => onRate(itemId, userRating === 'down' ? null : 'down')}
+                  onClick={() => {
+                    setLastAction('thumbs_down');
+                    onRate(itemId, userRating === 'down' ? null : 'down');
+                  }}
                   whileTap={{ scale: 0.8 }}
                   animate={userRating === 'down' ? { scale: [1, 1.2, 1] } : undefined}
                   transition={{ duration: 0.3 }}
@@ -272,7 +295,10 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
           {/* Left button */}
           {isWatched ? (
             <motion.button
-              onClick={() => onMoveToWantToWatch?.(itemId)}
+              onClick={() => {
+                setLastAction('added_to_watchlist');
+                onMoveToWantToWatch?.(itemId);
+              }}
               whileTap={{ scale: 0.96 }}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-secondary/50 border text-muted-foreground transition-colors"
               style={{ borderColor: "var(--check-border-2)" }}
@@ -282,7 +308,10 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             </motion.button>
           ) : bookmarked ? (
             <motion.button
-              onClick={() => onToggleBookmark?.()}
+              onClick={() => {
+                setLastAction('added_to_watchlist');
+                onToggleBookmark?.();
+              }}
               whileTap={{ scale: 0.96 }}
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
@@ -299,7 +328,10 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             </motion.button>
           ) : (
             <motion.button
-              onClick={() => onToggleBookmark?.()}
+              onClick={() => {
+                setLastAction('added_to_watchlist');
+                onToggleBookmark?.();
+              }}
               whileTap={{ scale: 0.96 }}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-secondary/50 border text-foreground transition-colors"
               style={{ borderColor: "var(--check-border-2)" }}
@@ -327,7 +359,10 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             </motion.button>
           ) : bookmarked ? (
             <motion.button
-              onClick={() => onMoveToWatched?.(itemId)}
+              onClick={() => {
+                setLastAction('marked_watched');
+                onMoveToWatched?.(itemId);
+              }}
               whileTap={{ scale: 0.96 }}
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
@@ -338,7 +373,10 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             </motion.button>
           ) : (
             <motion.button
-              onClick={() => onMoveToWatched?.(itemId)}
+              onClick={() => {
+                setLastAction('marked_watched');
+                onMoveToWatched?.(itemId);
+              }}
               whileTap={{ scale: 0.96 }}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-secondary/50 border text-foreground transition-colors"
               style={{ borderColor: "var(--check-border-2)" }}
