@@ -12,10 +12,9 @@ import { vectorToArray, arrayToVector, confidenceToArray, arrayToConfidence } fr
 import { providerIdToServiceId, serviceIdToProviderId } from './adapters/platformAdapter';
 import { UK_PROVIDERS_ARRAY } from './constants/platforms';
 import type { ServiceId } from '@/components/platformLogos';
-import type { TasteVector } from './taste/tasteVector';
 
 // Re-use app types
-import type { WatchlistItem, WatchlistItemMetadata } from './storage/watchlist';
+import type { WatchlistItem } from './storage/watchlist';
 import type { UserProfile, UserPreferences } from './storage/userPreferences';
 import type { TasteProfile, QuizAnswer, Interaction } from './storage/tasteProfile';
 
@@ -34,10 +33,6 @@ function ratingFromSupabase(rating: string | null): -1 | 0 | 1 {
 }
 
 // ── Timestamp conversion ────────────────────────────────────────
-
-function msToIso(ms: number): string {
-  return new Date(ms).toISOString();
-}
 
 function isoToMs(iso: string): number {
   return new Date(iso).getTime();

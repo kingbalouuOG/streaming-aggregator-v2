@@ -2,7 +2,7 @@ import React, { useMemo, useEffect, useRef } from "react";
 import { Search, X, SlidersHorizontal, Loader2 } from "lucide-react";
 import { BrowseCard } from "./BrowseCard";
 import { ContentItem } from "./ContentCard";
-import { FilterSheet, FilterState, defaultFilters } from "./FilterSheet";
+import { FilterSheet, FilterState } from "./FilterSheet";
 import { useSearch } from "@/hooks/useSearch";
 import { providerIdsToServiceIds } from "@/lib/adapters/platformAdapter";
 import { GENRE_NAME_TO_ID } from "@/lib/constants/genres";

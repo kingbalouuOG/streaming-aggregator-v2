@@ -15,7 +15,6 @@ import { computeClusterSeedVector } from '@/lib/taste/tasteClusters';
 import type { QuizPair } from '@/lib/taste/quizConfig';
 import { getFixedPairs, selectAdaptivePairs } from '@/lib/taste/quizConfig';
 import { computeQuizVector, getTopGenreNames } from '@/lib/taste/quizScoring';
-import { getMostAmbiguousDimensions } from '@/lib/taste/quizScoring';
 import type { QuizAnswer } from '@/lib/storage/tasteProfile';
 import { QuizIntro } from './QuizIntro';
 import { QuizQuestion } from './QuizQuestion';

@@ -22,7 +22,5 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
-      # No linter is currently configured in this repo (no ESLint/Biome).
-      # When one is added, wire it up here, e.g.:
-      # - name: Lint
-      #   run: npm run lint
+      - name: Lint
+        run: npm run lint

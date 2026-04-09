@@ -15,7 +15,6 @@
 import {
   type TasteVector,
   type ConfidenceVector,
-  type GenreDimension,
   createEmptyVector,
   createEmptyConfidence,
   clampVector,
@@ -159,7 +158,7 @@ export function computeQuizVector(
   answers: QuizAnswer[],
   pairs: QuizPair[]
 ): TasteVector {
-  let vector = { ...baseVector };
+  const vector = { ...baseVector };
   const pairMap = new Map(pairs.map(p => [p.id, p]));
 
   for (const answer of answers) {

@@ -10,7 +10,7 @@ interface ImageSkeletonProps {
 
 export function ImageSkeleton({ src, alt, className = "", style }: ImageSkeletonProps) {
   const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false);
+  const [, setError] = useState(false);
 
   // If src is empty/falsy, skip shimmer and show placeholder immediately
   useEffect(() => {

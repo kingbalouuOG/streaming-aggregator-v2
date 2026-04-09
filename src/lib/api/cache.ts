@@ -1,6 +1,6 @@
 import storage from '../storage';
 import md5 from 'crypto-js/md5';
-import { handleCacheError, logError } from '../utils/errorHandler';
+import { handleCacheError } from '../utils/errorHandler';
 
 const DEBUG = __DEV__;
 

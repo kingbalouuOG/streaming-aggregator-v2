@@ -28,7 +28,7 @@ import { useWatchlist } from "./hooks/useWatchlist";
 import { useHomeContent } from "./hooks/useHomeContent";
 import { useUpcoming } from "./hooks/useUpcoming";
 import { LazyGenreSection } from "./components/LazyGenreSection";
-import { providerIdsToServiceIds, serviceIdsToProviderIds, providerIdToServiceId } from "./lib/adapters/platformAdapter";
+import { providerIdsToServiceIds, providerIdToServiceId } from "./lib/adapters/platformAdapter";
 import { reorderWithinWindows } from "./lib/taste/genreBlending";
 import type { ServiceId } from "./components/platformLogos";
 import { App as CapApp } from "@capacitor/app";
@@ -57,7 +57,7 @@ export default function App() {
 }
 
 function AppContent() {
-  const { resolvedTheme } = useTheme();
+  useTheme();
   const auth = useAuth();
   const { isOnline, recheck: recheckNetwork } = useNetworkStatus();
   const [activeCategory, setActiveCategory] = useState("All");
@@ -149,7 +149,7 @@ function AppContent() {
   const home = useHomeContent(connectedServices, homeFilters);
 
   // --- First home view tracking (fires once after onboarding) ---
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- ref-gated single-fire, extra deps would cause re-fires
+   
   useEffect(() => {
     if (justOnboardedRef.current && !home.loading && activeTab === 'home') {
       justOnboardedRef.current = false;
@@ -473,7 +473,9 @@ function AppContent() {
         if (activeTab === "home") {
           await home.reload();
         }
-      } catch {}
+      } catch {
+        // ignore reload failure; UI just stops the spinner
+      }
       setIsRefreshing(false);
     }
     setPullDistance(0);

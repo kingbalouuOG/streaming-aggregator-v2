@@ -42,7 +42,9 @@ function getStoredTheme(): ThemeMode {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
     if (stored === "dark" || stored === "light" || stored === "system") return stored;
-  } catch {}
+  } catch {
+    // localStorage may be unavailable (private mode); fall through to default
+  }
   return "dark";
 }
 
@@ -91,7 +93,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = useCallback((mode: ThemeMode) => {
     setThemeState(mode);
-    try { localStorage.setItem(THEME_STORAGE_KEY, mode); } catch {}
+    try { localStorage.setItem(THEME_STORAGE_KEY, mode); } catch { /* localStorage unavailable */ }
   }, []);
 
   return (

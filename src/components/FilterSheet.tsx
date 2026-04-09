@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { X } from "lucide-react";
 import { EyeIcon, EyeOffIcon } from "./icons";
 import { motion, AnimatePresence } from "motion/react";
-import { PLATFORMS, getPlatform } from "./platformLogos";
+import { PLATFORMS } from "./platformLogos";
 import { TV_UNSUPPORTED_GENRE_NAMES } from "@/lib/constants/genres";
 
 // ----- Data -----

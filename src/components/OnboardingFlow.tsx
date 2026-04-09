@@ -11,7 +11,7 @@ import { PLATFORMS, type PlatformDef } from "./platformLogos";
 import { TasteQuiz } from "./quiz/TasteQuiz";
 import type { TasteVector } from "@/lib/taste/tasteVector";
 import type { QuizAnswer } from "@/lib/storage/tasteProfile";
-import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS, type TasteCluster } from "@/lib/taste/tasteClusters";
+import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste/tasteClusters";
 import { logOnboardingEvent } from "@/lib/analytics/logger";
 import { ONBOARDING_EVENTS } from "@/lib/analytics/events";
 

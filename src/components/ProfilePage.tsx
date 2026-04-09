@@ -19,8 +19,8 @@ import { toast } from "sonner";
 
 // ── Onboarding Data ─────────────────────────────────────────────────────
 import { OnboardingData } from "./OnboardingFlow";
-import { useTheme, ThemeMode } from "./ThemeContext";
-import { PLATFORMS, getPlatform } from "./platformLogos";
+import { useTheme } from "./ThemeContext";
+import { PLATFORMS } from "./platformLogos";
 import { SpendDashboard } from "./SpendDashboard";
 import { TasteQuiz } from "./quiz/TasteQuiz";
 import { getTasteProfile, saveQuizResults, retakeQuiz } from "@/lib/storage/tasteProfile";

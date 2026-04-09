@@ -53,7 +53,7 @@ export function LazyGenreSection({
   genreId,
   baseParams,
   sectionKeyBase,
-  filterGenreIds,
+  filterGenreIds: _filterGenreIds,
   fetchMovies,
   fetchTV,
   excludeIds,

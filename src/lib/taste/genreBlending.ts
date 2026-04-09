@@ -5,7 +5,7 @@
  * Uses the canonical TMDB_GENRE_TO_DIM mapping — no duplicate tables.
  */
 
-import type { TasteVector, GenreDimension } from './tasteVector';
+import type { TasteVector } from './tasteVector';
 import { TMDB_GENRE_TO_DIM } from './contentVectorMapping';
 
 // ── matchScore ──────────────────────────────────────────────────
