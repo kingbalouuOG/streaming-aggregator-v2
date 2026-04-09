@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
-import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, Check, CheckCircle2, Undo2, AlertCircle, ChevronDown, ChevronUp, MessageSquare, ExternalLink } from "lucide-react";
+import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, EyeOff, Check, CheckCircle2, Undo2, AlertCircle, ChevronDown, ChevronUp, MessageSquare, ExternalLink } from "lucide-react";
 import { TickIcon } from "./icons";
 import { motion } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
@@ -15,6 +15,7 @@ import { classifyProviders } from "@/lib/utils/providerClassifier";
 import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 import { startDwell, exitDwell, setLastAction, getCurrentDwellSeconds } from "@/lib/instrumentation/dwellTimer";
+import { markNotInterested } from "@/lib/storage/interactions";
 import rottenTomatoesLogo from "@/assets/rotten-tomatoes-logo.png";
 import { ReportSheet } from "./ReportSheet";
 
@@ -87,6 +88,30 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
       exitDwell();
     };
   }, [itemId]);
+
+  // Not Interested handler (Task 9b / IN-007).
+  //
+  // Sequence is deliberate:
+  //   1. exitDwell emits dwell_event with exit_reason='not_interested'
+  //      while the user is still logically on the page.
+  //   2. await markNotInterested writes the not_interested row AND
+  //      invalidates the getDismissedIds session cache, so the v1 rec
+  //      engine filters this title on next refresh. We await rather
+  //      than fire-and-forget because Joe explicitly wants the title
+  //      to disappear on next refresh — fire-and-forget would race
+  //      the cache invalidation against the post-navigation rec load.
+  //   3. onBack triggers unmount; the cleanup effect's exitDwell is
+  //      a no-op because we already exited.
+  const handleNotInterested = async () => {
+    const { tmdbId, mediaType } = parseContentItemId(itemId);
+    exitDwell('not_interested');
+    try {
+      await markNotInterested(tmdbId, mediaType);
+    } catch (err) {
+      console.error('[DetailPage] markNotInterested failed:', err);
+    }
+    onBack();
+  };
 
   useLayoutEffect(() => {
     const el = descRef.current;
@@ -284,6 +309,18 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
                   style={userRating === 'down' ? { backgroundColor: 'var(--danger)' } : undefined}
                 >
                   <ThumbsDown className={`w-3.5 h-3.5 ${userRating === 'down' ? 'fill-current' : ''}`} />
+                </motion.button>
+                {/* Not Interested — discovery rejection (Task 9b / IN-007).
+                    Secondary to thumbs up/down; writes a not_interested row
+                    and removes the title from recs on next refresh. */}
+                <motion.button
+                  onClick={handleNotInterested}
+                  whileTap={{ scale: 0.8 }}
+                  aria-label="Not interested"
+                  title="Not interested"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 bg-secondary text-muted-foreground hover:text-foreground"
+                >
+                  <EyeOff className="w-3.5 h-3.5" />
                 </motion.button>
               </div>
             </div>
