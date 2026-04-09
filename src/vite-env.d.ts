@@ -11,3 +11,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+// Injected by Vite's `define` config (see vite.config.ts).
+declare const __DEV__: boolean;

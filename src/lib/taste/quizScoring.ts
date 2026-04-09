@@ -266,7 +266,7 @@ export function computeQuizConfidence(
     const gain = QUIZ_CONFIDENCE_GAINS[answer.chosenOption];
     if (gain === 0) continue;
 
-    for (const dim of pair.dimensionsTested) {
+    for (const dim of pair.dimensionsTested as Array<keyof ConfidenceVector>) {
       confidence[dim] = Math.min(1.0, confidence[dim] + gain);
     }
   }

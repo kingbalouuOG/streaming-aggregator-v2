@@ -101,5 +101,6 @@ export const handleCacheError = <T>(error: AppError, defaultValue: T): T => {
 
 export const isRecoverableError = (error: AppError): boolean => {
   const errorType = classifyError(error);
-  return [ErrorType.NETWORK, ErrorType.RATE_LIMIT, ErrorType.API].includes(errorType);
+  const recoverable: ErrorTypeValue[] = [ErrorType.NETWORK, ErrorType.RATE_LIMIT, ErrorType.API];
+  return recoverable.includes(errorType);
 };

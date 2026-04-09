@@ -66,6 +66,7 @@ function supaRowToWatchlistItem(row: any): WatchlistItem {
       genreIds: row.genre_ids || [],
       runtime: null,
       numberOfSeasons: null,
+      originalLanguage: null,
     },
     syncStatus: 'synced',
     lastSyncedAt: Date.now(),

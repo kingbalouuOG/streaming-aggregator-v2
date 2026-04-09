@@ -87,6 +87,7 @@ interface ScoredCandidate {
   first_air_date?: string;
   vote_average?: number;
   popularity?: number;
+  original_language?: string;
 }
 
 export interface Recommendation {

@@ -49,7 +49,7 @@ export function useTasteProfile() {
 
   // Record a user interaction and update the vector
   const trackInteraction = useCallback(async (
-    contentMeta: ContentMetadata & { contentId: number; contentType: 'movie' | 'tv' },
+    contentMeta: ContentMetadata & { contentId: number; contentType: 'movie' | 'tv'; title?: string },
     action: Interaction['action']
   ) => {
     try {

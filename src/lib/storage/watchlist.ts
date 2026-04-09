@@ -17,6 +17,7 @@ export interface WatchlistItemMetadata {
   genreIds: number[];
   runtime: number | null;
   numberOfSeasons: number | null;
+  originalLanguage: string | null;
 }
 
 export interface WatchlistItem {

@@ -142,7 +142,7 @@ export function useSectionData(options: UseSectionDataOptions): SectionDataState
     const tvPage = nextTVPageRef.current;
 
     // Build TV params — sanitise genre IDs for non-genre sections
-    const rawTvParams = { ...baseParams, ...tvParams, page: tvPage };
+    const rawTvParams: Record<string, unknown> = { ...baseParams, ...tvParams, page: tvPage };
     const effectiveTvParams = (!isGenreSection && rawTvParams.with_genres)
       ? sanitiseTVGenreParams(rawTvParams)
       : rawTvParams;
