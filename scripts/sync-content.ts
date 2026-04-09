@@ -618,7 +618,7 @@ async function stageVectors(maxTitles: number): Promise<number> {
     // is always at the start of the filtered set.
     const { data, error } = await supabase
       .from('titles')
-      .select('tmdb_id, media_type, genre_ids, popularity, vote_count, release_year, original_language, runtime')
+      .select('tmdb_id, media_type, title, genre_ids, popularity, vote_count, release_year, original_language, runtime')
       .is('content_vector', null)
       .order('popularity', { ascending: false })
       .range(0, PAGE_SIZE - 1);
@@ -633,9 +633,16 @@ async function stageVectors(maxTitles: number): Promise<number> {
     }
 
     // Build upsert batch
-    const batch: { tmdb_id: number; media_type: string; content_vector: number[] }[] = [];
+    const batch: { tmdb_id: number; media_type: string; title: string; content_vector: number[] }[] = [];
     for (const title of data) {
       if (totalProcessed >= cap) break;
+
+      // Skip rows with null title (NOT NULL constraint would fail on upsert)
+      if (!title.title) {
+        skipped++;
+        totalProcessed++;
+        continue;
+      }
 
       const genreIds: number[] = title.genre_ids || [];
 
@@ -651,6 +658,7 @@ async function stageVectors(maxTitles: number): Promise<number> {
         batch.push({
           tmdb_id: title.tmdb_id,
           media_type: title.media_type,
+          title: title.title,
           content_vector: ALL_DIMENSIONS.map(d => vector[d]),
         });
         totalVectorised++;
