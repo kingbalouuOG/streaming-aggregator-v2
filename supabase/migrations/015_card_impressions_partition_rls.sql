@@ -14,20 +14,47 @@
 --
 -- This migration fixes the gap two ways:
 --   1. Creates a TEMPLATE TABLE (card_impressions_template) with RLS
---      enabled and the same policies as the parent. pg_partman v5 uses
---      the template to clone properties (including RLS state) onto
---      every NEW partition it creates.
+--      enabled and the same policies as the parent.
 --   2. ALTERs each EXISTING partition (created by migration 014's
 --      premake=2 plus the default partition) to enable RLS and add
 --      the per-user policies.
 --
--- After this migration, the verification query above returns
--- rowsecurity = true for the parent and every partition, present and
--- future.
---
 -- Phase 0 / Migration row 015. Added during Task 3 verification when
 -- the partition RLS gap was detected — strict scope deviation from
 -- the locked 012/013/014 plan, approved by Joe before apply.
+--
+-- ──────────────────────────────────────────────────────────────────
+-- KNOWN LIMITATION discovered during Task 3 verification (2026-04-09):
+-- ──────────────────────────────────────────────────────────────────
+-- The template_table mechanism propagates constraints, indexes, and
+-- GRANT-style privileges to new partitions, but does NOT propagate
+-- RLS state or RLS policies. This was empirically verified by calling
+-- create_partition_time('public.card_impressions', ARRAY['2026-08-01'])
+-- after this migration applied: the newly-created partition had
+-- rowsecurity = false and zero policies, despite template_table being
+-- correctly wired in part_config. Setting inherit_privileges = true
+-- was also tested and does not help — inherit_privileges covers
+-- GRANT-style privileges only.
+--
+-- Therefore, this migration successfully enables RLS on all partitions
+-- that existed at apply time, but future partitions created by partman
+-- (whether via automatic maintenance or manual create_partition_time
+-- calls) will revert to rowsecurity = false without additional
+-- intervention.
+--
+-- Migration 016 closes this gap via a Postgres event trigger on
+-- ddl_command_end that fires on every CREATE TABLE, filters to
+-- public.card_impressions_p% partitions, and enables RLS + creates
+-- the policies inline with the DDL. 016 supersedes the template_table
+-- mechanism for RLS propagation specifically.
+--
+-- Migration 015 remains required because:
+--   (a) It is the authoritative fix for existing partitions — 016's
+--       event trigger only fires on future CREATE TABLE events.
+--   (b) The template_table setup is still genuinely useful for
+--       constraint/index propagation, which partman DOES use.
+--
+-- Do not assume migration 015 is a complete RLS fix. Read 016 alongside it.
 
 -- ──────────────────────────────────────────────────────────────────
 -- Template table — pg_partman v5 clones its properties onto new
