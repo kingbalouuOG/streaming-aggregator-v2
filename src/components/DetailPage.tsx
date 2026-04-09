@@ -14,7 +14,7 @@ import { openDeepLink } from "@/lib/openDeepLink";
 import { classifyProviders } from "@/lib/utils/providerClassifier";
 import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
-import { startDwell, exitDwell, setLastAction } from "@/lib/instrumentation/dwellTimer";
+import { startDwell, exitDwell, setLastAction, getCurrentDwellSeconds } from "@/lib/instrumentation/dwellTimer";
 import rottenTomatoesLogo from "@/assets/rotten-tomatoes-logo.png";
 import { ReportSheet } from "./ReportSheet";
 
@@ -576,7 +576,20 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
   const handleServiceTap = async (service: ServiceId) => {
     const link = detail.serviceLinks[service];
     const deepLink = getDeepLink(service, link?.url || null, detail.title, detail.year);
-    await openDeepLink(deepLink.url);
+    const { tmdbId } = parseContentItemId(detail.id);
+    const dwellSecondsBeforeClick = getCurrentDwellSeconds();
+    try {
+      await openDeepLink(deepLink.url, {
+        contentId: tmdbId,
+        mediaType: detail.mediaType,
+        serviceId: service,
+        dwellSecondsBeforeClick,
+      });
+    } finally {
+      // Idempotent — dwell timer's 10-second safety net also catches
+      // a thrown-and-swallowed path, but calling here is the fast path.
+      exitDwell('deep_link_click');
+    }
   };
 
   return (
@@ -644,7 +657,14 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
 
       {/* Tier 3: Rent or Buy — price list, tappable */}
       {tier3.length > 0 && (
-        <RentBuyList options={tier3} title={detail.title} year={detail.year} serviceLinks={detail.serviceLinks} />
+        <RentBuyList
+          options={tier3}
+          title={detail.title}
+          year={detail.year}
+          serviceLinks={detail.serviceLinks}
+          contentId={parseContentItemId(detail.id).tmdbId}
+          mediaType={detail.mediaType}
+        />
       )}
     </div>
   );
@@ -652,14 +672,31 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
 
 // ── Rent/Buy list with "Show more" toggle ──────────────
 
-function RentBuyList({ options, title, year, serviceLinks }: { options: RentalOption[]; title?: string; year?: number; serviceLinks?: Record<string, ServiceLink> }) {
+function RentBuyList({ options, title, year, serviceLinks, contentId, mediaType }: {
+  options: RentalOption[];
+  title?: string;
+  year?: number;
+  serviceLinks?: Record<string, ServiceLink>;
+  contentId: number;
+  mediaType: 'movie' | 'tv';
+}) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? options : options.slice(0, 3);
 
   const handleRentBuyTap = async (option: RentalOption) => {
     const saLink = option.deepLinkUrl || serviceLinks?.[option.serviceKey]?.url || null;
     const deepLink = getDeepLink(option.serviceKey, saLink, title || '', year);
-    await openDeepLink(deepLink.url);
+    const dwellSecondsBeforeClick = getCurrentDwellSeconds();
+    try {
+      await openDeepLink(deepLink.url, {
+        contentId,
+        mediaType,
+        serviceId: option.serviceKey,
+        dwellSecondsBeforeClick,
+      });
+    } finally {
+      exitDwell('deep_link_click');
+    }
   };
 
   return (
