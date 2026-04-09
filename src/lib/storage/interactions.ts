@@ -8,6 +8,8 @@
 
 import { isSupabaseActive, getAuthUserId } from '../storage';
 import { supabase } from '../supabase';
+import { invalidateDismissedIdsCache } from './recommendations';
+import { getCurrentSessionId } from '../instrumentation/sessionId';
 
 // — Event types ——————————————————————————————————————————————————
 
@@ -20,13 +22,27 @@ export type InteractionEventType =
   | 'quiz_answer'
   | 'quiz_completed'
   | 'detail_view'
-  | 'search'
-  | 'dismiss';
+  | 'dwell_event'
+  | 'deep_link_click'
+  | 'not_interested'
+  | 'search';
+
+export type ExitReason =
+  | 'deep_link_click'
+  | 'added_to_watchlist'
+  | 'thumbs_up'
+  | 'thumbs_down'
+  | 'marked_watched'
+  | 'not_interested'
+  | 'back_to_previous'
+  | 'app_backgrounded';
 
 export interface InteractionEvent {
   event_type: InteractionEventType;
   content_id?: number | null;
   media_type?: 'movie' | 'tv' | null;
+  source_surface?: string | null;
+  session_id?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -51,6 +67,8 @@ export async function emitInteraction(event: InteractionEvent): Promise<void> {
         event_type: event.event_type,
         content_id: event.content_id ?? null,
         media_type: event.media_type ?? null,
+        source_surface: event.source_surface ?? null,
+        session_id: event.session_id ?? null,
         metadata: event.metadata ?? {},
       });
 
@@ -95,18 +113,25 @@ export function emitQuizCompleted(answerCount: number, topGenres: string[]): voi
   }).catch(() => {});
 }
 
-/** Emit a detail page view event */
+/**
+ * Emit a detail page view event. Anchor event for subsequent dwell
+ * and outcome events — IT IS NOT a positive signal (IN-002).
+ *
+ * `source_surface` is now a top-level column populated as 'detail'.
+ * The legacy `source` field that was nested in metadata is dropped.
+ */
 export function emitDetailView(
   contentId: number,
   mediaType: 'movie' | 'tv',
-  title: string,
-  source?: string
+  title: string
 ): void {
   emitInteraction({
     event_type: 'detail_view',
     content_id: contentId,
     media_type: mediaType,
-    metadata: { title, source },
+    source_surface: 'detail',
+    session_id: getCurrentSessionId(),
+    metadata: { title },
   }).catch(() => {});
 }
 
@@ -115,6 +140,93 @@ export function emitSearch(query: string, resultCount: number): void {
   emitInteraction({
     event_type: 'search',
     metadata: { query, result_count: resultCount },
+  }).catch(() => {});
+}
+
+/**
+ * Mark a title as "Not Interested" (IN-007).
+ *
+ * Writes a not_interested event to user_interactions and invalidates
+ * the in-memory dismissed-ids cache so the v1 recommendation engine
+ * picks up the new dismissal on its next refresh.
+ *
+ * Source surface is hard-coded to 'detail' because the only entry
+ * point in v2 is the "Not Interested" button on the detail page.
+ */
+export async function markNotInterested(
+  contentId: number,
+  mediaType: 'movie' | 'tv'
+): Promise<void> {
+  await emitInteraction({
+    event_type: 'not_interested',
+    content_id: contentId,
+    media_type: mediaType,
+    source_surface: 'detail',
+    session_id: getCurrentSessionId(),
+  });
+  invalidateDismissedIdsCache();
+}
+
+/**
+ * Emit a dwell_event when a detail page is closed (IN-001, IN-003, IN-004).
+ *
+ * The dwell timer (Task 8) calls this on exit. The session_id MUST be
+ * the value the dwell timer captured at startDwell() time, not a fresh
+ * lookup — see Task 8 for the rationale (5-minute abandonment case).
+ *
+ * `session_negative_accumulator` is the running per-session negative
+ * weight at emit time, capped at -1.0 by the dwell timer. Phase 0 emits
+ * it as a real metadata field for verification and Phase 3 consumption.
+ */
+export function emitDwellEvent(args: {
+  contentId: number;
+  mediaType: 'movie' | 'tv';
+  dwellSeconds: number;
+  exitReason: ExitReason;
+  sessionId: string;
+  sessionNegativeAccumulator: number;
+}): void {
+  emitInteraction({
+    event_type: 'dwell_event',
+    content_id: args.contentId,
+    media_type: args.mediaType,
+    source_surface: 'detail',
+    session_id: args.sessionId,
+    metadata: {
+      dwell_seconds: args.dwellSeconds,
+      exit_reason: args.exitReason,
+      session_negative_accumulator: args.sessionNegativeAccumulator,
+    },
+  }).catch(() => {});
+}
+
+/**
+ * Emit a deep_link_click event (IN-013).
+ *
+ * Called from openDeepLink.ts after AppLauncher.openUrl() either
+ * succeeds (confidence: 'high') or falls back to the browser
+ * (confidence: 'low').
+ */
+export function emitDeepLinkClick(args: {
+  contentId: number;
+  mediaType: 'movie' | 'tv';
+  serviceId: string;
+  deepLinkUrl: string;
+  dwellSecondsBeforeClick: number;
+  confidence: 'high' | 'low';
+}): void {
+  emitInteraction({
+    event_type: 'deep_link_click',
+    content_id: args.contentId,
+    media_type: args.mediaType,
+    source_surface: 'detail',
+    session_id: getCurrentSessionId(),
+    metadata: {
+      service_id: args.serviceId,
+      deep_link_url: args.deepLinkUrl,
+      dwell_seconds_before_click: args.dwellSecondsBeforeClick,
+      confidence: args.confidence,
+    },
   }).catch(() => {});
 }
 
