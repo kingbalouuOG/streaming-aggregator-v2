@@ -19,7 +19,6 @@ import {
   setCachedRecommendations,
   isRecommendationCacheValid,
   getDismissedIds,
-  cleanExpiredDismissals,
 } from '@/lib/storage/recommendations';
 import { discoverMovies, discoverTV, getSimilarMovies, getSimilarTV } from '@/lib/api/tmdb';
 import { GENRE_NAMES, GENRE_KEY_TO_TMDB, convertMovieGenresToTV, VALID_TV_GENRE_IDS, MOVIE_TO_TV_GENRE } from '@/lib/constants/genres';
@@ -555,8 +554,6 @@ export async function generateRecommendations(
   filterOpts?: DiscoverFilterOptions
 ): Promise<Recommendation[]> {
   try {
-    await cleanExpiredDismissals();
-
     if (hasActiveFilters(filterOpts)) {
       debug.info('FilterThreading', 'generateRecommendations — filtered, bypassing cache', {
         fetchMovies: filterOpts?.fetchMovies,
