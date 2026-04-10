@@ -621,6 +621,7 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
         mediaType: detail.mediaType,
         serviceId: service,
         dwellSecondsBeforeClick,
+        linkType: deepLink.type,
       });
     } finally {
       // Idempotent — dwell timer's 10-second safety net also catches
@@ -730,6 +731,7 @@ function RentBuyList({ options, title, year, serviceLinks, contentId, mediaType 
         mediaType,
         serviceId: option.serviceKey,
         dwellSecondsBeforeClick,
+        linkType: deepLink.type,
       });
     } finally {
       exitDwell('deep_link_click');

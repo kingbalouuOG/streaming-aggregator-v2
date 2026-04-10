@@ -49,6 +49,15 @@ export interface DeepLinkContext {
   mediaType: 'movie' | 'tv';
   serviceId: string;
   dwellSecondsBeforeClick: number;
+  /**
+   * Whether the resolved URL is an exact deep link or a search-page
+   * fallback. Search-fallback URLs always emit confidence='low' even
+   * if AppLauncher.openUrl succeeds, because "success" here just
+   * means the OS routed the intent somewhere — usually the browser
+   * landing on a search results page, not the native app opening
+   * the title's detail screen. See DeepLinkResult in deepLinks.ts.
+   */
+  linkType: 'exact' | 'search';
 }
 
 export interface DeepLinkResult {
@@ -62,7 +71,8 @@ export async function openDeepLink(
 ): Promise<DeepLinkResult> {
   // Validate URL protocol — allow HTTPS, HTTP, and intent:// (Android-specific).
   // On an invalid URL we still emit a low-confidence event so we have
-  // a record of the attempt, then bail.
+  // a record of the attempt, then bail — no window is set because no
+  // background is about to happen.
   try {
     const parsed = new URL(url);
     if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) {
@@ -74,14 +84,29 @@ export async function openDeepLink(
     return { confidence: 'low' };
   }
 
+  // Arm the correlation window BEFORE dispatching the deep link. On
+  // Android, the intent dispatches and Videx can background before
+  // the AppLauncher.openUrl promise resolves; if we set the window
+  // AFTER the await, the background event races ahead with
+  // expected=false, the dwell timer pauses, and the 5-minute
+  // abandonment fallback can fire (exiting with 'app_backgrounded').
+  // Setting it before the await eliminates the race regardless of
+  // how the bridge schedules the intent dispatch vs. promise
+  // resolution. Applies equally to the web window.open path.
+  markDeepLinkExpected();
+
   if (Capacitor.isNativePlatform()) {
     try {
       await AppLauncher.openUrl({ url });
-      // High-confidence path — the OS intent resolver accepted the
-      // URL and (presumably) routed it to the target app.
-      emitDeepLinkClick({ ...ctx, deepLinkUrl: url, confidence: 'high' });
-      markDeepLinkExpected();
-      return { confidence: 'high' };
+      // openUrl succeeded — but "success" here only means the OS
+      // intent resolver accepted the URL. For exact deep links that
+      // means we almost certainly landed in the target app. For
+      // search-fallback URLs it typically means the browser opened
+      // a search results page instead. Only the exact case is
+      // high-confidence in the Signal Spec sense.
+      const confidence: 'high' | 'low' = ctx.linkType === 'exact' ? 'high' : 'low';
+      emitDeepLinkClick({ ...ctx, deepLinkUrl: url, confidence });
+      return { confidence };
     } catch {
       // Fallback: if AppLauncher fails (e.g. intent:// not supported),
       // try opening the original web URL in the system browser.
@@ -96,7 +121,6 @@ export async function openDeepLink(
         window.open(url, '_system', 'noopener,noreferrer');
       }
       emitDeepLinkClick({ ...ctx, deepLinkUrl: url, confidence: 'low' });
-      markDeepLinkExpected();
       return { confidence: 'low' };
     }
   }
@@ -113,6 +137,5 @@ export async function openDeepLink(
     window.open(url, '_blank', 'noopener,noreferrer');
   }
   emitDeepLinkClick({ ...ctx, deepLinkUrl: url, confidence: 'low' });
-  markDeepLinkExpected();
   return { confidence: 'low' };
 }
