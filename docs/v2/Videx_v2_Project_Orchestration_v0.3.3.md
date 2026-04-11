@@ -1,7 +1,12 @@
 # Videx v2 — Project Orchestration & Version Control Strategy
 
-**Status:** v0.3.2 — Migration numbering shifted by +2 to reflect Phase 0 actuals (migrations 015 and 016 added in-phase for partition RLS hardening); Phase 0.5 onwards renumbered accordingly
-**Version:** 0.3.2
+**Status:** v0.3.3 — Migration 017 status flipped to ✅ Applied and description amended to reflect the four-not-five column reality; Phase 0.5 actuals note added; `supabase/cron/` convention is now live with `enrich_new_titles.sql` as its first file
+**Version:** 0.3.3
+
+**Changes from v0.3.2:**
+- §3.4 migration 017 row flipped from ⏳ Planned → ✅ Applied. Description amended: adds four columns (`keywords`, `cast_top_5`, `director`, `content_rating`) + partial work-queue index. `runtime` is NOT in 017 — it already existed at `001_content_tables.sql:24` and was backfilled opportunistically (0 → 81.4% populated) rather than re-added.
+- §3.4 gained a Phase 0.5 actuals note covering the four-column reality, the `supabase/cron/` directory being live, the `title_credits`/`title_genres` left-empty decision, and the production row-count gate outcomes.
+- The `supabase/cron/` convention is now load-bearing (not aspirational): `enrich_new_titles.sql` is the first file there, scheduled at 06:30 UTC daily. Future phases should file recurring-job schedules in `supabase/cron/` rather than as migrations.
 
 **Changes from v0.3.1:**
 - §3.4 migration table renumbered: migrations 015 and 016 inserted as Phase 0 in-phase deviations (`card_impressions_partition_rls.sql` and `card_impressions_rls_event_trigger.sql`). Every migration from Phase 0.5 onwards incremented by 2.
@@ -214,7 +219,7 @@ Supabase migrations live in `supabase/migrations/` and are applied via `supabase
 | 014 | `014_card_impressions_table.sql` | Phase 0 | ✅ Applied | Create `card_impressions` table with pg_partman monthly partitioning, `card_impression_daily_totals` aggregation table, and `card_impressions_rollup` + `pg_partman_maintenance` pg_cron jobs |
 | 015 | `015_card_impressions_partition_rls.sql` | Phase 0 (in-phase deviation) | ✅ Applied | Enable RLS on existing `card_impressions` child partitions and on the template table. Handles the existing-partition case at apply time. See Phase 0 summary §3 Deviation 2. |
 | 016 | `016_card_impressions_rls_event_trigger.sql` | Phase 0 (in-phase deviation) | ✅ Applied | `ddl_command_end` event trigger that automatically enables RLS and creates per-user policies on any new `card_impressions_*` partition. Supersedes 015's template_table approach for new partitions. See Phase 0 summary §3 Deviation 3 and Parking Lot IN-PX-01. |
-| 017 | `017_content_enrichment_columns.sql` | Phase 0.5 | ⏳ Planned | Add `keywords`, `cast_top_5`, `director`, `content_rating`, `runtime` columns to `titles` |
+| 017 | `017_content_enrichment_columns.sql` | Phase 0.5 | ✅ Applied | Adds `keywords`, `cast_top_5`, `director`, `content_rating` to `titles` plus a partial work-queue index on `(id) WHERE keywords IS NULL`. **`runtime` was NOT added by 017** — it already existed at 001:24 and was backfilled opportunistically (0 → 81.4% populated). See Phase 0.5 summary §1. |
 | 018 | `018_embeddings_pgvector.sql` | Phase 1 | ⏳ Planned | Enable pgvector extension, add `embedding vector(1536)` column, create HNSW index |
 | 019 | `019_drop_legacy_content_vector.sql` | Phase 1 (end) | ⏳ Planned | Drop the 24D `content_vector` column and its constraint |
 | 020 | `020_service_fingerprints.sql` | Phase 2 | ⏳ Planned | Create `service_fingerprints` table |
@@ -225,6 +230,8 @@ Supabase migrations live in `supabase/migrations/` and are applied via `supabase
 Numbering continues forward as phases execute. The list above is the current plan; migration numbers may shift if phases add additional migrations as they develop.
 
 **Phase 0 actuals note:** Phase 0 was originally planned to ship migrations 012–014 only. During implementation, Postgres' lack of RLS propagation from partitioned parents to child partitions surfaced as an empirical gap, which required two unplanned but in-scope migrations (015, 016) to close. Every migration number from Phase 0.5 onwards has been incremented by 2 from the v0.3.1 plan to absorb this shift. The pattern established by 016 (event trigger for partition RLS) is now a reusable Videx pattern — see Parking Lot IN-PX-01.
+
+**Phase 0.5 actuals note:** Phase 0.5 shipped exactly the planned single migration (017), but added four columns rather than five — `runtime` already existed at `001_content_tables.sql:24` (pre-existing, commented "movies only", 0/20000 populated) and was backfilled opportunistically rather than re-added. Phase 0.5 also created the new `supabase/cron/` directory with `enrich_new_titles.sql` as its first file, establishing the operational-automation-vs-schema-evolution convention described in §3.4 below. Phase 0.5 did NOT touch `title_credits` or `title_genres` — both confirmed empty in production and intentionally left alone (see Parking Lot IN-102, IN-106). The production row-count verification gates came in at `keywords=100%`, `cast_top_5=100%`, `runtime=81.4%`, `content_rating=65.4%` (within the brief's explicit 60% tolerance for certification sparsity), and `director=77.2%` overall — the last one short of the single 80% floor but split to movies 99.7% / TV 54.9%, accepted as a structural TMDb catalogue gap and filed as IN-PX-06/IN-PX-07 for Phase 1 review. See Phase 0.5 summary §3 Deviation 3 for the full analysis.
 
 **Operational automation vs schema evolution.** The migration sequence is reserved strictly for schema evolution — `CREATE TABLE`, `ALTER TABLE`, indexes, constraints, extension installs. Operational automation that invokes Edge Functions, schedules recurring jobs, or configures non-schema runtime behaviour lives in `supabase/cron/` as version-controlled SQL files, applied manually via `npx supabase db query < supabase/cron/<file>.sql` during the relevant phase's deployment. This keeps migration numbering tied to schema state rather than to operational config churn, and makes it obvious which artefacts roll back with `git revert` (schema migrations) versus which need a deliberate `cron.unschedule()` call (operational config). The two pg_cron jobs in migration 014 (`card_impressions_rollup`, `pg_partman_maintenance`) are an exception because they are tightly coupled to the lifecycle of the `card_impressions` table they maintain — if the table is dropped, those jobs should drop with it.
 
