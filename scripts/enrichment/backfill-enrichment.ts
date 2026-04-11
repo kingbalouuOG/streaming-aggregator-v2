@@ -31,7 +31,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { readFileSync, writeFileSync, appendFileSync, renameSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
 import { extractFields } from '../../supabase/functions/_shared/extract_fields.ts';
@@ -97,12 +97,54 @@ function loadCheckpoint(): Checkpoint | null {
 }
 
 function writeCheckpoint(cp: Checkpoint): void {
-  // Atomic: write to .tmp then rename, so a process kill mid-write
-  // never corrupts the checkpoint.
-  const tmp = `${CHECKPOINT_PATH}.tmp`;
-  writeFileSync(tmp, JSON.stringify(cp, null, 2));
-  renameSync(tmp, CHECKPOINT_PATH);
+  // Plain writeFileSync, no tmp+rename. The atomicity benefit of rename
+  // only matters for crash-in-middle-of-write, which for a sub-200-byte
+  // JSON file on modern disks is a non-issue. On Windows the tmp+rename
+  // pattern hits EPERM races with file watchers (VS Code, Claude Code,
+  // antivirus) that hold transient read handles on the destination — we
+  // hit this empirically at row 17000 of a 20K backfill run.
+  //
+  // If the script crashes mid-write (very rare for a tiny file), the
+  // worst case is a malformed checkpoint, which loadCheckpoint() already
+  // handles by returning null. In that case the re-run restarts from
+  // the last valid checkpoint or from id 0 — but the work queue
+  // (`WHERE keywords IS NULL`) is the real source of truth, so
+  // already-enriched rows just get filtered out of the next batch.
+  //
+  // Retry on EPERM as defence in depth against brief file-watcher holds.
+  const body = JSON.stringify(cp, null, 2);
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      writeFileSync(CHECKPOINT_PATH, body);
+      return;
+    } catch (err) {
+      lastErr = err;
+      if (
+        err &&
+        typeof err === 'object' &&
+        'code' in err &&
+        (err as NodeJS.ErrnoException).code === 'EPERM'
+      ) {
+        // Busy-wait ~50ms synchronously. We're inside the per-row loop
+        // so we can't use an async sleep here without restructuring.
+        const until = Date.now() + 50;
+        while (Date.now() < until) { /* spin */ }
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
 }
+
+// How often to persist the checkpoint to disk (every N rows). The
+// checkpoint is a human-readable progress marker, not the source of
+// truth — the work-queue query (`WHERE keywords IS NULL`) is. Writing
+// every 50 rows keeps the worst-case re-work on crash to ~13 seconds
+// of TMDb calls, and reduces the Windows file-watcher race surface 50x
+// vs writing every row.
+const CHECKPOINT_INTERVAL = 50;
 
 function appendFailure(record: object): void {
   appendFileSync(FAILURES_PATH, JSON.stringify(record) + '\n');
@@ -242,11 +284,12 @@ async function main(): Promise<void> {
 
       checkpoint.last_completed_id = row.id;
 
-      // Persist checkpoint after every row (cheap atomic rename), but
-      // ONLY in live mode. Dry-run must not advance the on-disk
-      // checkpoint, otherwise a subsequent live run would skip the
-      // rows the dry-run "saw" without actually writing them.
-      if (!dryRun) {
+      // Persist checkpoint every CHECKPOINT_INTERVAL rows, in live mode
+      // only. Dry-run must not advance the on-disk checkpoint (otherwise
+      // a subsequent live run would skip the rows the dry-run "saw"
+      // without actually writing them).
+      const totalTouched = checkpoint.processed_count + checkpoint.skipped_count + checkpoint.failed_count;
+      if (!dryRun && totalTouched % CHECKPOINT_INTERVAL === 0) {
         writeCheckpoint(checkpoint);
       }
 
@@ -265,6 +308,13 @@ async function main(): Promise<void> {
         lastProgressLog = now;
       }
     }
+  }
+
+  // Flush the final checkpoint state — the per-row write only fires
+  // every CHECKPOINT_INTERVAL rows, so without this the last <50 rows
+  // of a clean exit would be invisible in .checkpoint.json.
+  if (!dryRun) {
+    writeCheckpoint(checkpoint);
   }
 
   const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
