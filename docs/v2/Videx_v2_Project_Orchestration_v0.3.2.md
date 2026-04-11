@@ -1,7 +1,13 @@
 # Videx v2 — Project Orchestration & Version Control Strategy
 
-**Status:** v0.3.1 — Cross-document corrections applied (migration 014 description expanded)
-**Version:** 0.3.1
+**Status:** v0.3.2 — Migration numbering shifted by +2 to reflect Phase 0 actuals (migrations 015 and 016 added in-phase for partition RLS hardening); Phase 0.5 onwards renumbered accordingly
+**Version:** 0.3.2
+
+**Changes from v0.3.1:**
+- §3.4 migration table renumbered: migrations 015 and 016 inserted as Phase 0 in-phase deviations (`card_impressions_partition_rls.sql` and `card_impressions_rls_event_trigger.sql`). Every migration from Phase 0.5 onwards incremented by 2.
+- §3.4 gained a Phase 0 actuals note explaining why the renumber happened.
+- §3.4 gained a new note on the distinction between schema-evolution migrations and operational automation (the latter now lives in `supabase/cron/` rather than the migration sequence).
+- Applied-status column added to the migration table so the boundary between shipped and planned migrations is visible at a glance.
 **Purpose:** Define the version control strategy, environment setup, and project orchestration approach for the Videx v2 build. This document captures the foundational infrastructure decisions that have been locked through three rounds of strategy review and CC codebase validation.
 
 **Changes from v0.3:**
@@ -200,21 +206,27 @@ Specifically:
 
 Supabase migrations live in `supabase/migrations/` and are applied via `supabase db push`. Each phase produces one or more numbered migrations in sequence:
 
-| # | Migration | Phase | Purpose |
-|---|---|---|---|
-| 011 | `011_profiles_baseline.sql` | Pre-Phase 0 | Codify the profiles table that currently exists only in production (not in version control). Idempotent. |
-| 012 | `012_profiles_v2_onboarding_fields.sql` | Phase 0 | Add `age_range` and `viewing_context` columns for v2 onboarding Step 1 |
-| 013 | `013_user_interactions_v2_expansion.sql` | Phase 0 | Expand `user_interactions` with new interaction types, rename `dismiss` to `not_interested`, add session_id column |
-| 014 | `014_card_impressions_table.sql` | Phase 0 | Create `card_impressions` table with pg_partman monthly partitioning, `card_impression_daily_totals` aggregation table, and daily pg_cron rollup job |
-| 015 | `015_content_enrichment_columns.sql` | Phase 0.5 | Add `keywords`, `cast_top_5`, `director`, `content_rating`, `runtime` columns to `titles` |
-| 016 | `016_embeddings_pgvector.sql` | Phase 1 | Enable pgvector extension, add `embedding vector(1536)` column, create HNSW index |
-| 017 | `017_drop_legacy_content_vector.sql` | Phase 1 (end) | Drop the 24D `content_vector` column and its constraint |
-| 018 | `018_service_fingerprints.sql` | Phase 2 | Create `service_fingerprints` table |
-| 019 | `019_taste_vector_v2.sql` | Phase 3 | Add embedding-space taste vector column to `taste_profiles` |
-| 020 | `020_drop_legacy_taste_vector.sql` | Phase 3 (end) | Drop the 24D taste vector columns and `interaction_log` JSONB column |
-| 021 | `021_mood_rooms_tables.sql` | Phase 4.5 | Create `mood_rooms` and `mood_room_titles` tables |
+| # | Migration | Phase | Status | Purpose |
+|---|---|---|---|---|
+| 011 | `011_profiles_baseline.sql` | Pre-Phase 0 | ✅ Applied | Codify the profiles table that currently exists only in production (not in version control). Idempotent. |
+| 012 | `012_profiles_v2_onboarding_fields.sql` | Phase 0 | ✅ Applied | Add `age_range` and `viewing_context` columns for v2 onboarding Step 1 |
+| 013 | `013_user_interactions_v2_expansion.sql` | Phase 0 | ✅ Applied | Expand `user_interactions` with `session_id` and `source_surface` top-level columns, rename `dismiss` to `not_interested`, add CHECK constraint on the 15 allowed event types |
+| 014 | `014_card_impressions_table.sql` | Phase 0 | ✅ Applied | Create `card_impressions` table with pg_partman monthly partitioning, `card_impression_daily_totals` aggregation table, and `card_impressions_rollup` + `pg_partman_maintenance` pg_cron jobs |
+| 015 | `015_card_impressions_partition_rls.sql` | Phase 0 (in-phase deviation) | ✅ Applied | Enable RLS on existing `card_impressions` child partitions and on the template table. Handles the existing-partition case at apply time. See Phase 0 summary §3 Deviation 2. |
+| 016 | `016_card_impressions_rls_event_trigger.sql` | Phase 0 (in-phase deviation) | ✅ Applied | `ddl_command_end` event trigger that automatically enables RLS and creates per-user policies on any new `card_impressions_*` partition. Supersedes 015's template_table approach for new partitions. See Phase 0 summary §3 Deviation 3 and Parking Lot IN-PX-01. |
+| 017 | `017_content_enrichment_columns.sql` | Phase 0.5 | ⏳ Planned | Add `keywords`, `cast_top_5`, `director`, `content_rating`, `runtime` columns to `titles` |
+| 018 | `018_embeddings_pgvector.sql` | Phase 1 | ⏳ Planned | Enable pgvector extension, add `embedding vector(1536)` column, create HNSW index |
+| 019 | `019_drop_legacy_content_vector.sql` | Phase 1 (end) | ⏳ Planned | Drop the 24D `content_vector` column and its constraint |
+| 020 | `020_service_fingerprints.sql` | Phase 2 | ⏳ Planned | Create `service_fingerprints` table |
+| 021 | `021_taste_vector_v2.sql` | Phase 3 | ⏳ Planned | Add embedding-space taste vector column to `taste_profiles` |
+| 022 | `022_drop_legacy_taste_vector.sql` | Phase 3 (end) | ⏳ Planned | Drop the 24D taste vector columns and `interaction_log` JSONB column |
+| 023 | `023_mood_rooms_tables.sql` | Phase 4.5 | ⏳ Planned | Create `mood_rooms` and `mood_room_titles` tables |
 
 Numbering continues forward as phases execute. The list above is the current plan; migration numbers may shift if phases add additional migrations as they develop.
+
+**Phase 0 actuals note:** Phase 0 was originally planned to ship migrations 012–014 only. During implementation, Postgres' lack of RLS propagation from partitioned parents to child partitions surfaced as an empirical gap, which required two unplanned but in-scope migrations (015, 016) to close. Every migration number from Phase 0.5 onwards has been incremented by 2 from the v0.3.1 plan to absorb this shift. The pattern established by 016 (event trigger for partition RLS) is now a reusable Videx pattern — see Parking Lot IN-PX-01.
+
+**Operational automation vs schema evolution.** The migration sequence is reserved strictly for schema evolution — `CREATE TABLE`, `ALTER TABLE`, indexes, constraints, extension installs. Operational automation that invokes Edge Functions, schedules recurring jobs, or configures non-schema runtime behaviour lives in `supabase/cron/` as version-controlled SQL files, applied manually via `npx supabase db query < supabase/cron/<file>.sql` during the relevant phase's deployment. This keeps migration numbering tied to schema state rather than to operational config churn, and makes it obvious which artefacts roll back with `git revert` (schema migrations) versus which need a deliberate `cron.unschedule()` call (operational config). The two pg_cron jobs in migration 014 (`card_impressions_rollup`, `pg_partman_maintenance`) are an exception because they are tightly coupled to the lifecycle of the `card_impressions` table they maintain — if the table is dropped, those jobs should drop with it.
 
 **Where migrations live:** in `supabase/migrations/` on the phase branch they belong to. Once a migration is applied to the live Supabase project via `supabase db push`, it is permanent. Treat each migration as a one-way commitment, even before the phase branch is merged to main.
 

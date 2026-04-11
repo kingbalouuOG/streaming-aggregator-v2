@@ -2,8 +2,17 @@
 
 **Author:** Head of Strategy & Engineering (with Joe)
 **Date:** April 2026
-**Status:** v1.6.2 — Residual `card_impressions` schema tuple corrected in Section 6.4
-**Version:** 1.6.2
+**Status:** v1.6.3 — §6 migration numbers renumbered by +2 to absorb Phase 0's in-phase deviations (migrations 015 and 016); Phase 0 description updated to reflect actual scope
+**Version:** 1.6.3
+
+**Changes from v1.6.2:**
+- §6 migration numbers renumbered by +2 from Phase 0.5 onwards to absorb the two in-phase Phase 0 deviations (migrations 015 and 016 for `card_impressions` partition RLS).
+- Phase 0 description updated to reflect actual scope (5 migrations, not 3) — adds migrations 015 (existing-partition RLS hardening) and 016 (event trigger for new partitions).
+- Phase 0.5 migration reference updated from 015 → 017.
+- Phase 1 migration references updated from 016/017 → 018/019.
+- Phase 2 migration reference updated from 018 → 020.
+- Phase 3 migration references updated from 019/020 → 021/022.
+- Phase 4.5 migration reference updated from 021 → 023.
 
 **Changes from v1.6.1:**
 - Section 6.4 `card_impressions` schema tuple corrected: `tmdb_id` → `content_id` for consistency with the dedicated schema in Detail Page Signal Capture Spec Section 5.2
@@ -539,7 +548,7 @@ As of v1.5, all design exploration areas are complete and approved:
 
 **Phase 0 — Instrumentation and Phase 0 housekeeping.** Ship:
 
-- Card impression tracking: dedicated `card_impressions` table with `pg_partman` partitioning (migration 014), lifecycle manager (`src/lib/lifecycle/appState.ts`), client-side batching with the flush trigger set from Section 6.4
+- Card impression tracking: dedicated `card_impressions` table with `pg_partman` partitioning (migration 014), partition-level RLS hardening at apply time (migration 015) and on all future partitions via a `ddl_command_end` event trigger (migration 016), lifecycle manager (`src/lib/lifecycle/appState.ts`), client-side batching with the flush trigger set from Section 6.4
 - Session identifier generation (on app foreground after >5min background)
 - Dwell timer with pause/resume on background/foreground, exit outcome capture, and deep-link click confidence tagging (high-confidence if `AppLauncher.openUrl()` succeeds, low-confidence if fallback to browser)
 - `dismiss` → `not_interested` rename (migration 013 + code rename across `interactions.ts`)
@@ -552,7 +561,7 @@ As of v1.5, all design exploration areas are complete and approved:
 
 **Phase 0 duration:** ~1.5-2 weeks (revised up from the earlier 1-week estimate to account for the dwell timer lifecycle and deep-link correlation complexity).
 
-**Phase 0.5 — First-party content enrichment.** Schema migration (migration 015) adds persistent first-party metadata to the `titles` table:
+**Phase 0.5 — First-party content enrichment.** Schema migration (migration 017) adds persistent first-party metadata to the `titles` table:
 
 - `keywords` — array of keyword strings from TMDb
 - `cast_top_5` — array of top-billed cast
@@ -574,9 +583,9 @@ As of v1.5, all design exploration areas are complete and approved:
 
 **Embedding model (locked):** OpenAI `text-embedding-3-small`, 1536-dim, template from Section 4.1.
 
-**Migration 016** enables the pgvector extension, adds `embedding vector(1536)` column to `titles`, creates HNSW index. The new column uses a different name from the legacy `content_vector` to avoid constraint conflicts.
+**Migration 018** enables the pgvector extension, adds `embedding vector(1536)` column to `titles`, creates HNSW index. The new column uses a different name from the legacy `content_vector` to avoid constraint conflicts.
 
-**Migration 017** (end of Phase 1) drops the legacy 24D `content_vector` column and its `chk_content_vector_dim` constraint. Sync scripts (`sync-content.ts`, `sync-incremental/index.ts`) are updated in Phase 1 to stop computing 24D vectors and start computing/storing 1536D embeddings instead.
+**Migration 019** (end of Phase 1) drops the legacy 24D `content_vector` column and its `chk_content_vector_dim` constraint. Sync scripts (`sync-content.ts`, `sync-incremental/index.ts`) are updated in Phase 1 to stop computing 24D vectors and start computing/storing 1536D embeddings instead.
 
 **pgvector wire format spike (required before Phase 3):** insert test embeddings, query via Supabase JS client, verify return format. If the default behaviour requires a workaround, the spike produces a locked pattern (RPC, view, or client-side parser) that Phase 3 uses. This is the last thing Phase 1 does before closing out.
 
@@ -586,9 +595,9 @@ As of v1.5, all design exploration areas are complete and approved:
 
 **Phase 1.5 — Videx tags (optional, can defer).** LLM-generated semantic tags on top of Layer 1 metadata. Improves embedding quality and unlocks richer row generation. Can ship after Phase 1 without rebuilding embeddings if tags are added as an additional input layer in a future re-embedding pass. ~1–2 weeks when prioritised.
 
-**Phase 2 — Service fingerprints.** Compute embeddings per service (migration 018), validate discrimination, ship service-fingerprint-based cold-start. ~1 week.
+**Phase 2 — Service fingerprints.** Compute embeddings per service (migration 020), validate discrimination, ship service-fingerprint-based cold-start. ~1 week.
 
-**Phase 3 — User taste vector v2.** Re-express user taste in embedding space (migration 019). Nine files to be rewritten in this phase:
+**Phase 3 — User taste vector v2.** Re-express user taste in embedding space (migration 021). Nine files to be rewritten in this phase:
 
 - **`useHomeContent.ts`** — currently loads a 24D TasteProfile and passes it to every section for scoring. Rewritten to call the new recommendation hooks (which internally use the v2 ranking pipeline).
 - **`useContentDetail.ts`** — currently computes 24D content vectors inline for "More Like This." Rewritten to use the batch Supabase query approach (fetch candidate embeddings, client-side cosine similarity). Depends on Phase 1 wire format spike outcome.
@@ -600,7 +609,7 @@ As of v1.5, all design exploration areas are complete and approved:
 - **`ProfilePage.tsx`** — taste profile display and "retake quiz" removed; replaced by "Refine preferences" and "Retake taste summary" actions per the Profile restructure designs.
 - **`LazyGenreSection.tsx`** — currently passes `GenreAffinities` and `TasteVector` through to `useSectionData`. Updates to match the new `useSectionData` interface. Smaller change than the hooks but in the same file set because it consumes types from the v1 taste system.
 
-**Migration 020** (end of Phase 3) drops the 24D taste vector columns and the `interaction_log` JSONB column from the taste profiles table. The quiz subsystem (`quizConfig.ts`, `quizScoring.ts`, `TasteQuiz.tsx`, `QuizQuestion.tsx`), `scoreCandidate()`, `recomputeVector()`, `genreBlending.ts`, and other v1 taste system files are deleted in this phase.
+**Migration 022** (end of Phase 3) drops the 24D taste vector columns and the `interaction_log` JSONB column from the taste profiles table. The quiz subsystem (`quizConfig.ts`, `quizScoring.ts`, `TasteQuiz.tsx`, `QuizQuestion.tsx`), `scoreCandidate()`, `recomputeVector()`, `genreBlending.ts`, and other v1 taste system files are deleted in this phase.
 
 The two prototype users will lose their existing taste profiles at this point. They re-onboard on v2 on next app launch. Acceptable.
 
@@ -608,7 +617,7 @@ The two prototype users will lose their existing taste profiles at this point. T
 
 **Phase 4 — Ranking and row selection.** Implement multi-stage pipeline. Offline evaluation against v1 baseline. Service-filtered candidate retrieval, weighted ranking, row selection split by surface, within-row ordering. ~3 weeks.
 
-**Phase 4.5 — Mood Rooms.** Create `mood_rooms` and `mood_room_titles` tables (migration 021). Create Python clustering script at `scripts/mood_rooms/recluster.py`, dependencies at `scripts/mood_rooms/requirements.txt`. Create GitHub Actions workflow at `.github/workflows/mood-rooms-recluster.yml`. Configure GitHub Actions Secrets (`SUPABASE_CONNECTION_STRING`, `OPENAI_API_KEY`). Run the script once manually via `workflow_dispatch` to generate the initial mood rooms. Integrate "Mood Rooms for Tonight" row on the For You surface. Dedicated mood rooms browse surface is **deferred to v2.5**. ~2–3 weeks.
+**Phase 4.5 — Mood Rooms.** Create `mood_rooms` and `mood_room_titles` tables (migration 023). Create Python clustering script at `scripts/mood_rooms/recluster.py`, dependencies at `scripts/mood_rooms/requirements.txt`. Create GitHub Actions workflow at `.github/workflows/mood-rooms-recluster.yml`. Configure GitHub Actions Secrets (`SUPABASE_CONNECTION_STRING`, `OPENAI_API_KEY`). Run the script once manually via `workflow_dispatch` to generate the initial mood rooms. Integrate "Mood Rooms for Tonight" row on the For You surface. Dedicated mood rooms browse surface is **deferred to v2.5**. ~2–3 weeks.
 
 **Phase 5 — Contextual signals.** Add device detection, viewing-context handling, time-availability logic, catalogue-age slider wiring. ~2 weeks.
 
