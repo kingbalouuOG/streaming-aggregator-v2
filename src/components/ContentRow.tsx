@@ -2,12 +2,16 @@ import React, { useRef, useCallback, useLayoutEffect, useEffect } from "react";
 import { ContentCard, ContentItem } from "./ContentCard";
 import type { ServiceId } from "./platformLogos";
 import { getScrollPosition, setScrollPosition } from "@/lib/sectionSessionCache";
+import { recordImpression, type ImpressionSurface } from "@/lib/instrumentation/impressionBatcher";
+import { getCurrentSessionId, onSessionReset } from "@/lib/instrumentation/sessionId";
+import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 
 interface ContentRowProps {
   title: string;
   items: ContentItem[];
   variant?: "default" | "wide";
   sectionKey?: string;
+  sourceSurface?: ImpressionSurface;
   onItemSelect?: (item: ContentItem) => void;
   bookmarkedIds?: Set<string>;
   onToggleBookmark?: (item: ContentItem) => void;
@@ -18,10 +22,52 @@ interface ContentRowProps {
   hasMore?: boolean;
 }
 
-export function ContentRow({ title, items, variant = "default", sectionKey, onItemSelect, bookmarkedIds, onToggleBookmark, userServices, watchedIds, onLoadMore, loadingMore, hasMore }: ContentRowProps) {
+export function ContentRow({ title, items, variant = "default", sectionKey, sourceSurface, onItemSelect, bookmarkedIds, onToggleBookmark, userServices, watchedIds, onLoadMore, loadingMore, hasMore }: ContentRowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadMoreCalledRef = useRef(false);
   const scrollLeftRef = useRef(0);
+
+  // Impression tracking (Task 7 / IN-010).
+  //
+  // Dedup on (content_id, session_id) so remounts within the same
+  // session don't double-log. Session rollover (>= 5 minutes of
+  // background time) fires onSessionReset, which clears the set
+  // and allows the same card to log again in the new session.
+  //
+  // The ref's key format "{content_id}:{session_id}" matches the
+  // plan. We use content_id (the numeric TMDb id) rather than
+  // item.id (the "{type}-{id}" string) so the dedup key is stable
+  // against any future id-format changes.
+  const impressionDedupRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const unsubscribe = onSessionReset(() => {
+      impressionDedupRef.current.clear();
+    });
+    return unsubscribe;
+  }, []);
+
+  // Fire recordImpression for each item that hasn't been logged
+  // in the current session yet. Runs whenever `items` or
+  // `sourceSurface` changes — typically after the data load
+  // resolves and the row first renders its cards.
+  useEffect(() => {
+    if (!sourceSurface) return;
+    if (items.length === 0) return;
+    const sessionId = getCurrentSessionId();
+    items.forEach((item, position) => {
+      const { tmdbId } = parseContentItemId(item.id);
+      if (Number.isNaN(tmdbId)) return;
+      const key = `${tmdbId}:${sessionId}`;
+      if (impressionDedupRef.current.has(key)) return;
+      impressionDedupRef.current.add(key);
+      recordImpression({
+        contentId: tmdbId,
+        sourceSurface,
+        position,
+      });
+    });
+  }, [items, sourceSurface]);
 
   // Restore horizontal scroll position on mount
   useLayoutEffect(() => {

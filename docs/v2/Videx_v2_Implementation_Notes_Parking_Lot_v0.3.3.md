@@ -1,7 +1,10 @@
 # Videx v2 — Implementation Notes Parking Lot
 
-**Status:** v0.3.2 — Residual column name references corrected in prose and TypeScript interface
-**Version:** 0.3.2
+**Status:** v0.3.3 — Phase 0 entries (IN-PRE-001, IN-001 through IN-013) marked as ✅ Incorporated following Phase 0 closeout
+**Version:** 0.3.3
+
+**Changes from v0.3.2:**
+- IN-PRE-001 and IN-001 through IN-013 status flipped from ⏳ Not yet incorporated → ✅ Incorporated. All 14 Phase 0 entries are now reflected in shipped code and migrations on the `phase-0-instrumentation` branch (commits `ea1e456` through `e8702dc`). IN-005/IN-011 status notes call out the in-phase 015/016 deviations (partition RLS hardening) per Phase 0 summary §3.
 
 **Changes from v0.3.1:**
 - IN-007 prose reference to `(interaction_type union)` corrected to `(event_type union)` — the TypeScript union reflects the database column name
@@ -57,7 +60,7 @@ The migration is idempotent — applying it against the current production state
 
 **Verification after apply:** `\d+ profiles` shows same schema, new signups still create profile rows automatically, RLS policies remain functional, no data changed.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Pre-Phase 0 — migration 011 applied)
 
 ---
 
@@ -71,7 +74,7 @@ The migration is idempotent — applying it against the current production state
 
 **Detail:** The `dwell_event` fired when a user closes the detail page must include an `exit_reason` field in the payload. Values: `deep_link_click`, `added_to_watchlist`, `thumbs_up`, `thumbs_down`, `marked_watched`, `not_interested`, `back_to_previous`, `app_backgrounded`. Dwell time alone is meaningless — the engine interprets it through what the user did when they left.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0)
 
 ### IN-002: Detail view itself is NOT a positive signal
 
@@ -79,7 +82,7 @@ The migration is idempotent — applying it against the current production state
 
 **Detail:** A `detail_view` event is logged on page open as an anchor for subsequent dwell/outcome events, but it must NOT be weighted as a positive signal in taste vector updates. The signal interpretation happens entirely in the `dwell_event` with `exit_reason`.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0)
 
 ### IN-003: Dwell duration thresholds for negative weighting
 
@@ -91,7 +94,7 @@ The migration is idempotent — applying it against the current production state
 - `10–30` seconds: weight = −0.25
 - `30+` seconds: weight = −0.35
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0)
 
 ### IN-004: Negative dwell session cap
 
@@ -99,7 +102,7 @@ The migration is idempotent — applying it against the current production state
 
 **Detail:** Cumulative negative dwell signal per session must be capped at −1.0 regardless of how many rejections happen. Prevents the engine from learning "user hates everything they browse" during exploratory sessions. Implement as a session-aware accumulator that stops adding negative weight once −1.0 is reached.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0)
 
 ### IN-005: Card impression tracking in dedicated table
 
@@ -123,7 +126,7 @@ Indexes: `(user_id, shown_at DESC)`, `(source_surface, shown_at DESC)`, `(sessio
 
 Migration: `014_card_impressions_table.sql`.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0 — migrations 014/015/016 applied; 015/016 added in-phase to harden partition RLS, see Phase 0 summary §3 and Orchestration v0.3.2 §3.4)
 
 ### IN-006: Session ID generation and propagation
 
@@ -133,7 +136,7 @@ Migration: `014_card_impressions_table.sql`.
 
 **New module:** `src/lib/instrumentation/sessionId.ts`. Subscribes to the lifecycle manager (IN-009) for foreground/background transitions. Exposes `getCurrentSessionId()` which lazily generates a new UUID if none exists or if the previous session expired.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0)
 
 ### IN-007: Rename `dismiss` to `not_interested`
 
@@ -157,7 +160,7 @@ Migration: `014_card_impressions_table.sql`.
 - Other emitters (`emitContentInteraction`, `emitQuizAnswer`, `emitQuizCompleted`, `emitSearch`) do not need to pass `source_surface` — they default to `null`. This is correct: actions taken on the detail page have implicit source context.
 - Add new emitter `markNotInterested(contentId, mediaType)` that writes a `not_interested` event and calls `invalidateDismissedIdsCache()` (exposed by IN-008). Pass `source_surface: 'detail'` since the "Not Interested" button only exists on the detail page.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0)
 
 ### IN-008: `getDismissedIds()` rewrite — transitional gap fix
 
@@ -207,7 +210,7 @@ export function invalidateDismissedIdsCache(): void {
 - `recommendationEngine.ts:557` — remove this call entirely
 - No other callers in `src/`
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0)
 
 ### IN-009: Lifecycle manager module
 
@@ -234,7 +237,7 @@ export function flushImpressions(): void;
 
 **Why centralise:** avoids race conditions between multiple Capacitor listeners firing in non-deterministic order.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0)
 
 ### IN-010: Impression batcher module
 
@@ -268,7 +271,7 @@ export function flushNow(): Promise<void>;
 
 **Performance requirement:** `recordImpression()` must be cheap (synchronous array append). Called from every card render on every surface.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0)
 
 ### IN-011: pg_partman setup for card_impressions
 
@@ -284,7 +287,7 @@ export function flushNow(): Promise<void>;
 
 **Also create `card_impression_daily_totals` aggregation table** in the same migration, schema: `(date, user_id, source_surface, content_id, impression_count)`. Schedule a daily pg_cron job that aggregates impressions older than 90 days into this table BEFORE the retention-based deletion runs.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0 — migration 014; partition RLS hardened by 015/016)
 
 ### IN-012: localStorage v1 clear on first v2 launch
 
@@ -301,7 +304,7 @@ Runs once per device on first v2 launch. Implement in main entry point (`src/mai
 
 **Note:** full list of v1 keys to purge should be confirmed during Phase 0 implementation by searching the v1 code for `localStorage.setItem` calls.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0)
 
 ### IN-013: Deep link click confidence tagging
 
@@ -321,7 +324,7 @@ The try/catch at `openDeepLink.ts:28-45` already differentiates these paths. Pha
 
 **Payload fields:** `service_id`, `deep_link_url`, `dwell_seconds_before_click`, `confidence`.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0)
 
 ---
 

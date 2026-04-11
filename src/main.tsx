@@ -2,14 +2,59 @@
   import { createRoot } from "react-dom/client";
   import App from "./App.tsx";
   import "./index.css";
-  import { clearCache } from "./lib/api/cache";
 
-  // One-time: flush stale SA cache from before the cache-write fix.
-  // Safe to remove after all users have updated past this version.
-  const SA_CACHE_FLUSHED_KEY = 'sa_cache_flushed_v1';
-  if (!localStorage.getItem(SA_CACHE_FLUSHED_KEY)) {
-    clearCache('sa_').then(() => localStorage.setItem(SA_CACHE_FLUSHED_KEY, '1'));
+  // ─── Phase 0 / IN-012: one-time v1 localStorage purge ─────────────
+  //
+  // Two prototype users' devices still have v1 localStorage entries
+  // (taste profile, cached recommendations, API response caches) that
+  // could be read by v2 code and cause stale-data issues during the
+  // Phase 0 -> Phase 4 transition. On first launch of a v2 build, we
+  // wipe a known set of v1 keys and set @videx_version='2' so the
+  // purge runs exactly once per device.
+  //
+  // Keys purged:
+  //   - @taste_profile                 (v2 onboarding rebuilds it)
+  //   - @app_recommendations           (v1 rec engine cache — cheap to rebuild)
+  //   - @app_dismissed_recommendations (replaced by the getDismissedIds
+  //                                      Supabase query in migration 015)
+  //   - @app_hidden_gems               (no-op: not actually written in
+  //                                      v1 code, but listed in the brief
+  //                                      as belt-and-braces)
+  //   - tmdb_* / sa_* / omdb_*         (API response caches written by
+  //                                      cachedRequest wrapper; re-fetched
+  //                                      on demand)
+  //
+  // Keys PRESERVED:
+  //   - @app_watchlist / @user_profile / @user_preferences /
+  //     @auth_user_id / videx-theme / sa_cache_flushed_v1
+  //   - All of these are either user data we don't want to lose or
+  //     unrelated flags.
+  //
+  // This supersedes the previous one-shot 'sa_cache_flushed_v1' flag
+  // used to clear stale SA API cache — the new purge is a strict
+  // superset.
+  const VIDEX_VERSION_KEY = '@videx_version';
+  if (localStorage.getItem(VIDEX_VERSION_KEY) !== '2') {
+    const exactKeys = new Set([
+      '@taste_profile',
+      '@app_recommendations',
+      '@app_dismissed_recommendations',
+      '@app_hidden_gems',
+    ]);
+    const prefixMatch = ['tmdb_', 'sa_', 'omdb_'];
+    // Snapshot keys first because removeItem() mutates localStorage
+    // during iteration on some implementations.
+    const allKeys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key !== null) allKeys.push(key);
+    }
+    for (const key of allKeys) {
+      if (exactKeys.has(key) || prefixMatch.some((p) => key.startsWith(p))) {
+        localStorage.removeItem(key);
+      }
+    }
+    localStorage.setItem(VIDEX_VERSION_KEY, '2');
   }
 
   createRoot(document.getElementById("root")!).render(<App />);
-  

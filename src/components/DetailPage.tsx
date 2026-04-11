@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
-import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, Check, CheckCircle2, Undo2, AlertCircle, ChevronDown, ChevronUp, MessageSquare, ExternalLink } from "lucide-react";
+import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, EyeOff, Check, CheckCircle2, Undo2, AlertCircle, ChevronDown, ChevronUp, MessageSquare, ExternalLink } from "lucide-react";
 import { TickIcon } from "./icons";
 import { motion } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
@@ -14,6 +14,8 @@ import { openDeepLink } from "@/lib/openDeepLink";
 import { classifyProviders } from "@/lib/utils/providerClassifier";
 import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
+import { startDwell, exitDwell, setLastAction, getCurrentDwellSeconds } from "@/lib/instrumentation/dwellTimer";
+import { markNotInterested } from "@/lib/storage/interactions";
 import rottenTomatoesLogo from "@/assets/rotten-tomatoes-logo.png";
 import { ReportSheet } from "./ReportSheet";
 
@@ -70,6 +72,46 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
   const [descExpanded, setDescExpanded] = useState(false);
   const [descOverflows, setDescOverflows] = useState(false);
   const descRef = useRef<HTMLParagraphElement>(null);
+
+  // Dwell timer lifecycle (IN-001 / Task 8). Starts when the detail
+  // page mounts and fires a dwell_event on unmount with the most
+  // recent action set via setLastAction(), defaulting to
+  // 'back_to_previous' if the user just backed out. The cleanup
+  // function is called on unmount regardless of cause (back button,
+  // tab change, app close).
+  useEffect(() => {
+    const { tmdbId, mediaType } = parseContentItemId(itemId);
+    startDwell(tmdbId, mediaType);
+    return () => {
+      // exitDwell is idempotent — if an action path (deep link click,
+      // not_interested button) already exited, this is a no-op.
+      exitDwell();
+    };
+  }, [itemId]);
+
+  // Not Interested handler (Task 9b / IN-007).
+  //
+  // Sequence is deliberate:
+  //   1. exitDwell emits dwell_event with exit_reason='not_interested'
+  //      while the user is still logically on the page.
+  //   2. await markNotInterested writes the not_interested row AND
+  //      invalidates the getDismissedIds session cache, so the v1 rec
+  //      engine filters this title on next refresh. We await rather
+  //      than fire-and-forget because Joe explicitly wants the title
+  //      to disappear on next refresh — fire-and-forget would race
+  //      the cache invalidation against the post-navigation rec load.
+  //   3. onBack triggers unmount; the cleanup effect's exitDwell is
+  //      a no-op because we already exited.
+  const handleNotInterested = async () => {
+    const { tmdbId, mediaType } = parseContentItemId(itemId);
+    exitDwell('not_interested');
+    try {
+      await markNotInterested(tmdbId, mediaType);
+    } catch (err) {
+      console.error('[DetailPage] markNotInterested failed:', err);
+    }
+    onBack();
+  };
 
   useLayoutEffect(() => {
     const el = descRef.current;
@@ -235,7 +277,10 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             <div className="flex flex-col items-end gap-1">
               <div className="flex items-center gap-1.5">
                 <motion.button
-                  onClick={() => onRate(itemId, userRating === 'up' ? null : 'up')}
+                  onClick={() => {
+                    setLastAction('thumbs_up');
+                    onRate(itemId, userRating === 'up' ? null : 'up');
+                  }}
                   whileTap={{ scale: 0.8 }}
                   animate={userRating === 'up' ? { scale: [1, 1.2, 1] } : undefined}
                   transition={{ duration: 0.3 }}
@@ -249,7 +294,10 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
                   <ThumbsUp className={`w-3.5 h-3.5 ${userRating === 'up' ? 'fill-current' : ''}`} />
                 </motion.button>
                 <motion.button
-                  onClick={() => onRate(itemId, userRating === 'down' ? null : 'down')}
+                  onClick={() => {
+                    setLastAction('thumbs_down');
+                    onRate(itemId, userRating === 'down' ? null : 'down');
+                  }}
                   whileTap={{ scale: 0.8 }}
                   animate={userRating === 'down' ? { scale: [1, 1.2, 1] } : undefined}
                   transition={{ duration: 0.3 }}
@@ -262,6 +310,18 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
                 >
                   <ThumbsDown className={`w-3.5 h-3.5 ${userRating === 'down' ? 'fill-current' : ''}`} />
                 </motion.button>
+                {/* Not Interested — discovery rejection (Task 9b / IN-007).
+                    Secondary to thumbs up/down; writes a not_interested row
+                    and removes the title from recs on next refresh. */}
+                <motion.button
+                  onClick={handleNotInterested}
+                  whileTap={{ scale: 0.8 }}
+                  aria-label="Not interested"
+                  title="Not interested"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 bg-secondary text-muted-foreground hover:text-foreground"
+                >
+                  <EyeOff className="w-3.5 h-3.5" />
+                </motion.button>
               </div>
             </div>
           )}
@@ -272,7 +332,10 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
           {/* Left button */}
           {isWatched ? (
             <motion.button
-              onClick={() => onMoveToWantToWatch?.(itemId)}
+              onClick={() => {
+                setLastAction('added_to_watchlist');
+                onMoveToWantToWatch?.(itemId);
+              }}
               whileTap={{ scale: 0.96 }}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-secondary/50 border text-muted-foreground transition-colors"
               style={{ borderColor: "var(--check-border-2)" }}
@@ -282,7 +345,10 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             </motion.button>
           ) : bookmarked ? (
             <motion.button
-              onClick={() => onToggleBookmark?.()}
+              onClick={() => {
+                setLastAction('added_to_watchlist');
+                onToggleBookmark?.();
+              }}
               whileTap={{ scale: 0.96 }}
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
@@ -299,7 +365,10 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             </motion.button>
           ) : (
             <motion.button
-              onClick={() => onToggleBookmark?.()}
+              onClick={() => {
+                setLastAction('added_to_watchlist');
+                onToggleBookmark?.();
+              }}
               whileTap={{ scale: 0.96 }}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-secondary/50 border text-foreground transition-colors"
               style={{ borderColor: "var(--check-border-2)" }}
@@ -327,7 +396,10 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             </motion.button>
           ) : bookmarked ? (
             <motion.button
-              onClick={() => onMoveToWatched?.(itemId)}
+              onClick={() => {
+                setLastAction('marked_watched');
+                onMoveToWatched?.(itemId);
+              }}
               whileTap={{ scale: 0.96 }}
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
@@ -338,7 +410,10 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             </motion.button>
           ) : (
             <motion.button
-              onClick={() => onMoveToWatched?.(itemId)}
+              onClick={() => {
+                setLastAction('marked_watched');
+                onMoveToWatched?.(itemId);
+              }}
               whileTap={{ scale: 0.96 }}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-secondary/50 border text-foreground transition-colors"
               style={{ borderColor: "var(--check-border-2)" }}
@@ -538,7 +613,21 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
   const handleServiceTap = async (service: ServiceId) => {
     const link = detail.serviceLinks[service];
     const deepLink = getDeepLink(service, link?.url || null, detail.title, detail.year);
-    await openDeepLink(deepLink.url);
+    const { tmdbId } = parseContentItemId(detail.id);
+    const dwellSecondsBeforeClick = getCurrentDwellSeconds();
+    try {
+      await openDeepLink(deepLink.url, {
+        contentId: tmdbId,
+        mediaType: detail.mediaType,
+        serviceId: service,
+        dwellSecondsBeforeClick,
+        linkType: deepLink.type,
+      });
+    } finally {
+      // Idempotent — dwell timer's 10-second safety net also catches
+      // a thrown-and-swallowed path, but calling here is the fast path.
+      exitDwell('deep_link_click');
+    }
   };
 
   return (
@@ -606,7 +695,14 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
 
       {/* Tier 3: Rent or Buy — price list, tappable */}
       {tier3.length > 0 && (
-        <RentBuyList options={tier3} title={detail.title} year={detail.year} serviceLinks={detail.serviceLinks} />
+        <RentBuyList
+          options={tier3}
+          title={detail.title}
+          year={detail.year}
+          serviceLinks={detail.serviceLinks}
+          contentId={parseContentItemId(detail.id).tmdbId}
+          mediaType={detail.mediaType}
+        />
       )}
     </div>
   );
@@ -614,14 +710,32 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
 
 // ── Rent/Buy list with "Show more" toggle ──────────────
 
-function RentBuyList({ options, title, year, serviceLinks }: { options: RentalOption[]; title?: string; year?: number; serviceLinks?: Record<string, ServiceLink> }) {
+function RentBuyList({ options, title, year, serviceLinks, contentId, mediaType }: {
+  options: RentalOption[];
+  title?: string;
+  year?: number;
+  serviceLinks?: Record<string, ServiceLink>;
+  contentId: number;
+  mediaType: 'movie' | 'tv';
+}) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? options : options.slice(0, 3);
 
   const handleRentBuyTap = async (option: RentalOption) => {
     const saLink = option.deepLinkUrl || serviceLinks?.[option.serviceKey]?.url || null;
     const deepLink = getDeepLink(option.serviceKey, saLink, title || '', year);
-    await openDeepLink(deepLink.url);
+    const dwellSecondsBeforeClick = getCurrentDwellSeconds();
+    try {
+      await openDeepLink(deepLink.url, {
+        contentId,
+        mediaType,
+        serviceId: option.serviceKey,
+        dwellSecondsBeforeClick,
+        linkType: deepLink.type,
+      });
+    } finally {
+      exitDwell('deep_link_click');
+    }
   };
 
   return (

@@ -39,6 +39,7 @@ import { logOnboardingEvent } from "./lib/analytics/logger";
 import { ONBOARDING_EVENTS } from "./lib/analytics/events";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { maintainCache } from "./lib/api/cache";
+import { flushNow } from "./lib/instrumentation/impressionBatcher";
 import { parseContentItemId } from "./lib/adapters/contentAdapter";
 import { emitContentInteraction } from "./lib/storage/interactions";
 
@@ -202,6 +203,9 @@ function AppContent() {
   }, [filters.languages]);
 
   const handleItemSelect = (item: ContentItem) => {
+    // Flush trigger #6: detail page entry. Fire-and-forget — we
+    // don't await because the selection UI should be instant.
+    void flushNow();
     if (scrollRef.current) {
       savedScrollPositions.current[activeTab] = scrollRef.current.scrollTop;
     }
@@ -224,6 +228,9 @@ function AppContent() {
   };
 
   const handleTabChange = (tab: string) => {
+    // Flush trigger #5: bottom nav tab change. Fire-and-forget —
+    // we don't await because the tab UI should switch instantly.
+    void flushNow();
     if (scrollRef.current) {
       savedScrollPositions.current[activeTab] = scrollRef.current.scrollTop;
     }
@@ -691,13 +698,13 @@ function AppContent() {
                   ) : (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
                       {home.forYou.items.length > 0 && (
-                        <ContentRow title="For You" sectionKey="for-you" items={filterLanguage(filterWatched(home.forYou.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                        <ContentRow title="For You" sectionKey="for-you" sourceSurface="home" items={filterLanguage(filterWatched(home.forYou.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       )}
-                      <ContentRow title="Recently Added" sectionKey="recently-added" items={filterLanguage(filterWatched(home.recentlyAdded.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.recentlyAdded.loadMore} loadingMore={home.recentlyAdded.loadingMore} hasMore={home.recentlyAdded.hasMore} />
-                      <ContentRow title="Highest Rated" sectionKey="highest-rated" items={filterLanguage(filterWatched(home.highestRated.items))} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.highestRated.loadMore} loadingMore={home.highestRated.loadingMore} hasMore={home.highestRated.hasMore} />
-                      <ContentRow title="Popular on Your Services" sectionKey="popular" items={filterLanguage(filterWatched(home.popular.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.popular.loadMore} loadingMore={home.popular.loadingMore} hasMore={home.popular.hasMore} />
+                      <ContentRow title="Recently Added" sectionKey="recently-added" sourceSurface="home" items={filterLanguage(filterWatched(home.recentlyAdded.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.recentlyAdded.loadMore} loadingMore={home.recentlyAdded.loadingMore} hasMore={home.recentlyAdded.hasMore} />
+                      <ContentRow title="Highest Rated" sectionKey="highest-rated" sourceSurface="home" items={filterLanguage(filterWatched(home.highestRated.items))} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.highestRated.loadMore} loadingMore={home.highestRated.loadingMore} hasMore={home.highestRated.hasMore} />
+                      <ContentRow title="Popular on Your Services" sectionKey="popular" sourceSurface="home" items={filterLanguage(filterWatched(home.popular.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.popular.loadMore} loadingMore={home.popular.loadingMore} hasMore={home.popular.hasMore} />
                       {home.hiddenGems.items.length > 0 && (
-                        <ContentRow title="Hidden Gems" sectionKey="hidden-gems" items={filterLanguage(filterWatched(home.hiddenGems.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                        <ContentRow title="Hidden Gems" sectionKey="hidden-gems" sourceSurface="home" items={filterLanguage(filterWatched(home.hiddenGems.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       )}
                       {reorderedUpcoming.length > 0 && (
                         <div className="mb-6 overflow-hidden">

@@ -1,14 +1,14 @@
 import storage from '../storage';
+import { isSupabaseActive, getAuthUserId } from '../storage';
+import { supabase } from '../supabase';
 
 const DEBUG = __DEV__;
 
 const STORAGE_KEYS = {
   RECOMMENDATIONS: '@app_recommendations',
-  DISMISSED: '@app_dismissed_recommendations',
 };
 
 const RECOMMENDATION_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
-const DISMISSED_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 interface RecommendationCache {
   recommendations: any[];
@@ -18,17 +18,10 @@ interface RecommendationCache {
   schemaVersion: number;
 }
 
-interface DismissedData {
-  items: Array<{ id: number; type: string; dismissedAt: number }>;
-  schemaVersion: number;
-}
-
 const DEFAULT_RECOMMENDATIONS: RecommendationCache = {
   recommendations: [], generatedAt: 0, expiresAt: 0,
   basedOn: { genreAffinities: {}, likedItemIds: [] }, schemaVersion: 1,
 };
-
-const DEFAULT_DISMISSED: DismissedData = { items: [], schemaVersion: 1 };
 
 export const getCachedRecommendations = async (): Promise<RecommendationCache> => {
   try {
@@ -80,58 +73,59 @@ export const invalidateRecommendationCache = async () => {
   }
 };
 
-export const getDismissedRecommendations = async (): Promise<DismissedData> => {
-  try {
-    const data = await storage.getItem(STORAGE_KEYS.DISMISSED);
-    if (!data) return { ...DEFAULT_DISMISSED };
-    return JSON.parse(data);
-  } catch {
-    return { ...DEFAULT_DISMISSED };
-  }
-};
+// — Dismissed IDs (IN-008) ——————————————————————————————————————————
+//
+// Reads dismissed titles from user_interactions (event_type = 'not_interested').
+// Replaces the v1 localStorage-backed dismissal list so the v1 recommendation
+// engine keeps working while v2 is built on top. Signature is preserved:
+// returns Promise<Set<string>> with keys in `{media_type}-{content_id}` format.
+//
+// Cached at module scope for the lifetime of a session; invalidate via
+// invalidateDismissedIdsCache() when a new not_interested event is written.
+// Fail-safe: on Supabase error, returns an empty Set (degraded, not broken).
 
-export const dismissRecommendation = async (id: number, type: string) => {
-  const dismissed = await getDismissedRecommendations();
-  if (dismissed.items.some((item) => item.id === id && item.type === type)) return;
-  dismissed.items.push({ id, type, dismissedAt: Date.now() });
-  await storage.setItem(STORAGE_KEYS.DISMISSED, JSON.stringify(dismissed));
-};
-
-export const isDismissed = async (id: number, type: string): Promise<boolean> => {
-  try {
-    const dismissed = await getDismissedRecommendations();
-    const now = Date.now();
-    return dismissed.items.some((item) => item.id === id && item.type === type && now - item.dismissedAt < DISMISSED_TTL);
-  } catch {
-    return false;
-  }
-};
-
-export const cleanExpiredDismissals = async (): Promise<number> => {
-  try {
-    const dismissed = await getDismissedRecommendations();
-    const now = Date.now();
-    const initialCount = dismissed.items.length;
-    dismissed.items = dismissed.items.filter((item) => now - item.dismissedAt < DISMISSED_TTL);
-    const removedCount = initialCount - dismissed.items.length;
-    if (removedCount > 0) {
-      await storage.setItem(STORAGE_KEYS.DISMISSED, JSON.stringify(dismissed));
-    }
-    return removedCount;
-  } catch {
-    return 0;
-  }
-};
+let dismissedIdsSessionCache: Set<string> | null = null;
 
 export const getDismissedIds = async (): Promise<Set<string>> => {
+  if (dismissedIdsSessionCache) return dismissedIdsSessionCache;
+
+  if (!isSupabaseActive()) {
+    dismissedIdsSessionCache = new Set();
+    return dismissedIdsSessionCache;
+  }
+
   try {
-    const dismissed = await getDismissedRecommendations();
-    const now = Date.now();
-    const valid = dismissed.items.filter((item) => now - item.dismissedAt < DISMISSED_TTL);
-    return new Set(valid.map((item) => `${item.type}-${item.id}`));
-  } catch {
+    const userId = getAuthUserId();
+    if (!userId) {
+      dismissedIdsSessionCache = new Set();
+      return dismissedIdsSessionCache;
+    }
+
+    const { data, error } = await supabase
+      .from('user_interactions')
+      .select('content_id, media_type')
+      .eq('user_id', userId)
+      .eq('event_type', 'not_interested');
+
+    if (error) {
+      console.error('[Recommendations] getDismissedIds query failed:', error.message);
+      return new Set();
+    }
+
+    dismissedIdsSessionCache = new Set(
+      (data ?? [])
+        .filter((row) => row.content_id != null && row.media_type != null)
+        .map((row) => `${row.media_type}-${row.content_id}`)
+    );
+    return dismissedIdsSessionCache;
+  } catch (err) {
+    console.error('[Recommendations] getDismissedIds unexpected error:', err);
     return new Set();
   }
 };
 
-export { STORAGE_KEYS, RECOMMENDATION_CACHE_TTL, DISMISSED_TTL };
+export const invalidateDismissedIdsCache = (): void => {
+  dismissedIdsSessionCache = null;
+};
+
+export { STORAGE_KEYS, RECOMMENDATION_CACHE_TTL };
