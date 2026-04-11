@@ -140,6 +140,24 @@ test('extractFields throws on bad mediaType', () => {
   );
 });
 
+// ── runtime=0 is a TMDb placeholder, treat as NULL ──────────────
+
+test('movie with runtime: 0 is treated as NULL (TMDb placeholder)', () => {
+  const r = extractFields(
+    { id: 1, title: 'Unaired Film', runtime: 0 },
+    'movie'
+  );
+  assert.equal(r.runtime, null);
+});
+
+test('movie with runtime: -5 is treated as NULL', () => {
+  const r = extractFields(
+    { id: 1, title: 'Bad Data', runtime: -5 },
+    'movie'
+  );
+  assert.equal(r.runtime, null);
+});
+
 // ── Defensive: TMDb shape drift produces NULL/empty, never throws ─
 
 test('extractFields tolerates wholly missing optional blocks', () => {

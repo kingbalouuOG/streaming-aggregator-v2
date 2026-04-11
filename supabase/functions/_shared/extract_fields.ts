@@ -207,12 +207,17 @@ function extractContentRating(
 
 function extractRuntime(response: TmdbResponse, mediaType: MediaType): number | null {
   if (mediaType === 'movie') {
-    return asInteger(response.runtime);
+    // TMDb often returns `runtime: 0` as a placeholder for "no value"
+    // (e.g. for unaired films or films with no theatrical record).
+    // Treat 0 the same as missing — it's not a meaningful runtime.
+    const n = asInteger(response.runtime);
+    return n != null && n > 0 ? n : null;
   }
   // TV: episode_run_time is an integer array; take the first value.
   // Newer shows often have an empty array because TMDb has deprecated
   // multi-value episode_run_time in favour of per-episode runtime on
-  // /tv/{id}/season/{n}/episode/{n}. NULL is the right answer when empty.
+  // /tv/{id}/season/{n}/episode/{n}. NULL is the right answer when empty
+  // or when every entry is non-positive.
   const arr = asArray(response.episode_run_time);
   for (const v of arr) {
     const n = asInteger(v);
