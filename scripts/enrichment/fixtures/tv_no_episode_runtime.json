@@ -1,0 +1,27 @@
+{
+  "id": 77777,
+  "name": "New Streaming Show",
+  "episode_run_time": [],
+  "created_by": [
+    { "id": 1, "name": "Showrunner A" },
+    { "id": 2, "name": "Showrunner B" }
+  ],
+  "credits": {
+    "cast": [
+      { "order": 0, "name": "Star One" },
+      { "order": 1, "name": "Star Two" },
+      { "order": 2, "name": "Star Three" }
+    ],
+    "crew": []
+  },
+  "keywords": {
+    "results": [
+      { "id": 1, "name": "streaming" }
+    ]
+  },
+  "content_ratings": {
+    "results": [
+      { "iso_3166_1": "US", "rating": "TV-14" }
+    ]
+  }
+}

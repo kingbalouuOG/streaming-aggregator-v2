@@ -72,3 +72,8 @@ scripts/quiz-report-*.js
 scripts/*-results.json
 scripts/audit-results/*.json
 p2-*.csv
+
+# Phase 0.5 enrichment backfill state (local only)
+scripts/enrichment/.checkpoint.json
+scripts/enrichment/.checkpoint.json.tmp
+scripts/enrichment/.failures.jsonl

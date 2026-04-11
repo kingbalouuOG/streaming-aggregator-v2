@@ -1,7 +1,12 @@
 # Videx v2 — Implementation Notes Parking Lot
 
-**Status:** v0.3.3 — Phase 0 entries (IN-PRE-001, IN-001 through IN-013) marked as ✅ Incorporated following Phase 0 closeout
-**Version:** 0.3.3
+**Status:** v0.3.4 — Phase 0.5 entries (IN-101 through IN-107) marked as ✅ Incorporated following Phase 0.5 closeout; four new entries filed from Phase 0.5 deviations
+**Version:** 0.3.4
+
+**Changes from v0.3.3:**
+- IN-101 through IN-107 status flipped from ⏳ Not yet incorporated → ✅ Incorporated. All seven Phase 0.5 entries are now reflected in shipped code and migration 017 on the `phase-0.5-content-enrichment` branch (commits `e813c39` through `c4a8916`).
+- Phase 0.5 section gained two new entries (IN-PX-06, IN-PX-07) covering the TV director extraction widening follow-up and the split-by-media_type director gate policy — both filed from the in-phase analysis of the 77.2% director coverage miss (see Phase 0.5 summary §3 Deviation 3).
+- Cross-phase section gained two new entries (IN-XPS-004, IN-XPS-005) — the service-role JWT rotation plan before launch, and the Windows tmp+rename lesson from the backfill EPERM crash (see Phase 0.5 summary §3 Deviation 1).
 
 **Changes from v0.3.2:**
 - IN-PRE-001 and IN-001 through IN-013 status flipped from ⏳ Not yet incorporated → ✅ Incorporated. All 14 Phase 0 entries are now reflected in shipped code and migrations on the `phase-0-instrumentation` branch (commits `ea1e456` through `e8702dc`). IN-005/IN-011 status notes call out the in-phase 015/016 deviations (partition RLS hardening) per Phase 0 summary §3.
@@ -348,7 +353,7 @@ SELECT COUNT(*) FROM titles WHERE runtime IS NOT NULL;
 
 The empty `title_credits` table in v1 (correct schema, zero rows) is the cautionary tale. `title_genres` has the same problem. Schema existence ≠ data existence.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0.5 — the row-count verification was a hard acceptance gate; four of five fields cleared the 80% floor, `content_rating` came in at 65.4% within the brief's documented 60% tolerance, and `director` came in at 77.2% overall — accepted as a structural TV catalogue gap, see Phase 0.5 summary §3 Deviation 3 and IN-PX-07 below for the split-by-media_type policy change)
 
 ### IN-102: Investigate existing title_credits sync scripts before rewriting
 
@@ -356,7 +361,7 @@ The empty `title_credits` table in v1 (correct schema, zero rows) is the caution
 
 **Detail:** The `title_credits` table already exists in Supabase with sync scripts in the codebase, but the table is empty in production. Before writing new sync code for Phase 0.5, investigate why the existing scripts aren't running: never run, ran and failed silently, or deliberately disabled. Understanding which determines whether to revive existing sync code or rewrite from scratch.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0.5 — investigation confirmed `title_credits` and `title_genres` are both empty in production with no current writers. Phase 0.5 wrote the new enrichment data (cast_top_5, director) as denormalised `TEXT[]` / `TEXT` columns on `titles` directly rather than reviving `title_credits`. The legacy `title_credits` and `title_genres` tables stay empty; future phases can drop them safely.)
 
 ### IN-103: Use existing TMDb append_to_response pattern for backfill
 
@@ -366,7 +371,7 @@ The empty `title_credits` table in v1 (correct schema, zero rows) is the caution
 
 **Note from CC round 2:** the specific line references from earlier conversations (`tmdb.ts:130`, `tmdb.ts:138`) may be stale. CC should verify current line numbers when writing the backfill script.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0.5 — the backfill uses `append_to_response=keywords,credits,release_dates` for movies and `append_to_response=keywords,credits,content_ratings` for TV via `scripts/enrichment/tmdb-enrichment-client.ts`. Note: the existing `src/lib/api/tmdb.ts` client was NOT reused — it's browser-targeted axios-based code with a different `append_to_response` set at lines 127–141. The backfill uses raw `fetch` matching the `scripts/sync-content.ts` pattern instead, which is the established convention for Node-side scripts.)
 
 ### IN-104: Embedding input template must match eval template exactly
 
@@ -387,7 +392,7 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 
 **Note:** runtime line was added in v0.3 (see IN-105). The original eval did not include runtime, so an incremental validation sweep may be worthwhile to confirm runtime addition doesn't regress embedding quality.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ⚠️ Partially informed by Phase 0.5 — the enrichment columns the template reads are now populated (keywords 100%, cast_top_5 100%, runtime 81.4%). However, IN-104 is a Phase 1 task (the template itself is implemented during embedding generation), so the status stays partially pending. Phase 0.5's summary §8.3 documents the current fill rates so Phase 1's embedding generator can assume the columns exist. **One Phase 0.5 finding that affects IN-104: `director` is 99.7% populated for movies but only 54.9% for TV — the template's "omit empty lines" rule handles this, but Phase 1's embedding eval should not penalise TV rows for missing director lines (see IN-PX-06 and IN-PX-07 below).**
 
 ### IN-105: Runtime backfill added to Phase 0.5 enrichment scope
 
@@ -401,7 +406,7 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 
 **Embedding template update:** add `Runtime: {runtime} minutes` line to the template in IN-104. Omit the line entirely if runtime is null.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0.5 — runtime went from 0/20000 populated pre-phase to 16,288/20000 = 81.4% populated post-backfill, clearing the 80% floor. `extractRuntime` reads `runtime` for movies and `episode_run_time[0]` for TV. **In-phase fix:** `runtime: 0` was initially preserved as a literal 0 for movies, then caught during the C4 smoke test — TMDb returns `0` as a placeholder for "no value". Fix: treat `runtime <= 0` as NULL on the movie path (matching the TV path's existing `n > 0` filter). See Phase 0.5 summary §3 Deviation 2.)
 
 ### IN-106: title_genres via static TMDb genre mapping
 
@@ -419,7 +424,7 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 
 **Rationale:** TMDb genre list is small (~20 entries for movies, ~16 for TV) and changes roughly once every few years. Static mapping is simpler, faster, and avoids another Phase 0.5 data dependency.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0.5 — confirmed `title_genres` is empty in production; no backfill performed. Migration 017 did NOT drop the table (Phase 0.5's scope is additive only). Future phases can drop `title_genres` safely when convenient. `GENRE_NAMES` in `src/lib/constants/genres.ts` remains the source of truth for genre ID → name resolution and Phase 1's embedding template will use it directly.)
 
 ### IN-107: Phase 0.5 sync split — backfill script + enrichment Edge Function
 
@@ -446,7 +451,40 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 
 **Main sync function (`sync-incremental`) stays unchanged in scope.** The enrichment function runs separately.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 0.5 — split executed exactly as planned. Backfill lives at `scripts/enrichment/backfill-enrichment.ts` + `tmdb-enrichment-client.ts`. Edge Function lives at `supabase/functions/enrich-new-titles/index.ts` with shared logic at `supabase/functions/_shared/extract_fields.ts` imported by both. Cron schedule at `supabase/cron/enrich_new_titles.sql` fires daily at 06:30 UTC, 30 min after `daily-content-sync`. **Note:** the cron SQL lives in the new `supabase/cron/` directory per Orchestration v0.3.2 §3.4, NOT as a migration — this establishes the convention for future operational automation.)
+
+### IN-PX-06: Phase 1+ may want to widen TV director extraction to `credits.crew[]` "Series Director"
+
+**Source:** Phase 0.5 closeout analysis (director coverage miss — 77.2% overall, 99.7% movies, 54.9% TV)
+
+**Detail:** Phase 0.5 accepted TV director coverage at 54.9% as a structural TMDb catalogue gap rather than a fixable defect. The `extractDirector` TV path reads only from the top-level `created_by[]` field, which is TMDb's "showrunner/creator" concept and is structurally empty for documentaries, reality shows, anthology series, and old/foreign titles. Spot-check of 10 random NULL-director TV rows returned exactly these categories — every single one.
+
+**Potential follow-up**: Widen the TV extractor to additionally include `credits.crew[]` entries where `job === 'Series Director'` (the narrowest widening — excludes the pollution-prone "Executive Producer"). Expected lift: 2–5 percentage points of TV coverage, mostly for docuseries. Would not clear a hypothetical 80% floor by itself (the gap is ~25 points) but would be cheap and useful.
+
+**When to do this**: Only if Phase 1's embedding eval or Phase 3's engine evaluation indicates a director signal matters for TV recommendation quality. If the embeddings cluster TV shows well without a director signal (which is the expected outcome for documentaries — they embed on genre + overview + keywords), this follow-up is unnecessary. **Revisit during Phase 1 embedding eval.**
+
+**Reference:** Phase 0.5 summary §3 Deviation 3, `supabase/functions/_shared/extract_fields.ts:extractDirector`.
+
+**Status:** ⏳ Not yet incorporated — Phase 1+ decision
+
+### IN-PX-07: Director row-count gate should split by media_type going forward
+
+**Source:** Phase 0.5 closeout analysis (director coverage miss)
+
+**Detail:** The Phase 0.5 brief's §6.2 specified a single `director_pct ≥ 80%` gate across all titles. Phase 0.5 empirically confirmed that this is the wrong shape — movies and TV have very different structural director-data availability in TMDb, and a single aggregate gate masks the movie path's near-perfect 99.7% behind the TV path's structural 54.9%.
+
+**Proposal**: Future phases that reference director coverage gates should split by media_type:
+
+- `director_pct` for `media_type='movie'` must be ≥ 95%
+- `director_pct` for `media_type='tv'` is best-effort; no hard floor
+
+**Current production numbers under the proposed gate**:
+- Movies: 9,965 / 9,998 = 99.7% ✅ (clears the proposed 95% movie floor comfortably)
+- TV: 5,483 / 9,995 = 54.9% (no gate, accepted)
+
+**Action**: Any future phase brief that references director coverage criteria should use the split form. Phase 1 embedding eval should confirm whether missing director on TV shows hurts embedding quality — if yes, revisit IN-PX-06. If no, lock the split-gate policy and move on.
+
+**Status:** ⏳ Not yet incorporated — policy change, no code impact
 
 ---
 
@@ -822,6 +860,50 @@ SELECT * FROM partman.part_config WHERE parent_table = 'public.card_impressions'
 **When:** early May 2026 (or whenever the first calendar-month boundary after Phase 0 ships occurs).
 
 **Status:** ⏳ Scheduled for post-Phase-0 verification
+
+### IN-XPS-004: Service-role JWT in cron migration files should rotate to a secrets-managed reference before launch
+
+**Source:** Phase 0.5 closeout review (pattern inherited from Phase B1)
+
+**Detail:** Both `supabase/migrations/006_cron_schedule.sql` (Phase B1 — schedules `daily-content-sync`) and `supabase/cron/enrich_new_titles.sql` (Phase 0.5 — schedules `enrich-new-titles`) hardcode a full service-role JWT in version-controlled SQL so that pg_cron's `net.http_post()` can authenticate against the target Edge Functions. Phase 0.5 inherits this pattern from Phase B1 rather than introducing new exposure — but it is a pre-existing risk that both phases now depend on.
+
+**Why it matters:** The JWT in those SQL files grants service-role access to the entire Supabase project. Anyone with git history access (which includes anyone with read access to the repo) has a long-lived bypass of RLS on every table. During the build this is acceptable because only two people touch the repo and the Supabase project is pre-launch; post-launch this becomes a P0 security risk.
+
+**Rotation plan before public launch:**
+1. Create a Supabase Vault secret for the service-role JWT using `vault.create_secret()` (pg_cron can read from `vault.decrypted_secrets` at job execution time).
+2. Update both cron SQL files to read the JWT from the vault at execution time rather than baking it into the `cron.schedule` command body.
+3. Rotate the existing service-role JWT so the historical ones in git history are invalidated.
+4. Add a CI check that greps the repo for `Bearer eyJ` patterns in SQL files and fails the build if any appear outside `supabase/migrations/` archives.
+
+**Categorise:** cross-phase / security hardening / post-launch. **Blocks public launch.** Not a blocker for any phase of the v2 build itself.
+
+**Reference:** Phase 0.5 summary §5 first entry. Files: `supabase/migrations/006_cron_schedule.sql:19`, `supabase/cron/enrich_new_titles.sql` (embedded JWT).
+
+**Status:** ⏳ Flagged for pre-public-launch
+
+### IN-XPS-005: Atomic tmp+rename is Windows-hostile for files under active observation
+
+**Source:** Phase 0.5 empirical finding (backfill crash at row ~17,000 of 20,000)
+
+**Detail:** The original Phase 0.5 backfill used `writeFileSync(tmp, body); renameSync(tmp, final)` on every checkpoint write (every row, ~260 ms cadence). During the production run on Joe's Windows host with VS Code and Claude Code file watchers active, this crashed fatally at row ~17,000 with:
+
+```
+Fatal: Error: EPERM: operation not permitted, rename
+'...\.checkpoint.json.tmp' -> '...\.checkpoint.json'
+```
+
+**Root cause:** Windows `MoveFileEx` (which backs `renameSync`) refuses to rename over a destination held by any process via file handles. File watchers under VS Code / Claude Code / antivirus hold transient read handles continuously on observed files, and a long enough sequence of rename attempts eventually races into a held handle. The tmp+rename idiom is safe on Unix but structurally broken on Windows for any file under active observation.
+
+**Fix applied in Phase 0.5** (commit `c4a8916`): dropped tmp+rename entirely, use plain `writeFileSync`, retry 3× on EPERM with 50 ms busy-wait, write every 50 rows instead of every row. Zero data loss — the 17,166 rows from the crashed first run had already been UPDATE'd to Supabase successfully, the resume run picked up from the checkpoint and completed the remaining 2,832 rows in 18m 35s with zero EPERM events.
+
+**Lesson for future Videx scripts on Windows:**
+- For small config/checkpoint files (<1 KB): **prefer plain `writeFileSync(path, body)`**. The atomicity benefit of tmp+rename is negligible for files small enough that the write itself is effectively atomic on modern disks, and the consumer should handle rare corruption via "reload and recover from last good state" semantics.
+- For large or corruption-sensitive files: still use tmp+rename, but retry on `EPERM` with a short busy-wait between attempts (3 × 50 ms is the Phase 0.5 pattern), OR exclude the file from VS Code's `files.watcherExclude` and from antivirus exclusions.
+- If we accumulate enough Node-side callers, add a generic `writeJsonAtomic(path, data)` helper to `src/lib/fs/`. Not needed yet.
+
+**Reference:** Phase 0.5 summary §3 Deviation 1, `scripts/enrichment/backfill-enrichment.ts:74-118` (post-fix implementation), commit `c4a8916`.
+
+**Status:** ✅ Incorporated (Phase 0.5 — fix landed in commit `c4a8916`; lesson filed here for future Windows-side scripts)
 
 ---
 
