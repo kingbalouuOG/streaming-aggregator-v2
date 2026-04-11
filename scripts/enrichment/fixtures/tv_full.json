@@ -1,0 +1,32 @@
+{
+  "id": 1396,
+  "name": "Breaking Bad",
+  "episode_run_time": [45, 47],
+  "first_air_date": "2008-01-20",
+  "created_by": [
+    { "id": 66633, "name": "Vince Gilligan" }
+  ],
+  "credits": {
+    "cast": [
+      { "order": 0, "name": "Bryan Cranston" },
+      { "order": 1, "name": "Aaron Paul" },
+      { "order": 2, "name": "Anna Gunn" },
+      { "order": 3, "name": "Dean Norris" },
+      { "order": 4, "name": "Betsy Brandt" }
+    ],
+    "crew": []
+  },
+  "keywords": {
+    "results": [
+      { "id": 41525, "name": "high school teacher" },
+      { "id": 1992, "name": "new mexico" },
+      { "id": 11787, "name": "drug dealer" }
+    ]
+  },
+  "content_ratings": {
+    "results": [
+      { "iso_3166_1": "GB", "rating": "18" },
+      { "iso_3166_1": "US", "rating": "TV-MA" }
+    ]
+  }
+}
