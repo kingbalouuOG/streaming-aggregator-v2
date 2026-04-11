@@ -12,7 +12,8 @@
     "cap:open": "npx cap open android",
     "build:android": "npm run build && npx cap sync android",
     "dev:android": "echo Run: set LIVE_RELOAD=YOUR_IP && npx cap sync android",
-    "test:enrichment": "npx tsx scripts/enrichment/extract_fields.test.ts"
+    "test:enrichment": "npx tsx scripts/enrichment/extract_fields.test.ts",
+    "backfill:enrichment": "npx tsx scripts/enrichment/backfill-enrichment.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.2",
