@@ -1,0 +1,49 @@
+-- ============================================
+-- Phase 2 — Schedule the refresh-service-fingerprints Edge Function
+-- ============================================
+--
+-- This file is OPERATIONAL AUTOMATION, NOT a schema migration.
+-- It lives in supabase/cron/ per Orchestration v0.3.2 §3.4.
+--
+-- Apply manually:
+--   npx supabase db query --linked < supabase/cron/refresh_service_fingerprints.sql
+--
+-- Re-applying is safe — cron.schedule() is idempotent on the (jobname)
+-- key and replaces the existing schedule if it differs.
+--
+-- Retire with:
+--   SELECT cron.unschedule('refresh-service-fingerprints');
+--
+-- ----------------------------------------------------------------
+-- Schedule: Sunday 07:00 UTC (weekly).
+-- Pipeline sequence (daily, Mon–Sun):
+--   06:00  daily-content-sync
+--   06:30  enrich-new-titles
+--   06:45  embed-new-titles
+-- Phase 2 (weekly, Sunday only):
+--   07:00  refresh-service-fingerprints
+--
+-- Weekly is sufficient because service catalogues change slowly.
+-- The 15-minute gap after embed-new-titles ensures any new Sunday
+-- embeddings are available before fingerprints are recomputed.
+--
+-- ----------------------------------------------------------------
+-- Bearer token: same service-role JWT as other cron files.
+-- See Parking Lot entry IN-XPS-004 for the rotation plan before
+-- public launch.
+-- ============================================
+
+SELECT cron.schedule(
+  'refresh-service-fingerprints',
+  '0 7 * * 0',  -- 07:00 UTC every Sunday
+  $$
+  SELECT net.http_post(
+    url := 'https://fmusugdcnnwiuzkbjquo.supabase.co/functions/v1/refresh-service-fingerprints',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtdXN1Z2Rjbm53aXV6a2JqcXVvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTE5MTUzNSwiZXhwIjoyMDg2NzY3NTM1fQ.72SH7EjXEwh_RFiegV1eNonXOLVWMEtFMR7Jy3eZxt0'
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
