@@ -595,7 +595,9 @@ As of v1.5, all design exploration areas are complete and approved:
 
 **Phase 1.5 — Videx tags (optional, can defer).** LLM-generated semantic tags on top of Layer 1 metadata. Improves embedding quality and unlocks richer row generation. Can ship after Phase 1 without rebuilding embeddings if tags are added as an additional input layer in a future re-embedding pass. ~1–2 weeks when prioritised.
 
-**Phase 2 — Service fingerprints.** Compute embeddings per service (migration 020), validate discrimination, ship service-fingerprint-based cold-start. ~1 week.
+**Phase 2 — Service fingerprints.** ✅ Complete. Compute centroids per service (migration 020), validate discrimination, ship service-fingerprint table. ~1 week. 10 services fingerprinted; discrimination eval conditional pass (catalogue overlap is structural). See Phase 2 summary.
+
+**Phase 2.5 — TMDb watch/providers backfill.** Fill streaming_availability gaps for BBC iPlayer, NOW TV, Sky Go using TMDb discover data. No migration needed. Prerequisite for Phase 3 cold-start to cover all 10 UK services. ~0.5 week.
 
 **Phase 3 — User taste vector v2.** Re-express user taste in embedding space (migration 021). Nine files to be rewritten in this phase:
 

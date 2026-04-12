@@ -921,7 +921,11 @@ Phase-specific gotchas to remember when briefing each phase. These supplement th
 
 ### 8.4 Phase 2 — Service fingerprints
 
-**Smaller phase**, mostly database work. Watch for the service fingerprint computation being correctly weighted (recency-decayed, see Strategy Section 5.2).
+✅ **Complete.** Migration 020 applied, 10 services fingerprinted, Edge Function + Sunday cron deployed. Selection criterion: `popularity DESC` with `vote_count >= 50` (the §5.2 recency-decay reference was a misattribution — §5.2 describes user taste vector decay, not fingerprint selection). RLS tightened to authenticated-only. Discrimination eval: conditional pass. See Phase 2 summary.
+
+### 8.4.5 Phase 2.5 — TMDb watch/providers backfill
+
+**Small prerequisite phase** before Phase 3. BBC iPlayer, NOW TV, and Sky Go have no rows in `streaming_availability` for subscription/free content (SA API data gaps). Without backfill, these services contribute zero to Phase 3's cold-start taste vector blend. Uses TMDb `/discover` endpoint with `with_watch_providers` filter to populate `streaming_availability` rows. No migration needed. See Parking Lot IN-250.
 
 ### 8.5 Phase 3 — User taste vector v2 and hook rewrites
 
@@ -938,7 +942,7 @@ Phase-specific gotchas to remember when briefing each phase. These supplement th
 8. `ProfilePage.tsx`
 9. `LazyGenreSection.tsx`
 
-**Migration 020 deletes the v1 taste system.** Quiz files, 24D vectors, scoreCandidate, recomputeVector, era hacks. Don't be sentimental about it — the v1 system is being replaced, not preserved.
+**Migration 022 deletes the v1 taste system.** Quiz files, 24D vectors, scoreCandidate, recomputeVector, era hacks. Don't be sentimental about it — the v1 system is being replaced, not preserved.
 
 **The two prototype users lose their v1 taste profiles** at this phase. They re-onboard on v2. This is acceptable and locked.
 
