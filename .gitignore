@@ -77,3 +77,8 @@ p2-*.csv
 scripts/enrichment/.checkpoint.json
 scripts/enrichment/.checkpoint.json.tmp
 scripts/enrichment/.failures.jsonl
+
+# Phase 1 embedding backfill state (local only)
+scripts/embeddings/.checkpoint.json
+scripts/embeddings/.checkpoint.json.tmp
+scripts/embeddings/.failures.jsonl

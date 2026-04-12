@@ -30,6 +30,7 @@ export const GENRES: Record<string, number> = {
 };
 
 // Genre display names
+// Duplicated in supabase/functions/_shared/genreNames.ts for Deno Edge Functions — keep in sync.
 export const GENRE_NAMES: Record<number, string> = {
   28: 'Action',
   12: 'Adventure',
