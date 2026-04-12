@@ -82,3 +82,8 @@ scripts/enrichment/.failures.jsonl
 scripts/embeddings/.checkpoint.json
 scripts/embeddings/.checkpoint.json.tmp
 scripts/embeddings/.failures.jsonl
+
+# Phase 2 fingerprint build state (local only)
+scripts/fingerprints/.checkpoint.json
+scripts/fingerprints/.checkpoint.json.tmp
+scripts/fingerprints/.failures.jsonl

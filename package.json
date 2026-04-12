@@ -15,7 +15,10 @@
     "test:enrichment": "npx tsx scripts/enrichment/extract_fields.test.ts",
     "backfill:enrichment": "npx tsx scripts/enrichment/backfill-enrichment.ts",
     "test:embeddings": "npx tsx scripts/embeddings/__tests__/embeddingTemplate.test.ts",
-    "backfill:embeddings": "npx tsx scripts/embeddings/backfill-embeddings.ts"
+    "backfill:embeddings": "npx tsx scripts/embeddings/backfill-embeddings.ts",
+    "build:fingerprints": "npx tsx scripts/fingerprints/build-service-fingerprints.ts",
+    "eval:fingerprints": "npx tsx scripts/fingerprints/eval-service-discrimination.ts",
+    "test:fingerprints": "npx tsx scripts/fingerprints/__tests__/centroidMath.test.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.2",

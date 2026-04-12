@@ -555,6 +555,31 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 
 ---
 
+## Phase 2.5 — TMDb watch/providers backfill for SA API service gaps
+
+*(Fill streaming_availability gaps for BBC iPlayer, NOW TV, and Sky Go using TMDb discover data, so all 10 UK services have fingerprints before Phase 3 cold-start wiring)*
+
+### IN-250: TMDb discover backfill for BBC iPlayer, NOW TV, Sky Go
+
+**Source:** Phase 2 build-service-fingerprints dry-run (2026-04-12). BBC iPlayer has 0 rows in streaming_availability (SA API catalogue empty despite listing the service — GitHub issue filed, no response). NOW TV has 591 rows but all classified as `addon` stream_type (0 subscription/free). Sky Go is not in the SA API at all. All three are detected by TMDb watch/providers on the client side but have no server-side catalogue mapping for fingerprint construction.
+
+**Impact:** Without this, BBC/NOW/Sky Go contribute zero to Phase 3's onboarding cold-start taste vector blend. BBC iPlayer is likely top 3 most-selected UK services — a silent degradation of Pillar 3 for a large user segment.
+
+**Detail:**
+1. Write a backfill script (`scripts/fingerprints/backfill-tmdb-providers.ts`) that queries TMDb `/discover/movie` and `/discover/tv` with `with_watch_providers={id}&watch_region=GB` for each missing service (BBC=38, NOW=39, Sky Go=29).
+2. Insert rows into `streaming_availability` with `service_id`, `stream_type='free'` (BBC/Sky Go) or `'subscription'` (NOW), and `deep_link_url` set to the search fallback URL from `deepLinks.ts` (e.g., `https://www.bbc.co.uk/iplayer/search?q={title}`).
+3. BBC iPlayer deep links: structured format `https://www.bbc.co.uk/iplayer/episode/{pid}` exists but `pid` is BBC's internal ID, not derivable from TMDb. Search fallback (`/iplayer/search?q=`) is the correct approach. If SA API ticket resolves and provides real deep links, those will overwrite via the existing sync pipeline.
+4. After backfill, re-run `npm run build:fingerprints` to generate fingerprints for the newly populated services. No fingerprint code changes needed.
+5. Add an Edge Function or cron extension to keep TMDb-sourced availability rows refreshed (TMDb discover data changes weekly).
+
+**Scope:** Backend only. No UI changes, no hook rewrites, no schema changes. Same profile as Phase 2.
+
+**Prerequisite for Phase 3:** Phase 3's onboarding cold-start (IN-301, OnboardingFlow.tsx) blends fingerprints from selected services. If BBC/NOW/Sky Go have no fingerprints, the blend is incomplete and the cold-start quality is degraded for users of those services.
+
+**Status:** ⏳ Not yet incorporated
+
+---
+
 ## Phase 3 — User taste vector v2 and hook-level rewrites
 
 *(Re-express user taste in embedding space, rewrite hooks that currently use the v1 taste system)*
