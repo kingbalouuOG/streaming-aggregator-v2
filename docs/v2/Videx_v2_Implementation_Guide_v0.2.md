@@ -913,11 +913,11 @@ Phase-specific gotchas to remember when briefing each phase. These supplement th
 
 ### 8.3 Phase 1 — Content embeddings
 
-**Wire format spike comes first.** Before any production embedding work, run the spike from IN-203 to confirm whether Supabase JS client returns pgvector columns as parsed arrays or as serialised strings. The spike is a 30-minute task that de-risks Phase 3.
+**Wire format spike de-risks Phase 3.** The spike from IN-203 validates whether the Supabase JS client returns pgvector columns as parsed arrays or as serialised strings. It runs after the bulk backfill (needs real embeddings in the column to validate against) but its output (the locked wire format pattern) is consumed by Phase 3's `useContentDetail.ts` rewrite. Phase 1 result: PostgREST returns strings, locked pattern is `JSON.parse(row.embedding)`. See `docs/v2/phase-1-wire-format-spike.md`.
 
 **Embedding column name:** use `embedding`, not `content_vector`. The v1 column has a CHECK constraint on the old name that blocks reuse. See IN-204.
 
-**Drop the legacy column at end of Phase 1, not Phase 3.** Migration 017. With the v1-archive model there's no parallel engine reading from `content_vector`, so it can be dropped as soon as embeddings ship.
+**Drop the legacy column at end of Phase 1, not Phase 3.** Migration 019. With the v1-archive model there's no parallel engine reading from `content_vector`, so it can be dropped as soon as embeddings ship.
 
 ### 8.4 Phase 2 — Service fingerprints
 

@@ -465,7 +465,7 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 
 **Reference:** Phase 0.5 summary §3 Deviation 3, `supabase/functions/_shared/extract_fields.ts:extractDirector`.
 
-**Status:** ⏳ Not yet incorporated — Phase 1+ decision
+**Status:** ⏳ Deferred — Phase 1 cluster eval (`7160046`) shows BBC Period Dramas (TV) cohort passes at 0.53 within-cohort cosine similarity, comparable to movie cohort average of 0.57. TV titles cluster well without director in the embedding template. Director is intentionally excluded from the locked §4.1 template, so widening extraction has no effect on current embeddings. Deferred: only revisit if a future template revision adds director.
 
 ### IN-PX-07: Director row-count gate should split by media_type going forward
 
@@ -498,7 +498,7 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 
 **Detail:** Decision locked. Model: `text-embedding-3-small`. 1536 dimensions. Validated head-to-head against Voyage 3.5-lite on 510-title sample with cast and keywords enriched. OpenAI won on genre separation (~1.8x) and service discrimination (~2.1x).
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 1 — `7697ad8` embeddingTemplate.ts, `43bca73` openaiEmbeddings.ts, `d4fcff3` backfill script, `e8c6d8f` bulk backfill completed 19,993 titles at ~$0.047)
 
 ### IN-202: pgvector with HNSW indexing
 
@@ -508,7 +508,7 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 
 **Index build:** run after bulk embedding insert, not concurrently. Run from a migration script or from Joe's laptop, not from an Edge Function (Edge Function 150s timeout won't complete an HNSW build at this scale; dedicated compute completes in minutes).
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 1 — `e43bf1b` migration 018 pgvector + embedding column, `e8c6d8f` HNSW index built post-backfill, 156 MB, indisvalid=true)
 
 ### IN-203: pgvector wire format spike (Phase 1 prerequisite for Phase 3)
 
@@ -531,7 +531,7 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 
 **This is a 30-minute task in Phase 1 that de-risks Phase 3.** Do not skip.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 1 — `047aae1` wire format spike. Result: PostgREST returns strings, locked pattern is `JSON.parse(row.embedding)`. Report at `docs/v2/phase-1-wire-format-spike.md`)
 
 ### IN-204: Embedding column naming — use `embedding`, not `content_vector`
 
@@ -539,19 +539,19 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 
 **Detail:** The v1 `content_vector` column has a CHECK constraint (`chk_content_vector_dim`, `008_content_vectors.sql:9-10`) enforcing `array_length(content_vector, 1) = 24`. If Phase 1 tried to reuse the column name for a `vector(1536)` column, the ALTER would fail because the constraint name already exists.
 
-**Use a different column name.** `embedding` is the conventional name (pgvector's own documentation uses it). Migration 016 adds `embedding vector(1536)` as a new column, leaves `content_vector` in place. Migration 017 (end of Phase 1) drops `content_vector` and its constraint.
+**Use a different column name.** `embedding` is the conventional name (pgvector's own documentation uses it). Migration 018 adds `embedding vector(1536)` as a new column, leaves `content_vector` in place. Migration 019 (end of Phase 1) drops `content_vector` and its constraint.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 1 — `e43bf1b` migration 018 uses `embedding` column name)
 
 ### IN-205: Drop legacy content_vector column at end of Phase 1
 
 **Source:** Strategy review round 2 (CC finding M5); Recommendation Engine Strategy v1.6 Section 7.2
 
-**Detail:** Migration 017 (end of Phase 1) drops the legacy 24D `content_vector` column and its `chk_content_vector_dim` constraint from the `titles` table. Also update the sync scripts (`sync-content.ts`, `sync-incremental/index.ts`) in Phase 1 to stop computing and writing 24D vectors — they now compute and write 1536D embeddings instead.
+**Detail:** Migration 019 (end of Phase 1) drops the legacy 24D `content_vector` column and its `chk_content_vector_dim` constraint from the `titles` table. Also update the sync scripts (`sync-content.ts`, `sync-incremental/index.ts`) in Phase 1 to stop computing and writing 24D vectors — embeddings are now handled by the `embed-new-titles` cron instead.
 
 **Why at end of Phase 1, not Phase 3:** with the v1-archival reframe, there's no parallel v1 engine reading from `content_vector`. Once Phase 1 ships embeddings, the 24D column is dead weight. Drop it.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 1 — `cf5dc96` sync script rewrites, `a3282de` migration 019 + deletion of server-side computeContentVector.ts. Client-side v1 taste code remains until Phase 3.)
 
 ---
 
