@@ -9,7 +9,7 @@
  *   npx tsx scripts/sync-content.ts --stage tmdb       # Stage 1 only: TMDb titles
  *   npx tsx scripts/sync-content.ts --stage sa         # Stage 2 only: SA API availability
  *   npx tsx scripts/sync-content.ts --stage omdb       # Stage 3 only: OMDB ratings
- *   npx tsx scripts/sync-content.ts --stage vectors    # Backfill content_vector for existing titles
+ *   # --stage vectors removed in Phase 1 (use scripts/embeddings/backfill-embeddings.ts)
  *   npx tsx scripts/sync-content.ts --limit 50         # Process max 50 titles per stage
  *   npx tsx scripts/sync-content.ts --stage sa --limit 100
  *
@@ -21,7 +21,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { contentToVector, ALL_DIMENSIONS } from '../src/lib/taste/computeContentVector';
+// Phase 1: contentToVector import removed — embeddings handled by embed-new-titles cron
 
 // ── Load .env manually (no Vite in script context) ───────
 
@@ -211,15 +211,7 @@ async function stageTmdb(maxTitles: number): Promise<number> {
             ? parseInt((item.release_date || item.first_air_date).slice(0, 4), 10)
             : null;
 
-          const contentVector = contentToVector({
-            genreIds,
-            popularity: item.popularity,
-            voteCount: item.vote_count,
-            releaseYear,
-            originalLanguage: item.original_language,
-            runtime: null, // TMDb discover does not return runtime; computed from genres only
-          });
-
+          // Phase 1: embeddings handled by embed-new-titles cron (06:45 UTC)
           const titleData = {
             tmdb_id: item.id,
             media_type: mediaType,
@@ -235,7 +227,6 @@ async function stageTmdb(maxTitles: number): Promise<number> {
             vote_count: item.vote_count,
             popularity: item.popularity,
             original_language: item.original_language,
-            content_vector: ALL_DIMENSIONS.map(d => contentVector[d]),
             last_synced_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           };
@@ -595,101 +586,8 @@ async function stageImdbIds(maxTitles: number): Promise<number> {
   return fetched;
 }
 
-// ── Stage: Backfill content vectors ──────────────────────
-
-async function stageVectors(maxTitles: number): Promise<number> {
-  console.log('\n════════════════════════════════════════');
-  console.log('  STAGE: Content Vector Backfill (B1.4)');
-  console.log('════════════════════════════════════════\n');
-
-  const startTime = Date.now();
-  let totalProcessed = 0;
-  let totalVectorised = 0;
-  let skipped = 0;
-  let errors = 0;
-
-  const PAGE_SIZE = 500;
-  let hasMore = true;
-  const cap = Math.min(maxTitles, 100_000);
-
-  while (hasMore && totalProcessed < cap) {
-    // Always query from offset 0: as vectors are written, rows leave the
-    // `content_vector IS NULL` result set, so the next unprocessed batch
-    // is always at the start of the filtered set.
-    const { data, error } = await supabase
-      .from('titles')
-      .select('tmdb_id, media_type, title, genre_ids, popularity, vote_count, release_year, original_language, runtime')
-      .is('content_vector', null)
-      .order('popularity', { ascending: false })
-      .range(0, PAGE_SIZE - 1);
-
-    if (error) {
-      console.error('  ✗ Query error:', error.message);
-      break;
-    }
-    if (!data || data.length === 0) {
-      hasMore = false;
-      break;
-    }
-
-    // Build upsert batch
-    const batch: { tmdb_id: number; media_type: string; title: string; content_vector: number[] }[] = [];
-    for (const title of data) {
-      if (totalProcessed >= cap) break;
-
-      // Skip rows with null title (NOT NULL constraint would fail on upsert)
-      if (!title.title) {
-        skipped++;
-        totalProcessed++;
-        continue;
-      }
-
-      const genreIds: number[] = title.genre_ids || [];
-
-      try {
-        const vector = contentToVector({
-          genreIds,
-          popularity: title.popularity,
-          voteCount: title.vote_count,
-          releaseYear: title.release_year,
-          originalLanguage: title.original_language,
-          runtime: title.runtime ?? null,
-        });
-        batch.push({
-          tmdb_id: title.tmdb_id,
-          media_type: title.media_type,
-          title: title.title,
-          content_vector: ALL_DIMENSIONS.map(d => vector[d]),
-        });
-        totalVectorised++;
-      } catch {
-        skipped++;
-      }
-      totalProcessed++;
-    }
-
-    if (batch.length > 0) {
-      const { error: upsertError } = await supabase
-        .from('titles')
-        .upsert(batch, { onConflict: 'tmdb_id,media_type' });
-      if (upsertError) {
-        errors++;
-        console.error('  ✗ Upsert error:', upsertError.message);
-      }
-    }
-
-    if (totalProcessed % 2000 === 0 || data.length < PAGE_SIZE) {
-      console.log(`  [${totalProcessed}] ${totalVectorised} vectors written, ${skipped} skipped, ${errors} errors`);
-    }
-
-    if (data.length < PAGE_SIZE) hasMore = false;
-  }
-
-  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  console.log(`\n  ✓ Vector backfill complete: ${totalProcessed} processed, ${totalVectorised} vectorised, ${skipped} skipped, ${errors} errors (${elapsed}s)`);
-
-  return totalVectorised;
-}
+// Phase 1: stageVectors removed — embeddings handled by backfill-embeddings.ts
+// and ongoing embed-new-titles cron
 
 // ── Main ─────────────────────────────────────────────────
 
@@ -708,10 +606,6 @@ async function main() {
 
     if (stageArg === 'imdb') {
       await stageImdbIds(limitArg);
-    }
-
-    if (stageArg === 'vectors') {
-      await stageVectors(limitArg);
     }
 
     if (stageArg === 'all' || stageArg === 'sa') {

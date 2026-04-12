@@ -13,7 +13,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { contentToVector, ALL_DIMENSIONS } from '../_shared/computeContentVector.ts';
+// Phase 1: contentToVector import removed — embeddings handled by embed-new-titles cron
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -157,50 +157,6 @@ async function insertHistoryBatch(events: HistoryEvent[]): Promise<void> {
   }
 }
 
-async function computeAndStoreVector(
-  tmdbId: number,
-  mediaType: string
-): Promise<'vectorised' | 'skipped' | 'error'> {
-  try {
-    const { data } = await supabase
-      .from('titles')
-      .select('genre_ids, popularity, vote_count, release_year, original_language, runtime')
-      .eq('tmdb_id', tmdbId)
-      .eq('media_type', mediaType)
-      .single();
-
-    if (!data) {
-      // Title not yet in the titles table — log gap, skip silently
-      console.log(`Vector gap: (${tmdbId}, ${mediaType}) not found in titles — will be vectorised on next full sync`);
-      return 'skipped';
-    }
-
-    const vector = contentToVector({
-      genreIds: data.genre_ids || [],
-      popularity: data.popularity,
-      voteCount: data.vote_count,
-      releaseYear: data.release_year,
-      originalLanguage: data.original_language,
-      runtime: data.runtime ?? null,
-    });
-
-    const { error: updateError } = await supabase
-      .from('titles')
-      .update({ content_vector: ALL_DIMENSIONS.map(d => vector[d]) })
-      .eq('tmdb_id', tmdbId)
-      .eq('media_type', mediaType);
-
-    if (updateError) {
-      console.error(`Vector update failed for (${tmdbId}, ${mediaType}):`, updateError.message);
-      return 'error';
-    }
-
-    return 'vectorised';
-  } catch {
-    return 'error';
-  }
-}
-
 async function runIncrementalSync(sinceOverride?: number, syncId?: string): Promise<{
   processed: number;
   added: number;
@@ -210,7 +166,7 @@ async function runIncrementalSync(sinceOverride?: number, syncId?: string): Prom
   timedOut: boolean;
 }> {
   const since = sinceOverride || await getLastSyncTimestamp();
-  const stats = { processed: 0, added: 0, updated: 0, removed: 0, errors: 0, timedOut: false, vectorised: 0, vectorGaps: 0 };
+  const stats = { processed: 0, added: 0, updated: 0, removed: 0, errors: 0, timedOut: false };
   const historyEvents: HistoryEvent[] = [];
   const startTime = Date.now();
 
@@ -363,12 +319,7 @@ async function runIncrementalSync(sinceOverride?: number, syncId?: string): Prom
                 if (changeType === 'new') stats.added++;
                 else stats.updated++;
 
-                // Vectorize for new and updated only
-                if (changeType === 'new' || changeType === 'updated') {
-                  const vectorResult = await computeAndStoreVector(tmdbId, mediaType);
-                  if (vectorResult === 'vectorised') stats.vectorised++;
-                  else if (vectorResult === 'skipped') stats.vectorGaps++;
-                }
+                // Phase 1: embeddings handled by embed-new-titles cron (06:45 UTC)
               }
               stats.processed++;
             } catch (err: any) {
@@ -459,7 +410,7 @@ Deno.serve(async (req) => {
         .eq('id', syncId);
     }
 
-    console.log(`Sync complete: processed=${stats.processed} added=${stats.added} updated=${stats.updated} removed=${stats.removed} errors=${stats.errors} vectorised=${stats.vectorised} vectorGaps=${stats.vectorGaps}`);
+    console.log(`Sync complete: processed=${stats.processed} added=${stats.added} updated=${stats.updated} removed=${stats.removed} errors=${stats.errors}`);
 
     return new Response(JSON.stringify({ status: 'ok', ...stats }), {
       headers: { 'Content-Type': 'application/json' },
