@@ -1,35 +1,72 @@
 /**
- * Refresh Service Fingerprints Edge Function (Phase 2)
+ * Refresh Service Fingerprints Edge Function (Phase 2 + 2.5)
  *
  * Recomputes 1536D centroid vectors for each streaming service from their
  * top-N most popular catalogue titles. Runs weekly (Sunday 07:00 UTC) via
  * pg_cron, after the daily content pipeline (sync → enrich → embed) has
  * settled.
  *
- * Service count is small (~10), each requiring only DB reads + vector math.
- * Total runtime is well under the 2-minute Edge Function timeout.
+ * Phase 2.5 addition: Before recomputing fingerprints, runs a TMDb
+ * watch/providers backfill for BBC iPlayer, NOW TV, and Sky Go — three
+ * services absent or unusable from the SA API dataset. This keeps their
+ * catalogues fresh in streaming_availability.
+ *
+ * Timing note on backfill lag: New titles discovered by the weekly backfill
+ * won't be enriched/embedded until the next day's pipeline (Monday 06:30
+ * enrich → 06:45 embed). They contribute to fingerprints the following
+ * Sunday. This lag is acceptable because fingerprints represent service
+ * character (what kind of content a service carries), not breaking content
+ * (what's new this week). If a service's character shifts materially
+ * mid-week, the fingerprint catches up the following Sunday.
+ *
+ * Service count is small (~13), each requiring only DB reads + vector math.
+ * TMDb backfill adds ~5s (18 API calls at 260ms). Total runtime is well
+ * under the 2-minute Edge Function timeout.
  *
  * Deploy: npx supabase functions deploy refresh-service-fingerprints --project-ref fmusugdcnnwiuzkbjquo
  * Manual: curl -X POST https://<project>.supabase.co/functions/v1/refresh-service-fingerprints \
  *           -H "Authorization: Bearer <service_role_key>"
  *
- * Required Supabase Functions env vars (auto-provided):
- *   - SUPABASE_URL
- *   - SUPABASE_SERVICE_ROLE_KEY
+ * Required Supabase Functions env vars:
+ *   - SUPABASE_URL                (auto-provided)
+ *   - SUPABASE_SERVICE_ROLE_KEY   (auto-provided)
+ *   - TMDB_API_KEY                (must be set explicitly — already set for enrich-new-titles)
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { computeCentroid } from '../_shared/centroidMath.ts';
 
-// ── Config ─────────────────────────────────────���─────────
+// ── Config ───────────────────────────────────────────────
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const TMDB_API_KEY = Deno.env.get('TMDB_API_KEY')!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const TOP_N = 150;
 const IN_BATCH_SIZE = 300;
+
+// ── TMDb backfill config (Phase 2.5) ────────────────────
+
+const TMDB_BASE = 'https://api.themoviedb.org/3';
+const TMDB_DELAY = 260; // ms — ~4 req/s, matches all other scripts
+const BACKFILL_MAX_PAGES = 3; // reduced from 5 (local script) to stay under timeout
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Provider IDs verified via WU-0 preflight script against TMDb live API.
+const BACKFILL_PROVIDERS = [
+  { tmdb_provider_id: 38, service_id: 'bbc',   stream_type: 'free' as const },
+  { tmdb_provider_id: 39, service_id: 'now',   stream_type: 'subscription' as const },
+  { tmdb_provider_id: 29, service_id: 'skygo', stream_type: 'free' as const },
+];
+
+const BACKFILL_SEARCH_FALLBACKS: Record<string, (t: string) => string> = {
+  bbc:   (t) => `https://www.bbc.co.uk/iplayer/search?q=${encodeURIComponent(t)}`,
+  now:   (t) => `https://www.nowtv.com/watch/search?q=${encodeURIComponent(t)}`,
+  skygo: (t) => `https://www.google.com/search?q=${encodeURIComponent(t)}+site:sky.com`,
+};
 
 // ── Title fetching (same logic as build script) ──────────
 
@@ -67,7 +104,103 @@ async function fetchTitlesForPairs(
   return results;
 }
 
-// ── Process one service ──────────────────────────────���───
+// ── TMDb backfill (Phase 2.5) ───────────────────────────
+
+async function tmdbFetch(path: string, params: Record<string, string> = {}): Promise<any> {
+  await sleep(TMDB_DELAY);
+  const url = new URL(`${TMDB_BASE}${path}`);
+  url.searchParams.set('api_key', TMDB_API_KEY);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(url.toString());
+    if (res.ok) return res.json();
+    if ((res.status >= 500 || res.status === 429) && attempt < 2) {
+      await sleep(Math.pow(2, attempt) * 1000);
+      continue;
+    }
+    throw new Error(`TMDb ${res.status}: ${path}`);
+  }
+}
+
+async function backfillTmdbProviders(): Promise<{ titles_upserted: number; sa_rows_inserted: number }> {
+  let titlesUpserted = 0;
+  let saRowsInserted = 0;
+
+  for (const provider of BACKFILL_PROVIDERS) {
+    const deepLinkFn = BACKFILL_SEARCH_FALLBACKS[provider.service_id];
+
+    for (const mediaType of ['movie', 'tv']) {
+      let page = 1;
+      let totalPages = 1;
+
+      while (page <= totalPages && page <= BACKFILL_MAX_PAGES) {
+        const data = await tmdbFetch(`/discover/${mediaType}`, {
+          watch_region: 'GB',
+          with_watch_providers: provider.tmdb_provider_id.toString(),
+          sort_by: 'popularity.desc',
+          page: page.toString(),
+        });
+
+        totalPages = Math.min(data.total_pages || 1, 500);
+
+        for (const item of data.results || []) {
+          const title = item.title || item.name || 'Untitled';
+          const releaseYear = (item.release_date || item.first_air_date)
+            ? parseInt((item.release_date || item.first_air_date).slice(0, 4), 10)
+            : null;
+
+          // Upsert title
+          const { error: titleErr } = await supabase
+            .from('titles')
+            .upsert({
+              tmdb_id: item.id,
+              media_type: mediaType,
+              title,
+              original_title: item.original_title || item.original_name,
+              overview: item.overview,
+              release_date: item.release_date || item.first_air_date || null,
+              release_year: releaseYear,
+              poster_path: item.poster_path,
+              backdrop_path: item.backdrop_path,
+              genre_ids: item.genre_ids || [],
+              vote_average: item.vote_average,
+              vote_count: item.vote_count,
+              popularity: item.popularity,
+              original_language: item.original_language,
+              last_synced_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'tmdb_id,media_type' });
+
+          if (!titleErr) titlesUpserted++;
+
+          // Insert streaming_availability (skip duplicates via 23505)
+          const { error: saErr } = await supabase
+            .from('streaming_availability')
+            .insert({
+              tmdb_id: item.id,
+              media_type: mediaType,
+              service_id: provider.service_id,
+              sa_service_id: 'tmdb-backfill',
+              stream_type: provider.stream_type,
+              deep_link_url: deepLinkFn(title),
+              quality: 'default',
+              last_verified_at: new Date().toISOString(),
+            });
+
+          if (!saErr) saRowsInserted++;
+          // 23505 (unique_violation) is expected on re-runs — skip silently
+        }
+
+        page++;
+      }
+    }
+  }
+
+  return { titles_upserted: titlesUpserted, sa_rows_inserted: saRowsInserted };
+}
+
+// ── Process one service ─────────────────────────────────
 
 async function processService(serviceId: string): Promise<{ title_count: number } | null> {
   // Fetch (tmdb_id, media_type) pairs from streaming_availability
@@ -163,6 +296,11 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Phase 2.5: Backfill TMDb provider data before recomputing fingerprints
+    console.log('Phase 2.5 backfill: refreshing TMDb provider catalogues...');
+    const backfillStats = await backfillTmdbProviders();
+    console.log(`Phase 2.5 backfill done: ${backfillStats.titles_upserted} titles upserted, ${backfillStats.sa_rows_inserted} SA rows inserted`);
+
     // Get distinct services
     const { data: serviceRows, error: serviceErr } = await supabase
       .from('streaming_availability')
@@ -191,7 +329,7 @@ Deno.serve(async (req) => {
     }
 
     console.log(`refresh-service-fingerprints done: processed=${processed} failed=${failed}`);
-    return new Response(JSON.stringify({ status: 'ok', services_processed: processed, services_failed: failed, details }), {
+    return new Response(JSON.stringify({ status: 'ok', services_processed: processed, services_failed: failed, details, backfill: backfillStats }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {

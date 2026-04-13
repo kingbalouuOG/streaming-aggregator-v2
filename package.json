@@ -18,6 +18,9 @@
     "backfill:embeddings": "npx tsx scripts/embeddings/backfill-embeddings.ts",
     "build:fingerprints": "npx tsx scripts/fingerprints/build-service-fingerprints.ts",
     "eval:fingerprints": "npx tsx scripts/fingerprints/eval-service-discrimination.ts",
+    "check:cosine-drift": "npx tsx scripts/fingerprints/check-cosine-drift.ts",
+    "preflight:tmdb-providers": "npx tsx scripts/fingerprints/preflight-tmdb-providers.ts",
+    "backfill:tmdb-providers": "npx tsx scripts/fingerprints/backfill-tmdb-providers.ts",
     "test:fingerprints": "npx tsx scripts/fingerprints/__tests__/centroidMath.test.ts"
   },
   "dependencies": {
