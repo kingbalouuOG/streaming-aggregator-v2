@@ -67,7 +67,9 @@ interface BaselinePair {
 }
 
 function parseBaselineMatrix(): BaselinePair[] {
-  const reportPath = resolve(__dirname, '..', '..', 'docs', 'v2', 'phase-2-service-discrimination-eval.md');
+  // Read from the Phase 2 baseline snapshot, NOT the current eval report
+  // (eval-service-discrimination.ts overwrites the report on each run).
+  const reportPath = resolve(__dirname, '..', '..', 'docs', 'v2', 'phase-2-service-discrimination-baseline.md');
   const content = readFileSync(reportPath, 'utf-8');
   const lines = content.split('\n');
 
