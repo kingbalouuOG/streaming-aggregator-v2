@@ -1,18 +1,24 @@
 /**
- * Phase 2 — Build Service Fingerprints
+ * Phase 2 / 2.6 — Build Service Fingerprints
  *
  * Computes a 1536D centroid vector for each streaming service from the
  * top-N most popular catalogue titles (subscription/free only). Stores
- * results in the `service_fingerprints` table (migration 020).
+ * results in the `service_fingerprints` table (migration 020 + 022).
+ *
+ * Supports two variants (Phase 2.6):
+ *   v1_popularity   — arithmetic mean of top-N embeddings (default)
+ *   v2_exclusivity  — weighted mean where weight_i = 1/N_services
+ *                     (titles exclusive to fewer services contribute more)
  *
  * Runs from a developer laptop. Resume-safe via checkpoint + idempotent
- * upsert. Service count is small (~10), so a full re-run takes seconds.
+ * upsert. Service count is small (~13), so a full re-run takes seconds.
  *
  * Usage:
- *   npx tsx scripts/fingerprints/build-service-fingerprints.ts              # full run
- *   npx tsx scripts/fingerprints/build-service-fingerprints.ts --dry-run    # report counts, no writes
- *   npx tsx scripts/fingerprints/build-service-fingerprints.ts --limit 3    # process at most 3 services
- *   npx tsx scripts/fingerprints/build-service-fingerprints.ts --top 200    # top-200 titles per service
+ *   npx tsx scripts/fingerprints/build-service-fingerprints.ts                        # v1 full run
+ *   npx tsx scripts/fingerprints/build-service-fingerprints.ts --variant=exclusivity  # v2 exclusivity
+ *   npx tsx scripts/fingerprints/build-service-fingerprints.ts --dry-run              # report counts, no writes
+ *   npx tsx scripts/fingerprints/build-service-fingerprints.ts --limit 3              # process at most 3 services
+ *   npx tsx scripts/fingerprints/build-service-fingerprints.ts --top 200              # top-200 titles per service
  *
  * Prerequisites (.env):
  *   VITE_SUPABASE_URL
@@ -24,7 +30,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
-import { computeCentroid } from '../../supabase/functions/_shared/centroidMath.ts';
+import { computeCentroid, computeWeightedCentroid } from '../../supabase/functions/_shared/centroidMath.ts';
 
 // ── Load .env manually (no Vite in script context) ───────
 
@@ -64,6 +70,8 @@ const limitServices = args.includes('--limit')
 const topN = args.includes('--top')
   ? parseInt(args[args.indexOf('--top') + 1], 10)
   : 150;
+const variantArg = args.find(a => a.startsWith('--variant='));
+const variant = variantArg?.split('=')[1] === 'exclusivity' ? 'v2_exclusivity' : 'v1_popularity';
 
 // ── Checkpoint + failures ────────────────────────────────
 
@@ -74,6 +82,7 @@ interface Checkpoint {
   completed_services: string[];
   started_at: string;
   total_services: number;
+  variant?: string; // Phase 2.6: prevents cross-variant checkpoint contamination
 }
 
 function loadCheckpoint(): Checkpoint | null {
@@ -161,10 +170,55 @@ async function fetchTitlesForPairs(
   return results;
 }
 
+// ── Exclusivity map (Phase 2.6) ─────────────────────────
+
+/**
+ * Build a map of title → number of services carrying it.
+ * Only counts subscription/free rows (matches fingerprint domain).
+ * Key format: "tmdb_id:media_type"
+ */
+async function buildExclusivityMap(): Promise<Map<string, number>> {
+  const titleServices = new Map<string, Set<string>>();
+  let offset = 0;
+  const PAGE = 1000;
+
+  console.log('  loading exclusivity data...');
+  while (true) {
+    const { data, error } = await supabase
+      .from('streaming_availability')
+      .select('tmdb_id, media_type, service_id')
+      .in('stream_type', ['subscription', 'free'])
+      .range(offset, offset + PAGE - 1);
+
+    if (error) throw new Error(`exclusivity query: ${error.message}`);
+    if (!data || data.length === 0) break;
+
+    for (const row of data) {
+      const key = `${row.tmdb_id}:${row.media_type}`;
+      const services = titleServices.get(key) || new Set<string>();
+      services.add(row.service_id);
+      titleServices.set(key, services);
+    }
+
+    if (data.length < PAGE) break;
+    offset += PAGE;
+  }
+
+  // Convert Set<string> → count
+  const map = new Map<string, number>();
+  for (const [key, services] of titleServices) {
+    map.set(key, services.size);
+  }
+
+  console.log(`  exclusivity map: ${map.size} titles loaded`);
+  return map;
+}
+
 // ── Main ─────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  console.log('Phase 2 — Service Fingerprint Build');
+  console.log('Service Fingerprint Build');
+  console.log(`  variant: ${variant}`);
   console.log(`  top-N per service: ${topN}`);
   console.log(`  mode: ${dryRun ? 'DRY RUN' : 'LIVE'}`);
   console.log();
@@ -184,9 +238,13 @@ async function main(): Promise<void> {
   console.log(`  services found: ${allServices.length} (${allServices.join(', ')})`);
   console.log();
 
-  // Resume from checkpoint
+  // Resume from checkpoint (variant-isolated — clear if variant changed)
   const checkpoint = loadCheckpoint();
-  const completedSet = new Set(checkpoint?.completed_services || []);
+  const variantMatch = checkpoint?.variant === variant;
+  const completedSet = new Set(variantMatch ? (checkpoint?.completed_services || []) : []);
+  if (checkpoint && !variantMatch) {
+    console.log(`  checkpoint variant mismatch (was ${checkpoint.variant}, now ${variant}) — starting fresh`);
+  }
   const services = allServices
     .filter(s => !completedSet.has(s))
     .slice(0, limitServices);
@@ -198,9 +256,16 @@ async function main(): Promise<void> {
 
   const cp: Checkpoint = {
     completed_services: [...completedSet],
-    started_at: checkpoint?.started_at || new Date().toISOString(),
+    started_at: (variantMatch && checkpoint?.started_at) || new Date().toISOString(),
     total_services: allServices.length,
+    variant,
   };
+
+  // Build exclusivity map if needed (Phase 2.6)
+  let exclusivityMap: Map<string, number> | null = null;
+  if (variant === 'v2_exclusivity') {
+    exclusivityMap = await buildExclusivityMap();
+  }
 
   const startTime = Date.now();
   let processed = 0;
@@ -281,23 +346,40 @@ async function main(): Promise<void> {
         titleIds.push(t.id);
       }
 
-      const centroid = computeCentroid(vectors);
+      let centroid: number[];
+      if (variant === 'v2_exclusivity' && exclusivityMap) {
+        const weights = topTitles.map(t => {
+          const key = `${t.tmdb_id}:${t.media_type}`;
+          const serviceCount = exclusivityMap.get(key);
+          if (serviceCount === undefined || serviceCount < 1) {
+            throw new Error(
+              `Data integrity error: title ${t.tmdb_id} (${t.media_type}) has no exclusivity count. ` +
+              `It should appear in streaming_availability for at least this service (N >= 1).`
+            );
+          }
+          return 1 / serviceCount;
+        });
+        centroid = computeWeightedCentroid(vectors, weights);
+      } else {
+        centroid = computeCentroid(vectors);
+      }
 
       if (dryRun) {
         console.log(`    centroid computed (dry run — not writing)`);
       } else {
-        // Step 7: Upsert into service_fingerprints
+        // Step 7: Upsert into service_fingerprints (PK includes variant since migration 022)
         const vectorStr = `[${centroid.join(',')}]`;
         const { error: upsertErr } = await supabase
           .from('service_fingerprints')
           .upsert({
             service_id: serviceId,
             region: 'GB',
+            variant,
             centroid: vectorStr,
             title_count: topTitles.length,
             source_title_ids: titleIds,
             computed_at: new Date().toISOString(),
-          }, { onConflict: 'service_id,region' });
+          }, { onConflict: 'service_id,region,variant' });
 
         if (upsertErr) {
           throw new Error(`upsert for ${serviceId}: ${upsertErr.message}`);

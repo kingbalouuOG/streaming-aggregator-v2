@@ -87,3 +87,7 @@ scripts/embeddings/.failures.jsonl
 scripts/fingerprints/.checkpoint.json
 scripts/fingerprints/.checkpoint.json.tmp
 scripts/fingerprints/.failures.jsonl
+
+# Phase 2.5 TMDb backfill state (local only)
+scripts/fingerprints/.backfill-checkpoint.json
+scripts/fingerprints/.backfill-failures.jsonl
