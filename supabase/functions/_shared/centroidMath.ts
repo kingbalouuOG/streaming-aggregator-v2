@@ -10,6 +10,7 @@
  * Imported by:
  *   - scripts/fingerprints/build-service-fingerprints.ts (Node.js)
  *   - scripts/fingerprints/eval-service-discrimination.ts (Node.js)
+ *   - scripts/fingerprints/eval-synthetic-coldstart.ts (Node.js)
  *   - supabase/functions/refresh-service-fingerprints/index.ts (Deno)
  */
 
@@ -28,6 +29,35 @@ export function computeCentroid(vectors: number[][]): number[] {
     for (let i = 0; i < dim; i++) result[i] += v[i];
   }
   for (let i = 0; i < dim; i++) result[i] /= vectors.length;
+  return result;
+}
+
+/**
+ * Weighted element-wise mean of N vectors. Each vector contributes
+ * proportionally to its weight. Used by the exclusivity-weighted
+ * fingerprint variant (Phase 2.6) where weight_i = 1 / N_services.
+ *
+ * Returns the raw (unnormalised) centroid — same convention as computeCentroid.
+ */
+export function computeWeightedCentroid(vectors: number[][], weights: number[]): number[] {
+  if (vectors.length === 0) {
+    throw new Error('computeWeightedCentroid: cannot compute centroid of zero vectors');
+  }
+  if (vectors.length !== weights.length) {
+    throw new Error('computeWeightedCentroid: vectors and weights must have same length');
+  }
+  const dim = vectors[0].length;
+  const result = new Array(dim).fill(0);
+  let weightSum = 0;
+  for (let k = 0; k < vectors.length; k++) {
+    const w = weights[k];
+    weightSum += w;
+    for (let i = 0; i < dim; i++) result[i] += w * vectors[k][i];
+  }
+  if (weightSum === 0) {
+    throw new Error('computeWeightedCentroid: total weight is zero');
+  }
+  for (let i = 0; i < dim; i++) result[i] /= weightSum;
   return result;
 }
 

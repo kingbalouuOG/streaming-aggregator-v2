@@ -9,7 +9,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { computeCentroid, cosineSimilarity, l2Norm } from '../../../supabase/functions/_shared/centroidMath.ts';
+import { computeCentroid, computeWeightedCentroid, cosineSimilarity, l2Norm } from '../../../supabase/functions/_shared/centroidMath.ts';
 
 let passed = 0;
 let failed = 0;
@@ -54,6 +54,46 @@ test('centroid of opposing vectors returns midpoint (zero)', () => {
 
 test('centroid throws on empty input', () => {
   assert.throws(() => computeCentroid([]), /zero vectors/);
+});
+
+// ── computeWeightedCentroid ────────────────────────────────────
+
+test('weighted centroid with equal weights matches unweighted', () => {
+  const vecs = [[1, 2, 3], [4, 5, 6]];
+  const unweighted = computeCentroid(vecs);
+  const weighted = computeWeightedCentroid(vecs, [1, 1]);
+  for (let i = 0; i < unweighted.length; i++) {
+    assert.ok(Math.abs(weighted[i] - unweighted[i]) < 1e-10, `dim ${i}`);
+  }
+});
+
+test('weighted centroid of single vector returns that vector regardless of weight', () => {
+  const v = [3, 7, -2];
+  const result = computeWeightedCentroid([v], [5]);
+  assert.deepStrictEqual(result, [3, 7, -2]);
+});
+
+test('weighted centroid with weight [1, 0] returns first vector', () => {
+  const result = computeWeightedCentroid([[10, 20], [30, 40]], [1, 0]);
+  assert.deepStrictEqual(result, [10, 20]);
+});
+
+test('weighted centroid applies weights correctly', () => {
+  // weight 3:1 → centroid should be 3/4 of v1 + 1/4 of v2
+  const result = computeWeightedCentroid([[0, 0], [4, 8]], [3, 1]);
+  assert.deepStrictEqual(result, [1, 2]); // (3*0 + 1*4)/4, (3*0 + 1*8)/4
+});
+
+test('weighted centroid throws on mismatched lengths', () => {
+  assert.throws(() => computeWeightedCentroid([[1, 2]], [1, 2]), /same length/);
+});
+
+test('weighted centroid throws on empty input', () => {
+  assert.throws(() => computeWeightedCentroid([], []), /zero vectors/);
+});
+
+test('weighted centroid throws on zero total weight', () => {
+  assert.throws(() => computeWeightedCentroid([[1, 2]], [0]), /total weight is zero/);
 });
 
 // ── cosineSimilarity ───────────────────────────────────────────

@@ -257,17 +257,18 @@ async function processService(serviceId: string): Promise<{ title_count: number 
   const centroid = computeCentroid(vectors);
   const vectorStr = `[${centroid.join(',')}]`;
 
-  // Upsert
+  // Upsert (PK is service_id, region, variant since migration 022)
   const { error: upsertErr } = await supabase
     .from('service_fingerprints')
     .upsert({
       service_id: serviceId,
       region: 'GB',
+      variant: 'v1_popularity',
       centroid: vectorStr,
       title_count: topTitles.length,
       source_title_ids: titleIds,
       computed_at: new Date().toISOString(),
-    }, { onConflict: 'service_id,region' });
+    }, { onConflict: 'service_id,region,variant' });
 
   if (upsertErr) throw new Error(`upsert ${serviceId}: ${upsertErr.message}`);
 
