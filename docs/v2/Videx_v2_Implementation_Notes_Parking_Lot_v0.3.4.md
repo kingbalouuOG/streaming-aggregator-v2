@@ -576,7 +576,33 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 
 **Prerequisite for Phase 3:** Phase 3's onboarding cold-start (IN-301, OnboardingFlow.tsx) blends fingerprints from selected services. If BBC/NOW/Sky Go have no fingerprints, the blend is incomplete and the cold-start quality is degraded for users of those services.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Done (Phase 2.5, 2026-04-12). 600 titles backfilled (200 per service), 13 service fingerprints built. See `docs/v2/phase-summaries/phase-2.5-summary.md`.
+
+---
+
+## Phase 2.6 — Fingerprint Signal Refinement
+
+*(Evaluate whether exclusivity-weighted centroids produce sharper discrimination than popularity-ranked arithmetic means)*
+
+### IN-260: Exclusivity-weighted fingerprint A/B evaluation
+
+**Source:** Phase 2 discrimination eval — high pairwise cosine between mainstream services raised the question of whether alternative weighting could improve discrimination.
+
+**Detail:** Built v2_exclusivity centroids (weight_i = 1/N_services, titles exclusive to fewer services weighted more). Evaluated via bottom-half variance gate: v2 must improve variance for >= 8 of 13 services.
+
+**Result:** FAIL (5/13). v2 improved niche services (apple, bbc, mubi, plutotv, skygo) but degraded 8 mainstream services. Mean delta -0.000014 (noise). Exclusivity weighting trades discrimination between service types — not a universal improvement.
+
+**Decision:** Ship v1_popularity. See `docs/v2/phase-2-6-decision.md`.
+
+**Status:** ✅ Done (Phase 2.6, 2026-04-13). Exclusivity weighting discharged as a tuning option. Do not re-propose without new information.
+
+### IN-261: Curation-based fingerprint refinement
+
+**Source:** Phase 2.6 finding — exclusivity weighting doesn't help mainstream services because their "exclusive" titles at the top-150 boundary are arbitrary, not distinctive.
+
+**Detail:** An alternative approach: curated originals lists per mainstream service (e.g., Netflix Originals, Disney+ Originals) to boost titles that genuinely represent a service's editorial character.
+
+**Status:** ⏳ Parked. Revisit only if Phase 3 cold-start testing shows mainstream-service users get weak recommendations.
 
 ---
 
