@@ -36,7 +36,9 @@ export function useRecommendations(
         .map(id => providerIdToServiceId(id))
         .filter(Boolean) as string[];
 
+      console.log('[useRecommendations] serviceIds:', serviceIds, 'from providerIds:', providerIds);
       const { dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds } = await buildFilterSets(serviceIds);
+      console.log('[useRecommendations] availableTmdbIds:', availableTmdbIds.size, 'vector length:', profile.tasteVector.length);
 
       // Determine media type filter from fetchMovies/fetchTV
       const mediaTypeFilter = fetchMovies && !fetchTV ? 'movie' as const
@@ -53,6 +55,7 @@ export function useRecommendations(
         limit: 20,
       });
 
+      console.log('[useRecommendations] results:', results.length);
       setItems(results);
     } catch (error) {
       console.error('[useRecommendations] Error:', error);
