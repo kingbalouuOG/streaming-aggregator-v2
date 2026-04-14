@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
@@ -18,13 +18,16 @@ import {
   Bookmark,
   Eye,
   Film,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { OnboardingData } from "./OnboardingFlow";
 import { useTheme } from "./ThemeContext";
 import { PLATFORMS } from "./platformLogos";
-import { TASTE_CLUSTERS } from "@/lib/taste/tasteClusters";
+import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste/tasteClusters";
+import { getSliderState, saveSliderState } from "@/lib/taste-v2/tasteProfileV2";
+import { DEFAULT_SLIDERS, type SliderState } from "@/lib/taste-v2/types";
 
 const allServices = PLATFORMS;
 
@@ -33,6 +36,8 @@ type ProfileSubPage =
   | 'landing'
   | 'account'
   | 'services'
+  | 'taste'
+  | 'tune'
   | 'appearance';
 
 interface ProfilePageProps {
@@ -82,6 +87,22 @@ export function ProfilePage(props: ProfilePageProps) {
             onUpdate={props.onUpdateServices}
             onBack={goBack}
           />
+        </motion.div>
+      )}
+      {subPage === 'taste' && (
+        <motion.div key="taste" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 100, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}>
+          <YourTastePage
+            selectedClusters={props.userProfile?.clusters || []}
+            onUpdateClusters={props.onUpdateClusters}
+            onBack={goBack}
+          />
+        </motion.div>
+      )}
+      {subPage === 'tune' && (
+        <motion.div key="tune" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 100, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}>
+          <TuneRecommendationsPage onBack={goBack} />
         </motion.div>
       )}
       {subPage === 'appearance' && (
@@ -166,8 +187,8 @@ function ProfileLanding({
       <ActionRow icon={<Tv2 className="w-4.5 h-4.5" />} title="Streaming Services" subtitle={`${connectedCount} services connected`} onClick={() => onNavigate('services')} />
 
       <SectionLabel label="PERSONALISATION" />
-      <ActionRow icon={<Sparkles className="w-4.5 h-4.5" />} title="Your Taste" subtitle={topClusterNames || 'Set up your taste profile'} onClick={() => {}} />
-      <ActionRow icon={<SlidersHorizontal className="w-4.5 h-4.5" />} title="Tune Recommendations" subtitle="Balanced across all sliders" onClick={() => {}} />
+      <ActionRow icon={<Sparkles className="w-4.5 h-4.5" />} title="Your Taste" subtitle={topClusterNames || 'Set up your taste profile'} onClick={() => onNavigate('taste')} />
+      <ActionRow icon={<SlidersHorizontal className="w-4.5 h-4.5" />} title="Tune Recommendations" subtitle="Balanced across all sliders" onClick={() => onNavigate('tune')} />
 
       <SectionLabel label="SETTINGS" />
       <ActionRow icon={<Palette className="w-4.5 h-4.5" />} title="Appearance" subtitle="" onClick={() => onNavigate('appearance')} />
@@ -358,6 +379,322 @@ function AppearancePage({ onBack }: { onBack: () => void }) {
       <p className="text-muted-foreground text-[12px] mt-4">
         Changes apply immediately. System preference will automatically switch between light and dark based on your device settings.
       </p>
+    </SubPageShell>
+  );
+}
+
+// ═════════════════════════════════════════════════════════
+// ── Your Taste Sub-Page ─────────────────────────────────
+// ═════════════════════════════════════════════════════════
+function YourTastePage({
+  selectedClusters: initialClusters,
+  onUpdateClusters,
+  onBack,
+}: {
+  selectedClusters: string[];
+  onUpdateClusters?: (clusters: string[]) => Promise<void>;
+  onBack: () => void;
+}) {
+  const [showRefine, setShowRefine] = useState(false);
+  const [showRetakeConfirm, setShowRetakeConfirm] = useState(false);
+  const [clusters, setClusters] = useState(initialClusters);
+
+  const resolvedClusters = clusters
+    .map(id => TASTE_CLUSTERS.find(c => c.id === id))
+    .filter(Boolean) as typeof TASTE_CLUSTERS;
+
+  // Build prose summary
+  const top3 = resolvedClusters.slice(0, 3);
+  const summaryText = top3.length >= 2
+    ? `You tend to enjoy ${top3[0].adjective} ${top3[0].mood}, ${top3[1].adjective} ${top3[1].mood.split(' and ')[0]}, and ${top3[2]?.mood || top3[1].mood}.`
+    : top3.length === 1
+      ? `You tend to enjoy ${top3[0].adjective} stories with ${top3[0].mood}.`
+      : '';
+
+  const handleSaveRefined = async (newClusters: string[]) => {
+    setClusters(newClusters);
+    setShowRefine(false);
+    await onUpdateClusters?.(newClusters);
+    toast.success("Preferences updated");
+  };
+
+  if (showRefine) {
+    return (
+      <RefinePreferencesPage
+        initialClusters={clusters}
+        onSave={handleSaveRefined}
+        onBack={() => setShowRefine(false)}
+      />
+    );
+  }
+
+  return (
+    <SubPageShell title="Your Taste" onBack={onBack}>
+      <h3 className="text-foreground text-[16px] mb-1" style={{ fontWeight: 700 }}>Your taste profile</h3>
+      {summaryText && (
+        <p className="text-muted-foreground text-[13px] mb-4 leading-relaxed">{summaryText}</p>
+      )}
+
+      {/* Cluster chips */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        {resolvedClusters.map(c => (
+          <span key={c.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/15 text-foreground text-[13px]" style={{ fontWeight: 500 }}>
+            <span className="text-[16px]">{c.emoji}</span>
+            {c.name}
+          </span>
+        ))}
+      </div>
+
+      {/* Actions */}
+      <button
+        onClick={() => setShowRefine(true)}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-white text-[14px] mb-3 transition-colors hover:bg-primary/90"
+        style={{ fontWeight: 600 }}
+      >
+        <Sparkles className="w-4 h-4" />
+        Refine preferences
+      </button>
+
+      <button
+        onClick={() => setShowRetakeConfirm(true)}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-secondary text-muted-foreground text-[14px] border transition-colors hover:bg-secondary/80 hover:text-foreground"
+        style={{ fontWeight: 600, borderColor: "var(--border-subtle)" }}
+      >
+        <RotateCcw className="w-4 h-4" />
+        Retake taste profile
+      </button>
+
+      {/* Retake confirmation modal */}
+      <AnimatePresence>
+        {showRetakeConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60"
+            onClick={() => setShowRetakeConfirm(false)}
+          >
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="w-full max-w-md bg-card rounded-t-2xl p-6 mb-0"
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 className="text-foreground text-[18px] mb-2" style={{ fontWeight: 700 }}>
+                Retake taste profile?
+              </h3>
+              <p className="text-muted-foreground text-[14px] mb-5">
+                Retaking will reset your current taste profile. Are you sure?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowRetakeConfirm(false)}
+                  className="flex-1 py-3 rounded-xl bg-secondary text-muted-foreground text-[14px] transition-colors hover:bg-secondary/80"
+                  style={{ fontWeight: 600 }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowRetakeConfirm(false);
+                    // Retake = open refine preferences (Steps 3-5 of onboarding in future)
+                    setShowRefine(true);
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-primary text-white text-[14px] transition-colors hover:bg-primary/90"
+                  style={{ fontWeight: 600 }}
+                >
+                  Retake
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </SubPageShell>
+  );
+}
+
+// ═════════════════════════════════════════════════════════
+// ── Refine Preferences (cluster selection grid) ─────────
+// ═════════════════════════════════════════════════════════
+function RefinePreferencesPage({
+  initialClusters,
+  onSave,
+  onBack,
+}: {
+  initialClusters: string[];
+  onSave: (clusters: string[]) => void;
+  onBack: () => void;
+}) {
+  const [selected, setSelected] = useState(initialClusters);
+  const atLimit = selected.length >= MAX_CLUSTERS;
+
+  const toggle = (id: string) => {
+    setSelected(prev => {
+      if (prev.includes(id)) return prev.filter(c => c !== id);
+      if (prev.length >= MAX_CLUSTERS) return prev;
+      return [...prev, id];
+    });
+  };
+
+  return (
+    <SubPageShell title="Refine Preferences" onBack={onBack}>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-muted-foreground text-[13px]">
+          Select the genres that best match your taste
+        </p>
+        {selected.length > 0 && (
+          <span className="bg-primary text-white text-[12px] px-2 py-0.5 rounded-full" style={{ fontWeight: 600 }}>
+            {selected.length} selected
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5 mb-4">
+        {TASTE_CLUSTERS.map(cluster => {
+          const isSelected = selected.includes(cluster.id);
+          const isDisabled = atLimit && !isSelected;
+          return (
+            <button
+              key={cluster.id}
+              onClick={() => !isDisabled && toggle(cluster.id)}
+              className={`relative flex items-center gap-3 py-3 rounded-xl border text-left transition-all duration-200 ${
+                isSelected
+                  ? "border-primary/50 bg-primary/10"
+                  : isDisabled
+                    ? "bg-secondary/20 opacity-40 cursor-not-allowed"
+                    : "bg-secondary/40 hover:bg-secondary/60"
+              }`}
+              style={{ paddingLeft: '0.75rem', paddingRight: '2.25rem', borderColor: isSelected ? undefined : "var(--border-subtle)" }}
+            >
+              <span className="text-[20px] shrink-0">{cluster.emoji}</span>
+              <span className={`text-[13px] ${isSelected ? "text-foreground" : "text-muted-foreground"}`}
+                style={{ fontWeight: isSelected ? 600 : 500 }}>
+                {cluster.name}
+              </span>
+              {isSelected && (
+                <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                  <Check className="w-2.5 h-2.5 text-white" />
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <button
+        onClick={() => onSave(selected)}
+        disabled={selected.length < MIN_CLUSTERS}
+        className={`w-full py-3 rounded-xl text-[14px] transition-colors ${
+          selected.length >= MIN_CLUSTERS
+            ? "bg-primary text-white hover:bg-primary/90"
+            : "bg-secondary text-muted-foreground cursor-not-allowed"
+        }`}
+        style={{ fontWeight: 600 }}
+      >
+        Save Preferences
+      </button>
+    </SubPageShell>
+  );
+}
+
+// ═════════════════════════════════════════════════════════
+// ── Tune Recommendations Sub-Page ───────────────────────
+// ═════════════════════════════════════════════════════════
+function TuneRecommendationsPage({ onBack }: { onBack: () => void }) {
+  const [sliders, setSliders] = useState<SliderState>({ ...DEFAULT_SLIDERS });
+  const [loaded, setLoaded] = useState(false);
+  const saveTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load slider state from DB on mount
+  useEffect(() => {
+    getSliderState().then(s => {
+      setSliders(s);
+      setLoaded(true);
+    });
+  }, []);
+
+  // Debounced save on slider change
+  const updateSlider = useCallback((key: keyof SliderState, value: number) => {
+    setSliders(prev => {
+      const updated = { ...prev, [key]: value };
+      // Debounce save by 500ms
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
+        saveSliderState(updated).catch(err =>
+          console.error('[TuneRecommendations] save failed:', err)
+        );
+      }, 500);
+      return updated;
+    });
+  }, []);
+
+  const resetSliders = useCallback(() => {
+    setSliders({ ...DEFAULT_SLIDERS });
+    saveSliderState({ ...DEFAULT_SLIDERS }).catch(() => {});
+    toast.success("Sliders reset to defaults");
+  }, []);
+
+  const sliderConfig = [
+    { key: 'catalogueAge' as const, left: 'New releases', right: 'Best match regardless of age' },
+    { key: 'comfortZone' as const, left: 'Stick with what I like', right: 'Surprise me' },
+    { key: 'contentMix' as const, left: 'Focus on films', right: 'Focus on TV series' },
+    { key: 'variety' as const, left: 'Finish what I start', right: 'Try lots of things' },
+  ];
+
+  // Determine "Balanced" label display
+  const isBalanced = (key: keyof SliderState) => {
+    const v = sliders[key];
+    if (key === 'comfortZone') return Math.abs(v - DEFAULT_SLIDERS.comfortZone) < 0.02;
+    return Math.abs(v - 0.5) < 0.02;
+  };
+
+  return (
+    <SubPageShell title="Tune Your Recommendations" onBack={onBack}>
+      <p className="text-muted-foreground text-[13px] mb-5">
+        Adjust how Videx serves your recommendations. Changes take effect immediately.
+      </p>
+
+      {!loaded ? (
+        <div className="space-y-8">
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="h-16 rounded-xl bg-secondary animate-pulse" />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {sliderConfig.map(({ key, left, right }) => (
+            <div key={key}>
+              <div className="flex justify-between text-[12px] text-muted-foreground mb-2">
+                <span>{left}</span>
+                <span>{right}</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(sliders[key] * 100)}
+                onChange={e => updateSlider(key, parseInt(e.target.value, 10) / 100)}
+                className="w-full h-1.5 rounded-full appearance-none bg-secondary cursor-pointer accent-primary"
+              />
+              <p className="text-center text-[11px] text-primary mt-1" style={{ fontWeight: 500 }}>
+                {isBalanced(key) ? 'Balanced' : ''}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-6 pt-4 border-t" style={{ borderColor: "var(--border-subtle)" }}>
+        <button
+          onClick={resetSliders}
+          className="text-muted-foreground text-[13px] hover:text-foreground transition-colors"
+        >
+          Reset to defaults
+        </button>
+      </div>
     </SubPageShell>
   );
 }
