@@ -14,20 +14,21 @@ import {
 import { serviceIdToProviderId } from '@/lib/adapters/platformAdapter';
 import { UK_PROVIDERS_ARRAY } from '@/lib/constants/platforms';
 import type { ServiceId } from '@/components/platformLogos';
-import { initializeFromClusters, saveQuizResults, getTasteProfile, saveTasteProfile } from '@/lib/storage/tasteProfile';
-import type { QuizAnswer } from '@/lib/storage/tasteProfile';
-import type { TasteVector } from '@/lib/taste/tasteVector';
-import { clampVector, ALL_DIMENSIONS } from '@/lib/taste/tasteVector';
-import { computeClusterSeedVector, deriveHomeGenres } from '@/lib/taste/tasteClusters';
+import { TASTE_CLUSTERS } from '@/lib/taste/tasteClusters';
+import { bootstrapTasteVector } from '@/lib/taste-v2/bootstrap';
+import { saveV2TasteVector, saveSliderState } from '@/lib/taste-v2/tasteProfileV2';
+import { DEFAULT_SLIDERS } from '@/lib/taste-v2/types';
+import type { BootstrapSource, SliderState } from '@/lib/taste-v2/types';
 import { debug } from '@/lib/debugLogger';
 
 export interface OnboardingPayload {
   name: string;
   email: string;
-  services: string[];   // ServiceId strings
-  clusters: string[];   // taste cluster IDs
-  quizAnswers?: QuizAnswer[];
-  tasteVector?: TasteVector;
+  services: string[];             // ServiceId strings
+  clusters: string[];             // taste cluster IDs
+  watchedTitles?: { tmdbId: number; mediaType: 'movie' | 'tv' }[];
+  sliders?: SliderState;
+  onboardingStartTime?: number;
 }
 
 export function useUserPreferences(currentUserId?: string | null) {
@@ -48,7 +49,6 @@ export function useUserPreferences(currentUserId?: string | null) {
     if (userId) {
       const storedAuthId = await getStoredAuthUserId();
       if (storedAuthId && storedAuthId !== userId) {
-        // Different Supabase user — discard stale localStorage data
         await clearAllData();
         setProfile(null);
         setPreferences(null);
@@ -56,7 +56,6 @@ export function useUserPreferences(currentUserId?: string | null) {
         setLoading(false);
         return;
       }
-      // Remember this auth user for future mismatch detection
       await setStoredAuthUserId(userId);
     }
 
@@ -66,7 +65,6 @@ export function useUserPreferences(currentUserId?: string | null) {
     setLoading(false);
   }, []);
 
-  // Load when userId becomes available or changes
   useEffect(() => {
     if (currentUserId) load(currentUserId);
   }, [currentUserId, load]);
@@ -74,11 +72,10 @@ export function useUserPreferences(currentUserId?: string | null) {
   const completeOnboarding = useCallback(async (data: OnboardingPayload) => {
     const userId = `user_${Date.now()}`;
 
-    debug.info('Onboarding', 'Completing onboarding', {
+    debug.info('Onboarding', 'Completing onboarding (v2)', {
       clusters: data.clusters,
       services: data.services,
-      hasQuizAnswers: !!(data.quizAnswers && data.tasteVector),
-      quizAnswerCount: data.quizAnswers?.length ?? 0,
+      watchedTitleCount: data.watchedTitles?.length ?? 0,
     });
 
     await saveUserProfile({ userId, name: data.name, email: data.email });
@@ -90,21 +87,57 @@ export function useUserPreferences(currentUserId?: string | null) {
       return { id: providerId, name: provider?.name || serviceId, selected: true };
     });
 
-    // Derive homeGenres from cluster seed vector
-    const homeGenres = deriveHomeGenres(data.clusters);
+    // Derive homeGenres from cluster tmdbGenreIds (v2 path)
+    const seen = new Set<number>();
+    const homeGenres: number[] = [];
+    for (const clusterId of data.clusters) {
+      const cluster = TASTE_CLUSTERS.find(c => c.id === clusterId);
+      if (cluster) {
+        for (const gId of cluster.tmdbGenreIds) {
+          if (!seen.has(gId)) {
+            seen.add(gId);
+            homeGenres.push(gId);
+          }
+        }
+      }
+    }
 
     await saveUserPreferences({
       region: 'GB', platforms, homeGenres,
       selectedClusters: data.clusters,
     });
 
-    // Always initialise from clusters first (sets seed_vector in Supabase).
-    // Then overlay quiz results if the user completed the quiz.
-    await initializeFromClusters(data.clusters)
-      .catch((e) => console.error('[Onboarding] initializeFromClusters failed:', e));
-    if (data.quizAnswers && data.tasteVector) {
-      await saveQuizResults(data.quizAnswers, data.tasteVector)
-        .catch((e) => console.error('[Onboarding] saveQuizResults failed:', e));
+    // Bootstrap v2 taste vector from onboarding signals
+    const clusterRepresentativeTmdbIds = data.clusters.flatMap(clusterId => {
+      const cluster = TASTE_CLUSTERS.find(c => c.id === clusterId);
+      return cluster?.representativeTmdbIds || [];
+    });
+
+    const bootstrapSource: BootstrapSource = data.watchedTitles?.length
+      ? 'onboarding_v2'
+      : data.clusters.length
+        ? 'onboarding_v2'
+        : 'services_only';
+
+    try {
+      const vector = await bootstrapTasteVector({
+        serviceIds: data.services,
+        watchedTitles: data.watchedTitles || [],
+        clusterRepresentativeTmdbIds,
+      });
+
+      if (vector) {
+        await saveV2TasteVector(vector, 0, bootstrapSource);
+      }
+    } catch (e) {
+      console.error('[Onboarding] bootstrapTasteVector failed:', e);
+    }
+
+    // Save slider state (defaults or user-tuned from Step 5)
+    try {
+      await saveSliderState(data.sliders || DEFAULT_SLIDERS);
+    } catch (e) {
+      console.error('[Onboarding] saveSliderState failed:', e);
     }
 
     setProfile({ userId, name: data.name, email: data.email, createdAt: Date.now() });
@@ -131,15 +164,23 @@ export function useUserPreferences(currentUserId?: string | null) {
   }, [preferences]);
 
   const updateClusters = useCallback(async (clusterIds: string[]) => {
-    debug.info('Clusters', 'Updating clusters', {
+    debug.info('Clusters', 'Updating clusters (v2)', {
       newClusters: clusterIds,
       previousClusters: preferences?.selectedClusters ?? [],
     });
 
-    const newSeed = computeClusterSeedVector(clusterIds);
-    const homeGenres = deriveHomeGenres(clusterIds);
+    // Derive homeGenres from cluster tmdbGenreIds
+    const seen = new Set<number>();
+    const homeGenres: number[] = [];
+    for (const clusterId of clusterIds) {
+      const cluster = TASTE_CLUSTERS.find(c => c.id === clusterId);
+      if (cluster) {
+        for (const gId of cluster.tmdbGenreIds) {
+          if (!seen.has(gId)) { seen.add(gId); homeGenres.push(gId); }
+        }
+      }
+    }
 
-    // Persist to preferences
     const updated = {
       ...(preferences || { region: 'GB', platforms: [] }),
       homeGenres,
@@ -148,29 +189,25 @@ export function useUserPreferences(currentUserId?: string | null) {
     await saveUserPreferences(updated);
     setPreferences(updated);
 
-    // Update taste vector via seed delta shift
-    const tasteProfile = await getTasteProfile();
-    if (tasteProfile) {
-      const oldClusters = preferences?.selectedClusters;
-      if (oldClusters && oldClusters.length > 0) {
-        // Shift current vector by seed difference (preserves quiz + interaction deltas).
-        // Math: newVector = currentVector + (newSeed - oldSeed)
-        //                 = newSeed + quizDelta + interactionDrift
-        const oldSeed = computeClusterSeedVector(oldClusters);
-        const newVector = { ...tasteProfile.vector };
-        for (const d of ALL_DIMENSIONS) {
-          newVector[d] += newSeed[d] - oldSeed[d];
-        }
-        tasteProfile.vector = clampVector(newVector);
-      } else {
-        // Legacy user choosing clusters for the first time — one-time lossy re-seed.
-        // Their old quiz was calibrated against createDefaultVector (genre-based),
-        // which is fundamentally different from a cluster seed. Preserving those
-        // deltas would produce incoherent results.
-        tasteProfile.vector = newSeed;
+    // Re-bootstrap taste vector with new cluster selections
+    const clusterRepresentativeTmdbIds = clusterIds.flatMap(clusterId => {
+      const cluster = TASTE_CLUSTERS.find(c => c.id === clusterId);
+      return cluster?.representativeTmdbIds || [];
+    });
+
+    try {
+      const vector = await bootstrapTasteVector({
+        serviceIds: (preferences?.platforms || [])
+          .filter(p => p.selected !== false)
+          .map(p => p.name),
+        watchedTitles: [],
+        clusterRepresentativeTmdbIds,
+      });
+      if (vector) {
+        await saveV2TasteVector(vector, 0, 'manual_retake');
       }
-      tasteProfile.lastUpdated = new Date().toISOString();
-      await saveTasteProfile(tasteProfile);
+    } catch (e) {
+      console.error('[updateClusters] re-bootstrap failed:', e);
     }
   }, [preferences]);
 
