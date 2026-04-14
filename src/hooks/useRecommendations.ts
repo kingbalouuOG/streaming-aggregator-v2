@@ -1,20 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { generateRecommendations, type Recommendation } from '@/lib/utils/recommendationEngine';
-import { buildPosterUrl } from '@/lib/api/tmdb';
+import { rankTitles } from '@/lib/recommendations-v2/ranker';
+import { buildFilterSets } from '@/lib/recommendations-v2/hardFilters';
+import { getV2TasteProfile } from '@/lib/taste-v2/tasteProfileV2';
+import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import type { ContentItem } from '@/components/ContentCard';
-
-function recommendationToContentItem(rec: Recommendation): ContentItem {
-  return {
-    id: `${rec.type}-${rec.id}`,
-    title: rec.metadata.title,
-    image: buildPosterUrl(rec.metadata.posterPath) || '',
-    services: [],
-    rating: rec.metadata.voteAverage || undefined,
-    year: rec.metadata.releaseDate ? parseInt(rec.metadata.releaseDate.substring(0, 4), 10) : undefined,
-    type: rec.type === 'tv' ? 'tv' : 'movie',
-    language: rec.metadata.originalLanguage,
-  };
-}
 
 export function useRecommendations(
   providerIds: number[],
@@ -36,9 +25,35 @@ export function useRecommendations(
 
     setLoading(true);
     try {
-      const filterOpts = { fetchMovies, fetchTV, filterGenreIds };
-      const recommendations = await generateRecommendations(providerIds, 'GB', filterOpts);
-      setItems(recommendations.map(recommendationToContentItem));
+      const profile = await getV2TasteProfile();
+      if (!profile?.tasteVector) {
+        setItems([]);
+        return;
+      }
+
+      // Convert TMDb provider IDs to Videx service IDs
+      const serviceIds: string[] = providerIds
+        .map(id => providerIdToServiceId(id))
+        .filter(Boolean) as string[];
+
+      const { dismissedIds, thumbsDownIds, watchlistIds } = await buildFilterSets(serviceIds);
+
+      // Determine media type filter from fetchMovies/fetchTV
+      const mediaTypeFilter = fetchMovies && !fetchTV ? 'movie' as const
+        : !fetchMovies && fetchTV ? 'tv' as const
+        : undefined;
+
+      const results = await rankTitles({
+        tasteVector: profile.tasteVector,
+        userServiceIds: serviceIds,
+        dismissedIds,
+        thumbsDownIds,
+        watchlistIds,
+        mediaTypeFilter,
+        limit: 20,
+      });
+
+      setItems(results);
     } catch (error) {
       console.error('[useRecommendations] Error:', error);
     } finally {
