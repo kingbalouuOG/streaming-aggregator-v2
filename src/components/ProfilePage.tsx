@@ -28,6 +28,7 @@ import { PLATFORMS } from "./platformLogos";
 import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste/tasteClusters";
 import { getSliderState, saveSliderState } from "@/lib/taste-v2/tasteProfileV2";
 import { DEFAULT_SLIDERS, type SliderState } from "@/lib/taste-v2/types";
+import { SpendDashboard } from "./SpendDashboard";
 
 const allServices = PLATFORMS;
 
@@ -36,9 +37,11 @@ type ProfileSubPage =
   | 'landing'
   | 'account'
   | 'services'
+  | 'spend'
   | 'taste'
   | 'tune'
-  | 'appearance';
+  | 'appearance'
+  | 'privacy';
 
 interface ProfilePageProps {
   watchlistCount: number;
@@ -109,6 +112,18 @@ export function ProfilePage(props: ProfilePageProps) {
         <motion.div key="appearance" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 100, opacity: 0 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}>
           <AppearancePage onBack={goBack} />
+        </motion.div>
+      )}
+      {subPage === 'spend' && (
+        <motion.div key="spend" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 100, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}>
+          <MonthlySpendPage connectedServices={props.userProfile?.services || []} onBack={goBack} />
+        </motion.div>
+      )}
+      {subPage === 'privacy' && (
+        <motion.div key="privacy" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 100, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}>
+          <PrivacyDataPage onBack={goBack} />
         </motion.div>
       )}
     </AnimatePresence>
@@ -186,13 +201,16 @@ function ProfileLanding({
       <SectionLabel label="SUBSCRIPTIONS" />
       <ActionRow icon={<Tv2 className="w-4.5 h-4.5" />} title="Streaming Services" subtitle={`${connectedCount} services connected`} onClick={() => onNavigate('services')} />
 
+      <SectionLabel label="INSIGHTS" />
+      <ActionRow icon={<Wallet className="w-4.5 h-4.5" />} title="Monthly Spend" subtitle="" onClick={() => onNavigate('spend')} />
+
       <SectionLabel label="PERSONALISATION" />
       <ActionRow icon={<Sparkles className="w-4.5 h-4.5" />} title="Your Taste" subtitle={topClusterNames || 'Set up your taste profile'} onClick={() => onNavigate('taste')} />
       <ActionRow icon={<SlidersHorizontal className="w-4.5 h-4.5" />} title="Tune Recommendations" subtitle="Balanced across all sliders" onClick={() => onNavigate('tune')} />
 
       <SectionLabel label="SETTINGS" />
       <ActionRow icon={<Palette className="w-4.5 h-4.5" />} title="Appearance" subtitle="" onClick={() => onNavigate('appearance')} />
-      <ActionRow icon={<Shield className="w-4.5 h-4.5" />} title="Privacy & Data" subtitle="Manage your data" onClick={() => {}} />
+      <ActionRow icon={<Shield className="w-4.5 h-4.5" />} title="Privacy & Data" subtitle="Manage your data" onClick={() => onNavigate('privacy')} />
 
       {/* Sign Out */}
       <div className="mt-6">
@@ -695,6 +713,173 @@ function TuneRecommendationsPage({ onBack }: { onBack: () => void }) {
           Reset to defaults
         </button>
       </div>
+    </SubPageShell>
+  );
+}
+
+// ═════════════════════════════════════════════════════════
+// ── Monthly Spend Sub-Page ──────────────────────────────
+// ═════════════════════════════════════════════════════════
+function MonthlySpendPage({ connectedServices, onBack }: { connectedServices: string[]; onBack: () => void }) {
+  return (
+    <SubPageShell title="Monthly Spend" onBack={onBack}>
+      <SpendDashboard connectedServices={connectedServices} />
+    </SubPageShell>
+  );
+}
+
+// ═════════════════════════════════════════════════════════
+// ── Privacy & Data Sub-Page ─────────────────────────────
+// ═════════════════════════════════════════════════════════
+function PrivacyDataPage({ onBack }: { onBack: () => void }) {
+  const [showLearnMore, setShowLearnMore] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  return (
+    <SubPageShell title="Privacy & Data" onBack={onBack}>
+      <p className="text-muted-foreground text-[13px] mb-5 leading-relaxed">
+        Videx learns from what you watch, rate, and explore in the app to recommend content that matches your taste. We never sell this data or share it with other services.
+      </p>
+
+      {/* What Videx learns about you */}
+      <button
+        onClick={() => setShowLearnMore(true)}
+        className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-secondary/60 hover:bg-secondary/80 transition-colors mb-2"
+      >
+        <Eye className="w-5 h-5 text-blue-400 shrink-0" />
+        <span className="text-foreground text-[14px] flex-1 text-left" style={{ fontWeight: 500 }}>
+          What Videx learns about you
+        </span>
+      </button>
+
+      {/* Download my data */}
+      <button
+        onClick={() => toast.success("Download started", { description: "Your data export will be ready shortly." })}
+        className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-secondary/60 hover:bg-secondary/80 transition-colors mb-2"
+      >
+        <ArrowLeft className="w-5 h-5 text-emerald-400 shrink-0 rotate-[-90deg]" />
+        <span className="text-foreground text-[14px] flex-1 text-left" style={{ fontWeight: 500 }}>
+          Download my data
+        </span>
+      </button>
+
+      {/* Delete my account */}
+      <button
+        onClick={() => setShowDeleteConfirm(true)}
+        className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors"
+      >
+        <Shield className="w-5 h-5 text-red-400 shrink-0" />
+        <span className="text-red-400 text-[14px] flex-1 text-left" style={{ fontWeight: 500 }}>
+          Delete my account
+        </span>
+      </button>
+
+      {/* "What Videx learns" info modal */}
+      <AnimatePresence>
+        {showLearnMore && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60"
+            onClick={() => setShowLearnMore(false)}
+          >
+            <motion.div
+              initial={{ y: 200, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 200, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="w-full max-w-md bg-card rounded-t-2xl p-6"
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 className="text-foreground text-[18px] mb-4" style={{ fontWeight: 700 }}>
+                What Videx learns about you
+              </h3>
+
+              <div className="mb-4">
+                <p className="text-foreground text-[13px] mb-2" style={{ fontWeight: 600 }}>We track:</p>
+                <ul className="space-y-1.5 text-muted-foreground text-[13px]">
+                  <li>What you rate (thumbs up/down)</li>
+                  <li>What you add to your watchlist</li>
+                  <li>What you mark as watched</li>
+                  <li>Titles you mark as not interested</li>
+                  <li>Which services you tap to start watching</li>
+                  <li>Titles you tap to view details</li>
+                  <li>How long you spend looking at title details</li>
+                  <li>Your genre and taste preferences</li>
+                  <li>Your streaming service subscriptions</li>
+                </ul>
+              </div>
+
+              <div className="mb-5">
+                <p className="text-foreground text-[13px] mb-2" style={{ fontWeight: 600 }}>We don't track:</p>
+                <ul className="space-y-1.5 text-muted-foreground text-[13px]">
+                  <li>Your location</li>
+                  <li>Your other apps</li>
+                  <li>Anything outside Videx</li>
+                  <li>Your actual viewing on streaming platforms</li>
+                </ul>
+              </div>
+
+              <button
+                onClick={() => setShowLearnMore(false)}
+                className="w-full py-3 rounded-xl bg-primary text-white text-[14px] transition-colors hover:bg-primary/90"
+                style={{ fontWeight: 600 }}
+              >
+                Got it
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete account confirmation modal */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6"
+            onClick={() => setShowDeleteConfirm(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="w-full max-w-sm bg-card rounded-2xl p-6"
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 className="text-foreground text-[18px] mb-2" style={{ fontWeight: 700 }}>
+                Delete account?
+              </h3>
+              <p className="text-muted-foreground text-[14px] mb-2 leading-relaxed">
+                This will permanently delete your account, all your preferences, watchlist, and ratings. This action cannot be undone.
+              </p>
+              <p className="text-primary text-[13px] mb-5 leading-relaxed bg-primary/10 rounded-xl px-3 py-2">
+                Account deletion is not yet available. Contact support to delete your account.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-[14px] transition-colors hover:bg-secondary/80"
+                  style={{ fontWeight: 600 }}
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled
+                  className="flex-1 py-3 rounded-xl bg-red-500/30 text-red-400/50 text-[14px] cursor-not-allowed"
+                  style={{ fontWeight: 600 }}
+                >
+                  Delete Account
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </SubPageShell>
   );
 }

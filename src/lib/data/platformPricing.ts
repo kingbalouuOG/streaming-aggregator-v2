@@ -1,3 +1,6 @@
+// Last verified: April 2026. Review quarterly. UK prices in GBP.
+// Parking lot IN-XPS-007: needs periodic review cadence or external data source before public launch.
+
 export interface PricingTier {
   name: string;
   price: number; // GBP/month
