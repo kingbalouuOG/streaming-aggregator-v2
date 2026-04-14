@@ -1,39 +1,39 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Pencil,
+  ArrowLeft,
+  Check,
   Sun,
   Moon,
   Monitor,
   LogOut,
-  Eye,
-  Bookmark,
-  Check,
-  X,
-  Film,
+  ChevronRight,
+  User,
+  Tv2,
+  Wallet,
   Sparkles,
-  RotateCcw,
-  Trash2,
+  SlidersHorizontal,
+  Palette,
+  Shield,
+  Bookmark,
+  Eye,
+  Film,
 } from "lucide-react";
 import { toast } from "sonner";
 
-// ── Onboarding Data ─────────────────────────────────────────────────────
 import { OnboardingData } from "./OnboardingFlow";
 import { useTheme } from "./ThemeContext";
 import { PLATFORMS } from "./platformLogos";
-import { SpendDashboard } from "./SpendDashboard";
-import { TasteQuiz } from "./quiz/TasteQuiz";
-import { getTasteProfile, saveQuizResults, retakeQuiz } from "@/lib/storage/tasteProfile";
-import { invalidateRecommendationCache } from "@/lib/storage/recommendations";
-import storage from "@/lib/storage";
-import type { TasteProfile, QuizAnswer } from "@/lib/storage/tasteProfile";
-import type { TasteVector } from "@/lib/taste/tasteVector";
-import { getGenresFromVector, genreKeyToName } from "@/lib/taste/tasteVector";
 import { TASTE_CLUSTERS } from "@/lib/taste/tasteClusters";
 
-// ── Service definitions ─────────────────────────────────────────────────────
 const allServices = PLATFORMS;
 
+// ── Sub-page routing ─────────────────────────────────
+type ProfileSubPage =
+  | 'landing'
+  | 'account'
+  | 'services'
+  | 'appearance';
 
 interface ProfilePageProps {
   watchlistCount: number;
@@ -50,186 +50,90 @@ interface ProfilePageProps {
   onDeleteAccount?: () => Promise<{ error?: string }>;
 }
 
-export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignOut, onUpdateServices, onUpdateClusters, onUpdateProfile, onNavigateHome, isAuthenticated, username, email: authEmail, onDeleteAccount }: ProfilePageProps) {
-  // ── Profile state ─��───────────────────────────────
-  const [name, setName] = useState(userProfile?.name || "");
-  const [email, setEmail] = useState(userProfile?.email || "");
-  const [isEditingDetails, setIsEditingDetails] = useState(false);
-  const [editName, setEditName] = useState(userProfile?.name || "");
-  const [editEmail, setEditEmail] = useState(userProfile?.email || "");
+export function ProfilePage(props: ProfilePageProps) {
+  const [subPage, setSubPage] = useState<ProfileSubPage>('landing');
 
-  // ── Services state ─────────────────────────────────
-  const [connectedServices, setConnectedServices] = useState<string[]>(
-    userProfile?.services || PLATFORMS.map((p) => p.id)
+  const goTo = (page: ProfileSubPage) => setSubPage(page);
+  const goBack = () => setSubPage('landing');
+
+  return (
+    <AnimatePresence mode="wait">
+      {subPage === 'landing' && (
+        <motion.div key="landing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <ProfileLanding {...props} onNavigate={goTo} />
+        </motion.div>
+      )}
+      {subPage === 'account' && (
+        <motion.div key="account" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 100, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}>
+          <AccountDetailsPage
+            name={props.username || props.userProfile?.name || ''}
+            email={props.email || props.userProfile?.email || ''}
+            onSave={props.onUpdateProfile}
+            onBack={goBack}
+          />
+        </motion.div>
+      )}
+      {subPage === 'services' && (
+        <motion.div key="services" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 100, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}>
+          <StreamingServicesPage
+            initialServices={props.userProfile?.services || PLATFORMS.map(p => p.id)}
+            onUpdate={props.onUpdateServices}
+            onBack={goBack}
+          />
+        </motion.div>
+      )}
+      {subPage === 'appearance' && (
+        <motion.div key="appearance" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 100, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}>
+          <AppearancePage onBack={goBack} />
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
-  const [isEditingServices, setIsEditingServices] = useState(false);
+}
 
-  // ── Clusters state ─────────────────────────────────
-  const [selectedClusters, setSelectedClusters] = useState<string[]>(
-    userProfile?.clusters || []
-  );
+// ═════════════════════════════════════════════════════════
+// ── Profile Landing ─────────────────────────────────────
+// ═════════════════════════════════════════════════════════
+function ProfileLanding({
+  watchlistCount,
+  watchedCount,
+  userProfile,
+  onSignOut,
+  username,
+  email,
+  onNavigate,
+}: ProfilePageProps & { onNavigate: (page: ProfileSubPage) => void }) {
+  const displayName = username || userProfile?.name || 'User';
+  const displayEmail = email || userProfile?.email || '';
+  const connectedCount = userProfile?.services?.length || 0;
+  const selectedClusters = userProfile?.clusters || [];
 
-  // ── Taste profile / quiz state ──────────────────
-  const [tasteProfile, setTasteProfile] = useState<TasteProfile | null>(null);
-  const [showQuiz, setShowQuiz] = useState(false);
-
-  useEffect(() => {
-    getTasteProfile().then(setTasteProfile);
-  }, []);
-
-  const topTastePills = selectedClusters.length > 0
-    ? selectedClusters
-        .map(id => TASTE_CLUSTERS.find(c => c.id === id))
-        .filter((c): c is NonNullable<typeof c> => c != null)
-        .map(c => `${c.emoji} ${c.name}`)
-    : tasteProfile?.quizCompleted && tasteProfile.vector
-      ? getGenresFromVector(tasteProfile.vector).slice(0, 5).map(genreKeyToName)
-      : [];
-
-  const handleQuizComplete = useCallback(async (answers: QuizAnswer[], vector: TasteVector) => {
-    try {
-      if (tasteProfile?.quizCompleted) {
-        // Retake: preserve interaction history
-        const updated = await retakeQuiz(answers, vector);
-        if (updated) setTasteProfile(updated);
-      } else {
-        const updated = await saveQuizResults(answers, vector);
-        setTasteProfile(updated);
-      }
-      // Invalidate caches so recommendations use new vector
-      await Promise.all([
-        invalidateRecommendationCache(),
-        storage.removeItem('@app_hidden_gems'),
-      ]).catch(() => {});
-      toast.success("Taste profile updated", { icon: "✨" });
-    } catch {
-      toast.error("Failed to save quiz results");
-    }
-    setShowQuiz(false);
-    onNavigateHome?.();
-  }, [tasteProfile, onNavigateHome]);
-
-  const handleQuizSkip = useCallback(() => {
-    setShowQuiz(false);
-  }, []);
-
-  // ── Theme state ─────────────────────────────────
-  const { theme, setTheme } = useTheme();
-
-  // ── Track initial state for dirty detection ─────────────────
-  const initialServices = useRef(connectedServices.slice().sort().join(','));
-
-  // ── Dirty check (services only — genres no longer manually editable) ─────────────────
-  const servicesChanged = connectedServices.slice().sort().join(',') !== initialServices.current;
-  const detailsChanged = name !== editName || email !== editEmail || isEditingDetails;
-  const hasUnsavedChanges = detailsChanged || servicesChanged;
-
-  // ── Handlers ─────────────────────────────────
-  const handleSaveDetails = async () => {
-    setName(editName);
-    setEmail(editEmail);
-    setIsEditingDetails(false);
-    await onUpdateProfile?.(editName, editEmail);
-    toast.success("Profile updated", { icon: "👤", description: "Your details have been saved." });
-  };
-
-  const handleCancelDetails = () => {
-    setEditName(name);
-    setEditEmail(email);
-    setIsEditingDetails(false);
-  };
-
-  const toggleService = (id: string) => {
-    setConnectedServices((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-    );
-  };
-
-  const handleSaveChanges = async () => {
-    try {
-      if (detailsChanged && !isEditingDetails) {
-        await onUpdateProfile?.(name, email);
-      }
-      if (servicesChanged) {
-        await onUpdateServices?.(connectedServices);
-      }
-      initialServices.current = connectedServices.slice().sort().join(',');
-      toast.success("Settings saved", { icon: "✅", description: "Your preferences have been updated." });
-    } catch {
-      toast.error("Failed to save", { description: "Please try again." });
-    }
-  };
-
-  const handleSignOut = () => {
-    onSignOut?.();
-  };
-
-  // ── Delete account ─────────────────────────────────
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const deleteConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleDeleteAccount = async () => {
-    if (!deleteConfirm) {
-      setDeleteConfirm(true);
-      // Auto-reset confirmation after 5 seconds
-      if (deleteConfirmTimerRef.current) clearTimeout(deleteConfirmTimerRef.current);
-      deleteConfirmTimerRef.current = setTimeout(() => setDeleteConfirm(false), 5000);
-      return;
-    }
-    if (!onDeleteAccount || deleting) return;
-    if (deleteConfirmTimerRef.current) clearTimeout(deleteConfirmTimerRef.current);
-    setDeleting(true);
-    try {
-      const result = await onDeleteAccount();
-      if (result.error) {
-        toast.error('Failed to delete account', { description: result.error });
-        setDeleting(false);
-        setDeleteConfirm(false);
-      } else {
-        toast.success('Account deleted');
-      }
-    } catch {
-      toast.error('Failed to delete account');
-      setDeleting(false);
-      setDeleteConfirm(false);
-    }
-  };
-
-  const initials = name
+  const initials = displayName
     .split(" ")
     .map((n) => n[0])
     .join("")
     .toUpperCase()
-    .slice(0, 2);
+    .slice(0, 2) || 'U';
 
-  // Full-screen quiz overlay
-  if (showQuiz) {
-    return (
-      <div className="fixed inset-0 z-50 bg-background">
-        <TasteQuiz
-          onComplete={handleQuizComplete}
-          onSkip={handleQuizSkip}
-          showSkip={false}
-          userClusters={selectedClusters}
-          showClusterSelect={true}
-          onClustersUpdated={async (clusters) => {
-            setSelectedClusters(clusters);
-            await onUpdateClusters?.(clusters);
-          }}
-        />
-      </div>
-    );
-  }
+  // Build taste summary for the action row subtitle
+  const topClusterNames = selectedClusters
+    .slice(0, 3)
+    .map(id => TASTE_CLUSTERS.find(c => c.id === id)?.name)
+    .filter(Boolean)
+    .join(', ');
 
   return (
     <div className="flex flex-col min-h-full px-5 pb-8">
-      {/* Safe area spacer */}
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl -mx-5 px-5" style={{ backgroundColor: "var(--background)", paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }} />
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl -mx-5 px-5"
+        style={{ backgroundColor: "var(--background)", paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
+        <h1 className="text-foreground text-[18px] pb-2" style={{ fontWeight: 700 }}>Profile</h1>
+      </div>
 
-      {/* ── Avatar & Info ─────────────────────────────────── */}
-      <div className="flex flex-col items-center mb-6">
+      {/* Avatar & Info */}
+      <div className="flex flex-col items-center mb-6 pt-2">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -237,356 +141,51 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
           className="relative mb-3"
         >
           <div className="w-20 h-20 rounded-full bg-primary flex items-center justify-center ring-2 ring-primary/30 ring-offset-2 ring-offset-background">
-            <span className="text-white text-[28px]" style={{ fontWeight: 700 }}>
-              {initials}
-            </span>
+            <span className="text-white text-[28px]" style={{ fontWeight: 700 }}>{initials}</span>
           </div>
         </motion.div>
-        <h2 className="text-foreground text-[18px] mb-0.5" style={{ fontWeight: 600 }}>
-          {name}
-        </h2>
-        <p className="text-primary text-[13px] mb-0.5">{email}</p>
-        <p className="text-muted-foreground text-[12px]">
+        <h2 className="text-foreground text-[18px] mb-0.5" style={{ fontWeight: 600 }}>{displayName}</h2>
+        <p className="text-muted-foreground text-[13px] mb-0.5">{displayEmail}</p>
+        <p className="text-muted-foreground text-[11px]">
           Member since {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
         </p>
 
-        {/* Quick stats */}
+        {/* Stats row */}
         <div className="flex items-center gap-4 mt-3">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary">
-            <Bookmark className="w-3.5 h-3.5 text-primary" />
-            <span className="text-foreground text-[12px]" style={{ fontWeight: 600 }}>
-              {watchlistCount}
-            </span>
-            <span className="text-muted-foreground text-[11px]">Watchlist</span>
-          </div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary">
-            <Eye className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-foreground text-[12px]" style={{ fontWeight: 600 }}>
-              {watchedCount}
-            </span>
-            <span className="text-muted-foreground text-[11px]">Watched</span>
-          </div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary">
-            <Film className="w-3.5 h-3.5 text-blue-400" />
-            <span className="text-foreground text-[12px]" style={{ fontWeight: 600 }}>
-              {connectedServices.length}
-            </span>
-            <span className="text-muted-foreground text-[11px]">Services</span>
-          </div>
+          <StatBadge icon={<Bookmark className="w-3.5 h-3.5 text-primary" />} count={watchlistCount} label="Watchlist" />
+          <StatBadge icon={<Eye className="w-3.5 h-3.5 text-emerald-400" />} count={watchedCount} label="Watched" />
+          <StatBadge icon={<Film className="w-3.5 h-3.5 text-blue-400" />} count={connectedCount} label="Services" />
         </div>
       </div>
 
-      {/* ── Personal Details ─────────────────────────────── */}
-      <SectionHeader title="Personal Details" />
-      <div className="space-y-2.5 mb-3">
-        <InputField
-          label="Name"
-          value={isEditingDetails ? editName : name}
-          onChange={(v) => setEditName(v)}
-          disabled={!isEditingDetails}
-        />
-        <InputField
-          label="Email"
-          value={isEditingDetails ? editEmail : email}
-          onChange={(v) => setEditEmail(v)}
-          disabled={!isEditingDetails}
-          type="email"
-        />
-      </div>
+      {/* Action Rows */}
+      <SectionLabel label="ACCOUNT" />
+      <ActionRow icon={<User className="w-4.5 h-4.5" />} title="Account Details" subtitle={displayEmail} onClick={() => onNavigate('account')} />
 
-      <AnimatePresence mode="wait">
-        {isEditingDetails ? (
-          <motion.div
-            key="save-cancel"
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            className="flex gap-2 mb-6"
-          >
-            <button
-              onClick={handleSaveDetails}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-white text-[13px] transition-colors hover:bg-primary/90"
-              style={{ fontWeight: 600 }}
-            >
-              <Check className="w-4 h-4" />
-              Save Details
-            </button>
-            <button
-              onClick={handleCancelDetails}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-secondary text-muted-foreground text-[13px] transition-colors hover:bg-secondary/80"
-              style={{ fontWeight: 600 }}
-            >
-              <X className="w-4 h-4" />
-              Cancel
-            </button>
-          </motion.div>
-        ) : (
-          <motion.button
-            key="edit"
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            onClick={() => setIsEditingDetails(true)}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-primary/40 text-primary text-[13px] mb-6 transition-colors hover:bg-primary/10"
-            style={{ fontWeight: 600 }}
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            Edit Details
-          </motion.button>
-        )}
-      </AnimatePresence>
+      <SectionLabel label="SUBSCRIPTIONS" />
+      <ActionRow icon={<Tv2 className="w-4.5 h-4.5" />} title="Streaming Services" subtitle={`${connectedCount} services connected`} onClick={() => onNavigate('services')} />
 
-      {/* ── Streaming Services ────────────────────────────── */}
-      <SectionHeader
-        title="Streaming Services"
-        action={
-          <button
-            onClick={() => setIsEditingServices(!isEditingServices)}
-            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
-              isEditingServices
-                ? "bg-primary text-white"
-                : "bg-secondary text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {isEditingServices ? <Check className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
-          </button>
-        }
-      />
+      <SectionLabel label="PERSONALISATION" />
+      <ActionRow icon={<Sparkles className="w-4.5 h-4.5" />} title="Your Taste" subtitle={topClusterNames || 'Set up your taste profile'} onClick={() => {}} />
+      <ActionRow icon={<SlidersHorizontal className="w-4.5 h-4.5" />} title="Tune Recommendations" subtitle="Balanced across all sliders" onClick={() => {}} />
 
-      <AnimatePresence mode="wait">
-        {isEditingServices ? (
-          <motion.div
-            key="services-grid"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ type: "spring", damping: 22, stiffness: 300 }}
-            className="overflow-hidden mb-6"
-          >
-            <div className="grid grid-cols-2 gap-2">
-              {allServices.map((service) => {
-                const isConnected = connectedServices.includes(service.id);
-                return (
-                  <button
-                    key={service.id}
-                    onClick={() => toggleService(service.id)}
-                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-all duration-200 ${
-                      isConnected
-                        ? "border-primary/40 bg-primary/8"
-                        : "bg-secondary/50 opacity-50"
-                    }`}
-                    style={{ borderColor: isConnected ? undefined : "var(--border-subtle)" }}
-                  >
-                    <img src={service.logo} alt={service.name} className="w-8 h-8 rounded-lg object-cover shrink-0" />
-                    <div className="flex flex-col items-start flex-1 min-w-0">
-                      <span className="text-foreground text-[12px] truncate w-full text-left" style={{ fontWeight: 600 }}>
-                        {service.name}
-                      </span>
-                      <span className={`text-[10px] ${isConnected ? "text-emerald-400" : "text-muted-foreground"}`}>
-                        {isConnected ? "Connected" : "Not connected"}
-                      </span>
-                    </div>
-                    <div
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 shrink-0 ${
-                        isConnected
-                          ? "border-primary bg-primary"
-                          : "bg-transparent"
-                      }`}
-                      style={{ borderColor: isConnected ? undefined : "var(--check-border)" }}
-                    >
-                      {isConnected && <Check className="w-3 h-3 text-white" />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="services-row"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex items-center gap-2 mb-6 overflow-x-auto no-scrollbar"
-          >
-            {connectedServices.map((id) => {
-              const service = allServices.find((s) => s.id === id);
-              if (!service) return null;
-              return (
-                <motion.img
-                  key={id}
-                  layout
-                  src={service.logo}
-                  alt={service.name}
-                  className="w-10 h-10 rounded-xl object-cover shrink-0"
-                  style={{ boxShadow: "0 0 0 1px var(--border-subtle)" }}
-                />
-              );
-            })}
-            {connectedServices.length === 0 && (
-              <span className="text-muted-foreground text-[12px]">No services connected</span>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <SectionLabel label="SETTINGS" />
+      <ActionRow icon={<Palette className="w-4.5 h-4.5" />} title="Appearance" subtitle="" onClick={() => onNavigate('appearance')} />
+      <ActionRow icon={<Shield className="w-4.5 h-4.5" />} title="Privacy & Data" subtitle="Manage your data" onClick={() => {}} />
 
-      {/* ── Monthly Spend Dashboard ────────────────────────────── */}
-      <SpendDashboard connectedServices={connectedServices} />
-
-      {/* ── Taste Profile ────────────────────────────── */}
-      <SectionHeader title="Taste Profile" />
-
-      {tasteProfile?.quizCompleted ? (
-        <div className="mb-6">
-          {/* Top genres */}
-          {topTastePills.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="text-muted-foreground text-[12px] whitespace-nowrap">Top tastes:</span>
-              {topTastePills.map((genre) => (
-                <span
-                  key={genre}
-                  className="px-2.5 py-1 rounded-full bg-primary/15 text-primary text-[11px] whitespace-nowrap"
-                  style={{ fontWeight: 600 }}
-                >
-                  {genre}
-                </span>
-              ))}
-            </div>
-          )}
-          <button
-            onClick={() => setShowQuiz(true)}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border bg-secondary/40 text-muted-foreground text-[13px] transition-colors hover:bg-secondary/60 hover:text-foreground"
-            style={{ fontWeight: 600, borderColor: "var(--border-subtle)" }}
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            Retake Taste Quiz
-          </button>
-        </div>
-      ) : (
+      {/* Sign Out */}
+      <div className="mt-6">
         <button
-          onClick={() => setShowQuiz(true)}
-          className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-primary/30 bg-primary/5 mb-6 transition-colors hover:bg-primary/10"
-          style={{ borderColor: undefined }}
+          onClick={onSignOut}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary/10 text-primary text-[13px] border border-primary/20 transition-colors hover:bg-primary/20"
+          style={{ fontWeight: 600 }}
         >
-          <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
-            <Sparkles className="w-5 h-5 text-primary" />
-          </div>
-          <div className="flex-1 text-left">
-            <p className="text-foreground text-[14px]" style={{ fontWeight: 600 }}>
-              Take Taste Quiz
-            </p>
-            <p className="text-muted-foreground text-[12px]">
-              Answer 10 questions to personalise your recommendations
-            </p>
-          </div>
-        </button>
-      )}
-
-      {/* ── Appearance ────────────────────────────── */}
-      <SectionHeader title="Appearance" />
-
-      <div className="space-y-2 mb-6">
-        {/* Theme toggle row */}
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-secondary/60 border" style={{ borderColor: "var(--border-subtle-2)" }}>
-          <Moon className="w-4 h-4 text-muted-foreground shrink-0" />
-          <div className="flex-1">
-            <p className="text-foreground text-[13px]" style={{ fontWeight: 600 }}>
-              Theme
-            </p>
-            <p className="text-muted-foreground text-[11px] capitalize">{theme}</p>
-          </div>
-          {/* Mini toggle */}
-          <div className="flex items-center gap-1 bg-background rounded-lg p-0.5">
-            {(["dark", "light"] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setTheme(mode)}
-                className={`p-1.5 rounded-md transition-all duration-200 ${
-                  theme === mode
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {mode === "dark" ? (
-                  <Moon className="w-3.5 h-3.5" />
-                ) : (
-                  <Sun className="w-3.5 h-3.5" />
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* System preference */}
-        <button
-          onClick={() => setTheme("system")}
-          className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border text-[13px] transition-colors ${
-            theme === "system"
-              ? "border-primary/40 bg-primary/10 text-primary"
-              : "bg-secondary/40 text-muted-foreground hover:text-foreground hover:bg-secondary/60"
-          }`}
-          style={{ fontWeight: 600, borderColor: theme === "system" ? undefined : "var(--border-subtle)" }}
-        >
-          <Monitor className="w-4 h-4" />
-          Use System Preference
+          <LogOut className="w-4 h-4" />
+          Sign Out
         </button>
       </div>
 
-      {/* ── Save Changes ────────────────────────────── */}
-      <button
-        onClick={handleSaveChanges}
-        disabled={!hasUnsavedChanges}
-        className={`w-full py-3 rounded-xl text-[13px] mb-3 transition-colors border ${
-          hasUnsavedChanges
-            ? "bg-primary text-white border-primary/40 hover:bg-primary/90"
-            : "bg-secondary/60 text-muted-foreground border-transparent hover:bg-secondary/80"
-        }`}
-        style={{ fontWeight: 600, borderColor: hasUnsavedChanges ? undefined : "var(--border-subtle-2)" }}
-      >
-        {hasUnsavedChanges ? "Save Changes" : "No Changes"}
-      </button>
-
-      {/* ── Account ────────────────────────────── */}
-      {isAuthenticated && onDeleteAccount && (
-        <div className="mb-3">
-          <SectionHeader title="Account" />
-          {authEmail && (
-            <p className="text-muted-foreground text-[12px] mb-2">
-              Signed in as <span className="text-foreground">{username || authEmail}</span>
-            </p>
-          )}
-          <button
-            onClick={handleDeleteAccount}
-            disabled={deleting}
-            className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] border transition-colors ${
-              deleteConfirm
-                ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                : 'bg-secondary/60 text-muted-foreground border-transparent hover:bg-secondary/80'
-            }`}
-            style={{ fontWeight: 600, borderColor: deleteConfirm ? undefined : 'var(--border-subtle-2)' }}
-          >
-            <Trash2 className="w-4 h-4" />
-            {deleting ? 'Deleting…' : deleteConfirm ? 'Tap again to confirm' : 'Delete Account'}
-          </button>
-          {deleteConfirm && !deleting && (
-            <p className="text-red-400 text-[11px] text-center mt-1.5">
-              This will permanently delete your account and all data
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* ── Sign Out ────────────────────────────── */}
-      <button
-        onClick={handleSignOut}
-        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 text-red-400 text-[13px] border border-red-500/20 transition-colors hover:bg-red-500/20"
-        style={{ fontWeight: 600 }}
-      >
-        <LogOut className="w-4 h-4" />
-        Sign Out
-      </button>
-
-      {/* ── Data Sources ────────────────────────── */}
+      {/* Data Sources */}
       <p className="text-muted-foreground/40 text-[11px] text-center mt-6 leading-relaxed">
         Streaming availability data provided by{' '}
         <a href="https://www.movieofthenight.com/about/api" target="_blank" rel="noopener noreferrer" className="underline">
@@ -596,65 +195,245 @@ export function ProfilePage({ watchlistCount, watchedCount, userProfile, onSignO
         <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" className="underline">
           TMDb
         </a>
-        . Streaming availability data powered by JustWatch.
+        .
       </p>
     </div>
   );
 }
 
-// ── Section Header sub-component ───────────────────────────
-function SectionHeader({
-  title,
-  action,
+// ═════════════════════════════════════════════════════════
+// ── Account Details Sub-Page ────────────────────────────
+// ═════════════════════════════════════════════════════════
+function AccountDetailsPage({
+  name: initialName,
+  email: initialEmail,
+  onSave,
+  onBack,
 }: {
-  title: string;
-  action?: React.ReactNode;
+  name: string;
+  email: string;
+  onSave?: (name: string, email: string) => Promise<void>;
+  onBack: () => void;
 }) {
+  const [name, setName] = useState(initialName);
+  const [email, setEmail] = useState(initialEmail);
+  const isDirty = name !== initialName || email !== initialEmail;
+
+  const handleSave = async () => {
+    await onSave?.(name, email);
+    toast.success("Account details updated");
+    onBack();
+  };
+
   return (
-    <div className="flex items-center justify-between mb-2.5">
-      <h3
-        className="text-muted-foreground text-[11px] tracking-widest uppercase"
+    <SubPageShell title="Account Details" onBack={onBack}>
+      <div className="space-y-4">
+        <InputField label="Name" value={name} onChange={setName} />
+        <InputField label="Email" value={email} onChange={setEmail} type="email" />
+      </div>
+      <button
+        onClick={handleSave}
+        disabled={!isDirty}
+        className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-[14px] mt-6 transition-colors ${
+          isDirty
+            ? "bg-primary/20 text-primary border border-primary/30"
+            : "bg-secondary/60 text-muted-foreground"
+        }`}
         style={{ fontWeight: 600 }}
       >
-        {title}
-      </h3>
-      {action}
+        {isDirty ? <><Check className="w-4 h-4" /> Save Changes</> : 'Save Changes'}
+      </button>
+    </SubPageShell>
+  );
+}
+
+// ═════════════════════════════════════════════════════════
+// ── Streaming Services Sub-Page ─────────────────────────
+// ═════════════════════════════════════════════════════════
+function StreamingServicesPage({
+  initialServices,
+  onUpdate,
+  onBack,
+}: {
+  initialServices: string[];
+  onUpdate?: (services: string[]) => Promise<void>;
+  onBack: () => void;
+}) {
+  const [connected, setConnected] = useState<string[]>(initialServices);
+
+  const toggleService = async (id: string) => {
+    const updated = connected.includes(id)
+      ? connected.filter(s => s !== id)
+      : [...connected, id];
+    setConnected(updated);
+    await onUpdate?.(updated);
+  };
+
+  return (
+    <SubPageShell title="Streaming Services" onBack={onBack}>
+      <p className="text-muted-foreground text-[11px] uppercase tracking-widest mb-3" style={{ fontWeight: 600 }}>
+        Choose your services
+      </p>
+      <div className="grid grid-cols-2 gap-2.5">
+        {allServices.map((service) => {
+          const isConnected = connected.includes(service.id);
+          return (
+            <button
+              key={service.id}
+              onClick={() => toggleService(service.id)}
+              className={`relative flex items-center gap-2.5 px-3 py-3 rounded-xl border transition-all duration-200 ${
+                isConnected
+                  ? "border-primary/40 bg-primary/8"
+                  : "bg-secondary/40 opacity-60"
+              }`}
+              style={{ borderColor: isConnected ? undefined : "var(--border-subtle)" }}
+            >
+              <img src={service.logo} alt={service.name} className="w-10 h-10 rounded-xl object-cover shrink-0" />
+              <div className="flex flex-col items-start flex-1 min-w-0">
+                <span className="text-foreground text-[12px] truncate w-full text-left" style={{ fontWeight: 600 }}>
+                  {service.name}
+                </span>
+                <span className={`text-[10px] ${isConnected ? "text-primary" : "text-muted-foreground"}`}>
+                  {isConnected ? "Connected" : "Not connected"}
+                </span>
+              </div>
+              {isConnected && (
+                <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                  <Check className="w-3 h-3 text-white" />
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-muted-foreground text-[12px] text-center mt-4">
+        Changes save automatically. Select the streaming services you have access to for accurate recommendations.
+      </p>
+    </SubPageShell>
+  );
+}
+
+// ═════════════════════════════════════════════════════════
+// ── Appearance Sub-Page ─────────────────────────────────
+// ═════════════════════════════════════════════════════════
+function AppearancePage({ onBack }: { onBack: () => void }) {
+  const { theme, setTheme } = useTheme();
+
+  const options = [
+    { value: 'light' as const, label: 'Light', icon: <Sun className="w-5 h-5" /> },
+    { value: 'dark' as const, label: 'Dark', icon: <Moon className="w-5 h-5" /> },
+    { value: 'system' as const, label: 'System', icon: <Monitor className="w-5 h-5" /> },
+  ];
+
+  return (
+    <SubPageShell title="Appearance" onBack={onBack}>
+      <div className="space-y-2.5">
+        {options.map(opt => {
+          const isActive = theme === opt.value;
+          return (
+            <button
+              key={opt.value}
+              onClick={() => setTheme(opt.value)}
+              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border transition-all duration-200 ${
+                isActive
+                  ? "border-primary/50 bg-primary/10"
+                  : "bg-secondary/40 hover:bg-secondary/60"
+              }`}
+              style={{ borderColor: isActive ? undefined : "var(--border-subtle)" }}
+            >
+              <span className={isActive ? "text-primary" : "text-muted-foreground"}>{opt.icon}</span>
+              <span className={`text-[14px] flex-1 text-left ${isActive ? "text-foreground" : "text-muted-foreground"}`}
+                style={{ fontWeight: isActive ? 600 : 500 }}>
+                {opt.label}
+              </span>
+              {isActive && (
+                <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                  <div className="w-2 h-2 rounded-full bg-white" />
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-muted-foreground text-[12px] mt-4">
+        Changes apply immediately. System preference will automatically switch between light and dark based on your device settings.
+      </p>
+    </SubPageShell>
+  );
+}
+
+// ═════════════════════════════════════════════════════════
+// ── Shared Sub-Components ───────────────────────────────
+// ═════════════════════════════════════════════════════════
+
+function SubPageShell({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col min-h-full px-5 pb-8">
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl -mx-5 px-5 flex items-center gap-3"
+        style={{ backgroundColor: "var(--background)", paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
+        <button onClick={onBack} className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <h1 className="text-foreground text-[18px] py-2" style={{ fontWeight: 700 }}>{title}</h1>
+      </div>
+      <div className="pt-4">{children}</div>
     </div>
   );
 }
 
-// ── Input Field sub-component ──────────────────────────────
-function InputField({
-  label,
-  value,
-  onChange,
-  disabled,
-  type = "text",
-}: {
+function ActionRow({ icon, title, subtitle, onClick }: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-secondary/40 hover:bg-secondary/60 transition-colors mb-2"
+    >
+      <span className="text-muted-foreground">{icon}</span>
+      <div className="flex-1 text-left min-w-0">
+        <p className="text-foreground text-[14px]" style={{ fontWeight: 600 }}>{title}</p>
+        {subtitle && <p className="text-muted-foreground text-[12px] truncate">{subtitle}</p>}
+      </div>
+      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+    </button>
+  );
+}
+
+function SectionLabel({ label }: { label: string }) {
+  return (
+    <p className="text-muted-foreground text-[11px] tracking-widest uppercase mt-4 mb-2 px-1" style={{ fontWeight: 600 }}>
+      {label}
+    </p>
+  );
+}
+
+function StatBadge({ icon, count, label }: { icon: React.ReactNode; count: number; label: string }) {
+  return (
+    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary">
+      {icon}
+      <span className="text-foreground text-[12px]" style={{ fontWeight: 600 }}>{count}</span>
+      <span className="text-muted-foreground text-[11px]">{label}</span>
+    </div>
+  );
+}
+
+function InputField({ label, value, onChange, type = "text" }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
-  disabled: boolean;
   type?: string;
 }) {
   return (
-    <div
-      className={`relative rounded-xl border transition-all duration-200 ${
-        disabled
-          ? "bg-secondary/40"
-          : "border-primary/40 bg-secondary/60 ring-1 ring-primary/20"
-      }`}
-      style={{ borderColor: disabled ? "var(--border-subtle)" : undefined }}
-    >
-      <label className="absolute top-2 left-3 text-muted-foreground text-[10px]">
-        {label}
-      </label>
+    <div className="relative rounded-xl border border-primary/30 bg-secondary/60 ring-1 ring-primary/10">
+      <label className="absolute top-2 left-3 text-muted-foreground text-[10px]">{label}</label>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        className="w-full bg-transparent px-3 pt-6 pb-2 text-foreground text-[14px] outline-none disabled:text-foreground/70"
+        className="w-full bg-transparent px-3 pt-6 pb-2 text-foreground text-[14px] outline-none"
       />
     </div>
   );
