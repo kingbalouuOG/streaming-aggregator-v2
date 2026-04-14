@@ -6,8 +6,6 @@ import { ContentRow } from './ContentRow';
 import { GENRE_NAMES, VALID_TV_GENRE_IDS, MOVIE_TO_TV_GENRE } from '@/lib/constants/genres';
 import type { ContentItem } from './ContentCard';
 import type { ServiceId } from './platformLogos';
-import type { GenreAffinities } from '@/lib/utils/recommendationEngine';
-import type { TasteVector } from '@/lib/taste/tasteVector';
 
 interface LazyGenreSectionProps {
   genreId: number;
@@ -18,8 +16,10 @@ interface LazyGenreSectionProps {
   fetchTV: boolean;
   excludeIds: Set<string>;
   onNewIds: (ids: string[]) => void;
-  genreAffinities: GenreAffinities;
-  tasteVector?: TasteVector | null;
+  /** @deprecated Phase 3: genre affinities no longer used */
+  genreAffinities?: Record<string, number>;
+  /** @deprecated Phase 3: v1 taste vector no longer used */
+  tasteVector?: unknown;
   onItemSelect?: (item: ContentItem) => void;
   bookmarkedIds?: Set<string>;
   onToggleBookmark?: (item: ContentItem) => void;
@@ -58,8 +58,6 @@ export function LazyGenreSection({
   fetchTV,
   excludeIds,
   onNewIds,
-  genreAffinities,
-  tasteVector,
   onItemSelect,
   bookmarkedIds,
   onToggleBookmark,
@@ -89,10 +87,7 @@ export function LazyGenreSection({
     enabled: effectivelyVisible,
     excludeIds,
     onNewIds,
-    genreAffinities,
     isGenreSection: true,
-    scoringMode: tasteVector ? 'hybrid' : 'affinity',
-    tasteVector,
   });
 
   const genreName = GENRE_NAMES[genreId] || 'Unknown';

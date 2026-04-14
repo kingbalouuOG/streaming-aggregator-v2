@@ -8,21 +8,21 @@ import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import { invalidateRecommendationCache } from '@/lib/storage/recommendations';
 import storage from '@/lib/storage';
 import { getHomeGenres } from '@/lib/storage/userPreferences';
-import { calculateGenreAffinities, type GenreAffinities } from '@/lib/utils/recommendationEngine';
 import { serviceIdsToProviderIds } from '@/lib/adapters/platformAdapter';
-import { GENRE_NAME_TO_ID, GENRE_NAMES, GENRE_KEY_TO_TMDB } from '@/lib/constants/genres';
+import { GENRE_NAME_TO_ID, GENRE_NAMES } from '@/lib/constants/genres';
+import { TASTE_CLUSTERS } from '@/lib/taste/tasteClusters';
 import type { FilterState } from '@/components/FilterSheet';
 import type { ServiceId } from '@/components/platformLogos';
-import { getTasteProfile } from '@/lib/storage/tasteProfile';
-import { getGenresFromVector } from '@/lib/taste/tasteVector';
-import type { TasteVector } from '@/lib/taste/tasteVector';
 import type { ContentItem } from '@/components/ContentCard';
 import { debug } from '@/lib/debugLogger';
+import { supabase } from '@/lib/supabase';
+import { getAuthUserId, isSupabaseActive } from '@/lib/storage';
+
+// Phase 3: GenreAffinities type kept for backward compat with callers
+export type GenreAffinities = Record<string, number>;
 
 export function useHomeContent(providerIds: number[], filters?: FilterState) {
   const [genreList, setGenreList] = useState<number[]>([]);
-  const [genreAffinities, setGenreAffinities] = useState<GenreAffinities>({});
-  const [tasteVector, setTasteVector] = useState<TasteVector | null>(null);
   const [metaLoading, setMetaLoading] = useState(true);
   const [reloadCounter, setReloadCounter] = useState(0);
 
@@ -102,8 +102,6 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     fetchTV,
     enabled: !!providerStr,
     skipExternalDedup: true,
-    scoringMode: 'windowReorder',
-    tasteVector,
     initialSize: 15,
     batchSize: 8,
   });
@@ -117,8 +115,6 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     fetchTV,
     enabled: !!providerStr,
     skipExternalDedup: true,
-    scoringMode: 'windowReorder',
-    tasteVector,
     initialSize: 15,
     batchSize: 8,
   });
@@ -132,8 +128,6 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     fetchTV,
     enabled: !!providerStr,
     skipExternalDedup: true,
-    scoringMode: 'windowReorder',
-    tasteVector,
     initialSize: 15,
     batchSize: 8,
   });
@@ -200,53 +194,56 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     return combined;
   }, [fixedSectionIds]);
 
-  // --- Load genre list + affinities + taste vector ---
+  // --- Load genre list from selected clusters (v2) or fallback to homeGenres ---
   useEffect(() => {
     let cancelled = false;
     setMetaLoading(true);
     async function load() {
       try {
-        const [homeGenres, affinities, tasteProfile] = await Promise.all([
-          getHomeGenres(),
-          calculateGenreAffinities(),
-          getTasteProfile(),
-        ]);
+        // Try to derive genres from the user's selected clusters
+        let clusterGenreIds: number[] = [];
+        if (isSupabaseActive()) {
+          const userId = getAuthUserId();
+          if (userId) {
+            const { data } = await supabase
+              .from('taste_profiles' as any)
+              .select('selected_clusters')
+              .eq('user_id', userId)
+              .maybeSingle();
+            const selectedClusters: string[] = (data as any)?.selected_clusters || [];
+            if (selectedClusters.length > 0) {
+              // Derive genre IDs from cluster tmdbGenreIds field
+              const seen = new Set<number>();
+              for (const clusterId of selectedClusters) {
+                const cluster = TASTE_CLUSTERS.find(c => c.id === clusterId);
+                if (cluster) {
+                  for (const gId of cluster.tmdbGenreIds) {
+                    if (!seen.has(gId)) {
+                      seen.add(gId);
+                      clusterGenreIds.push(gId);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
         if (cancelled) return;
 
-        setGenreAffinities(affinities);
-        setTasteVector(tasteProfile?.vector || null);
-
-        debug.info('Vector', 'Meta loaded', {
-          hasVector: !!tasteProfile?.vector,
-          quizCompleted: !!tasteProfile?.quizCompleted,
-          affinityCount: Object.keys(affinities).length,
-          topAffinities: Object.entries(affinities)
-            .sort(([, a], [, b]) => (b as number) - (a as number))
-            .slice(0, 5)
-            .map(([id, score]) => ({ genreId: Number(id), name: GENRE_NAMES[Number(id)], score })),
-        });
-
-        if (tasteProfile?.vector) {
-          const v = tasteProfile.vector;
-          const allDims = Object.entries(v)
-            .sort(([, a], [, b]) => Math.abs(b as number) - Math.abs(a as number))
-            .map(([k, val]) => `${k}:${(val as number).toFixed(3)}`);
-          debug.info('Vector', 'Full stored vector (25D)', { dimensions: allDims });
-        }
-
-        if (tasteProfile?.quizCompleted && tasteProfile.vector) {
-          // Post-quiz: all genres above threshold, ordered by vector score
-          const vectorKeys = getGenresFromVector(tasteProfile.vector);
-          const vectorGenreIds = vectorKeys
-            .map((key) => GENRE_KEY_TO_TMDB[key])
-            .filter(Boolean);
-          setGenreList(vectorGenreIds.length > 0 ? vectorGenreIds : homeGenres);
+        if (clusterGenreIds.length > 0) {
+          setGenreList(clusterGenreIds);
         } else {
-          // Pre-quiz fallback: onboarding genre selections
-          setGenreList(homeGenres);
+          // Fallback: onboarding genre selections from homeGenres
+          const homeGenres = await getHomeGenres();
+          if (!cancelled) setGenreList(homeGenres);
         }
+
+        debug.info('HomeContent', 'Meta loaded (v2)', {
+          genreCount: clusterGenreIds.length || 'fallback',
+        });
       } catch (err) {
-        console.error('[useHomeContent] Error loading genres/affinities:', err);
+        console.error('[useHomeContent] Error loading genres:', err);
       } finally {
         if (!cancelled) setMetaLoading(false);
       }
@@ -260,26 +257,6 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
 
   // --- Overall loading (true until at least one fixed section has items) ---
   const loading = !providerStr || (popular.loading && highestRated.loading && recentlyAdded.loading);
-
-  // --- Auto-refresh ForYou + HiddenGems when taste vector becomes available (post-quiz) ---
-  const prevVectorRef = useRef<TasteVector | null>(null);
-  useEffect(() => {
-    const prev = prevVectorRef.current;
-    prevVectorRef.current = tasteVector;
-    // Skip initial mount (prev is null and tasteVector is null)
-    if (prev === null && tasteVector === null) return;
-    // Vector changed (null → value, or value → different value after retake)
-    if (tasteVector && tasteVector !== prev) {
-      debug.info('Vector', 'Vector changed — refreshing ForYou + HiddenGems');
-      (async () => {
-        await Promise.all([
-          invalidateRecommendationCache(),
-          storage.removeItem('@app_hidden_gems'),
-        ]).catch(() => {});
-        await Promise.all([recs.reload(), hiddenGems.reload()]);
-      })();
-    }
-  }, [tasteVector, recs.reload, hiddenGems.reload]);
 
   // --- Prefetch services for visible items (fire-and-forget) ---
   const prefetchedRef = useRef(false);
@@ -324,8 +301,8 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     hiddenGems: { ...hiddenGems, items: dedupedSections.hiddenGems },
     // Genre section support
     genreList,
-    genreAffinities,
-    tasteVector,
+    genreAffinities: {} as GenreAffinities,  // Phase 3: empty, Phase 4 reintroduces
+    tasteVector: null,                        // Phase 3: v1 vector removed, v2 loaded internally by hooks
     baseParams,
     filterKey,
     sectionKeyBase,

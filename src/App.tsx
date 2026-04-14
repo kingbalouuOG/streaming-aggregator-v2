@@ -29,7 +29,6 @@ import { useHomeContent } from "./hooks/useHomeContent";
 import { useUpcoming } from "./hooks/useUpcoming";
 import { LazyGenreSection } from "./components/LazyGenreSection";
 import { providerIdsToServiceIds, providerIdToServiceId } from "./lib/adapters/platformAdapter";
-import { reorderWithinWindows } from "./lib/taste/genreBlending";
 import type { ServiceId } from "./components/platformLogos";
 import { App as CapApp } from "@capacitor/app";
 import { useTasteProfile } from "./hooks/useTasteProfile";
@@ -172,12 +171,8 @@ function AppContent() {
 
   // --- Upcoming content (Coming Soon) ---
   const upcoming = useUpcoming(connectedServices, home.fetchMovies, home.fetchTV);
-  const reorderedUpcoming = useMemo(
-    () => home.tasteVector
-      ? reorderWithinWindows(upcoming.items, home.tasteVector, (item) => item.genreIds || [])
-      : upcoming.items,
-    [upcoming.items, home.tasteVector]
-  );
+  // Phase 3: no client-side reordering (Phase 4 reintroduces via v2 ranker)
+  const reorderedUpcoming = upcoming.items;
 
   const activeFilterCount =
     filters.services.length +

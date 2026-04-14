@@ -3,12 +3,11 @@ import { discoverMovies, discoverTV } from '@/lib/api/tmdb';
 import { tmdbMovieToContentItem, tmdbTVToContentItem } from '@/lib/adapters/contentAdapter';
 import { getSectionCache, setSectionCache } from '@/lib/sectionSessionCache';
 import { sanitiseTVGenreParams } from '@/lib/constants/genres';
-import { reorderWithinWindows, hybridScore } from '@/lib/taste/genreBlending';
-import type { TasteVector } from '@/lib/taste/tasteVector';
 import type { ContentItem } from '@/components/ContentCard';
-import type { GenreAffinities } from '@/lib/utils/recommendationEngine';
 import { debug } from '@/lib/debugLogger';
 
+// Phase 3: scoring modes are preserved as type but all resolve to 'none'.
+// Phase 4 reintroduces vector-based scoring via the v2 ranker.
 export type ScoringMode = 'none' | 'affinity' | 'windowReorder' | 'hybrid';
 
 /** ContentItem extended with raw TMDb fields for scoring */
@@ -35,14 +34,14 @@ export interface UseSectionDataOptions {
   excludeIds?: Set<string>;
   /** Register newly displayed IDs into the shared set */
   onNewIds?: (ids: string[]) => void;
-  /** Genre affinities for scoring (genre sections only) */
-  genreAffinities?: GenreAffinities | null;
-  /** Whether to sort by genre affinity */
+  /** @deprecated Phase 3: genre affinities no longer used for scoring */
+  genreAffinities?: Record<string, number> | null;
+  /** @deprecated Phase 3: scoring always 'none' */
   applyScoring?: boolean;
-  /** Scoring mode: determines how items are sorted in the buffer */
+  /** @deprecated Phase 3: scoring always 'none'. Phase 4 reintroduces. */
   scoringMode?: ScoringMode;
-  /** User's taste vector for vector-based scoring */
-  tasteVector?: TasteVector | null;
+  /** @deprecated Phase 3: v1 taste vector no longer used */
+  tasteVector?: unknown;
   /** Whether this is a genre-specific section (affects TV genre handling) */
   isGenreSection?: boolean;
   /** When true, skip dedup against excludeIds and onNewIds registration (for useMemo dedup) */
@@ -60,22 +59,6 @@ export interface SectionDataState {
   loading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
-}
-
-/** Simple affinity score for genre row sorting */
-function scoreByAffinity(item: BufferedItem, affinities: GenreAffinities): number {
-  let score = 0;
-  for (const gId of item._genreIds || []) {
-    score += affinities[gId] || 0;
-  }
-  // Normalize genre score
-  score = Math.min(score / 10, 1) * 70;
-  // Popularity tiebreaker
-  score += Math.min((item._popularity || 0) / 100, 1) * 10;
-  // Rating bonus
-  const rating = item.rating || 0;
-  if (rating >= 7) score += (rating - 7) * 3;
-  return score;
 }
 
 /** Convert raw TMDb result to BufferedItem (ContentItem + scoring fields) */
@@ -106,10 +89,6 @@ export function useSectionData(options: UseSectionDataOptions): SectionDataState
     enabled = true,
     excludeIds,
     onNewIds,
-    genreAffinities,
-    applyScoring = false,
-    scoringMode: scoringModeOpt,
-    tasteVector,
     isGenreSection = false,
     skipExternalDedup = false,
     initialSize = 10,
@@ -117,8 +96,8 @@ export function useSectionData(options: UseSectionDataOptions): SectionDataState
     maxItems = 50,
   } = options;
 
-  // Resolve scoring mode: explicit scoringMode takes precedence over legacy applyScoring
-  const scoringMode: ScoringMode = scoringModeOpt ?? (applyScoring ? 'affinity' : 'none');
+  // Phase 3: all scoring modes resolve to 'none'. TMDb API ordering only.
+  const scoringMode: ScoringMode = 'none';
 
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -188,23 +167,10 @@ export function useSectionData(options: UseSectionDataOptions): SectionDataState
     return itemList.filter((item) => !excludeIds.has(item.id));
   }, [excludeIds, skipExternalDedup]);
 
-  /** Sort/reorder buffer based on scoring mode */
+  /** Sort/reorder buffer based on scoring mode (Phase 3: always 'none') */
   const sortBuffer = useCallback((buf: BufferedItem[]): BufferedItem[] => {
-    switch (scoringMode) {
-      case 'windowReorder':
-        if (!tasteVector) return buf;
-        return reorderWithinWindows(buf, tasteVector, (item) => item._genreIds || []);
-      case 'hybrid':
-        if (!tasteVector) return buf;
-        return [...buf].sort((a, b) => hybridScore(b, tasteVector) - hybridScore(a, tasteVector));
-      case 'affinity':
-        if (!genreAffinities) return buf;
-        return [...buf].sort((a, b) => scoreByAffinity(b, genreAffinities) - scoreByAffinity(a, genreAffinities));
-      case 'none':
-      default:
-        return buf;
-    }
-  }, [scoringMode, tasteVector, genreAffinities]);
+    return buf;
+  }, []);
 
   /** Register item IDs in the shared exclude set */
   const registerItems = useCallback((newItems: ContentItem[]) => {
