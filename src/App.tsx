@@ -32,8 +32,7 @@ import { providerIdsToServiceIds, providerIdToServiceId } from "./lib/adapters/p
 import type { ServiceId } from "./components/platformLogos";
 import { App as CapApp } from "@capacitor/app";
 import { useTasteProfile } from "./hooks/useTasteProfile";
-import { migrateFromLegacyPreferences } from "./lib/storage/tasteProfile";
-import { IMMEDIATE_LOAD_COUNT } from "./lib/taste/tasteVector";
+const IMMEDIATE_LOAD_COUNT = 5;
 import { logOnboardingEvent } from "./lib/analytics/logger";
 import { ONBOARDING_EVENTS } from "./lib/analytics/events";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -104,16 +103,6 @@ function AppContent() {
 
   // --- Taste profile (continuous learning) ---
   const taste = useTasteProfile();
-
-  // --- Migration: create taste profile for existing users ---
-  useEffect(() => {
-    if (userPrefs.onboardingComplete && !taste.loading && !taste.profile) {
-      const homeGenres = userPrefs.preferences?.homeGenres;
-      if (homeGenres && homeGenres.length > 0) {
-        migrateFromLegacyPreferences(homeGenres).then(() => taste.reload());
-      }
-    }
-  }, [userPrefs.onboardingComplete, taste.loading, taste.profile, userPrefs.preferences?.homeGenres?.join(',')]);
 
   // --- Derive provider IDs from user's selected services ---
   const connectedServices = userPrefs.preferences?.platforms

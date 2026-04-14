@@ -78,9 +78,22 @@ export const getGenreName = (id: number): string => {
   return GENRE_NAMES[id] || 'Unknown';
 };
 
-// Taste vector dimension key → TMDb genre ID (shared mapping for homepage sections)
-import { genreNameToKey } from '@/lib/taste/tasteVector';
+// Genre name → vector dimension key (extracted from v1 tasteVector.ts, Phase 3)
+const GENRE_NAME_TO_DIM_KEY: Record<string, string> = {
+  'Action': 'action', 'Adventure': 'adventure', 'Animation': 'animation',
+  'Comedy': 'comedy', 'Crime': 'crime',
+  'Documentary': 'documentary', 'Drama': 'drama', 'Family': 'family',
+  'Fantasy': 'fantasy', 'History': 'history', 'Horror': 'horror',
+  'Musical': 'musical', 'Music': 'musical',
+  'Mystery': 'mystery', 'Reality': 'reality', 'Romance': 'romance',
+  'Sci-Fi': 'scifi', 'Thriller': 'thriller', 'War': 'war', 'Western': 'western',
+};
 
+function genreNameToKey(name: string): string {
+  return GENRE_NAME_TO_DIM_KEY[name] || name.toLowerCase();
+}
+
+// Taste vector dimension key → TMDb genre ID (shared mapping for homepage sections)
 export const GENRE_KEY_TO_TMDB: Record<string, number> = {};
 for (const [name, id] of Object.entries(GENRE_NAME_TO_ID)) {
   const key = genreNameToKey(name);

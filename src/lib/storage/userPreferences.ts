@@ -1,5 +1,4 @@
 import storage, { isSupabaseActive } from '../storage';
-import { clearTasteProfile } from './tasteProfile';
 import * as supa from '../supabaseStorage';
 
 const DEBUG = __DEV__;
@@ -162,7 +161,7 @@ export const hasCompletedOnboarding = async (): Promise<boolean> => {
 
 export const clearAllData = async () => {
   await storage.multiRemove([STORAGE_KEYS.USER_PROFILE, STORAGE_KEYS.USER_PREFERENCES, STORAGE_KEYS.AUTH_USER_ID]);
-  await clearTasteProfile();
+  // v1 clearTasteProfile removed — v2 taste data lives in Supabase (cascade on profile delete)
   if (DEBUG) console.log('[Storage] All user data cleared');
 };
 
