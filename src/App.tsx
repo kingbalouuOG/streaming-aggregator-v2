@@ -749,6 +749,23 @@ function AppContent() {
                 </>
               )}
 
+              {activeTab === "foryou" && (
+                <div className="px-0 pt-2">
+                  <h1 className="text-foreground text-[22px] px-5 mb-4" style={{ fontWeight: 700 }}>For You</h1>
+                  {home.forYou.items.length > 0 && (
+                    <ContentRow title="Recommended For You" sectionKey="foryou-recs" sourceSurface="for_you" items={filterLanguage(filterWatched(home.forYou.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                  )}
+                  {home.hiddenGems.items.length > 0 && (
+                    <ContentRow title="Hidden Gems" sectionKey="foryou-gems" sourceSurface="for_you" items={filterLanguage(filterWatched(home.hiddenGems.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                  )}
+                  {home.forYou.items.length === 0 && home.hiddenGems.items.length === 0 && !home.loading && (
+                    <p className="text-muted-foreground text-[14px] text-center px-5 py-12">
+                      Complete onboarding to see personalised recommendations here.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {activeTab === "browse" && (
                 <BrowsePage
                   onItemSelect={handleItemSelect}

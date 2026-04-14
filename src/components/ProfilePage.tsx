@@ -196,21 +196,21 @@ function ProfileLanding({
 
       {/* Action Rows */}
       <SectionLabel label="ACCOUNT" />
-      <ActionRow icon={<User className="w-4.5 h-4.5" />} title="Account Details" subtitle={displayEmail} onClick={() => onNavigate('account')} />
+      <ActionRow icon={<User className="w-4.5 h-4.5 text-blue-400" />} title="Account Details" subtitle={displayEmail} onClick={() => onNavigate('account')} />
 
       <SectionLabel label="SUBSCRIPTIONS" />
-      <ActionRow icon={<Tv2 className="w-4.5 h-4.5" />} title="Streaming Services" subtitle={`${connectedCount} services connected`} onClick={() => onNavigate('services')} />
+      <ActionRow icon={<Tv2 className="w-4.5 h-4.5 text-emerald-400" />} title="Streaming Services" subtitle={`${connectedCount} services connected`} onClick={() => onNavigate('services')} />
 
       <SectionLabel label="INSIGHTS" />
-      <ActionRow icon={<Wallet className="w-4.5 h-4.5" />} title="Monthly Spend" subtitle="" onClick={() => onNavigate('spend')} />
+      <ActionRow icon={<Wallet className="w-4.5 h-4.5 text-yellow-400" />} title="Monthly Spend" subtitle={`£${connectedCount > 0 ? '—' : '0'}/month`} onClick={() => onNavigate('spend')} />
 
       <SectionLabel label="PERSONALISATION" />
-      <ActionRow icon={<Sparkles className="w-4.5 h-4.5" />} title="Your Taste" subtitle={topClusterNames || 'Set up your taste profile'} onClick={() => onNavigate('taste')} />
-      <ActionRow icon={<SlidersHorizontal className="w-4.5 h-4.5" />} title="Tune Recommendations" subtitle="Balanced across all sliders" onClick={() => onNavigate('tune')} />
+      <ActionRow icon={<Sparkles className="w-4.5 h-4.5 text-primary" />} title="Your Taste" subtitle={topClusterNames || 'Set up your taste profile'} onClick={() => onNavigate('taste')} />
+      <ActionRow icon={<SlidersHorizontal className="w-4.5 h-4.5 text-purple-400" />} title="Tune Recommendations" subtitle="Balanced across all sliders" onClick={() => onNavigate('tune')} />
 
       <SectionLabel label="SETTINGS" />
-      <ActionRow icon={<Palette className="w-4.5 h-4.5" />} title="Appearance" subtitle="" onClick={() => onNavigate('appearance')} />
-      <ActionRow icon={<Shield className="w-4.5 h-4.5" />} title="Privacy & Data" subtitle="Manage your data" onClick={() => onNavigate('privacy')} />
+      <ActionRow icon={<Palette className="w-4.5 h-4.5 text-pink-400" />} title="Appearance" subtitle="" onClick={() => onNavigate('appearance')} />
+      <ActionRow icon={<Shield className="w-4.5 h-4.5 text-cyan-400" />} title="Privacy & Data" subtitle="Manage your data" onClick={() => onNavigate('privacy')} />
 
       {/* Sign Out */}
       <div className="mt-6">
@@ -266,21 +266,22 @@ function AccountDetailsPage({
 
   return (
     <SubPageShell title="Account Details" onBack={onBack}>
-      <div className="space-y-4">
+      <div className="space-y-3 mb-6">
         <InputField label="Name" value={name} onChange={setName} />
         <InputField label="Email" value={email} onChange={setEmail} type="email" />
       </div>
       <button
         onClick={handleSave}
         disabled={!isDirty}
-        className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-[14px] mt-6 transition-colors ${
+        className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-[14px] transition-colors ${
           isDirty
-            ? "bg-primary/20 text-primary border border-primary/30"
+            ? "bg-primary text-white shadow-lg shadow-primary/25"
             : "bg-secondary/60 text-muted-foreground"
         }`}
         style={{ fontWeight: 600 }}
       >
-        {isDirty ? <><Check className="w-4 h-4" /> Save Changes</> : 'Save Changes'}
+        {isDirty && <Check className="w-4 h-4" />}
+        Save Changes
       </button>
     </SubPageShell>
   );
@@ -781,15 +782,15 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6"
             onClick={() => setShowLearnMore(false)}
           >
             <motion.div
-              initial={{ y: 200, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 200, opacity: 0 }}
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="w-full max-w-md bg-card rounded-t-2xl p-6"
+              className="w-full max-w-sm bg-card rounded-2xl p-6 max-h-[80vh] overflow-y-auto"
               onClick={e => e.stopPropagation()}
             >
               <h3 className="text-foreground text-[18px] mb-4" style={{ fontWeight: 700 }}>

@@ -103,54 +103,55 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
     setWatchedLoading(true);
 
     try {
-      // Fetch per-service top titles (avoids centroid collapse)
-      const allCandidates: WatchedGridTitle[] = [];
-      const seenIds = new Set<number>();
+      // Fetch all service centroids in one call
+      const centroids = await fetchServiceCentroids(selectedServices);
+      if (centroids.length === 0) { setWatchedLoading(false); return; }
 
-      for (const serviceId of selectedServices) {
-        const centroids = await fetchServiceCentroids([serviceId]);
-        if (centroids.length === 0) continue;
+      // Use the mean centroid for a single fast RPC call (good enough for onboarding)
+      const dim = centroids[0].length;
+      const meanCentroid = new Array(dim).fill(0);
+      for (const c of centroids) {
+        for (let i = 0; i < dim; i++) meanCentroid[i] += c[i];
+      }
+      for (let i = 0; i < dim; i++) meanCentroid[i] /= centroids.length;
 
-        const serviceCentroid = centroids[0];
-        const vectorStr = `[${serviceCentroid.join(',')}]`;
+      const vectorStr = `[${meanCentroid.join(',')}]`;
+      const { data: matched } = await supabase.rpc('match_titles_by_vector', {
+        query_vector: vectorStr,
+        match_limit: 60,
+      });
 
-        const { data: matched } = await supabase.rpc('match_titles_by_vector', {
-          query_vector: vectorStr,
-          match_limit: 30,
-        });
+      if (!matched || (matched as any[]).length === 0) { setWatchedLoading(false); return; }
 
-        if (!matched) continue;
+      const tmdbIds = (matched as any[]).map((m: any) => m.tmdb_id);
 
-        // Get full metadata for matched titles
-        const tmdbIds = (matched as any[]).map((m: any) => m.tmdb_id);
-        const { data: titles } = await supabase
-          .from('titles' as any)
+      // Fetch metadata and availability in parallel
+      const [titleRes, availRes] = await Promise.all([
+        supabase.from('titles' as any)
           .select('tmdb_id, media_type, title, poster_path, release_year, popularity')
           .in('tmdb_id', tmdbIds)
-          .gte('popularity', 20)
-          .not('poster_path', 'is', null);
-
-        // Check availability on this service
-        const { data: availRows } = await supabase
-          .from('streaming_availability' as any)
+          .gte('popularity', 15)
+          .not('poster_path', 'is', null),
+        supabase.from('streaming_availability' as any)
           .select('tmdb_id')
           .in('tmdb_id', tmdbIds)
-          .eq('service_id', serviceId);
+          .in('service_id', selectedServices),
+      ]);
 
-        const availSet = new Set(((availRows as any[]) || []).map((r: any) => r.tmdb_id));
+      const availSet = new Set(((availRes.data as any[]) || []).map((r: any) => r.tmdb_id));
+      const seenIds = new Set<number>();
+      const allCandidates: WatchedGridTitle[] = [];
 
-        for (const t of ((titles as any[]) || [])) {
-          if (seenIds.has(t.tmdb_id)) continue;
-          if (!availSet.has(t.tmdb_id)) continue;
-          seenIds.add(t.tmdb_id);
-          allCandidates.push({
-            tmdbId: t.tmdb_id,
-            mediaType: t.media_type,
-            title: t.title,
-            posterPath: t.poster_path,
-            year: t.release_year,
-          });
-        }
+      for (const t of ((titleRes.data as any[]) || [])) {
+        if (seenIds.has(t.tmdb_id) || !availSet.has(t.tmdb_id)) continue;
+        seenIds.add(t.tmdb_id);
+        allCandidates.push({
+          tmdbId: t.tmdb_id,
+          mediaType: t.media_type,
+          title: t.title,
+          posterPath: t.poster_path,
+          year: t.release_year,
+        });
       }
 
       // Shuffle for variety
@@ -263,7 +264,6 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
   const toggleCluster = (clusterId: string) => {
     setSelectedClusters(prev => {
       if (prev.includes(clusterId)) return prev.filter(c => c !== clusterId);
-      if (prev.length >= MAX_CLUSTERS) return prev;
       return [...prev, clusterId];
     });
   };
@@ -373,6 +373,8 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
               {step === 4 && (
                 <StepTasteSummary
                   selectedClusters={selectedClusters}
+                  watchedCount={watchedSelections.size}
+                  serviceCount={selectedServices.length}
                   sliders={sliders}
                   onSlidersChange={setSliders}
                 />
@@ -408,7 +410,7 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
           )}
           {step === 3 && selectedClusters.length >= MIN_CLUSTERS && (
             <p className="text-muted-foreground text-[12px] text-center mb-2">
-              {selectedClusters.length} of {MAX_CLUSTERS} selected
+              {selectedClusters.length} selected
             </p>
           )}
 
@@ -519,9 +521,9 @@ function StepAccount({
           initial={{ scale: 0, rotate: -20 }}
           animate={{ scale: 1, rotate: 0 }}
           transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
-          className="w-14 h-14 rounded-2xl mb-3 shadow-xl shadow-primary/30 bg-gradient-to-br from-primary to-orange-400 flex items-center justify-center"
+          className="w-16 h-16 rounded-[20px] mb-3 shadow-xl shadow-primary/30 bg-gradient-to-br from-primary to-orange-400 flex items-center justify-center aspect-square"
         >
-          <Popcorn className="text-white" style={{ width: 28, height: 28 }} />
+          <Popcorn className="text-white" style={{ width: 30, height: 30 }} />
         </motion.div>
         <h2 className="text-foreground text-[22px] mb-0.5" style={{ fontWeight: 700 }}>Join VIDEX</h2>
         <p className="text-muted-foreground text-[13px]">Start discovering what to watch tonight</p>
@@ -655,6 +657,16 @@ function StepAccount({
   );
 }
 
+// UK services ordered by approximate market size
+const SERVICE_DISPLAY_ORDER = [
+  'netflix', 'prime', 'disney', 'bbc', 'itvx', 'channel4', 'now', 'skygo', 'apple', 'paramount',
+];
+const orderedServices = [...allServices].sort((a, b) => {
+  const ai = SERVICE_DISPLAY_ORDER.indexOf(a.id);
+  const bi = SERVICE_DISPLAY_ORDER.indexOf(b.id);
+  return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+});
+
 // ═════════════════════════════════════════════════════════
 // ── Step 2: Select Services ─────────────────────────────
 // ═════════════════════════════════════════════════════════
@@ -690,7 +702,7 @@ function StepServices({
       </div>
 
       <div className="grid grid-cols-2 gap-2.5">
-        {allServices.map((service, idx) => {
+        {orderedServices.map((service, idx) => {
           const isSelected = selected.includes(service.id);
           return (
             <motion.button
@@ -789,13 +801,13 @@ function StepWatchedGrid({
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="aspect-[2/3] rounded-xl bg-secondary animate-pulse" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           {titles.map((title, idx) => {
             const key = `${title.mediaType}-${title.tmdbId}`;
             const isSelected = selected.has(key);
@@ -872,8 +884,6 @@ function StepClusters({
   onToggle: (clusterId: string) => void;
   onClear: () => void;
 }) {
-  const atLimit = selected.length >= MAX_CLUSTERS;
-
   return (
     <div className="flex flex-col h-full px-6 overflow-y-auto no-scrollbar">
       <div className="pt-4 pb-5">
@@ -916,21 +926,18 @@ function StepClusters({
       <div className="grid grid-cols-2 gap-2.5">
         {TASTE_CLUSTERS.map((cluster, idx) => {
           const isSelected = selected.includes(cluster.id);
-          const isDisabled = atLimit && !isSelected;
           return (
             <motion.button
               key={cluster.id}
               initial={{ opacity: 0, scale: 0.85 }}
-              animate={{ opacity: isDisabled ? 0.4 : 1, scale: isDisabled ? 0.98 : 1 }}
+              animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.03 * idx, type: "spring", damping: 20, stiffness: 300 }}
-              whileTap={!isDisabled ? { scale: 0.94 } : undefined}
-              onClick={() => !isDisabled && onToggle(cluster.id)}
+              whileTap={{ scale: 0.94 }}
+              onClick={() => onToggle(cluster.id)}
               className={`relative flex items-center gap-4 py-3 rounded-2xl border text-left transition-all duration-250 ${
                 isSelected
                   ? "border-primary/50 bg-primary/10"
-                  : isDisabled
-                    ? "bg-secondary/20 cursor-not-allowed"
-                    : "bg-secondary/40 hover:bg-secondary/60"
+                  : "bg-secondary/40 hover:bg-secondary/60"
               }`}
               style={{ paddingLeft: '1rem', paddingRight: '2.5rem', borderColor: isSelected ? undefined : "var(--border-subtle)" }}
             >
@@ -968,19 +975,6 @@ function StepClusters({
       </div>
 
       <AnimatePresence>
-        {atLimit && (
-          <motion.p
-            initial={{ opacity: 0, y: -10, height: 0 }}
-            animate={{ opacity: 1, y: 0, height: "auto" }}
-            exit={{ opacity: 0, y: -10, height: 0 }}
-            transition={{ duration: 0.3 }}
-            className="text-primary text-[12px] text-center mt-3"
-          >
-            Maximum {MAX_CLUSTERS} selected
-          </motion.p>
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
         {selected.length > 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-3 text-center">
             <button onClick={onClear} className="text-muted-foreground text-[13px] hover:text-foreground transition-colors">
@@ -999,10 +993,14 @@ function StepClusters({
 // ═════════════════════════════════════════════════════════
 function StepTasteSummary({
   selectedClusters,
+  watchedCount,
+  serviceCount,
   sliders,
   onSlidersChange,
 }: {
   selectedClusters: string[];
+  watchedCount: number;
+  serviceCount: number;
   sliders: SliderState;
   onSlidersChange: (s: SliderState) => void;
 }) {
@@ -1013,17 +1011,27 @@ function StepTasteSummary({
   // Build prose summary from cluster adjectives/moods
   const topClusters = clusters.slice(0, 3);
   const summaryText = topClusters.length >= 2
-    ? `Your taste leans toward ${topClusters.map(c => c.name).join(', ')}. You enjoy ${topClusters[0].adjective} stories with ${topClusters[1].mood}.`
+    ? `Your taste skews towards ${topClusters.map(c => c.name.toLowerCase()).join(', ')}, with ${topClusters[0].adjective} preferences. We'll spread picks across your ${serviceCount} service${serviceCount !== 1 ? 's' : ''}.`
     : topClusters.length === 1
-      ? `Your taste leans toward ${topClusters[0].name}. You enjoy ${topClusters[0].adjective} stories with ${topClusters[0].mood}.`
+      ? `Your taste skews towards ${topClusters[0].name.toLowerCase()}, with ${topClusters[0].adjective} preferences.`
       : 'Your taste profile is being built from your service selections.';
 
   const sliderConfig = [
-    { key: 'catalogueAge' as const, left: 'New releases', right: 'Best match regardless of age' },
+    { key: 'catalogueAge' as const, left: 'New releases', right: 'Best match, any age' },
     { key: 'comfortZone' as const, left: 'Stick with what I like', right: 'Surprise me' },
-    { key: 'contentMix' as const, left: 'Focus on films', right: 'Focus on TV series' },
+    { key: 'contentMix' as const, left: 'Films', right: 'TV Series' },
     { key: 'variety' as const, left: 'Finish what I start', right: 'Try lots of things' },
   ];
+
+  // Slider position labels
+  const getSliderLabel = (key: keyof SliderState, value: number) => {
+    const defaultVal = key === 'comfortZone' ? DEFAULT_SLIDERS.comfortZone : 0.5;
+    if (Math.abs(value - defaultVal) < 0.02) return 'Balanced';
+    if (value < 0.3) return `Leaning ${sliderConfig.find(s => s.key === key)?.left.toLowerCase()}`;
+    if (value > 0.7) return `Leaning ${sliderConfig.find(s => s.key === key)?.right.toLowerCase()}`;
+    if (value < 0.5) return `Slightly prefer ${sliderConfig.find(s => s.key === key)?.left.toLowerCase()}`;
+    return `Slightly prefer ${sliderConfig.find(s => s.key === key)?.right.toLowerCase()}`;
+  };
 
   const resetSliders = () => onSlidersChange({ ...DEFAULT_SLIDERS });
 
@@ -1031,33 +1039,39 @@ function StepTasteSummary({
     <div className="flex flex-col h-full px-6 overflow-y-auto no-scrollbar">
       <div className="pt-4 pb-4">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-          <h2 className="text-foreground text-[20px] mb-2" style={{ fontWeight: 700 }}>
-            Almost there! 🎬
+          <h2 className="text-foreground text-[22px] mb-1" style={{ fontWeight: 700 }}>
+            Almost there 🎉
           </h2>
           <p className="text-muted-foreground text-[13px] mb-4">
-            Here's what we've learned about your recommendations.
+            Tune how we serve your recommendations.
           </p>
         </motion.div>
 
-        {/* Taste summary card */}
+        {/* Taste summary card with stats */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="bg-primary/10 border border-primary/20 rounded-2xl p-4 mb-5"
         >
-          <p className="text-foreground text-[14px] leading-relaxed mb-3">
+          <p className="text-foreground text-[13px] leading-relaxed mb-3">
             {summaryText}
           </p>
-          <ol className="space-y-1">
-            {clusters.slice(0, 5).map((c, i) => (
-              <li key={c.id} className="flex items-center gap-2 text-[13px]">
-                <span className="text-primary" style={{ fontWeight: 600 }}>{i + 1}.</span>
-                <span className="text-[16px]">{c.emoji}</span>
-                <span className="text-foreground" style={{ fontWeight: 500 }}>{c.name}</span>
-              </li>
-            ))}
-          </ol>
+          {/* Stats row */}
+          <div className="flex items-center justify-around">
+            <div className="text-center">
+              <p className="text-primary text-[20px]" style={{ fontWeight: 700 }}>{selectedClusters.length}</p>
+              <p className="text-muted-foreground text-[11px]">Genres</p>
+            </div>
+            <div className="text-center">
+              <p className="text-primary text-[20px]" style={{ fontWeight: 700 }}>{watchedCount}</p>
+              <p className="text-muted-foreground text-[11px]">Titles</p>
+            </div>
+            <div className="text-center">
+              <p className="text-primary text-[20px]" style={{ fontWeight: 700 }}>{serviceCount}</p>
+              <p className="text-muted-foreground text-[11px]">Services</p>
+            </div>
+          </div>
         </motion.div>
 
         {/* Sliders */}
@@ -1085,7 +1099,7 @@ function StepTasteSummary({
                   className="w-full h-1.5 rounded-full appearance-none bg-secondary cursor-pointer accent-primary"
                 />
                 <p className="text-center text-[11px] text-primary mt-0.5" style={{ fontWeight: 500 }}>
-                  {sliders[key] === 0.5 || (key === 'comfortZone' && sliders[key] === 0.25) ? 'Balanced' : ''}
+                  {getSliderLabel(key, sliders[key])}
                 </p>
               </div>
             ))}
