@@ -7,6 +7,14 @@ import {
   Sparkles,
   Tv,
   RefreshCw,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  Popcorn,
+  User,
+  X,
+  Loader2,
 } from "lucide-react";
 import { PLATFORMS, type PlatformDef } from "./platformLogos";
 import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste/tasteClusters";
@@ -16,6 +24,7 @@ import { supabase } from "@/lib/supabase";
 import { fetchServiceCentroids } from "@/lib/taste-v2/bootstrap";
 import type { SliderState } from "@/lib/taste-v2/types";
 import { DEFAULT_SLIDERS } from "@/lib/taste-v2/types";
+import { useAuth } from "./AuthContext";
 
 // ── Service definitions ──────────────────────────────────
 export type { PlatformDef as StreamingServiceDef };
@@ -35,6 +44,8 @@ export interface OnboardingData {
 
 interface OnboardingFlowProps {
   onComplete: (data: OnboardingData) => void;
+  /** If true, skip Step 1 (account creation) — user already authenticated */
+  skipAuth?: boolean;
 }
 
 const TOTAL_STEPS = 5;
@@ -60,13 +71,17 @@ interface WatchedGridTitle {
   year: number | null;
 }
 
-export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
-  const [step, setStep] = useState(0);
+export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
+  // If auth is already done, start at Step 2 (Services)
+  const [step, setStep] = useState(skipAuth ? 1 : 0);
   const [direction, setDirection] = useState(0);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [selectedClusters, setSelectedClusters] = useState<string[]>([]);
   const [watchedSelections, setWatchedSelections] = useState<Set<string>>(new Set());
   const [sliders, setSliders] = useState<SliderState>({ ...DEFAULT_SLIDERS });
+
+  // Step 1 (Account) state
+  const [accountCreated, setAccountCreated] = useState(!!skipAuth);
 
   // Watched grid state
   const [watchedPool, setWatchedPool] = useState<WatchedGridTitle[]>([]);
@@ -159,28 +174,48 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const currentRoundTitles = watchedPool.slice(roundStartIdx, roundStartIdx + TITLES_PER_ROUND);
 
   const canContinue = [
-    selectedServices.length > 0,                      // Step 1: Services
-    true,                                             // Step 2: Watched grid (optional)
-    selectedClusters.length >= MIN_CLUSTERS,           // Step 3: Clusters
-    true,                                             // Step 4: Summary + sliders
+    accountCreated,                                   // Step 1: Account (handled by StepAccount callback)
+    selectedServices.length > 0,                      // Step 2: Services
+    true,                                             // Step 3: Watched grid (optional)
+    selectedClusters.length >= MIN_CLUSTERS,           // Step 4: Clusters
+    true,                                             // Step 5: Summary + sliders
   ];
 
+  // Called by StepAccount when auth sign-up succeeds
+  const handleAccountCreated = useCallback((age: string | null, context: string | null) => {
+    setAccountCreated(true);
+    // Save age_range and viewing_context to profiles (fire-and-forget)
+    if (age || context) {
+      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (age) updates.age_range = age;
+      if (context) updates.viewing_context = context;
+      supabase.auth.getUser().then(({ data }) => {
+        if (data.user) {
+          supabase.from('profiles' as any).update(updates).eq('id', data.user.id);
+        }
+      });
+    }
+    // Advance to Step 2 (Services)
+    setDirection(1);
+    setStep(1);
+  }, []);
+
   const goNext = async () => {
-    if (step === 0) {
+    // Step 1 (Account) is handled by handleAccountCreated callback, not goNext
+    if (step === 1) {
       void logOnboardingEvent(ONBOARDING_EVENTS.SERVICES_COMPLETED, {
         service_count: selectedServices.length,
         services: selectedServices,
       });
-      // Pre-fetch watched grid titles for Step 2
+      // Pre-fetch watched grid titles for Step 3
       fetchWatchedGridCandidates();
     }
-    if (step === 1 && watchedRound < TOTAL_ROUNDS - 1) {
-      // Advance to next round within Step 2
+    if (step === 2 && watchedRound < TOTAL_ROUNDS - 1) {
+      // Advance to next round within Step 3
       setWatchedRound(r => r + 1);
       return;
     }
-    // Step 1 (watched grid) has no dedicated analytics event — selections logged at completion
-    if (step === 2) {
+    if (step === 3) {
       void logOnboardingEvent(ONBOARDING_EVENTS.CLUSTERS_COMPLETED, {
         cluster_count: selectedClusters.length,
         clusters: selectedClusters,
@@ -209,10 +244,12 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   };
 
   const goBack = () => {
-    if (step === 1 && watchedRound > 0) {
+    if (step === 2 && watchedRound > 0) {
       setWatchedRound(r => r - 1);
       return;
     }
+    // Don't go back to Step 1 (account creation) — account already created
+    if (step <= 1) return;
     setDirection(-1);
     setStep(s => s - 1);
   };
@@ -254,7 +291,8 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   // CTA button text
   const getCtaText = () => {
-    if (step === 1 && watchedRound < TOTAL_ROUNDS - 1) return `Next round (${watchedRound + 1}/${TOTAL_ROUNDS})`;
+    if (step === 0) return 'Continue'; // Step 1 has its own CTA inside StepAccount
+    if (step === 2 && watchedRound < TOTAL_ROUNDS - 1) return `Next round (${watchedRound + 1}/${TOTAL_ROUNDS})`;
     if (step === TOTAL_STEPS - 1) return 'Start exploring VIDEX';
     return 'Continue';
   };
@@ -295,7 +333,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         <div className="flex-1 overflow-hidden relative">
           <AnimatePresence initial={false} custom={direction} mode="wait">
             <motion.div
-              key={step === 1 ? `step1-round${watchedRound}` : `step${step}`}
+              key={step === 2 ? `step2-round${watchedRound}` : `step${step}`}
               custom={direction}
               variants={slideVariants}
               initial="enter"
@@ -305,13 +343,16 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               className="absolute inset-0 flex flex-col"
             >
               {step === 0 && (
+                <StepAccount onAccountCreated={handleAccountCreated} />
+              )}
+              {step === 1 && (
                 <StepServices
                   selected={selectedServices}
                   onToggle={toggleService}
                   onSelectAll={selectAllServices}
                 />
               )}
-              {step === 1 && (
+              {step === 2 && (
                 <StepWatchedGrid
                   titles={currentRoundTitles}
                   selected={watchedSelections}
@@ -322,14 +363,14 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   loading={watchedLoading}
                 />
               )}
-              {step === 2 && (
+              {step === 3 && (
                 <StepClusters
                   selected={selectedClusters}
                   onToggle={toggleCluster}
                   onClear={clearClusters}
                 />
               )}
-              {step === 3 && (
+              {step === 4 && (
                 <StepTasteSummary
                   selectedClusters={selectedClusters}
                   sliders={sliders}
@@ -340,31 +381,32 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           </AnimatePresence>
         </div>
 
-        {/* ── Bottom CTA ───────────────────── */}
+        {/* ── Bottom CTA (hidden on Step 1 — StepAccount has its own) ───────────────────── */}
+        {step === 0 ? null : (
         <div className="px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3">
-          {step === 0 && selectedServices.length === 0 && (
+          {step === 1 && selectedServices.length === 0 && (
             <p className="text-muted-foreground text-[12px] text-center mb-2">
               Select at least one service to continue
             </p>
           )}
-          {step === 0 && selectedServices.length > 0 && (
+          {step === 1 && selectedServices.length > 0 && (
             <p className="text-muted-foreground text-[12px] text-center mb-2">
               {selectedServices.length} service{selectedServices.length !== 1 ? "s" : ""} selected
             </p>
           )}
-          {step === 1 && (
+          {step === 2 && (
             <p className="text-muted-foreground text-[12px] text-center mb-2">
               {watchedSelections.size > 0
                 ? `${watchedSelections.size} title${watchedSelections.size !== 1 ? 's' : ''} selected`
                 : 'Tap titles you\'ve watched and enjoyed'}
             </p>
           )}
-          {step === 2 && selectedClusters.length < MIN_CLUSTERS && (
+          {step === 3 && selectedClusters.length < MIN_CLUSTERS && (
             <p className="text-muted-foreground text-[12px] text-center mb-2">
               Pick at least {MIN_CLUSTERS} that match your vibe
             </p>
           )}
-          {step === 2 && selectedClusters.length >= MIN_CLUSTERS && (
+          {step === 3 && selectedClusters.length >= MIN_CLUSTERS && (
             <p className="text-muted-foreground text-[12px] text-center mb-2">
               {selectedClusters.length} of {MAX_CLUSTERS} selected
             </p>
@@ -385,13 +427,236 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             {step < TOTAL_STEPS - 1 && <ArrowRight className="w-4.5 h-4.5" />}
           </motion.button>
         </div>
+        )}
       </div>
     </div>
   );
 }
 
 // ═════════════════════════════════════════════════════════
-// ── Step 1: Select Services ─────────────────────────────
+// ── Step 1: Create Account ──────────────────────────────
+// ═════════════════════════════════════════════════════════
+const AGE_RANGES = ['Under 18', '18-24', '25-34', '35-44', '45-54', '55+'];
+const VIEWING_CONTEXTS = [
+  { id: 'solo', label: 'Solo', icon: '👤' },
+  { id: 'partner', label: 'With a partner', icon: '👥' },
+  { id: 'family', label: 'With family', icon: '👨‍👩‍👧‍👦' },
+  { id: 'mix', label: 'Mix', icon: '🔀' },
+];
+
+function StepAccount({
+  onAccountCreated,
+}: {
+  onAccountCreated: (ageRange: string | null, viewingContext: string | null) => void;
+}) {
+  const { signUp, checkUsernameAvailable } = useAuth();
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'too-short' | 'invalid' | 'checking' | 'available' | 'taken'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [ageRange, setAgeRange] = useState<string | null>(null);
+  const [viewingCtx, setViewingCtx] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const latestUsernameRef = useRef('');
+
+  const handleUsernameChange = useCallback((raw: string) => {
+    const cleaned = raw.toLowerCase().replace(/\s/g, '').slice(0, 20);
+    setUsername(cleaned);
+    setError(null);
+    latestUsernameRef.current = cleaned;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (cleaned.length === 0) { setUsernameStatus('idle'); return; }
+    if (cleaned.length < 3) { setUsernameStatus('too-short'); return; }
+    if (!/^[a-z0-9]([a-z0-9_.]*[a-z0-9])?$/.test(cleaned) || /[_.]{2}/.test(cleaned)) {
+      setUsernameStatus('invalid'); return;
+    }
+    setUsernameStatus('checking');
+    debounceRef.current = setTimeout(async () => {
+      const available = await checkUsernameAvailable(cleaned);
+      if (latestUsernameRef.current === cleaned) {
+        setUsernameStatus(available ? 'available' : 'taken');
+      }
+    }, 600);
+  }, [checkUsernameAvailable]);
+
+  useEffect(() => {
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, []);
+
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const pwValid = password.length >= 8 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /[^a-zA-Z0-9]/.test(password);
+  const confirmValid = confirmPassword.length > 0 && confirmPassword === password;
+  const canSubmit = emailValid && usernameStatus === 'available' && pwValid && confirmValid;
+
+  const handleSubmit = async () => {
+    if (!canSubmit || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    const result = await signUp(email, password, username);
+    setSubmitting(false);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      onAccountCreated(ageRange, viewingCtx);
+    }
+  };
+
+  const usernameBorderColor =
+    usernameStatus === 'available' ? 'rgba(34, 197, 94, 0.5)'
+    : usernameStatus === 'taken' || usernameStatus === 'invalid' ? 'rgba(239, 68, 68, 0.6)'
+    : undefined;
+
+  return (
+    <div className="flex flex-col h-full px-6 overflow-y-auto no-scrollbar">
+      {/* Hero */}
+      <div className="flex flex-col items-center pt-4 pb-4">
+        <motion.div
+          initial={{ scale: 0, rotate: -20 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
+          className="w-14 h-14 rounded-2xl mb-3 shadow-xl shadow-primary/30 bg-gradient-to-br from-primary to-orange-400 flex items-center justify-center"
+        >
+          <Popcorn className="text-white" style={{ width: 28, height: 28 }} />
+        </motion.div>
+        <h2 className="text-foreground text-[22px] mb-0.5" style={{ fontWeight: 700 }}>Join VIDEX</h2>
+        <p className="text-muted-foreground text-[13px]">Start discovering what to watch tonight</p>
+      </div>
+
+      {/* Form fields */}
+      <div className="space-y-2.5 mb-4">
+        {/* Email */}
+        <div className="relative">
+          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"><Mail className="w-4.5 h-4.5" /></div>
+          <input type="email" placeholder="Email address" value={email}
+            onChange={e => { setEmail(e.target.value); setError(null); }}
+            className="w-full bg-secondary/60 border rounded-xl pl-11 pr-4 py-3 text-foreground text-[14px] placeholder:text-muted-foreground/50 outline-none focus:ring-1 transition-all"
+            style={{ borderColor: email.length > 0 ? (emailValid ? 'rgba(34,197,94,0.5)' : 'rgba(239,68,68,0.6)') : 'var(--border-subtle)' }}
+          />
+        </div>
+
+        {/* Username */}
+        <div className="relative">
+          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"><User className="w-4.5 h-4.5" /></div>
+          <input type="text" placeholder="Username" value={username}
+            onChange={e => handleUsernameChange(e.target.value)}
+            className="w-full bg-secondary/60 border rounded-xl pl-11 pr-10 py-3 text-foreground text-[14px] placeholder:text-muted-foreground/50 outline-none focus:ring-1 transition-all"
+            style={{ borderColor: usernameBorderColor || 'var(--border-subtle)' }}
+          />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            {usernameStatus === 'checking' && <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />}
+            {usernameStatus === 'available' && <Check className="w-4 h-4 text-emerald-400" />}
+            {(usernameStatus === 'taken' || usernameStatus === 'invalid') && <X className="w-4 h-4 text-red-400" />}
+          </div>
+        </div>
+
+        {/* Password */}
+        <div className="relative">
+          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"><Lock className="w-4.5 h-4.5" /></div>
+          <input type={showPassword ? 'text' : 'password'} placeholder="Password" value={password}
+            onChange={e => { setPassword(e.target.value); setError(null); }}
+            className="w-full bg-secondary/60 border rounded-xl pl-11 pr-10 py-3 text-foreground text-[14px] placeholder:text-muted-foreground/50 outline-none focus:ring-1 transition-all"
+            style={{ borderColor: password.length > 0 && pwValid ? 'rgba(34,197,94,0.5)' : 'var(--border-subtle)' }}
+          />
+          <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+          </button>
+        </div>
+
+        {/* Confirm password */}
+        <div className="relative">
+          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"><Lock className="w-4.5 h-4.5" /></div>
+          <input type={showConfirm ? 'text' : 'password'} placeholder="Confirm password" value={confirmPassword}
+            onChange={e => { setConfirmPassword(e.target.value); setError(null); }}
+            className="w-full bg-secondary/60 border rounded-xl pl-11 pr-10 py-3 text-foreground text-[14px] placeholder:text-muted-foreground/50 outline-none focus:ring-1 transition-all"
+            style={{ borderColor: confirmPassword.length > 0 ? (confirmValid ? 'rgba(34,197,94,0.5)' : 'rgba(239,68,68,0.6)') : 'var(--border-subtle)' }}
+          />
+          <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            {showConfirm ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* A little about you — Optional */}
+      <div className="mb-4">
+        <h3 className="text-foreground text-[14px] mb-1" style={{ fontWeight: 600 }}>A little about you</h3>
+        <p className="text-muted-foreground text-[12px] mb-3">Optional — helps us recommend the right content from day one.</p>
+
+        <p className="text-muted-foreground text-[12px] mb-1.5" style={{ fontWeight: 500 }}>Age range</p>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {AGE_RANGES.map(age => (
+            <button key={age} onClick={() => setAgeRange(ageRange === age ? null : age)}
+              className={`px-3 py-1.5 rounded-full text-[12px] border transition-all ${
+                ageRange === age
+                  ? 'border-primary bg-primary/15 text-foreground'
+                  : 'border-transparent bg-secondary/60 text-muted-foreground'
+              }`}
+              style={{ fontWeight: ageRange === age ? 600 : 500 }}
+            >
+              {age}
+            </button>
+          ))}
+        </div>
+
+        <p className="text-muted-foreground text-[12px] mb-1.5" style={{ fontWeight: 500 }}>How do you usually watch?</p>
+        <div className="flex flex-wrap gap-2">
+          {VIEWING_CONTEXTS.map(ctx => (
+            <button key={ctx.id} onClick={() => setViewingCtx(viewingCtx === ctx.id ? null : ctx.id)}
+              className={`px-3 py-1.5 rounded-full text-[12px] border transition-all ${
+                viewingCtx === ctx.id
+                  ? 'border-primary bg-primary/15 text-foreground'
+                  : 'border-transparent bg-secondary/60 text-muted-foreground'
+              }`}
+              style={{ fontWeight: viewingCtx === ctx.id ? 600 : 500 }}
+            >
+              {ctx.icon} {ctx.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Legal */}
+      <p className="text-muted-foreground text-[11px] text-center mb-3">
+        By creating an account, you agree to our{' '}
+        <span className="text-primary">Terms of Service</span> and{' '}
+        <span className="text-primary">Privacy Policy</span>
+      </p>
+
+      {/* Error */}
+      <AnimatePresence>
+        {error && (
+          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="text-red-400 text-[13px] text-center mb-2">{error}</motion.p>
+        )}
+      </AnimatePresence>
+
+      {/* CTA */}
+      <div className="pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <motion.button
+          onClick={handleSubmit}
+          disabled={!canSubmit || submitting}
+          whileTap={canSubmit && !submitting ? { scale: 0.97 } : undefined}
+          className={`w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-[15px] transition-all duration-300 ${
+            canSubmit && !submitting
+              ? 'bg-primary text-white shadow-lg shadow-primary/25'
+              : 'bg-secondary text-muted-foreground cursor-not-allowed'
+          }`}
+          style={{ fontWeight: 600 }}
+        >
+          {submitting ? 'Creating account…' : 'Continue'}
+          {!submitting && <ArrowRight className="w-4.5 h-4.5" />}
+        </motion.button>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════
+// ── Step 2: Select Services ─────────────────────────────
 // ═════════════════════════════════════════════════════════
 function StepServices({
   selected,

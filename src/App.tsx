@@ -67,6 +67,7 @@ function AppContent() {
   const [watchlistSubTab, setWatchlistSubTab] = useState<"want" | "watched">("want");
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const [showSignUpSuccess, setShowSignUpSuccess] = useState(false);
+  const [showSignUpOnboarding, setShowSignUpOnboarding] = useState(false);
   const [authUsername, setAuthUsername] = useState<string | null>(null);
   const prevSessionRef = useRef<boolean>(false);
   const justOnboardedRef = useRef(false);
@@ -499,11 +500,23 @@ function AppContent() {
     );
   }
 
-  // ── Not authenticated → auth screens ──
+  // ── Not authenticated → auth screens or sign-up onboarding ──
   if (!auth.session) {
+    if (showSignUpOnboarding) {
+      // Sign-up via the v2 onboarding flow (Step 1 handles auth)
+      return (
+        <>
+          <OnboardingFlow onComplete={handleOnboardingComplete} />
+          <ThemedToaster />
+        </>
+      );
+    }
     return (
       <>
-        <AuthScreen onSignUpSuccess={handleSignUpSuccess} />
+        <AuthScreen
+          onSignUpSuccess={handleSignUpSuccess}
+          onStartSignUp={() => setShowSignUpOnboarding(true)}
+        />
         <ThemedToaster />
       </>
     );
@@ -545,7 +558,7 @@ function AppContent() {
   if (!userPrefs.onboardingComplete) {
     return (
       <>
-        <OnboardingFlow onComplete={handleOnboardingComplete} />
+        <OnboardingFlow onComplete={handleOnboardingComplete} skipAuth />
         <ThemedToaster />
       </>
     );
