@@ -36,7 +36,7 @@ export function useRecommendations(
         .map(id => providerIdToServiceId(id))
         .filter(Boolean) as string[];
 
-      const { dismissedIds, thumbsDownIds, watchlistIds } = await buildFilterSets(serviceIds);
+      const { dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds } = await buildFilterSets(serviceIds);
 
       // Determine media type filter from fetchMovies/fetchTV
       const mediaTypeFilter = fetchMovies && !fetchTV ? 'movie' as const
@@ -45,7 +45,7 @@ export function useRecommendations(
 
       const results = await rankTitles({
         tasteVector: profile.tasteVector,
-        userServiceIds: serviceIds,
+        availableTmdbIds,
         dismissedIds,
         thumbsDownIds,
         watchlistIds,

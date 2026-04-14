@@ -35,7 +35,7 @@ export function useHiddenGems(
         .map(id => providerIdToServiceId(id))
         .filter(Boolean) as string[];
 
-      const { dismissedIds, thumbsDownIds, watchlistIds } = await buildFilterSets(serviceIds);
+      const { dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds } = await buildFilterSets(serviceIds);
 
       const mediaTypeFilter = fetchMovies && !fetchTV ? 'movie' as const
         : !fetchMovies && fetchTV ? 'tv' as const
@@ -43,7 +43,7 @@ export function useHiddenGems(
 
       const results = await rankHiddenGems({
         tasteVector: profile.tasteVector,
-        userServiceIds: serviceIds,
+        availableTmdbIds,
         dismissedIds,
         thumbsDownIds,
         watchlistIds,

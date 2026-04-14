@@ -22,7 +22,7 @@ const OVERFETCH_MULTIPLIER = 3;
 export async function rankTitles(input: RankerInput): Promise<ContentItem[]> {
   const {
     tasteVector,
-    userServiceIds,
+    availableTmdbIds,
     dismissedIds,
     thumbsDownIds,
     watchlistIds,
@@ -51,17 +51,7 @@ export async function rankTitles(input: RankerInput): Promise<ContentItem[]> {
 
   if (matchedTitles.length === 0) return [];
 
-  // Get available tmdb_ids for user's services
-  const { data: availRows } = await supabase
-    .from('streaming_availability' as any)
-    .select('tmdb_id')
-    .in('service_id', userServiceIds);
-
-  const availableTmdbIds = new Set(
-    ((availRows as any[]) || []).map((r: any) => r.tmdb_id as number)
-  );
-
-  // Hard filter
+  // Hard filter (availability set pre-built by caller via buildFilterSets)
   const filtered = matchedTitles.filter(t => {
     const contentKey = `${t.media_type}-${t.tmdb_id}`;
 
@@ -132,7 +122,7 @@ export async function rankTitles(input: RankerInput): Promise<ContentItem[]> {
 export async function rankHiddenGems(input: RankerInput): Promise<ContentItem[]> {
   const {
     tasteVector,
-    userServiceIds,
+    availableTmdbIds,
     dismissedIds,
     thumbsDownIds,
     watchlistIds,
@@ -159,17 +149,7 @@ export async function rankHiddenGems(input: RankerInput): Promise<ContentItem[]>
   const matchedTitles = matched as MatchedTitle[];
   if (matchedTitles.length === 0) return [];
 
-  // Get available tmdb_ids
-  const { data: availRows } = await supabase
-    .from('streaming_availability' as any)
-    .select('tmdb_id')
-    .in('service_id', userServiceIds);
-
-  const availableTmdbIds = new Set(
-    ((availRows as any[]) || []).map((r: any) => r.tmdb_id as number)
-  );
-
-  // Hard filter (same as rankTitles)
+  // Hard filter (availability set pre-built by caller via buildFilterSets)
   const hardFiltered = matchedTitles.filter(t => {
     const contentKey = `${t.media_type}-${t.tmdb_id}`;
     if (availableTmdbIds.size > 0 && !availableTmdbIds.has(t.tmdb_id)) return false;

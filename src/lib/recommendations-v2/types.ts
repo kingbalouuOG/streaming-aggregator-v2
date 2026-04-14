@@ -9,7 +9,7 @@ import type { ContentItem } from '@/components/ContentCard';
 /** Input to the ranker */
 export interface RankerInput {
   tasteVector: number[];
-  userServiceIds: string[];
+  availableTmdbIds: Set<number>;   // pre-built from streaming_availability
   dismissedIds: Set<string>;       // format: "movie-12345" or "tv-12345"
   thumbsDownIds: Set<string>;      // same format
   watchlistIds: Set<string>;       // same format

@@ -11,7 +11,7 @@ import {
   type UserProfile,
   type UserPreferences,
 } from '@/lib/storage/userPreferences';
-import { serviceIdToProviderId } from '@/lib/adapters/platformAdapter';
+import { serviceIdToProviderId, providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import { UK_PROVIDERS_ARRAY } from '@/lib/constants/platforms';
 import type { ServiceId } from '@/components/platformLogos';
 import { TASTE_CLUSTERS } from '@/lib/taste/tasteClusters';
@@ -199,7 +199,11 @@ export function useUserPreferences(currentUserId?: string | null) {
       const vector = await bootstrapTasteVector({
         serviceIds: (preferences?.platforms || [])
           .filter(p => p.selected !== false)
-          .map(p => p.name),
+          .map(p => {
+            const sid = providerIdToServiceId(p.id);
+            return sid || '';
+          })
+          .filter(Boolean),
         watchedTitles: [],
         clusterRepresentativeTmdbIds,
       });
