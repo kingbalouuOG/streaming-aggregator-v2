@@ -7,15 +7,13 @@ import {
   Sparkles,
   Tv,
   RefreshCw,
-  Film,
 } from "lucide-react";
 import { PLATFORMS, type PlatformDef } from "./platformLogos";
 import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste/tasteClusters";
 import { logOnboardingEvent } from "@/lib/analytics/logger";
 import { ONBOARDING_EVENTS } from "@/lib/analytics/events";
 import { supabase } from "@/lib/supabase";
-import { fetchServiceCentroids, fetchTitleEmbeddings } from "@/lib/taste-v2/bootstrap";
-import { centroid } from "@/lib/taste-v2/vectorOps";
+import { fetchServiceCentroids } from "@/lib/taste-v2/bootstrap";
 import type { SliderState } from "@/lib/taste-v2/types";
 import { DEFAULT_SLIDERS } from "@/lib/taste-v2/types";
 
@@ -254,9 +252,6 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setWatchedPoolOffset(prev => prev + TITLES_PER_ROUND);
   };
 
-  // Step labels for the progress indicator
-  const stepLabels = ['Services', 'Watched', 'Taste', 'Summary', 'Ready'];
-
   // CTA button text
   const getCtaText = () => {
     if (step === 1 && watchedRound < TOTAL_ROUNDS - 1) return `Next round (${watchedRound + 1}/${TOTAL_ROUNDS})`;
@@ -337,8 +332,6 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               {step === 3 && (
                 <StepTasteSummary
                   selectedClusters={selectedClusters}
-                  watchedCount={watchedSelections.size}
-                  serviceCount={selectedServices.length}
                   sliders={sliders}
                   onSlidersChange={setSliders}
                 />
@@ -741,14 +734,10 @@ function StepClusters({
 // ═════════════════════════════════════════════════════════
 function StepTasteSummary({
   selectedClusters,
-  watchedCount,
-  serviceCount,
   sliders,
   onSlidersChange,
 }: {
   selectedClusters: string[];
-  watchedCount: number;
-  serviceCount: number;
   sliders: SliderState;
   onSlidersChange: (s: SliderState) => void;
 }) {

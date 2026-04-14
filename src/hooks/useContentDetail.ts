@@ -141,7 +141,6 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
       // Score and sort candidates
       const similar = mergedCandidates
         .map((item: any) => {
-          const candidateKey = `${mediaType === 'movie' ? 'movie' : 'tv'}-${item.id}`;
           // Try both media types since candidate might be movie or tv
           const candidateEmbedding = embeddingMap.get(`movie-${item.id}`)
             || embeddingMap.get(`tv-${item.id}`);

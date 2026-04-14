@@ -9,7 +9,7 @@ import { invalidateRecommendationCache } from '@/lib/storage/recommendations';
 import storage from '@/lib/storage';
 import { getHomeGenres } from '@/lib/storage/userPreferences';
 import { serviceIdsToProviderIds } from '@/lib/adapters/platformAdapter';
-import { GENRE_NAME_TO_ID, GENRE_NAMES } from '@/lib/constants/genres';
+import { GENRE_NAME_TO_ID } from '@/lib/constants/genres';
 import { TASTE_CLUSTERS } from '@/lib/taste/tasteClusters';
 import type { FilterState } from '@/components/FilterSheet';
 import type { ServiceId } from '@/components/platformLogos';
@@ -201,7 +201,7 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     async function load() {
       try {
         // Try to derive genres from the user's selected clusters
-        let clusterGenreIds: number[] = [];
+        const clusterGenreIds: number[] = [];
         if (isSupabaseActive()) {
           const userId = getAuthUserId();
           if (userId) {
