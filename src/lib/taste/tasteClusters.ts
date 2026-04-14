@@ -22,6 +22,11 @@ export interface TasteCluster {
   description: string;
   emoji: string;
   vector: Partial<Record<Dimension, number>>;
+  // V2 fields (added Phase 3, Task 2)
+  adjective: string;
+  mood: string;
+  tmdbGenreIds: number[];
+  representativeTmdbIds: { tmdbId: number; mediaType: 'movie' | 'tv' }[];
 }
 
 // ── Constants ────────────────────────────────────────────────────
@@ -53,6 +58,15 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       intensity: -0.4,
       pacing: 0.3,
     },
+    adjective: 'feel-good',
+    mood: 'light-hearted comedy and uplifting stories',
+    tmdbGenreIds: [35, 18],
+    representativeTmdbIds: [
+      { tmdbId: 18785, mediaType: 'movie' }, // The Hangover
+      { tmdbId: 8363, mediaType: 'movie' },  // Superbad
+      { tmdbId: 10625, mediaType: 'movie' }, // Mean Girls
+      { tmdbId: 55721, mediaType: 'movie' }, // Bridesmaids
+    ],
   },
   // 2. Action & Adrenaline
   {
@@ -68,6 +82,14 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       pacing: 0.9,
       tone: -0.2,
     },
+    adjective: 'intense',
+    mood: 'high-stakes action and adrenaline',
+    tmdbGenreIds: [28, 12, 53],
+    representativeTmdbIds: [
+      { tmdbId: 562, mediaType: 'movie' },   // Die Hard
+      { tmdbId: 680, mediaType: 'movie' },   // Pulp Fiction
+      { tmdbId: 857, mediaType: 'movie' },   // Saving Private Ryan
+    ],
   },
   // 3. Dark Thrillers
   {
@@ -83,6 +105,15 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       intensity: 0.7,
       pacing: 0.7,
     },
+    adjective: 'dark',
+    mood: 'gritty crime and tense suspense',
+    tmdbGenreIds: [53, 80, 9648],
+    representativeTmdbIds: [
+      { tmdbId: 807, mediaType: 'movie' },    // Se7en
+      { tmdbId: 210577, mediaType: 'movie' }, // Gone Girl
+      { tmdbId: 146233, mediaType: 'movie' }, // Prisoners
+      { tmdbId: 273481, mediaType: 'movie' }, // Sicario
+    ],
   },
   // 4. Rom-Coms & Love Stories
   {
@@ -97,6 +128,15 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       tone: 0.7,
       intensity: -0.3,
     },
+    adjective: 'romantic',
+    mood: 'sweeping romances and charming comedy',
+    tmdbGenreIds: [10749, 35, 18],
+    representativeTmdbIds: [
+      { tmdbId: 11036, mediaType: 'movie' }, // The Notebook
+      { tmdbId: 455207, mediaType: 'movie' }, // Crazy Rich Asians
+      { tmdbId: 4348, mediaType: 'movie' },  // Pride & Prejudice
+      { tmdbId: 13, mediaType: 'movie' },    // Forrest Gump
+    ],
   },
   // 5. Epic Sci-Fi & Fantasy
   {
@@ -112,6 +152,14 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       pacing: -0.2,
       era: -0.2,
     },
+    adjective: 'cerebral',
+    mood: 'speculative worlds and grand adventures',
+    tmdbGenreIds: [878, 14, 12],
+    representativeTmdbIds: [
+      { tmdbId: 157336, mediaType: 'movie' }, // Interstellar
+      { tmdbId: 335984, mediaType: 'movie' }, // Blade Runner 2049
+      { tmdbId: 329865, mediaType: 'movie' }, // Arrival
+    ],
   },
   // 6. Horror & Supernatural
   {
@@ -127,6 +175,14 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       intensity: 0.75,
       pacing: 0.2,
     },
+    adjective: 'unsettling',
+    mood: 'creepy horror and supernatural dread',
+    tmdbGenreIds: [27, 53, 9648],
+    representativeTmdbIds: [
+      { tmdbId: 419430, mediaType: 'movie' }, // Get Out
+      { tmdbId: 447332, mediaType: 'movie' }, // A Quiet Place
+      { tmdbId: 126889, mediaType: 'movie' }, // Alien: Covenant
+    ],
   },
   // 7. Mind-Bending Mysteries
   {
@@ -142,6 +198,15 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       intensity: 0.5,
       pacing: -0.3,
     },
+    adjective: 'cerebral',
+    mood: 'psychological depth and twist-driven puzzles',
+    tmdbGenreIds: [9648, 53, 878],
+    representativeTmdbIds: [
+      { tmdbId: 27205, mediaType: 'movie' }, // Inception
+      { tmdbId: 11324, mediaType: 'movie' }, // Shutter Island
+      { tmdbId: 1124, mediaType: 'movie' },  // The Prestige
+      { tmdbId: 77, mediaType: 'movie' },    // Memento
+    ],
   },
   // 8. Heartfelt Drama
   {
@@ -156,6 +221,14 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       intensity: 0.2,
       pacing: -0.4,
     },
+    adjective: 'heartfelt',
+    mood: 'slow-burn character dramas and emotional depth',
+    tmdbGenreIds: [18, 10749],
+    representativeTmdbIds: [
+      { tmdbId: 278, mediaType: 'movie' },    // The Shawshank Redemption
+      { tmdbId: 238, mediaType: 'movie' },    // The Godfather
+      { tmdbId: 13, mediaType: 'movie' },     // Forrest Gump
+    ],
   },
   // 9. True Crime & Real Stories
   {
@@ -171,6 +244,13 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       intensity: 0.5,
       pacing: -0.2,
     },
+    adjective: 'gripping',
+    mood: 'true crime investigations and real-world stories',
+    tmdbGenreIds: [99, 80, 36],
+    representativeTmdbIds: [
+      { tmdbId: 1430, mediaType: 'movie' },  // Bowling for Columbine
+      { tmdbId: 64439, mediaType: 'tv' },    // Making a Murderer
+    ],
   },
   // 10. Anime & Animation
   {
@@ -185,6 +265,15 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       intensity: 0.3,
       pacing: 0.2,
     },
+    adjective: 'vibrant',
+    mood: 'animated worlds and visual storytelling',
+    tmdbGenreIds: [16, 28, 14],
+    representativeTmdbIds: [
+      { tmdbId: 324857, mediaType: 'movie' }, // Spider-Man: Into the Spider-Verse
+      { tmdbId: 129, mediaType: 'movie' },    // Spirited Away
+      { tmdbId: 862, mediaType: 'movie' },    // Toy Story
+      { tmdbId: 150540, mediaType: 'movie' }, // Inside Out
+    ],
   },
   // 11. Prestige & Award-Winners
   {
@@ -201,6 +290,13 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       pacing: -0.4,
       popularity: -0.4,
     },
+    adjective: 'acclaimed',
+    mood: 'critically praised cinema and prestige storytelling',
+    tmdbGenreIds: [18, 36, 99],
+    representativeTmdbIds: [
+      { tmdbId: 581734, mediaType: 'movie' }, // Nomadland
+      { tmdbId: 278, mediaType: 'movie' },    // The Shawshank Redemption
+    ],
   },
   // 12. History & War
   {
@@ -217,6 +313,14 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       pacing: -0.5,
       era: 0.7,
     },
+    adjective: 'epic',
+    mood: 'historical epics and wartime drama',
+    tmdbGenreIds: [36, 10752, 18],
+    representativeTmdbIds: [
+      { tmdbId: 857, mediaType: 'movie' },    // Saving Private Ryan
+      { tmdbId: 374720, mediaType: 'movie' }, // Dunkirk
+      { tmdbId: 16869, mediaType: 'movie' },  // Inglourious Basterds
+    ],
   },
   // 13. Reality & Entertainment
   {
@@ -232,6 +336,12 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       popularity: 0.6,
       intensity: -0.2,
     },
+    adjective: 'entertaining',
+    mood: 'competition shows and unscripted entertainment',
+    tmdbGenreIds: [10764, 35],
+    representativeTmdbIds: [
+      { tmdbId: 37678, mediaType: 'tv' },  // The Voice
+    ],
   },
   // 14. Cult & Indie
   {
@@ -246,6 +356,13 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       popularity: -0.8,
       intensity: 0.2,
     },
+    adjective: 'offbeat',
+    mood: 'cult favourites and indie discoveries',
+    tmdbGenreIds: [18, 35],
+    representativeTmdbIds: [
+      { tmdbId: 550, mediaType: 'movie' },  // Fight Club
+      { tmdbId: 680, mediaType: 'movie' },  // Pulp Fiction
+    ],
   },
   // 15. Family & Kids
   {
@@ -262,6 +379,15 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       intensity: -0.6,
       pacing: 0.3,
     },
+    adjective: 'family-friendly',
+    mood: 'fun adventures for all ages',
+    tmdbGenreIds: [10751, 16, 35, 12],
+    representativeTmdbIds: [
+      { tmdbId: 12, mediaType: 'movie' },     // Finding Nemo
+      { tmdbId: 8587, mediaType: 'movie' },   // The Lion King
+      { tmdbId: 277834, mediaType: 'movie' }, // Moana
+      { tmdbId: 862, mediaType: 'movie' },    // Toy Story
+    ],
   },
   // 16. Westerns & Frontier
   {
@@ -279,6 +405,15 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       pacing: 0.2,
       era: 0.5,
     },
+    adjective: 'rugged',
+    mood: 'frontier tales and outlaw drama',
+    tmdbGenreIds: [37, 28, 12],
+    representativeTmdbIds: [
+      { tmdbId: 429, mediaType: 'movie' },    // The Good, the Bad and the Ugly
+      { tmdbId: 68718, mediaType: 'movie' },  // Django Unchained
+      { tmdbId: 281957, mediaType: 'movie' }, // The Revenant
+      { tmdbId: 6977, mediaType: 'movie' },   // No Country for Old Men
+    ],
   },
 ];
 
