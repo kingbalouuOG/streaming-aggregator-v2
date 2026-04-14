@@ -54,7 +54,8 @@ export async function getWatchlistIds(): Promise<Set<string>> {
  * Get TMDb IDs of titles available on the user's selected services.
  * Returns Set<number> of tmdb_ids.
  *
- * This is the most expensive filter — cached per call, not per session.
+ * Paginates through all results since Supabase default limit is 1000 rows
+ * but streaming_availability can have 40k+ rows across services.
  */
 export async function getAvailableTmdbIds(
   serviceIds: string[],
@@ -62,14 +63,28 @@ export async function getAvailableTmdbIds(
   if (serviceIds.length === 0) return new Set();
 
   try {
-    const { data, error } = await supabase
-      .from('streaming_availability' as any)
-      .select('tmdb_id')
-      .in('service_id', serviceIds);
+    const allIds = new Set<number>();
+    const pageSize = 1000;
+    let offset = 0;
 
-    if (error || !data) return new Set();
+    while (true) {
+      const { data, error } = await supabase
+        .from('streaming_availability' as any)
+        .select('tmdb_id')
+        .in('service_id', serviceIds)
+        .range(offset, offset + pageSize - 1);
 
-    return new Set((data as any[]).map((r: any) => r.tmdb_id as number));
+      if (error || !data || data.length === 0) break;
+
+      for (const r of (data as any[])) {
+        allIds.add(r.tmdb_id as number);
+      }
+
+      if (data.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    return allIds;
   } catch {
     return new Set();
   }

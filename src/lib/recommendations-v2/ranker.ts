@@ -13,10 +13,9 @@ import { titleRowToContentItem } from './titleAdapter';
 import type { RankerInput, MatchedTitle, TitleRow, ContentItem } from './types';
 import { HIDDEN_GEMS_FILTERS } from './types';
 
-// Over-fetch enough to find matches after service filtering.
-// With ~20k titles and ~300-500 available per user, we need a large
-// pool to guarantee overlap. pgvector HNSW is fast even at 2000.
-const OVERFETCH_MULTIPLIER = 100;
+// Over-fetch to compensate for hard filtering (dismissed, thumbs-down, watchlist).
+// With ef_search fix and paginated availability, 500 is more than enough.
+const OVERFETCH_MULTIPLIER = 25;
 
 /**
  * Rank titles by cosine similarity to the user's taste vector.
@@ -137,8 +136,8 @@ export async function rankHiddenGems(input: RankerInput): Promise<ContentItem[]>
     limit = HIDDEN_GEMS_FILTERS.maxResults,
   } = input;
 
-  // Fetch a large pool — need enough for service filtering + popularity filtering
-  const fetchLimit = 2000;
+  // Fetch a large pool — need enough for service + popularity filtering
+  const fetchLimit = 500;
 
   const vectorStr = `[${tasteVector.join(',')}]`;
 
