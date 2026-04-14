@@ -196,21 +196,21 @@ function ProfileLanding({
 
       {/* Action Rows */}
       <SectionLabel label="ACCOUNT" />
-      <ActionRow icon={<User className="w-4.5 h-4.5 text-blue-400" />} title="Account Details" subtitle={displayEmail} onClick={() => onNavigate('account')} />
+      <ActionRow icon={<User className="w-4 h-4 text-white" />} iconBg="bg-blue-500" title="Account Details" subtitle={displayEmail} onClick={() => onNavigate('account')} />
 
       <SectionLabel label="SUBSCRIPTIONS" />
-      <ActionRow icon={<Tv2 className="w-4.5 h-4.5 text-emerald-400" />} title="Streaming Services" subtitle={`${connectedCount} services connected`} onClick={() => onNavigate('services')} />
+      <ActionRow icon={<Tv2 className="w-4 h-4 text-white" />} iconBg="bg-emerald-500" title="Streaming Services" subtitle={`${connectedCount} services connected`} onClick={() => onNavigate('services')} />
 
       <SectionLabel label="INSIGHTS" />
-      <ActionRow icon={<Wallet className="w-4.5 h-4.5 text-yellow-400" />} title="Monthly Spend" subtitle={`£${connectedCount > 0 ? '—' : '0'}/month`} onClick={() => onNavigate('spend')} />
+      <ActionRow icon={<Wallet className="w-4 h-4 text-white" />} iconBg="bg-yellow-500" title="Monthly Spend" subtitle={`£${connectedCount > 0 ? '—' : '0'}/month`} onClick={() => onNavigate('spend')} />
 
       <SectionLabel label="PERSONALISATION" />
-      <ActionRow icon={<Sparkles className="w-4.5 h-4.5 text-primary" />} title="Your Taste" subtitle={topClusterNames || 'Set up your taste profile'} onClick={() => onNavigate('taste')} />
-      <ActionRow icon={<SlidersHorizontal className="w-4.5 h-4.5 text-purple-400" />} title="Tune Recommendations" subtitle="Balanced across all sliders" onClick={() => onNavigate('tune')} />
+      <ActionRow icon={<Sparkles className="w-4 h-4 text-white" />} iconBg="bg-primary" title="Your Taste" subtitle={topClusterNames || 'Set up your taste profile'} onClick={() => onNavigate('taste')} />
+      <ActionRow icon={<SlidersHorizontal className="w-4 h-4 text-white" />} iconBg="bg-purple-500" title="Tune Recommendations" subtitle="Balanced across all sliders" onClick={() => onNavigate('tune')} />
 
       <SectionLabel label="SETTINGS" />
-      <ActionRow icon={<Palette className="w-4.5 h-4.5 text-pink-400" />} title="Appearance" subtitle="" onClick={() => onNavigate('appearance')} />
-      <ActionRow icon={<Shield className="w-4.5 h-4.5 text-cyan-400" />} title="Privacy & Data" subtitle="Manage your data" onClick={() => onNavigate('privacy')} />
+      <ActionRow icon={<Palette className="w-4 h-4 text-white" />} iconBg="bg-pink-500" title="Appearance" subtitle="Dark" onClick={() => onNavigate('appearance')} />
+      <ActionRow icon={<Shield className="w-4 h-4 text-white" />} iconBg="bg-cyan-600" title="Privacy & Data" subtitle="Manage your data" onClick={() => onNavigate('privacy')} />
 
       {/* Sign Out */}
       <div className="mt-6">
@@ -904,8 +904,9 @@ function SubPageShell({ title, onBack, children }: { title: string; onBack: () =
   );
 }
 
-function ActionRow({ icon, title, subtitle, onClick }: {
+function ActionRow({ icon, iconBg, title, subtitle, onClick }: {
   icon: React.ReactNode;
+  iconBg?: string;
   title: string;
   subtitle: string;
   onClick: () => void;
@@ -915,7 +916,9 @@ function ActionRow({ icon, title, subtitle, onClick }: {
       onClick={onClick}
       className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-secondary/40 hover:bg-secondary/60 transition-colors mb-2"
     >
-      <span className="text-muted-foreground">{icon}</span>
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg || 'bg-secondary'}`}>
+        {icon}
+      </div>
       <div className="flex-1 text-left min-w-0">
         <p className="text-foreground text-[14px]" style={{ fontWeight: 600 }}>{title}</p>
         {subtitle && <p className="text-muted-foreground text-[12px] truncate">{subtitle}</p>}
