@@ -683,18 +683,18 @@ function TuneRecommendationsPage({ onBack }: { onBack: () => void }) {
 
   return (
     <SubPageShell title="Tune Your Recommendations" onBack={onBack}>
-      <p className="text-muted-foreground text-[13px] mb-8">
+      <p className="text-muted-foreground text-[13px]" style={{ marginBottom: '2rem' }}>
         Adjust how Videx serves your recommendations. Changes take effect immediately.
       </p>
 
       {!loaded ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           {[0, 1, 2, 3].map(i => (
             <div key={i} className="h-16 rounded-xl bg-secondary animate-pulse" />
           ))}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           {sliderConfig.map(({ key, left, right }) => (
             <div key={key}>
               <div className="flex justify-between text-[12px] text-muted-foreground" style={{ marginBottom: '0.375rem' }}>
