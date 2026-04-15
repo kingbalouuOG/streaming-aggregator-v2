@@ -1024,13 +1024,17 @@ function StepTasteSummary({
   ];
 
   // Slider position labels
+  const softLower = (s: string): string => s.length === 0 ? s : s[0].toLowerCase() + s.slice(1);
+
   const getSliderLabel = (key: keyof SliderState, value: number) => {
     const defaultVal = key === 'comfortZone' ? DEFAULT_SLIDERS.comfortZone : 0.5;
+    const cfg = sliderConfig.find(s => s.key === key);
+    if (!cfg) return '';
     if (Math.abs(value - defaultVal) < 0.02) return 'Balanced';
-    if (value < 0.3) return `Leaning ${sliderConfig.find(s => s.key === key)?.left.toLowerCase()}`;
-    if (value > 0.7) return `Leaning ${sliderConfig.find(s => s.key === key)?.right.toLowerCase()}`;
-    if (value < 0.5) return `Slightly prefer ${sliderConfig.find(s => s.key === key)?.left.toLowerCase()}`;
-    return `Slightly prefer ${sliderConfig.find(s => s.key === key)?.right.toLowerCase()}`;
+    if (value < 0.3) return `Leaning ${softLower(cfg.left)}`;
+    if (value > 0.7) return `Leaning ${softLower(cfg.right)}`;
+    if (value < 0.5) return `Slightly prefer ${softLower(cfg.left)}`;
+    return `Slightly prefer ${softLower(cfg.right)}`;
   };
 
   const resetSliders = () => onSlidersChange({ ...DEFAULT_SLIDERS });

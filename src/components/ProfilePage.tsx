@@ -663,16 +663,22 @@ function TuneRecommendationsPage({ onBack }: { onBack: () => void }) {
     { key: 'variety' as const, left: 'Finish what I start', right: 'Try lots of things' },
   ];
 
+  // Lowercase the first word only, preserving proper nouns like "TV"
+  const softLower = (s: string): string => {
+    if (s.length === 0) return s;
+    return s[0].toLowerCase() + s.slice(1);
+  };
+
   // Dynamic slider position label
   const getSliderLabel = (key: keyof SliderState, value: number): string => {
     const defaultVal = key === 'comfortZone' ? DEFAULT_SLIDERS.comfortZone : 0.5;
     const cfg = sliderConfig.find(s => s.key === key);
     if (!cfg) return '';
     if (Math.abs(value - defaultVal) < 0.04) return 'Balanced';
-    if (value < 0.25) return `Strongly prefer ${cfg.left.toLowerCase()}`;
-    if (value < 0.5) return `Slightly prefer ${cfg.left.toLowerCase()}`;
-    if (value < 0.75) return `Slightly prefer ${cfg.right.toLowerCase()}`;
-    return `Strongly prefer ${cfg.right.toLowerCase()}`;
+    if (value < 0.25) return `Strongly prefer ${softLower(cfg.left)}`;
+    if (value < 0.5) return `Slightly prefer ${softLower(cfg.left)}`;
+    if (value < 0.75) return `Slightly prefer ${softLower(cfg.right)}`;
+    return `Strongly prefer ${softLower(cfg.right)}`;
   };
 
   return (
