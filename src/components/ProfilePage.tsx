@@ -196,21 +196,21 @@ function ProfileLanding({
 
       {/* Action Rows */}
       <SectionLabel label="ACCOUNT" />
-      <ActionRow icon={<User className="w-4 h-4 text-blue-400" />} iconBg="bg-blue-500/15" title="Account Details" subtitle={displayEmail} onClick={() => onNavigate('account')} />
+      <ActionRow icon={<User className="w-4 h-4" style={{ color: '#60a5fa' }} />} iconBg="" iconBgColor="#dbeafe" title="Account Details" subtitle={displayEmail} onClick={() => onNavigate('account')} />
 
       <SectionLabel label="SUBSCRIPTIONS" />
-      <ActionRow icon={<Tv2 className="w-4 h-4 text-purple-400" />} iconBg="bg-purple-500/15" title="Streaming Services" subtitle={`${connectedCount} services connected`} onClick={() => onNavigate('services')} />
+      <ActionRow icon={<Tv2 className="w-4 h-4" style={{ color: '#a78bfa' }} />} iconBg="" iconBgColor="#ede9fe" title="Streaming Services" subtitle={`${connectedCount} services connected`} onClick={() => onNavigate('services')} />
 
       <SectionLabel label="INSIGHTS" />
-      <ActionRow icon={<Wallet className="w-4 h-4 text-emerald-400" />} iconBg="bg-emerald-500/15" title="Monthly Spend" subtitle={`£${connectedCount > 0 ? '—' : '0'}/month`} onClick={() => onNavigate('spend')} />
+      <ActionRow icon={<Wallet className="w-4 h-4" style={{ color: '#34d399' }} />} iconBg="" iconBgColor="#d1fae5" title="Monthly Spend" subtitle={`£${connectedCount > 0 ? '—' : '0'}/month`} onClick={() => onNavigate('spend')} />
 
       <SectionLabel label="PERSONALISATION" />
-      <ActionRow icon={<Sparkles className="w-4 h-4 text-primary" />} iconBg="bg-primary/15" title="Your Taste" subtitle={topClusterNames || 'Set up your taste profile'} onClick={() => onNavigate('taste')} />
-      <ActionRow icon={<SlidersHorizontal className="w-4 h-4 text-indigo-400" />} iconBg="bg-indigo-500/15" title="Tune Recommendations" subtitle="Balanced across all sliders" onClick={() => onNavigate('tune')} />
+      <ActionRow icon={<Sparkles className="w-4 h-4" style={{ color: '#fb923c' }} />} iconBg="" iconBgColor="#ffedd5" title="Your Taste" subtitle={topClusterNames || 'Set up your taste profile'} onClick={() => onNavigate('taste')} />
+      <ActionRow icon={<SlidersHorizontal className="w-4 h-4" style={{ color: '#facc15' }} />} iconBg="" iconBgColor="#fef3c7" title="Tune Recommendations" subtitle="Balanced across all sliders" onClick={() => onNavigate('tune')} />
 
       <SectionLabel label="SETTINGS" />
-      <ActionRow icon={<Palette className="w-4 h-4 text-pink-400" />} iconBg="bg-pink-500/15" title="Appearance" subtitle="Dark" onClick={() => onNavigate('appearance')} />
-      <ActionRow icon={<Shield className="w-4 h-4 text-slate-400" />} iconBg="bg-slate-500/15" title="Privacy & Data" subtitle="Manage your data" onClick={() => onNavigate('privacy')} />
+      <ActionRow icon={<Palette className="w-4 h-4" style={{ color: '#818cf8' }} />} iconBg="" iconBgColor="#e0e7ff" title="Appearance" subtitle="Dark" onClick={() => onNavigate('appearance')} />
+      <ActionRow icon={<Shield className="w-4 h-4" style={{ color: '#94a3b8' }} />} iconBg="" iconBgColor="#e2e8f0" title="Privacy & Data" subtitle="Manage your data" onClick={() => onNavigate('privacy')} />
 
       {/* Sign Out */}
       <div className="mt-6">
@@ -904,9 +904,10 @@ function SubPageShell({ title, onBack, children }: { title: string; onBack: () =
   );
 }
 
-function ActionRow({ icon, iconBg, title, subtitle, onClick }: {
+function ActionRow({ icon, iconBg, iconBgColor, title, subtitle, onClick }: {
   icon: React.ReactNode;
   iconBg?: string;
+  iconBgColor?: string;
   title: string;
   subtitle: string;
   onClick: () => void;
@@ -916,7 +917,10 @@ function ActionRow({ icon, iconBg, title, subtitle, onClick }: {
       onClick={onClick}
       className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-secondary/40 hover:bg-secondary/60 transition-colors mb-2"
     >
-      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg || 'bg-secondary'}`}>
+      <div
+        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg || (iconBgColor ? '' : 'bg-secondary')}`}
+        style={iconBgColor ? { backgroundColor: iconBgColor } : undefined}
+      >
         {icon}
       </div>
       <div className="flex-1 text-left min-w-0">
