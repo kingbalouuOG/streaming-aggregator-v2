@@ -688,16 +688,16 @@ function TuneRecommendationsPage({ onBack }: { onBack: () => void }) {
       </p>
 
       {!loaded ? (
-        <div className="space-y-10">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
           {[0, 1, 2, 3].map(i => (
             <div key={i} className="h-16 rounded-xl bg-secondary animate-pulse" />
           ))}
         </div>
       ) : (
-        <div className="space-y-16">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
           {sliderConfig.map(({ key, left, right }) => (
             <div key={key}>
-              <div className="flex justify-between text-[12px] text-muted-foreground mb-1.5">
+              <div className="flex justify-between text-[12px] text-muted-foreground" style={{ marginBottom: '0.375rem' }}>
                 <span>{left}</span>
                 <span className="text-right">{right}</span>
               </div>
@@ -710,7 +710,7 @@ function TuneRecommendationsPage({ onBack }: { onBack: () => void }) {
                 className="videx-slider"
                 style={{ ['--slider-fill' as any]: `${Math.round(sliders[key] * 100)}%` }}
               />
-              <p className="text-center text-[11px] text-primary mt-1" style={{ fontWeight: 500 }}>
+              <p className="text-center text-[11px] text-primary" style={{ fontWeight: 500, marginTop: '0.25rem' }}>
                 {getSliderLabel(key, sliders[key])}
               </p>
             </div>
