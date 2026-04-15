@@ -694,7 +694,7 @@ function TuneRecommendationsPage({ onBack }: { onBack: () => void }) {
           ))}
         </div>
       ) : (
-        <div className="space-y-12">
+        <div className="space-y-16">
           {sliderConfig.map(({ key, left, right }) => (
             <div key={key}>
               <div className="flex justify-between text-[12px] text-muted-foreground mb-1.5">
