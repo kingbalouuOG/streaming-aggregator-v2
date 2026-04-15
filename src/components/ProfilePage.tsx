@@ -498,7 +498,8 @@ function YourTastePage({
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 100, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="w-full max-w-md bg-card rounded-t-2xl p-6 mb-0"
+              className="w-full max-w-md rounded-t-2xl p-6 mb-0"
+              style={{ backgroundColor: 'var(--card)' }}
               onClick={e => e.stopPropagation()}
             >
               <h3 className="text-foreground text-[18px] mb-2" style={{ fontWeight: 700 }}>
@@ -802,7 +803,8 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="w-full max-w-sm bg-card rounded-2xl p-6 max-h-[80vh] overflow-y-auto"
+              className="w-full max-w-sm rounded-2xl p-6 max-h-[80vh] overflow-y-auto"
+              style={{ backgroundColor: 'var(--card)' }}
               onClick={e => e.stopPropagation()}
             >
               <h3 className="text-foreground text-[18px] mb-4" style={{ fontWeight: 700 }}>
@@ -861,7 +863,8 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="w-full max-w-sm bg-card rounded-2xl p-6"
+              className="w-full max-w-sm rounded-2xl p-6"
+              style={{ backgroundColor: 'var(--card)' }}
               onClick={e => e.stopPropagation()}
             >
               <h3 className="text-foreground text-[18px] mb-2" style={{ fontWeight: 700 }}>
