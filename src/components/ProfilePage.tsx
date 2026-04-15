@@ -663,32 +663,37 @@ function TuneRecommendationsPage({ onBack }: { onBack: () => void }) {
     { key: 'variety' as const, left: 'Finish what I start', right: 'Try lots of things' },
   ];
 
-  // Determine "Balanced" label display
-  const isBalanced = (key: keyof SliderState) => {
-    const v = sliders[key];
-    if (key === 'comfortZone') return Math.abs(v - DEFAULT_SLIDERS.comfortZone) < 0.02;
-    return Math.abs(v - 0.5) < 0.02;
+  // Dynamic slider position label
+  const getSliderLabel = (key: keyof SliderState, value: number): string => {
+    const defaultVal = key === 'comfortZone' ? DEFAULT_SLIDERS.comfortZone : 0.5;
+    const cfg = sliderConfig.find(s => s.key === key);
+    if (!cfg) return '';
+    if (Math.abs(value - defaultVal) < 0.04) return 'Balanced';
+    if (value < 0.25) return `Strongly prefer ${cfg.left.toLowerCase()}`;
+    if (value < 0.5) return `Slightly prefer ${cfg.left.toLowerCase()}`;
+    if (value < 0.75) return `Slightly prefer ${cfg.right.toLowerCase()}`;
+    return `Strongly prefer ${cfg.right.toLowerCase()}`;
   };
 
   return (
     <SubPageShell title="Tune Your Recommendations" onBack={onBack}>
-      <p className="text-muted-foreground text-[13px] mb-5">
+      <p className="text-muted-foreground text-[13px] mb-8">
         Adjust how Videx serves your recommendations. Changes take effect immediately.
       </p>
 
       {!loaded ? (
-        <div className="space-y-8">
+        <div className="space-y-10">
           {[0, 1, 2, 3].map(i => (
             <div key={i} className="h-16 rounded-xl bg-secondary animate-pulse" />
           ))}
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-10">
           {sliderConfig.map(({ key, left, right }) => (
             <div key={key}>
-              <div className="flex justify-between text-[12px] text-muted-foreground mb-2">
+              <div className="flex justify-between text-[12px] text-muted-foreground mb-3">
                 <span>{left}</span>
-                <span>{right}</span>
+                <span className="text-right">{right}</span>
               </div>
               <input
                 type="range"
@@ -696,10 +701,11 @@ function TuneRecommendationsPage({ onBack }: { onBack: () => void }) {
                 max={100}
                 value={Math.round(sliders[key] * 100)}
                 onChange={e => updateSlider(key, parseInt(e.target.value, 10) / 100)}
-                className="w-full h-1.5 rounded-full appearance-none bg-secondary cursor-pointer accent-primary"
+                className="videx-slider"
+                style={{ ['--slider-fill' as any]: `${Math.round(sliders[key] * 100)}%` }}
               />
-              <p className="text-center text-[11px] text-primary mt-1" style={{ fontWeight: 500 }}>
-                {isBalanced(key) ? 'Balanced' : ''}
+              <p className="text-center text-[11px] text-primary mt-2" style={{ fontWeight: 500 }}>
+                {getSliderLabel(key, sliders[key])}
               </p>
             </div>
           ))}

@@ -1096,7 +1096,8 @@ function StepTasteSummary({
                   max={100}
                   value={Math.round(sliders[key] * 100)}
                   onChange={e => onSlidersChange({ ...sliders, [key]: parseInt(e.target.value, 10) / 100 })}
-                  className="w-full h-1.5 rounded-full appearance-none bg-secondary cursor-pointer accent-primary"
+                  className="videx-slider"
+                  style={{ ['--slider-fill' as any]: `${Math.round(sliders[key] * 100)}%` }}
                 />
                 <p className="text-center text-[11px] text-primary mt-0.5" style={{ fontWeight: 500 }}>
                   {getSliderLabel(key, sliders[key])}
