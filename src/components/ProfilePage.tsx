@@ -196,21 +196,21 @@ function ProfileLanding({
 
       {/* Action Rows */}
       <SectionLabel label="ACCOUNT" />
-      <ActionRow icon={<User className="w-4 h-4 text-white" />} iconBg="bg-blue-500" title="Account Details" subtitle={displayEmail} onClick={() => onNavigate('account')} />
+      <ActionRow icon={<User className="w-4 h-4 text-blue-400" />} iconBg="bg-blue-500/15" title="Account Details" subtitle={displayEmail} onClick={() => onNavigate('account')} />
 
       <SectionLabel label="SUBSCRIPTIONS" />
-      <ActionRow icon={<Tv2 className="w-4 h-4 text-white" />} iconBg="bg-emerald-500" title="Streaming Services" subtitle={`${connectedCount} services connected`} onClick={() => onNavigate('services')} />
+      <ActionRow icon={<Tv2 className="w-4 h-4 text-purple-400" />} iconBg="bg-purple-500/15" title="Streaming Services" subtitle={`${connectedCount} services connected`} onClick={() => onNavigate('services')} />
 
       <SectionLabel label="INSIGHTS" />
-      <ActionRow icon={<Wallet className="w-4 h-4 text-white" />} iconBg="bg-yellow-500" title="Monthly Spend" subtitle={`£${connectedCount > 0 ? '—' : '0'}/month`} onClick={() => onNavigate('spend')} />
+      <ActionRow icon={<Wallet className="w-4 h-4 text-emerald-400" />} iconBg="bg-emerald-500/15" title="Monthly Spend" subtitle={`£${connectedCount > 0 ? '—' : '0'}/month`} onClick={() => onNavigate('spend')} />
 
       <SectionLabel label="PERSONALISATION" />
-      <ActionRow icon={<Sparkles className="w-4 h-4 text-white" />} iconBg="bg-primary" title="Your Taste" subtitle={topClusterNames || 'Set up your taste profile'} onClick={() => onNavigate('taste')} />
-      <ActionRow icon={<SlidersHorizontal className="w-4 h-4 text-white" />} iconBg="bg-purple-500" title="Tune Recommendations" subtitle="Balanced across all sliders" onClick={() => onNavigate('tune')} />
+      <ActionRow icon={<Sparkles className="w-4 h-4 text-primary" />} iconBg="bg-primary/15" title="Your Taste" subtitle={topClusterNames || 'Set up your taste profile'} onClick={() => onNavigate('taste')} />
+      <ActionRow icon={<SlidersHorizontal className="w-4 h-4 text-indigo-400" />} iconBg="bg-indigo-500/15" title="Tune Recommendations" subtitle="Balanced across all sliders" onClick={() => onNavigate('tune')} />
 
       <SectionLabel label="SETTINGS" />
-      <ActionRow icon={<Palette className="w-4 h-4 text-white" />} iconBg="bg-pink-500" title="Appearance" subtitle="Dark" onClick={() => onNavigate('appearance')} />
-      <ActionRow icon={<Shield className="w-4 h-4 text-white" />} iconBg="bg-cyan-600" title="Privacy & Data" subtitle="Manage your data" onClick={() => onNavigate('privacy')} />
+      <ActionRow icon={<Palette className="w-4 h-4 text-pink-400" />} iconBg="bg-pink-500/15" title="Appearance" subtitle="Dark" onClick={() => onNavigate('appearance')} />
+      <ActionRow icon={<Shield className="w-4 h-4 text-slate-400" />} iconBg="bg-slate-500/15" title="Privacy & Data" subtitle="Manage your data" onClick={() => onNavigate('privacy')} />
 
       {/* Sign Out */}
       <div className="mt-6">
