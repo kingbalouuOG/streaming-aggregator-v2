@@ -635,7 +635,7 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 
 **This is a scope clarification, not a scope expansion.** The work was always going to happen. CC's round 2 review correctly identified that it lives across 9 files, not in one place.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated — Phase 3 (all 9 files + useTasteProfile rewritten, commits `0d212cc` through `f455d6b`)
 
 ### IN-302: Detail page "More Like This" batch query pattern
 
@@ -654,7 +654,7 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 
 **Depends on IN-203 spike outcome.** If pgvector wire format requires an RPC or view, this batch query uses that pattern instead of direct SELECT.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated — Phase 3 (commit `29e99ae`, useContentDetail.ts rewritten with batch query pattern)
 
 ### IN-303: Quiz subsystem deletion and interaction_log drop
 
@@ -682,7 +682,7 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 
 **Nothing migrates from the old system.** Two prototype users start fresh on v2.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated — Phase 3 (commit `390537e`, 15 files deleted, migration 024 drops v1 columns)
 
 ---
 
@@ -955,6 +955,32 @@ Fatal: Error: EPERM: operation not permitted, rename
 **Reference:** Phase 0.5 summary §3 Deviation 1, `scripts/enrichment/backfill-enrichment.ts:74-118` (post-fix implementation), commit `c4a8916`.
 
 **Status:** ✅ Incorporated (Phase 0.5 — fix landed in commit `c4a8916`; lesson filed here for future Windows-side scripts)
+
+### IN-XPS-006: Delete account wiring deferred
+
+**Source:** Phase 3 brief §9.1; GDPR Article 17
+
+**Detail:** The delete account confirmation modal UI ships in Phase 3 (Privacy & Data sub-page in ProfilePage). But the "Delete Account" button is disabled with an inline notice: "Account deletion is not yet available. Contact support to delete your account."
+
+Wiring requires cascading delete across: `profiles`, `user_interactions`, `card_impressions`, `taste_profiles`, `user_services`, watchlist entries, and the Supabase auth user. Must be implemented before public launch.
+
+**Status:** ⏳ Flagged for pre-public-launch
+
+### IN-XPS-007: Service pricing config needs review cadence
+
+**Source:** Phase 3 Task 11 (Monthly Spend sub-page)
+
+**Detail:** Service tier pricing is hardcoded in `src/lib/data/platformPricing.ts` with a "Last verified: April 2026" header comment. UK streaming prices change frequently (Netflix raised prices twice in 2024, Disney+ restructured tiers). Before public launch, either establish a quarterly review cadence or wire to an external pricing data source.
+
+**Status:** ⏳ Flagged for pre-public-launch
+
+### IN-XPS-008: Consider pre-built onboarding watched-grid title pool
+
+**Source:** Phase 3 testing feedback (Joe)
+
+**Detail:** The onboarding watched-grid (Step 3) currently queries popular titles from the user's services live at onboarding time (~500ms). An alternative: pre-build a curated pool of recognisable titles per service, refreshed weekly via cron job or Edge Function. Benefits: instant load (0ms), editorial control over what appears, consistent QA. Trade-off: another table to maintain, not personalised to the user's services until the pool is partitioned by service. Needs user testing first to validate whether the current dynamic approach produces good enough results before committing to a pre-built pool.
+
+**Status:** ⏳ Consider after user testing
 
 ---
 
