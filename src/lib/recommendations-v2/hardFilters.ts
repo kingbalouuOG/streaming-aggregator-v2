@@ -54,8 +54,10 @@ export async function getWatchlistIds(): Promise<Set<string>> {
  * Get TMDb IDs of titles available on the user's selected services.
  * Returns Set<number> of tmdb_ids.
  *
- * Paginates through all results since Supabase default limit is 1000 rows
- * but streaming_availability can have 40k+ rows across services.
+ * Uses the get_available_tmdb_ids RPC (migration 028) for DISTINCT
+ * results, with 20 parallel page fetches instead of 42 sequential.
+ * PostgREST caps at 1000 rows per request regardless of .limit(),
+ * so parallel pagination is necessary.
  */
 export async function getAvailableTmdbIds(
   serviceIds: string[],
@@ -63,25 +65,21 @@ export async function getAvailableTmdbIds(
   if (serviceIds.length === 0) return new Set();
 
   try {
+    const PAGE_COUNT = 20;
+    const PAGE_SIZE = 1000;
+
+    const pages = Array.from({ length: PAGE_COUNT }, (_, i) =>
+      supabase.rpc('get_available_tmdb_ids', { service_ids: serviceIds })
+        .range(i * PAGE_SIZE, (i + 1) * PAGE_SIZE - 1)
+    );
+
+    const results = await Promise.all(pages);
     const allIds = new Set<number>();
-    const pageSize = 1000;
-    let offset = 0;
 
-    while (true) {
-      const { data, error } = await supabase
-        .from('streaming_availability' as any)
-        .select('tmdb_id')
-        .in('service_id', serviceIds)
-        .range(offset, offset + pageSize - 1);
-
-      if (error || !data || data.length === 0) break;
-
-      for (const r of (data as any[])) {
-        allIds.add(r.tmdb_id as number);
+    for (const r of results) {
+      for (const row of ((r.data as any[]) || [])) {
+        allIds.add(row.tmdb_id as number);
       }
-
-      if (data.length < pageSize) break;
-      offset += pageSize;
     }
 
     return allIds;
@@ -90,10 +88,17 @@ export async function getAvailableTmdbIds(
   }
 }
 
+export interface FilterSets {
+  dismissedIds: Set<string>;
+  thumbsDownIds: Set<string>;
+  watchlistIds: Set<string>;
+  availableTmdbIds: Set<number>;
+}
+
 /**
  * Build all filter sets in parallel for the ranker.
  */
-export async function buildFilterSets(serviceIds: string[]) {
+export async function buildFilterSets(serviceIds: string[]): Promise<FilterSets> {
   const [dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds] = await Promise.all([
     getDismissedIds(),
     getThumbsDownIds(),

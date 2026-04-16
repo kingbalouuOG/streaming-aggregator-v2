@@ -8,9 +8,10 @@ import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import { invalidateRecommendationCache } from '@/lib/storage/recommendations';
 import storage from '@/lib/storage';
 import { getHomeGenres } from '@/lib/storage/userPreferences';
-import { serviceIdsToProviderIds } from '@/lib/adapters/platformAdapter';
+import { serviceIdsToProviderIds, providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import { GENRE_NAME_TO_ID } from '@/lib/constants/genres';
 import { TASTE_CLUSTERS } from '@/lib/taste/tasteClusters';
+import { buildFilterSets, type FilterSets } from '@/lib/recommendations-v2/hardFilters';
 import type { FilterState } from '@/components/FilterSheet';
 import type { ServiceId } from '@/components/platformLogos';
 import type { ContentItem } from '@/components/ContentCard';
@@ -22,6 +23,7 @@ import { getAuthUserId, isSupabaseActive } from '@/lib/storage';
 export type GenreAffinities = Record<string, number>;
 
 export function useHomeContent(providerIds: number[], filters?: FilterState) {
+  const [sharedFilters, setSharedFilters] = useState<FilterSets | null>(null);
   const [genreList, setGenreList] = useState<number[]>([]);
   const [metaLoading, setMetaLoading] = useState(true);
   const [reloadCounter, setReloadCounter] = useState(0);
@@ -132,11 +134,21 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     batchSize: 8,
   });
 
+  // --- Build shared filter sets once for both recommendation hooks ---
+  useEffect(() => {
+    if (!providerStr) return;
+    const serviceIds: string[] = providerIds
+      .map(id => providerIdToServiceId(id))
+      .filter(Boolean) as string[];
+    if (serviceIds.length === 0) return;
+    buildFilterSets(serviceIds).then(setSharedFilters);
+  }, [providerStr, reloadCounter]);
+
   // --- Recommendations ("For You") ---
-  const recs = useRecommendations(providerIds, fetchMovies, fetchTV, filterGenreIds);
+  const recs = useRecommendations(providerIds, fetchMovies, fetchTV, filterGenreIds, sharedFilters);
 
   // --- Hidden Gems ---
-  const hiddenGems = useHiddenGems(providerIds, fetchMovies, fetchTV, filterGenreIds);
+  const hiddenGems = useHiddenGems(providerIds, fetchMovies, fetchTV, filterGenreIds, sharedFilters);
 
   // --- Render-time dedup (strict priority order) ---
   // All fixed sections fetch in parallel; this useMemo enforces priority regardless of

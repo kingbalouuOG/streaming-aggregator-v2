@@ -15,11 +15,24 @@ import type {
 } from './types';
 import { DEFAULT_SLIDERS } from './types';
 
+// Session-scope cache for taste profile (avoids duplicate fetches from parallel hooks)
+let profileCache: { data: TasteProfileV2 | null; ts: number } | null = null;
+const PROFILE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+export function invalidateV2ProfileCache() {
+  profileCache = null;
+}
+
 /**
  * Read the v2 taste profile from Supabase.
+ * Cached for 5 minutes to avoid duplicate fetches from parallel hooks.
  * Returns null if no profile row exists or Supabase is inactive.
  */
 export async function getV2TasteProfile(): Promise<TasteProfileV2 | null> {
+  if (profileCache && Date.now() - profileCache.ts < PROFILE_CACHE_TTL) {
+    return profileCache.data;
+  }
+
   if (!isSupabaseActive()) return null;
 
   const userId = getAuthUserId();
@@ -52,7 +65,7 @@ export async function getV2TasteProfile(): Promise<TasteProfileV2 | null> {
       : row.taste_vector_v2;
   }
 
-  return {
+  const result: TasteProfileV2 = {
     tasteVector,
     updatedAt: row.taste_vector_updated_at || null,
     interactionCount: row.taste_vector_interaction_count ?? 0,
@@ -64,6 +77,9 @@ export async function getV2TasteProfile(): Promise<TasteProfileV2 | null> {
       variety: row.slider_variety ?? DEFAULT_SLIDERS.variety,
     },
   };
+
+  profileCache = { data: result, ts: Date.now() };
+  return result;
 }
 
 /**
@@ -75,6 +91,7 @@ export async function saveV2TasteVector(
   interactionCount: number,
   bootstrappedFrom: BootstrapSource,
 ): Promise<void> {
+  invalidateV2ProfileCache();
   if (!isSupabaseActive()) return;
 
   const userId = getAuthUserId();
@@ -107,6 +124,7 @@ export async function updateV2TasteVector(
   vector: TasteVectorV2,
   interactionCount: number,
 ): Promise<void> {
+  invalidateV2ProfileCache();
   if (!isSupabaseActive()) return;
 
   const userId = getAuthUserId();

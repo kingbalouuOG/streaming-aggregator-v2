@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { rankTitles } from '@/lib/recommendations-v2/ranker';
-import { buildFilterSets } from '@/lib/recommendations-v2/hardFilters';
+import { buildFilterSets, type FilterSets } from '@/lib/recommendations-v2/hardFilters';
 import { getV2TasteProfile } from '@/lib/taste-v2/tasteProfileV2';
 import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import type { ContentItem } from '@/components/ContentCard';
@@ -10,6 +10,7 @@ export function useRecommendations(
   fetchMovies = true,
   fetchTV = true,
   filterGenreIds: number[] = [],
+  sharedFilters?: FilterSets | null,
 ) {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,38 +32,37 @@ export function useRecommendations(
         return;
       }
 
-      // Convert TMDb provider IDs to Videx service IDs
-      const serviceIds: string[] = providerIds
-        .map(id => providerIdToServiceId(id))
-        .filter(Boolean) as string[];
+      let filters: FilterSets;
+      if (sharedFilters) {
+        filters = sharedFilters;
+      } else {
+        const serviceIds: string[] = providerIds
+          .map(id => providerIdToServiceId(id))
+          .filter(Boolean) as string[];
+        filters = await buildFilterSets(serviceIds);
+      }
 
-      console.log('[useRecommendations] serviceIds:', serviceIds, 'from providerIds:', providerIds);
-      const { dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds } = await buildFilterSets(serviceIds);
-      console.log('[useRecommendations] availableTmdbIds:', availableTmdbIds.size, 'vector length:', profile.tasteVector.length);
-
-      // Determine media type filter from fetchMovies/fetchTV
       const mediaTypeFilter = fetchMovies && !fetchTV ? 'movie' as const
         : !fetchMovies && fetchTV ? 'tv' as const
         : undefined;
 
       const results = await rankTitles({
         tasteVector: profile.tasteVector,
-        availableTmdbIds,
-        dismissedIds,
-        thumbsDownIds,
-        watchlistIds,
+        availableTmdbIds: filters.availableTmdbIds,
+        dismissedIds: filters.dismissedIds,
+        thumbsDownIds: filters.thumbsDownIds,
+        watchlistIds: filters.watchlistIds,
         mediaTypeFilter,
         limit: 20,
       });
 
-      console.log('[useRecommendations] results:', results.length);
       setItems(results);
     } catch (error) {
       console.error('[useRecommendations] Error:', error);
     } finally {
       setLoading(false);
     }
-  }, [providerStr, fetchMovies, fetchTV, filterGenreStr]);
+  }, [providerStr, fetchMovies, fetchTV, filterGenreStr, sharedFilters]);
 
   useEffect(() => { load(); }, [load]);
 

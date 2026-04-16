@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { rankHiddenGems } from '@/lib/recommendations-v2/ranker';
-import { buildFilterSets } from '@/lib/recommendations-v2/hardFilters';
+import { buildFilterSets, type FilterSets } from '@/lib/recommendations-v2/hardFilters';
 import { getV2TasteProfile } from '@/lib/taste-v2/tasteProfileV2';
 import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import type { ContentItem } from '@/components/ContentCard';
@@ -10,6 +10,7 @@ export function useHiddenGems(
   fetchMovies = true,
   fetchTV = true,
   filterGenreIds: number[] = [],
+  sharedFilters?: FilterSets | null,
 ) {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,11 +32,15 @@ export function useHiddenGems(
         return;
       }
 
-      const serviceIds: string[] = providerIds
-        .map(id => providerIdToServiceId(id))
-        .filter(Boolean) as string[];
-
-      const { dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds } = await buildFilterSets(serviceIds);
+      let filters: FilterSets;
+      if (sharedFilters) {
+        filters = sharedFilters;
+      } else {
+        const serviceIds: string[] = providerIds
+          .map(id => providerIdToServiceId(id))
+          .filter(Boolean) as string[];
+        filters = await buildFilterSets(serviceIds);
+      }
 
       const mediaTypeFilter = fetchMovies && !fetchTV ? 'movie' as const
         : !fetchMovies && fetchTV ? 'tv' as const
@@ -43,10 +48,10 @@ export function useHiddenGems(
 
       const results = await rankHiddenGems({
         tasteVector: profile.tasteVector,
-        availableTmdbIds,
-        dismissedIds,
-        thumbsDownIds,
-        watchlistIds,
+        availableTmdbIds: filters.availableTmdbIds,
+        dismissedIds: filters.dismissedIds,
+        thumbsDownIds: filters.thumbsDownIds,
+        watchlistIds: filters.watchlistIds,
         mediaTypeFilter,
         limit: 15,
       });
@@ -57,7 +62,7 @@ export function useHiddenGems(
     } finally {
       setLoading(false);
     }
-  }, [providerStr, fetchMovies, fetchTV, filterGenreStr]);
+  }, [providerStr, fetchMovies, fetchTV, filterGenreStr, sharedFilters]);
 
   useEffect(() => { load(); }, [load]);
 
