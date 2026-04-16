@@ -97,70 +97,67 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
     void logOnboardingEvent(ONBOARDING_EVENTS.ONBOARDING_STARTED, {});
   }, []);
 
-  // Fetch watched grid candidates when entering Step 3
+  // Fetch watched grid candidates — uses popular titles from user's services
   const fetchWatchedGridCandidates = useCallback(async () => {
     if (selectedServices.length === 0) return;
     setWatchedLoading(true);
 
     try {
-      // Fetch all service centroids in one call
-      const centroids = await fetchServiceCentroids(selectedServices);
-      if (centroids.length === 0) { setWatchedLoading(false); return; }
-
-      // Use the mean centroid for a single fast RPC call (good enough for onboarding)
-      const dim = centroids[0].length;
-      const meanCentroid = new Array(dim).fill(0);
-      for (const c of centroids) {
-        for (let i = 0; i < dim; i++) meanCentroid[i] += c[i];
-      }
-      for (let i = 0; i < dim; i++) meanCentroid[i] /= centroids.length;
-
-      const vectorStr = `[${meanCentroid.join(',')}]`;
-      const { data: matched } = await supabase.rpc('match_titles_by_vector', {
-        query_vector: vectorStr,
-        match_limit: 60,
-      });
-
-      if (!matched || (matched as any[]).length === 0) { setWatchedLoading(false); return; }
-
-      const tmdbIds = (matched as any[]).map((m: any) => m.tmdb_id);
-
-      // Fetch metadata and availability in parallel
+      // Skip the centroid RPC entirely — just query popular titles on user's services directly.
+      // This is faster (2 parallel queries vs 4 sequential) and gives better-known titles.
       const [titleRes, availRes] = await Promise.all([
         supabase.from('titles' as any)
           .select('tmdb_id, media_type, title, poster_path, release_year, popularity')
-          .in('tmdb_id', tmdbIds)
-          .gte('popularity', 15)
-          .not('poster_path', 'is', null),
-        supabase.from('streaming_availability' as any)
-          .select('tmdb_id')
-          .in('tmdb_id', tmdbIds)
-          .in('service_id', selectedServices),
+          .gte('popularity', 30)
+          .gte('vote_count', 200)
+          .not('poster_path', 'is', null)
+          .not('embedding', 'is', null)
+          .order('popularity', { ascending: false })
+          .limit(500),
+        supabase.rpc('get_available_tmdb_ids', { service_ids: selectedServices })
+          .limit(1000),
       ]);
 
-      const availSet = new Set(((availRes.data as any[]) || []).map((r: any) => r.tmdb_id));
+      const availSet = new Set(
+        ((availRes.data as any[]) || []).map((r: any) => r.tmdb_id as number)
+      );
+
       const seenIds = new Set<number>();
-      const allCandidates: WatchedGridTitle[] = [];
+      const movies: WatchedGridTitle[] = [];
+      const tvShows: WatchedGridTitle[] = [];
 
       for (const t of ((titleRes.data as any[]) || [])) {
         if (seenIds.has(t.tmdb_id) || !availSet.has(t.tmdb_id)) continue;
         seenIds.add(t.tmdb_id);
-        allCandidates.push({
+        const item: WatchedGridTitle = {
           tmdbId: t.tmdb_id,
           mediaType: t.media_type,
           title: t.title,
           posterPath: t.poster_path,
           year: t.release_year,
-        });
+        };
+        if (t.media_type === 'movie') movies.push(item);
+        else tvShows.push(item);
       }
 
-      // Shuffle for variety
-      for (let i = allCandidates.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [allCandidates[i], allCandidates[j]] = [allCandidates[j], allCandidates[i]];
+      // Interleave movies and TV for balance, then shuffle within groups
+      const balanced: WatchedGridTitle[] = [];
+      const maxLen = Math.max(movies.length, tvShows.length);
+      for (let i = 0; i < maxLen; i++) {
+        if (i < movies.length) balanced.push(movies[i]);
+        if (i < tvShows.length) balanced.push(tvShows[i]);
       }
 
-      setWatchedPool(allCandidates);
+      // Light shuffle (within groups of 6 for round variety, not full random)
+      for (let g = 0; g < balanced.length; g += TITLES_PER_ROUND) {
+        const end = Math.min(g + TITLES_PER_ROUND, balanced.length);
+        for (let i = end - 1; i > g; i--) {
+          const j = g + Math.floor(Math.random() * (i - g + 1));
+          [balanced[i], balanced[j]] = [balanced[j], balanced[i]];
+        }
+      }
+
+      setWatchedPool(balanced);
       setWatchedPoolOffset(0);
       setWatchedRound(0);
     } catch (err) {
@@ -169,6 +166,15 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
       setWatchedLoading(false);
     }
   }, [selectedServices]);
+
+  // Pre-fetch watched grid as soon as first service is selected (background)
+  const prefetchTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (step === 0 && selectedServices.length > 0 && !prefetchTriggeredRef.current) {
+      prefetchTriggeredRef.current = true;
+      fetchWatchedGridCandidates();
+    }
+  }, [selectedServices.length, step, fetchWatchedGridCandidates]);
 
   // Current round's visible titles
   const roundStartIdx = watchedRound * TITLES_PER_ROUND + watchedPoolOffset;
@@ -905,21 +911,12 @@ function StepClusters({
               Pick at least {MIN_CLUSTERS} genres
             </p>
           </div>
-          <AnimatePresence>
-            {selected.length > 0 && (
-              <motion.span
-                key={selected.length}
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.8, opacity: 0 }}
-                transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                className="bg-primary text-white text-[12px] px-2 py-0.5 rounded-full tabular-nums"
-                style={{ fontWeight: 600 }}
-              >
-                {selected.length} selected
-              </motion.span>
-            )}
-          </AnimatePresence>
+          <span
+            className="bg-primary text-white text-[12px] px-2 py-0.5 rounded-full tabular-nums transition-opacity"
+            style={{ fontWeight: 600, opacity: selected.length > 0 ? 1 : 0 }}
+          >
+            {selected.length || 0} selected
+          </span>
         </motion.div>
       </div>
 
