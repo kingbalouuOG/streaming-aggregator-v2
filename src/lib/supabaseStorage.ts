@@ -8,7 +8,6 @@
 
 import { supabase } from './supabase';
 import { getAuthUserId } from './storage';
-import { vectorToArray, arrayToVector, confidenceToArray, arrayToConfidence } from './taste/vectorSerialisation';
 import { providerIdToServiceId, serviceIdToProviderId } from './adapters/platformAdapter';
 import { UK_PROVIDERS_ARRAY } from './constants/platforms';
 import type { ServiceId } from '@/components/platformLogos';
@@ -16,7 +15,6 @@ import type { ServiceId } from '@/components/platformLogos';
 // Re-use app types
 import type { WatchlistItem } from './storage/watchlist';
 import type { UserProfile, UserPreferences } from './storage/userPreferences';
-import type { TasteProfile, QuizAnswer, Interaction } from './storage/tasteProfile';
 
 // ── Rating conversion ───────────────────────────────────────────
 
@@ -476,108 +474,7 @@ export async function supaSaveUserPreferences(preferences: UserPreferences): Pro
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  TASTE PROFILE (taste_profiles table)
-// ═══════════════════════════════════════════════════════════════
-
-export async function supaGetTasteProfile(): Promise<TasteProfile | null> {
-  const userId = getAuthUserId();
-  if (!userId) return null;
-
-  const { data, error } = await supabase
-    .from('taste_profiles')
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error('[SupaStorage] getTasteProfile failed:', error.message);
-    throw error;
-  }
-
-  if (!data || !data.vector) return null;
-
-  return {
-    vector: arrayToVector(data.vector),
-    confidence: data.confidence ? arrayToConfidence(data.confidence) : undefined,
-    quizCompleted: data.quiz_completed || false,
-    quizAnswers: (data.quiz_answers as QuizAnswer[]) || [],
-    interactionLog: (data.interaction_log as Interaction[]) || [],
-    lastUpdated: data.last_updated || new Date().toISOString(),
-    version: data.version || 1,
-  };
-}
-
-export async function supaSaveTasteProfile(
-  profile: TasteProfile,
-  selectedClusters?: string[]
-): Promise<void> {
-  const userId = getAuthUserId();
-  if (!userId) return;
-
-  const row: Record<string, any> = {
-    user_id: userId,
-    vector: vectorToArray(profile.vector),
-    confidence: profile.confidence ? confidenceToArray(profile.confidence) : null,
-    quiz_completed: profile.quizCompleted,
-    quiz_answers: profile.quizAnswers,
-    interaction_log: profile.interactionLog,
-    version: profile.version,
-    last_updated: profile.lastUpdated || new Date().toISOString(),
-  };
-
-  // Compute and store seed_vector if clusters are provided
-  if (selectedClusters && selectedClusters.length > 0) {
-    const { computeClusterSeedVector } = await import('./taste/tasteClusters');
-    row.seed_vector = vectorToArray(computeClusterSeedVector(selectedClusters));
-    row.selected_clusters = selectedClusters;
-  } else {
-    // Preserve existing seed_vector, selected_clusters, and home_genres.
-    // If seed_vector is null but clusters exist, compute it now (self-healing).
-    const { data: existing } = await supabase
-      .from('taste_profiles')
-      .select('seed_vector, selected_clusters, home_genres')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (existing) {
-      if (existing.selected_clusters?.length > 0) {
-        if (!existing.seed_vector) {
-          const { computeClusterSeedVector } = await import('./taste/tasteClusters');
-          row.seed_vector = vectorToArray(computeClusterSeedVector(existing.selected_clusters));
-        } else {
-          row.seed_vector = existing.seed_vector;
-        }
-        row.selected_clusters = existing.selected_clusters;
-      }
-      if (existing.home_genres) row.home_genres = existing.home_genres;
-    }
-  }
-
-  const { error } = await supabase
-    .from('taste_profiles')
-    .upsert(row, { onConflict: 'user_id' });
-
-  if (error) {
-    console.error('[SupaStorage] saveTasteProfile failed:', error.message);
-    throw error;
-  }
-}
-
-export async function supaClearTasteProfile(): Promise<void> {
-  const userId = getAuthUserId();
-  if (!userId) return;
-
-  const { error } = await supabase
-    .from('taste_profiles')
-    .delete()
-    .eq('user_id', userId);
-
-  if (error) {
-    console.error('[SupaStorage] clearTasteProfile failed:', error.message);
-    throw error;
-  }
-}
+// v1 taste profile CRUD removed (Phase 3). V2 CRUD in taste-v2/tasteProfileV2.ts.
 
 // ── Home genres (stored in taste_profiles) ──────────────────────
 

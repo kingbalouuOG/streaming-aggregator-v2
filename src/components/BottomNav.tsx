@@ -1,5 +1,5 @@
 import React from "react";
-import { Home, Search, Bookmark, User } from "lucide-react";
+import { Home, Sparkles, Search, Bookmark, User } from "lucide-react";
 import { motion } from "motion/react";
 
 interface NavItem {
@@ -10,6 +10,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { icon: Home, label: "Home", id: "home" },
+  { icon: Sparkles, label: "For You", id: "foryou" },
   { icon: Search, label: "Browse", id: "browse" },
   { icon: Bookmark, label: "Watchlist", id: "watchlist" },
   { icon: User, label: "Profile", id: "profile" },

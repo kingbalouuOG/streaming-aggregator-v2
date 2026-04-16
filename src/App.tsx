@@ -29,12 +29,10 @@ import { useHomeContent } from "./hooks/useHomeContent";
 import { useUpcoming } from "./hooks/useUpcoming";
 import { LazyGenreSection } from "./components/LazyGenreSection";
 import { providerIdsToServiceIds, providerIdToServiceId } from "./lib/adapters/platformAdapter";
-import { reorderWithinWindows } from "./lib/taste/genreBlending";
 import type { ServiceId } from "./components/platformLogos";
 import { App as CapApp } from "@capacitor/app";
 import { useTasteProfile } from "./hooks/useTasteProfile";
-import { migrateFromLegacyPreferences } from "./lib/storage/tasteProfile";
-import { IMMEDIATE_LOAD_COUNT } from "./lib/taste/tasteVector";
+const IMMEDIATE_LOAD_COUNT = 5;
 import { logOnboardingEvent } from "./lib/analytics/logger";
 import { ONBOARDING_EVENTS } from "./lib/analytics/events";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -69,6 +67,7 @@ function AppContent() {
   const [watchlistSubTab, setWatchlistSubTab] = useState<"want" | "watched">("want");
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const [showSignUpSuccess, setShowSignUpSuccess] = useState(false);
+  const [showSignUpOnboarding, setShowSignUpOnboarding] = useState(false);
   const [authUsername, setAuthUsername] = useState<string | null>(null);
   const prevSessionRef = useRef<boolean>(false);
   const justOnboardedRef = useRef(false);
@@ -105,16 +104,6 @@ function AppContent() {
 
   // --- Taste profile (continuous learning) ---
   const taste = useTasteProfile();
-
-  // --- Migration: create taste profile for existing users ---
-  useEffect(() => {
-    if (userPrefs.onboardingComplete && !taste.loading && !taste.profile) {
-      const homeGenres = userPrefs.preferences?.homeGenres;
-      if (homeGenres && homeGenres.length > 0) {
-        migrateFromLegacyPreferences(homeGenres).then(() => taste.reload());
-      }
-    }
-  }, [userPrefs.onboardingComplete, taste.loading, taste.profile, userPrefs.preferences?.homeGenres?.join(',')]);
 
   // --- Derive provider IDs from user's selected services ---
   const connectedServices = userPrefs.preferences?.platforms
@@ -172,12 +161,8 @@ function AppContent() {
 
   // --- Upcoming content (Coming Soon) ---
   const upcoming = useUpcoming(connectedServices, home.fetchMovies, home.fetchTV);
-  const reorderedUpcoming = useMemo(
-    () => home.tasteVector
-      ? reorderWithinWindows(upcoming.items, home.tasteVector, (item) => item.genreIds || [])
-      : upcoming.items,
-    [upcoming.items, home.tasteVector]
-  );
+  // Phase 3: no client-side reordering (Phase 4 reintroduces via v2 ranker)
+  const reorderedUpcoming = upcoming.items;
 
   const activeFilterCount =
     filters.services.length +
@@ -515,11 +500,23 @@ function AppContent() {
     );
   }
 
-  // ── Not authenticated → auth screens ──
+  // ── Not authenticated → auth screens or sign-up onboarding ──
   if (!auth.session) {
+    if (showSignUpOnboarding) {
+      // Sign-up via the v2 onboarding flow (Step 1 handles auth)
+      return (
+        <>
+          <OnboardingFlow onComplete={handleOnboardingComplete} />
+          <ThemedToaster />
+        </>
+      );
+    }
     return (
       <>
-        <AuthScreen onSignUpSuccess={handleSignUpSuccess} />
+        <AuthScreen
+          onSignUpSuccess={handleSignUpSuccess}
+          onStartSignUp={() => setShowSignUpOnboarding(true)}
+        />
         <ThemedToaster />
       </>
     );
@@ -561,7 +558,7 @@ function AppContent() {
   if (!userPrefs.onboardingComplete) {
     return (
       <>
-        <OnboardingFlow onComplete={handleOnboardingComplete} />
+        <OnboardingFlow onComplete={handleOnboardingComplete} skipAuth />
         <ThemedToaster />
       </>
     );
@@ -750,6 +747,23 @@ function AppContent() {
                     </motion.div>
                   )}
                 </>
+              )}
+
+              {activeTab === "foryou" && (
+                <div className="px-0 pt-2">
+                  <h1 className="text-foreground text-[22px] px-5 mb-4" style={{ fontWeight: 700 }}>For You</h1>
+                  {home.forYou.items.length > 0 && (
+                    <ContentRow title="Recommended For You" sectionKey="foryou-recs" sourceSurface="for_you" items={filterLanguage(filterWatched(home.forYou.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                  )}
+                  {home.hiddenGems.items.length > 0 && (
+                    <ContentRow title="Hidden Gems" sectionKey="foryou-gems" sourceSurface="for_you" items={filterLanguage(filterWatched(home.hiddenGems.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                  )}
+                  {home.forYou.items.length === 0 && home.hiddenGems.items.length === 0 && !home.loading && (
+                    <p className="text-muted-foreground text-[14px] text-center px-5 py-12">
+                      Complete onboarding to see personalised recommendations here.
+                    </p>
+                  )}
+                </div>
               )}
 
               {activeTab === "browse" && (

@@ -1,0 +1,208 @@
+/**
+ * Taste Vector V2 — Interaction Updates
+ *
+ * Incremental update (on each interaction) and full recompute (on stale launch).
+ * The user_interactions event log is the source of truth.
+ */
+
+import { supabase } from '../supabase';
+import { getAuthUserId } from '../storage';
+import { l2Normalise, addScaled, isZeroVector } from './vectorOps';
+import {
+  INTERACTION_WEIGHTS,
+  NEGATIVE_EVENTS,
+  TASTE_RELEVANT_EVENTS,
+  CONFIDENCE_FLOOR_THRESHOLD,
+  CONFIDENCE_FLOOR_MULTIPLIER,
+  EXPLICIT_HALF_LIFE_DAYS,
+  BEHAVIOURAL_HALF_LIFE_DAYS,
+  BEHAVIOURAL_EVENTS,
+} from './types';
+import type { TasteVectorV2 } from './types';
+
+const LEARNING_RATE = 0.05;
+
+/**
+ * Apply a single interaction to the taste vector (incremental update).
+ *
+ * Fetches the title's 1536D embedding, blends it into the current vector
+ * weighted by the interaction signal, and L2-normalises.
+ */
+export async function applyInteractionIncremental(
+  currentVector: TasteVectorV2,
+  tmdbId: number,
+  mediaType: 'movie' | 'tv',
+  eventType: string,
+  interactionCount: number,
+): Promise<{ vector: TasteVectorV2; newCount: number } | null> {
+  const weight = INTERACTION_WEIGHTS[eventType];
+  if (weight === undefined) return null;
+
+  // Fetch the title's embedding
+  const { data, error } = await supabase
+    .from('titles' as any)
+    .select('embedding')
+    .eq('tmdb_id', tmdbId)
+    .eq('media_type', mediaType)
+    .not('embedding', 'is', null)
+    .maybeSingle();
+
+  if (error || !data?.embedding) {
+    console.warn('[InteractionUpdate] No embedding found for', mediaType, tmdbId);
+    return null;
+  }
+
+  const embedding: number[] = typeof data.embedding === 'string'
+    ? JSON.parse(data.embedding)
+    : data.embedding;
+
+  // Apply confidence floor boost for early interactions
+  const newCount = interactionCount + 1;
+  const confidenceMultiplier = newCount <= CONFIDENCE_FLOOR_THRESHOLD
+    ? CONFIDENCE_FLOOR_MULTIPLIER
+    : 1.0;
+
+  const effectiveWeight = Math.abs(weight) * LEARNING_RATE * confidenceMultiplier;
+  const isNegative = NEGATIVE_EVENTS.has(eventType);
+
+  const updated = isNegative
+    ? addScaled(currentVector, embedding, -effectiveWeight)
+    : addScaled(currentVector, embedding, effectiveWeight);
+
+  return {
+    vector: l2Normalise(updated),
+    newCount,
+  };
+}
+
+/** Compute exponential decay weight for a timestamp */
+function decayWeight(timestampIso: string, halfLifeDays: number): number {
+  const ageMs = Date.now() - new Date(timestampIso).getTime();
+  const ageDays = ageMs / (1000 * 60 * 60 * 24);
+  return Math.pow(0.5, ageDays / halfLifeDays);
+}
+
+/**
+ * Full recompute of the taste vector from the user_interactions event log.
+ *
+ * Deterministic and replayable: reads all taste-relevant interactions,
+ * fetches their embeddings, applies weights + decay, sums, normalises.
+ *
+ * @param bootstrapVector The original bootstrap vector (anchor point).
+ *   If null, starts from zero vector.
+ */
+export async function recomputeFromInteractions(
+  bootstrapVector: TasteVectorV2 | null,
+): Promise<TasteVectorV2 | null> {
+  const userId = getAuthUserId();
+  if (!userId) return null;
+
+  // Fetch all taste-relevant interactions
+  const { data: interactions, error } = await supabase
+    .from('user_interactions' as any)
+    .select('content_id, media_type, event_type, metadata, created_at')
+    .eq('user_id', userId)
+    .in('event_type', [...TASTE_RELEVANT_EVENTS])
+    .not('content_id', 'is', null)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('[InteractionUpdate] Failed to fetch interactions:', error.message);
+    return null;
+  }
+
+  if (!interactions || interactions.length === 0) {
+    return bootstrapVector;
+  }
+
+  // Collect unique content IDs for batch embedding fetch
+  const contentKeys = new Set<string>();
+  for (const i of interactions) {
+    if (i.content_id && i.media_type) {
+      contentKeys.add(`${i.media_type}-${i.content_id}`);
+    }
+  }
+
+  const tmdbIds = [...contentKeys].map(k => {
+    const [, id] = k.split('-');
+    return parseInt(id, 10);
+  });
+
+  // Batch fetch embeddings
+  const { data: titleRows, error: embedError } = await supabase
+    .from('titles' as any)
+    .select('tmdb_id, media_type, embedding')
+    .in('tmdb_id', tmdbIds)
+    .not('embedding', 'is', null);
+
+  if (embedError) {
+    console.error('[InteractionUpdate] Failed to fetch embeddings:', embedError.message);
+    return bootstrapVector;
+  }
+
+  // Build embedding lookup
+  const embeddingMap = new Map<string, number[]>();
+  for (const row of (titleRows || [])) {
+    const key = `${row.media_type}-${row.tmdb_id}`;
+    const emb: number[] = typeof row.embedding === 'string'
+      ? JSON.parse(row.embedding)
+      : row.embedding;
+    embeddingMap.set(key, emb);
+  }
+
+  // Start from bootstrap vector or zero
+  const dim = 1536;
+  let vector = bootstrapVector ? [...bootstrapVector] : new Array(dim).fill(0);
+
+  // Replay all interactions with decay
+  let count = 0;
+  for (const interaction of interactions) {
+    const key = `${interaction.media_type}-${interaction.content_id}`;
+    const embedding = embeddingMap.get(key);
+    if (!embedding) continue;
+
+    const baseWeight = INTERACTION_WEIGHTS[interaction.event_type];
+    if (baseWeight === undefined) continue;
+
+    // Handle deep_link_click confidence level
+    let weight = baseWeight;
+    if (interaction.event_type === 'deep_link_click') {
+      const confidence = interaction.metadata?.confidence;
+      weight = confidence === 'low' ? 0.4 : 0.8;
+    }
+
+    // Handle combined watched + thumbs_up (1.5 replaces individual)
+    // This is handled implicitly: the event log contains separate events,
+    // and their weights sum naturally (0.5 + 1.0 = 1.5)
+
+    // Apply decay
+    const halfLife = BEHAVIOURAL_EVENTS.has(interaction.event_type)
+      ? BEHAVIOURAL_HALF_LIFE_DAYS
+      : EXPLICIT_HALF_LIFE_DAYS;
+    const decay = decayWeight(interaction.created_at, halfLife);
+
+    count++;
+    const confidenceMultiplier = count <= CONFIDENCE_FLOOR_THRESHOLD
+      ? CONFIDENCE_FLOOR_MULTIPLIER
+      : 1.0;
+
+    const effectiveWeight = Math.abs(weight) * decay * LEARNING_RATE * confidenceMultiplier;
+    const isNegative = NEGATIVE_EVENTS.has(interaction.event_type) || weight < 0;
+
+    vector = isNegative
+      ? addScaled(vector, embedding, -effectiveWeight)
+      : addScaled(vector, embedding, effectiveWeight);
+  }
+
+  if (isZeroVector(vector)) return bootstrapVector;
+
+  return l2Normalise(vector);
+}
+
+/** Check if the taste vector needs recomputation (stale > 24h) */
+export function needsRecomputation(updatedAt: string | null): boolean {
+  if (!updatedAt) return false; // no vector yet = nothing to recompute
+  const lastUpdate = new Date(updatedAt).getTime();
+  const hours24 = 24 * 60 * 60 * 1000;
+  return Date.now() - lastUpdate > hours24;
+}

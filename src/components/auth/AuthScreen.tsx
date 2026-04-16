@@ -26,9 +26,11 @@ const slideVariants = {
 
 interface AuthScreenProps {
   onSignUpSuccess?: (username: string) => void;
+  /** When provided, clicking "Create Account" shows the onboarding flow instead of the inline SignUpScreen */
+  onStartSignUp?: () => void;
 }
 
-export default function AuthScreen({ onSignUpSuccess }: AuthScreenProps) {
+export default function AuthScreen({ onSignUpSuccess, onStartSignUp }: AuthScreenProps) {
   const [view, setView] = useState<AuthView>('sign-in');
   const [direction, setDirection] = useState(1); // 1 = forward, -1 = back
 
@@ -62,7 +64,7 @@ export default function AuthScreen({ onSignUpSuccess }: AuthScreenProps) {
             {view === 'sign-in' && (
               <SignInScreen
                 onForgotPassword={() => navigateTo('forgot-password')}
-                onGoToSignUp={() => navigateTo('sign-up')}
+                onGoToSignUp={onStartSignUp || (() => navigateTo('sign-up'))}
               />
             )}
             {view === 'sign-up' && (

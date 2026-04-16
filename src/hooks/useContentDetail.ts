@@ -4,9 +4,9 @@ import { getRatings } from '@/lib/api/omdb';
 import { getStreamingLinks } from '@/lib/api/supabaseContent';
 import { buildDetailData, type DetailData } from '@/lib/adapters/detailAdapter';
 import { tmdbMovieToContentItem, tmdbTVToContentItem } from '@/lib/adapters/contentAdapter';
-import { contentToVector } from '@/lib/taste/contentVectorMapping';
-import { cosineSimilarity, DIMENSION_WEIGHTS } from '@/lib/taste/tasteVector';
-import { getTasteProfile } from '@/lib/storage/tasteProfile';
+import { supabase } from '@/lib/supabase';
+import { cosineSimilarity } from '@/lib/taste-v2/vectorOps';
+import { getV2TasteProfile } from '@/lib/taste-v2/tasteProfileV2';
 import { emitDetailView } from '@/lib/storage/interactions';
 import type { ContentItem } from '@/components/ContentCard';
 
@@ -70,7 +70,7 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
 
       const detail = buildDetailData(tmdbDetail, mediaType, omdbRatings, streamingLinks, userPlatformIds);
 
-      // Extract source characteristics (needed for discover params + scoring)
+      // Extract source characteristics for discover params
       const sourceGenres: number[] = tmdbDetail.genres?.map((g: any) => g.id) || tmdbDetail.genre_ids || [];
       const sourceRating: number = tmdbDetail.vote_average || 0;
 
@@ -109,91 +109,62 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
         }
       }
 
-      // Build source content vector for similarity comparison
-      const releaseDate = tmdbDetail.release_date || tmdbDetail.first_air_date;
-      const sourceVector = contentToVector({
-        genreIds: sourceGenres,
-        popularity: tmdbDetail.popularity,
-        voteCount: tmdbDetail.vote_count,
-        releaseYear: releaseDate ? parseInt(releaseDate.slice(0, 4), 10) : null,
-        originalLanguage: tmdbDetail.original_language,
-      });
+      // --- V2 batch query pattern (Phase 1 locked) ---
+      // Batch-fetch 1536D embeddings for all candidates + source title
+      const candidateIds = mergedCandidates.map((c: any) => c.id);
+      const allTmdbIds = [tmdbId, ...candidateIds];
 
-      // Load taste profile for personalized blending (fire-and-forget on failure)
-      let tasteVector = null;
-      let confidence = undefined;
+      const { data: embeddingRows } = await supabase
+        .from('titles' as any)
+        .select('tmdb_id, media_type, embedding')
+        .in('tmdb_id', allTmdbIds)
+        .not('embedding', 'is', null);
+
+      // Build embedding lookup: JSON.parse(row.embedding as string) — Phase 1 locked pattern
+      const embeddingMap = new Map<string, number[]>();
+      for (const row of ((embeddingRows as any[]) || [])) {
+        const emb: number[] = typeof row.embedding === 'string'
+          ? JSON.parse(row.embedding)
+          : row.embedding;
+        embeddingMap.set(`${row.media_type}-${row.tmdb_id}`, emb);
+      }
+
+      const sourceEmbedding = embeddingMap.get(`${mediaType}-${tmdbId}`);
+
+      // Load v2 taste vector for personalized scoring
+      let tasteVector: number[] | null = null;
       try {
-        const profile = await getTasteProfile();
-        if (profile?.vector) {
-          tasteVector = profile.vector;
-          confidence = profile.confidence;
-        }
-      } catch { /* pre-quiz users won't have a profile */ }
+        const profile = await getV2TasteProfile();
+        tasteVector = profile?.tasteVector || null;
+      } catch { /* no taste vector yet — use content similarity fallback */ }
 
-      const sourceLang = tmdbDetail.original_language || 'en';
-      const sourcePrimaryGenre = sourceGenres[0] ?? null;
-
+      // Score and sort candidates
       const similar = mergedCandidates
         .map((item: any) => {
-          const itemGenres: number[] = item.genre_ids || [];
-          const itemReleaseDate = item.release_date || item.first_air_date;
-          const candidateVector = contentToVector({
-            genreIds: itemGenres,
-            popularity: item.popularity,
-            voteCount: item.vote_count,
-            releaseYear: itemReleaseDate ? parseInt(itemReleaseDate.slice(0, 4), 10) : null,
-            originalLanguage: item.original_language,
-          });
-
-          // 1. Vector similarity (tone, genre weight, pacing, etc.) — 0-100 scale
-          const sourceSimilarity = cosineSimilarity(sourceVector, candidateVector);
-
-          // 2. Classic genre overlap — shared genres / total unique genres
-          const sharedGenres = itemGenres.filter((g) => sourceGenres.includes(g));
-          const totalUnique = new Set([...sourceGenres, ...itemGenres]).size;
-          const genreOverlap = totalUnique > 0 ? (sharedGenres.length / totalUnique) * 100 : 0;
-
-          // 3. Primary genre bonus/penalty
-          let primaryGenreBonus = 0;
-          if (sourcePrimaryGenre !== null) {
-            if (itemGenres.includes(sourcePrimaryGenre)) primaryGenreBonus = 15;
-            else if (sharedGenres.length === 0) primaryGenreBonus = -20;
-          }
-
-          // 4. Language affinity — same language no change, different language penalty
-          const langBonus = (item.original_language || 'en') === sourceLang ? 0 : -10;
-
-          // 5. Rating proximity — how close in quality tier (0-10 scale)
-          const ratingProximity = 1 - Math.abs((item.vote_average || 0) - sourceRating) / 10;
+          // Try both media types since candidate might be movie or tv
+          const candidateEmbedding = embeddingMap.get(`movie-${item.id}`)
+            || embeddingMap.get(`tv-${item.id}`);
 
           let matchScore: number;
-          if (tasteVector) {
-            // Zero out era weight — detail page should match on genre/tone, not release era bias
-            const detailWeights = { ...DIMENSION_WEIGHTS, era: 0 };
-            const tasteSimilarity = cosineSimilarity(tasteVector, candidateVector, detailWeights, confidence);
-            matchScore = Math.round(
-              sourceSimilarity * 0.5
-              + genreOverlap * 0.2
-              + tasteSimilarity * 0.2
-              + ratingProximity * 10 * 0.1
-              + primaryGenreBonus
-              + langBonus
-            );
+
+          if (candidateEmbedding) {
+            if (tasteVector) {
+              // Personalized: cosine similarity against user's taste vector
+              matchScore = cosineSimilarity(tasteVector, candidateEmbedding) * 100;
+            } else if (sourceEmbedding) {
+              // Content similarity fallback: cosine similarity against source title
+              matchScore = cosineSimilarity(sourceEmbedding, candidateEmbedding) * 100;
+            } else {
+              // No embeddings at all — use rating/popularity heuristic
+              matchScore = Math.min(((item.vote_average || 0) / 10) * 80 + 10, 95);
+            }
           } else {
-            const popularityFactor = Math.min((item.popularity || 0) / 100, 1);
-            matchScore = Math.round(
-              sourceSimilarity * 0.5
-              + genreOverlap * 0.3
-              + ratingProximity * 10 * 0.1
-              + popularityFactor * 100 * 0.1
-              + primaryGenreBonus
-              + langBonus
-            );
+            // Candidate has no embedding — TMDb-only heuristic
+            matchScore = Math.min(((item.vote_average || 0) / 10) * 80 + 10, 95);
           }
 
           const contentItem = mediaType === 'movie' ? tmdbMovieToContentItem(item) : tmdbTVToContentItem(item);
-          // Clamp to [30, 95] — avoids awkward 0% or 100% in UI
-          contentItem.matchPercentage = Math.max(30, Math.min(95, matchScore));
+          contentItem.matchPercentage = Math.max(30, Math.min(95, Math.round(matchScore)));
           return contentItem;
         })
         .sort((a: ContentItem, b: ContentItem) => (b.matchPercentage || 0) - (a.matchPercentage || 0))
