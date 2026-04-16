@@ -21,7 +21,6 @@ import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste-v2/taste
 import { logOnboardingEvent } from "@/lib/analytics/logger";
 import { ONBOARDING_EVENTS } from "@/lib/analytics/events";
 import { supabase } from "@/lib/supabase";
-import { fetchServiceCentroids } from "@/lib/taste-v2/bootstrap";
 import type { SliderState } from "@/lib/taste-v2/types";
 import { DEFAULT_SLIDERS } from "@/lib/taste-v2/types";
 import { useAuth } from "./AuthContext";
