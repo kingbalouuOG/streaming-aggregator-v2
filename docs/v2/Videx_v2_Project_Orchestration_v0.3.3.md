@@ -227,6 +227,8 @@ Supabase migrations live in `supabase/migrations/` and are applied via `supabase
 | 023 | `023_taste_vector_v2.sql` | Phase 3 | ✅ Applied | Add `taste_vector_v2 vector(1536)`, slider columns, metadata to `taste_profiles` |
 | 024 | `024_drop_legacy_taste_vector.sql` | Phase 3 | ✅ Applied | Drop v1 24D columns: `vector`, `confidence`, `seed_vector`, `quiz_completed`, `quiz_answers`, `interaction_log`, `version` |
 | 025 | `025_fix_match_titles_rpc.sql` | Phase 3 | ✅ Applied | Recreate `match_titles_by_vector` as plpgsql with dynamic `hnsw.ef_search` (was capped at 40 results) |
+| 026 | `026_security_linter_fixes.sql` | Infrastructure | ✅ Applied | Supabase security advisor — accepted linter warnings |
+| 027 | `027_function_search_path_pin.sql` | Infrastructure | ✅ Applied | Pin `search_path` on RPC functions per security advisor |
 | 028 | `028_available_tmdb_ids_rpc.sql` | Phase 3 | ✅ Applied | `get_available_tmdb_ids` RPC — single-query DISTINCT availability lookup |
 | 029+ | *(mood rooms tables)* | Phase 4.5 | ⏳ Planned | Create `mood_rooms` and `mood_room_titles` tables |
 
