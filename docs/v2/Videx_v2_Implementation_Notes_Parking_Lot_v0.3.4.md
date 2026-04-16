@@ -982,6 +982,18 @@ Wiring requires cascading delete across: `profiles`, `user_interactions`, `card_
 
 **Status:** ⏳ Consider after user testing
 
+### IN-XPS-009: Retake Taste Profile limited to cluster selection only *(Phase 3 carry-forward)*
+
+**Source:** Phase 3 post-merge review (Joe)
+
+**Detail:** The "Retake taste profile" action in Profile → Your Taste currently opens only the cluster selection grid (RefinePreferencesPage). The original plan called for reusing onboarding Steps 3–5 (watched-grid → clusters → taste summary) for a full taste profile retake. This was deferred because the step components live inline in `OnboardingFlow.tsx` (1,122 lines) rather than as separate reusable files, making cross-component reuse impractical without either extracting them or importing OnboardingFlow in a special mode.
+
+**Impact:** Users can refine their genre/cluster preferences but cannot redo the watched-grid portion of the taste profile without going through full onboarding again. The taste vector is re-bootstrapped from cluster representative titles only (no watched-grid signal on retake).
+
+**Fix when needed:** Extract Steps 3–5 (StepWatchedGrid, StepGenrePreferences, StepTasteSummary) into standalone components in `src/components/onboarding/`. Import from both OnboardingFlow and ProfilePage's retake flow. This is part of the broader monolith refactoring of OnboardingFlow.tsx and ProfilePage.tsx.
+
+**Status:** ⏳ Deferred — revisit when Phase 4/5 needs to modify these files or when user feedback indicates retake quality is a problem
+
 ---
 
 ## Onboarding implementation notes
