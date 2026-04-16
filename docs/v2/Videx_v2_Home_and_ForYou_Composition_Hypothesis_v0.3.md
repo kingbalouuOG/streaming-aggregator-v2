@@ -156,6 +156,8 @@ In approximate order from top to bottom:
 
 ## 3. The For You Surface
 
+> **Phase 3 implementation note (April 2026):** Phase 3 ships a minimal For You surface with only two rows: "Recommended For You" (cosine-sorted from `match_titles_by_vector`) and "Hidden Gems" (popularity-capped variant). The full row composition described below (Mood Rooms, Because You Watched, Outside Your Usual, etc.) is Phase 4 scope.
+
 ### 3.1 Purpose and principles
 
 **Purpose:** Give users a highly personalised view of content that matches their taste. This is the surface where the recommendation engine is fully expressed. It's where users go when they want Videx to interpret their taste rather than show them what's out there.

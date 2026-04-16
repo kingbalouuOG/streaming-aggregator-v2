@@ -17,7 +17,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { PLATFORMS, type PlatformDef } from "./platformLogos";
-import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste/tasteClusters";
+import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste-v2/tasteClusters";
 import { logOnboardingEvent } from "@/lib/analytics/logger";
 import { ONBOARDING_EVENTS } from "@/lib/analytics/events";
 import { supabase } from "@/lib/supabase";
@@ -191,14 +191,17 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
   // Called by StepAccount when auth sign-up succeeds
   const handleAccountCreated = useCallback((age: string | null, context: string | null) => {
     setAccountCreated(true);
-    // Save age_range and viewing_context to profiles (fire-and-forget)
+    // Save age_range and viewing_context to profiles
     if (age || context) {
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
       if (age) updates.age_range = age;
       if (context) updates.viewing_context = context;
       supabase.auth.getUser().then(({ data }) => {
         if (data.user) {
-          supabase.from('profiles' as any).update(updates).eq('id', data.user.id);
+          supabase.from('profiles' as any).update(updates).eq('id', data.user.id)
+            .then(({ error }: any) => {
+              if (error) console.error('[Onboarding] Failed to save demographics:', error.message);
+            });
         }
       });
     }

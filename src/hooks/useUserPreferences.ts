@@ -14,7 +14,7 @@ import {
 import { serviceIdToProviderId, providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import { UK_PROVIDERS_ARRAY } from '@/lib/constants/platforms';
 import type { ServiceId } from '@/components/platformLogos';
-import { TASTE_CLUSTERS } from '@/lib/taste/tasteClusters';
+import { TASTE_CLUSTERS } from '@/lib/taste-v2/tasteClusters';
 import { bootstrapTasteVector } from '@/lib/taste-v2/bootstrap';
 import { saveV2TasteVector, saveSliderState } from '@/lib/taste-v2/tasteProfileV2';
 import { DEFAULT_SLIDERS } from '@/lib/taste-v2/types';

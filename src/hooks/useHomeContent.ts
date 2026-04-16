@@ -10,7 +10,7 @@ import storage from '@/lib/storage';
 import { getHomeGenres } from '@/lib/storage/userPreferences';
 import { serviceIdsToProviderIds, providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import { GENRE_NAME_TO_ID } from '@/lib/constants/genres';
-import { TASTE_CLUSTERS } from '@/lib/taste/tasteClusters';
+import { TASTE_CLUSTERS } from '@/lib/taste-v2/tasteClusters';
 import { buildFilterSets, type FilterSets } from '@/lib/recommendations-v2/hardFilters';
 import type { FilterState } from '@/components/FilterSheet';
 import type { ServiceId } from '@/components/platformLogos';

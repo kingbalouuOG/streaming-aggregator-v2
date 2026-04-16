@@ -97,22 +97,6 @@ export function emitContentInteraction(
   }).catch(() => {});
 }
 
-/** Emit a quiz answer event */
-export function emitQuizAnswer(pairId: string, chosen: string, phase: string): void {
-  emitInteraction({
-    event_type: 'quiz_answer',
-    metadata: { pair_id: pairId, chosen, phase },
-  }).catch(() => {});
-}
-
-/** Emit quiz completion event */
-export function emitQuizCompleted(answerCount: number, topGenres: string[]): void {
-  emitInteraction({
-    event_type: 'quiz_completed',
-    metadata: { answer_count: answerCount, top_genres: topGenres },
-  }).catch(() => {});
-}
-
 /**
  * Emit a detail page view event. Anchor event for subsequent dwell
  * and outcome events — IT IS NOT a positive signal (IN-002).

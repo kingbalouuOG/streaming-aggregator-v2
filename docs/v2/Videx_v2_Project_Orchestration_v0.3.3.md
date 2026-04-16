@@ -224,9 +224,11 @@ Supabase migrations live in `supabase/migrations/` and are applied via `supabase
 | 019 | `019_drop_legacy_content_vector.sql` | Phase 1 (end) | ✅ Applied | Drop the 24D `content_vector` column and its constraint |
 | 020 | `020_service_fingerprints.sql` | Phase 2 | ✅ Applied | Create `service_fingerprints` table with CHECK constraint, authenticated-only RLS |
 | 022 | `022_fingerprint_variant.sql` | Phase 2.6 | ✅ Applied | Add `variant` column to `service_fingerprints` (PK now includes variant), `match_titles_by_vector` RPC for pgvector cosine similarity search (Phase 3 inheritance) |
-| 023 | `023_taste_vector_v2.sql` | Phase 3 | ⏳ Planned | Add embedding-space taste vector column to `taste_profiles` |
-| 024 | `024_drop_legacy_taste_vector.sql` | Phase 3 (end) | ⏳ Planned | Drop the 24D taste vector columns and `interaction_log` JSONB column |
-| 025 | `025_mood_rooms_tables.sql` | Phase 4.5 | ⏳ Planned | Create `mood_rooms` and `mood_room_titles` tables |
+| 023 | `023_taste_vector_v2.sql` | Phase 3 | ✅ Applied | Add `taste_vector_v2 vector(1536)`, slider columns, metadata to `taste_profiles` |
+| 024 | `024_drop_legacy_taste_vector.sql` | Phase 3 | ✅ Applied | Drop v1 24D columns: `vector`, `confidence`, `seed_vector`, `quiz_completed`, `quiz_answers`, `interaction_log`, `version` |
+| 025 | `025_fix_match_titles_rpc.sql` | Phase 3 | ✅ Applied | Recreate `match_titles_by_vector` as plpgsql with dynamic `hnsw.ef_search` (was capped at 40 results) |
+| 028 | `028_available_tmdb_ids_rpc.sql` | Phase 3 | ✅ Applied | `get_available_tmdb_ids` RPC — single-query DISTINCT availability lookup |
+| 029+ | *(mood rooms tables)* | Phase 4.5 | ⏳ Planned | Create `mood_rooms` and `mood_room_titles` tables |
 
 Numbering continues forward as phases execute. The list above is the current plan; migration numbers may shift if phases add additional migrations as they develop.
 

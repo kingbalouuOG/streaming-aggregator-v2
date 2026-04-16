@@ -956,7 +956,7 @@ Fatal: Error: EPERM: operation not permitted, rename
 
 **Status:** ✅ Incorporated (Phase 0.5 — fix landed in commit `c4a8916`; lesson filed here for future Windows-side scripts)
 
-### IN-XPS-006: Delete account wiring deferred
+### IN-XPS-006: Delete account wiring deferred *(Phase 3 carry-forward)*
 
 **Source:** Phase 3 brief §9.1; GDPR Article 17
 
@@ -966,7 +966,7 @@ Wiring requires cascading delete across: `profiles`, `user_interactions`, `card_
 
 **Status:** ⏳ Flagged for pre-public-launch
 
-### IN-XPS-007: Service pricing config needs review cadence
+### IN-XPS-007: Service pricing config needs review cadence *(Phase 3 carry-forward)*
 
 **Source:** Phase 3 Task 11 (Monthly Spend sub-page)
 
@@ -974,7 +974,7 @@ Wiring requires cascading delete across: `profiles`, `user_interactions`, `card_
 
 **Status:** ⏳ Flagged for pre-public-launch
 
-### IN-XPS-008: Consider pre-built onboarding watched-grid title pool
+### IN-XPS-008: Consider pre-built onboarding watched-grid title pool *(Phase 3 carry-forward)*
 
 **Source:** Phase 3 testing feedback (Joe)
 

@@ -25,7 +25,7 @@ import { toast } from "sonner";
 import { OnboardingData } from "./OnboardingFlow";
 import { useTheme } from "./ThemeContext";
 import { PLATFORMS } from "./platformLogos";
-import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste/tasteClusters";
+import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste-v2/tasteClusters";
 import { getSliderState, saveSliderState } from "@/lib/taste-v2/tasteProfileV2";
 import { DEFAULT_SLIDERS, type SliderState } from "@/lib/taste-v2/types";
 import { SpendDashboard } from "./SpendDashboard";

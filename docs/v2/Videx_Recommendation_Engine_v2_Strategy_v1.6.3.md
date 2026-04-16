@@ -599,7 +599,7 @@ As of v1.5, all design exploration areas are complete and approved:
 
 **Phase 2.5 — TMDb watch/providers backfill.** Fill streaming_availability gaps for BBC iPlayer, NOW TV, Sky Go using TMDb discover data. No migration needed. Prerequisite for Phase 3 cold-start to cover all 10 UK services. ~0.5 week.
 
-**Phase 3 — User taste vector v2.** Re-express user taste in embedding space (migration 021). Nine files to be rewritten in this phase:
+**Phase 3 — User taste vector v2.** ✅ Complete. Re-expressed user taste in embedding space (migrations 023–025, 028). Ten files rewritten (9 from plan + useTasteProfile). Auth sign-up integrated into onboarding Step 1. v1 quiz subsystem deleted. Bootstrap uses dynamic 4-band weights by watched-grid selection count (0 selections → 0.55/0.00/0.45; 1-4 → 0.40/0.40/0.20; 5-12 → 0.30/0.55/0.15; 13+ → 0.20/0.70/0.10). Files rewritten:
 
 - **`useHomeContent.ts`** — currently loads a 24D TasteProfile and passes it to every section for scoring. Rewritten to call the new recommendation hooks (which internally use the v2 ranking pipeline).
 - **`useContentDetail.ts`** — currently computes 24D content vectors inline for "More Like This." Rewritten to use the batch Supabase query approach (fetch candidate embeddings, client-side cosine similarity). Depends on Phase 1 wire format spike outcome.
