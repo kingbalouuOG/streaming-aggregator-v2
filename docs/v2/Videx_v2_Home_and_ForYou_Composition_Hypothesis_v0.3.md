@@ -156,7 +156,9 @@ In approximate order from top to bottom:
 
 ## 3. The For You Surface
 
-> **Phase 3 implementation note (April 2026):** Phase 3 ships a minimal For You surface with only two rows: "Recommended For You" (cosine-sorted from `match_titles_by_vector`) and "Hidden Gems" (popularity-capped variant). The full row composition described below (Mood Rooms, Because You Watched, Outside Your Usual, etc.) is Phase 4 scope.
+> **Phase 3 implementation note (April 2026):** Phase 3 shipped a minimal For You surface with only two rows: "Recommended For You" (cosine-sorted from `match_titles_by_vector`) and "Hidden Gems" (popularity-capped variant).
+>
+> **Phase 4 implementation note (April 2026):** ✅ Complete. For You now renders up to 7 rows: Recommended For You, Hidden Gems, Because You Watched [Title], More From [Director/Actor], Outside Your Usual, From Your Watchlist. Mood Rooms for Tonight position reserved for Phase 4.5 (not rendered). All 4 delivery sliders wired to pipeline via bottom-sheet tray with haptic feedback. Home surface rebuilt to match §2.2 row composition (Hero Carousel, Recently Added, Trending, Coming Soon, Per-Service Charts, Critically Acclaimed [gated], Genre Spotlight). See `phase-summaries/phase-4-summary.md`.
 
 ### 3.1 Purpose and principles
 

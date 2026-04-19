@@ -368,6 +368,8 @@ The onboarding flow has been designed to maximise signal capture per step while 
 - **Weights will be tuned** via offline evaluation (Section 6).
 - **All scoring on the same numerical scale.** The v1 `scoreCandidate()` bug (cosine similarity on 0-100 scale added to weighted components) is explicitly not carried forward. v2 uses weighted sums of unit-length embedding deltas for taste, and ranking weights as percentages summing to 100%. No mixing of raw and normalised scores.
 
+**Phase 4 implementation (shipped):** The 50/20/10/10/10 table represents intent. In implementation, the three *scoring* components (taste, recency, contextual) form the Stage 2 weighted sum normalised to 1.0 — taste 62.5% / recency 25% / contextual 12.5% — while intra-list diversity and cross-service spread are implemented as **post-processing stages** (genre-spread + de-clustering), not as literal scoring components. Weight constants live in `src/lib/recommendations-v2/weights.ts`. The contextual component returns a neutral 0.5 in Phase 4 (placeholder); when Phase 5 replaces it with a real scorer, the 62.5/25/12.5 split should be re-evaluated. The Catalogue-age slider modulates recency weight between 10-30% with proportional re-normalisation of the other two components.
+
 **Slider modifications to pipeline:**
 - **Catalogue-age slider** → scales recency weight (default 20%, range ~10–30%)
 - **Comfort-zone slider** → scales exploration ratio in Stage 3 (default 20–25%, range ~10–40%)
@@ -617,11 +619,11 @@ The two prototype users will lose their existing taste profiles at this point. T
 
 ~2–3 weeks (revised up from ~2 weeks due to hook rewrite scope).
 
-**Phase 4 — Ranking and row selection.** Implement multi-stage pipeline. Offline evaluation against v1 baseline. Service-filtered candidate retrieval, weighted ranking, row selection split by surface, within-row ordering. ~3 weeks.
+**Phase 4 — Ranking pipeline & row composition.** ✅ Complete. Full multi-stage pipeline replacing Phase 3 cosine-only ranker. Single source of truth for weights in `weights.ts` (taste 62.5% + recency 25% + contextual 12.5% placeholder). Pluggable diversity (genre-spread with taste cluster secondary signal; MMR deferred to Phase 5). Home surface: 7 rows (Hero Carousel, Recently Added, Trending, Coming Soon, Per-Service Charts, Critically Acclaimed [gated], Genre Spotlight). For You surface: up to 7 rows (Recommended For You, Hidden Gems, Because You Watched, More From [Director/Actor], Outside Your Usual, From Your Watchlist). All 4 delivery sliders wired to pipeline parameters with bottom-sheet tray + haptic feedback. Shared 500-candidate pool for taste-vector rows; in-memory re-ranking on slider change. Zero migrations. See Phase 4 summary.
 
 **Phase 4.5 — Mood Rooms.** Create `mood_rooms` and `mood_room_titles` tables (migration 023). Create Python clustering script at `scripts/mood_rooms/recluster.py`, dependencies at `scripts/mood_rooms/requirements.txt`. Create GitHub Actions workflow at `.github/workflows/mood-rooms-recluster.yml`. Configure GitHub Actions Secrets (`SUPABASE_CONNECTION_STRING`, `OPENAI_API_KEY`). Run the script once manually via `workflow_dispatch` to generate the initial mood rooms. Integrate "Mood Rooms for Tonight" row on the For You surface. Dedicated mood rooms browse surface is **deferred to v2.5**. ~2–3 weeks.
 
-**Phase 5 — Contextual signals.** Add device detection, viewing-context handling, time-availability logic, catalogue-age slider wiring. ~2 weeks.
+**Phase 5 — Contextual signals.** Replace the `contextual.ts` placeholder (returns neutral 0.5 in Phase 4) with real scoring: device detection, viewing-context handling, time-of-day mood adaptation. When this ships, the 62.5/25/12.5 scoring weight split should be re-evaluated since the contextual component will have real ranking influence. ~2 weeks.
 
 **Phase 6 — Launch.** v2 is complete. Build Android APK, install on test device, verify end-to-end. No cutover ceremony — v2 is just the next build of the app. Two prototype users re-onboard on their next app launch.
 

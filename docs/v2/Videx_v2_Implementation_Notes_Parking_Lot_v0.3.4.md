@@ -704,7 +704,7 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 - Should NOT fire continuously during drag — only at moment of crossing
 - Respect user's system haptic settings
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 4). `SliderTray.tsx` imports `Haptics` and `ImpactStyle` from `@capacitor/haptics`. Threshold crossings tracked via `prevLabelsRef` — haptic fires once per label change, not continuously during drag. Fires on all 5 label boundaries ("Strongly prefer [left]" / "Slightly prefer [left]" / "Balanced" / "Slightly prefer [right]" / "Strongly prefer [right]") for all 4 sliders.
 
 ### IN-402: Slider state shared between Profile and For You
 
@@ -718,7 +718,7 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 - Write immediately on slider release (auto-save, no explicit save button)
 - Cache locally for offline resilience
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 4). Slider state stored as four columns on `taste_profiles` (`slider_catalogue_age`, `slider_comfort_zone`, `slider_content_mix`, `slider_variety`) — decided during Phase 3. Both `TuneRecommendationsPage` (Profile sub-page) and `SliderTray` (For You bottom sheet) read via `getSliderState()` and write via `saveSliderState()`. Debounced auto-save at 500ms. `invalidateV2ProfileCache()` called on save to ensure the other location reads fresh values.
 
 ### IN-403: Slider parameter mapping (continuous to pipeline weight)
 
@@ -732,7 +732,7 @@ Omit empty lines (no "Keywords: " with nothing after). Runtime line is omitted i
 
 Sliders do NOT modify the taste vector directly — they only modify pipeline parameters. This keeps the content-identity signal clean.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 4). Mapping functions in `src/lib/recommendations-v2/weights.ts`: `getCatalogueAgeRecencyWeight()` (0.30 - slider × 0.20), `getComfortZoneRowCount()` (5 + round(slider × 10)), `getContentMixMovieRatio()` (0.80 - slider × 0.60), `getVarietyGenreWindow()` (1 + round(slider × 4)). All mappings linear interpolation. Sliders do not modify taste vector — only pipeline parameters, per spec.
 
 ### IN-404: scoreCandidate scale mismatch must NOT be carried forward
 
@@ -745,7 +745,7 @@ Sliders do NOT modify the taste vector directly — they only modify pipeline pa
 
 This is a discipline, not a feature, but must be enforced from day 1 of Phase 4. The v1 `scoreCandidate()` function itself is deleted in Phase 3 (see IN-303), so there's no risk of the bug being referenced, but the v2 equivalent must not reintroduce the same mistake.
 
-**Status:** ⏳ Not yet incorporated
+**Status:** ✅ Incorporated (Phase 4). All Stage 2 scoring components are normalised to 0.0–1.0 before weighting. `distanceToSimilarity()` converts cosine distance (0-2) to similarity (0-1). `computeForYouRecencyScore()` returns 0-1 via exponential decay. `computeContextualScore()` returns 0-1 (0.5 placeholder). `normalizePopularity()` log-scales to 0-1. `normalizeImdbRating()` divides by 10. Weights sum to 1.0. Match percentage conversion (`scoreToMatchPercentage()`) is isolated to the final UI mapping step. No mixing of raw and normalised scores.
 
 ---
 
