@@ -159,7 +159,6 @@ function AppContent() {
 
   // --- Upcoming content (Coming Soon) ---
   const upcoming = useUpcoming(connectedServices, home.fetchMovies, home.fetchTV);
-  // Phase 3: no client-side reordering (Phase 4 reintroduces via v2 ranker)
   const reorderedUpcoming = upcoming.items;
 
   const activeFilterCount =

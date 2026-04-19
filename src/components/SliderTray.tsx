@@ -70,7 +70,7 @@ export function SliderTray({ isOpen, onClose, onSlidersChange, initialSliders }:
       if (rerankTimeoutRef.current) clearTimeout(rerankTimeoutRef.current);
       rerankTimeoutRef.current = setTimeout(() => {
         onSlidersChange(updated);
-      }, 150);
+      }, 300);
 
       // Debounced save to Supabase (500ms)
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -93,8 +93,6 @@ export function SliderTray({ isOpen, onClose, onSlidersChange, initialSliders }:
       if (rerankTimeoutRef.current) clearTimeout(rerankTimeoutRef.current);
     };
   }, []);
-
-  if (!isOpen) return null;
 
   return (
     <AnimatePresence>

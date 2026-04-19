@@ -65,7 +65,9 @@ async function getServiceOrder(userServiceIds: string[]): Promise<string[]> {
       .from('user_interactions' as any)
       .select('metadata')
       .eq('user_id', userId)
-      .eq('event_type', 'deep_link_click');
+      .eq('event_type', 'deep_link_click')
+      .order('created_at', { ascending: false })
+      .limit(200);
 
     if (!data || data.length === 0) return userServiceIds;
 

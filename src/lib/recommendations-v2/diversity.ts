@@ -164,14 +164,20 @@ export function deClusterByService(
 
     if (!allSameService) continue;
 
-    // Find the next item with a different primary service to swap with
+    // Find the next item with a different primary service to swap with.
+    // Check against the full preceding window to avoid introducing a new cluster.
     for (let k = i + 1; k < result.length; k++) {
       const swapServices = new Set(getServices(result[k].tmdbId, result[k].mediaType));
-      const prevServices = getServices(result[i - 1].tmdbId, result[i - 1].mediaType);
-      const wouldCluster = prevServices.some(s => swapServices.has(s));
+      let wouldCluster = false;
+      for (let j = 1; j <= maxConsecutive && i - j >= 0; j++) {
+        const prevServices = getServices(result[i - j].tmdbId, result[i - j].mediaType);
+        if (prevServices.some(s => swapServices.has(s))) {
+          wouldCluster = true;
+          break;
+        }
+      }
 
       if (!wouldCluster) {
-        // Swap
         [result[i], result[k]] = [result[k], result[i]];
         break;
       }
@@ -217,15 +223,14 @@ export function applyContentMixRatio(
   const result: ScoredCandidate[] = [];
   let mi = 0;
   let ti = 0;
+  let movieCount = 0;
 
   while (mi < selectedMovies.length || ti < selectedTV.length) {
-    // Decide whether next pick should be movie or TV based on current ratio
-    const currentMovieRatio = result.length === 0
-      ? 0
-      : result.filter(c => c.mediaType === 'movie').length / result.length;
+    const currentMovieRatio = result.length === 0 ? 0 : movieCount / result.length;
 
     if (mi < selectedMovies.length && (ti >= selectedTV.length || currentMovieRatio < movieRatio)) {
       result.push(selectedMovies[mi++]);
+      movieCount++;
     } else if (ti < selectedTV.length) {
       result.push(selectedTV[ti++]);
     } else {
