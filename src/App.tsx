@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { Loader2 } from "lucide-react";
 import { CategoryFilter } from "./components/CategoryFilter";
 import { ContentRow } from "./components/ContentRow";
-import { FeaturedHero } from "./components/FeaturedHero";
+import { FeaturedHeroCarousel } from "./components/FeaturedHero";
+import { ForYouPage } from "./components/ForYouPage";
 import { BottomNav } from "./components/BottomNav";
 import { ContentItem } from "./components/ContentCard";
 import { BrowsePage, BrowseStateSnapshot } from "./components/BrowsePage";
@@ -27,12 +28,10 @@ import { useUserPreferences } from "./hooks/useUserPreferences";
 import { useWatchlist } from "./hooks/useWatchlist";
 import { useHomeContent } from "./hooks/useHomeContent";
 import { useUpcoming } from "./hooks/useUpcoming";
-import { LazyGenreSection } from "./components/LazyGenreSection";
 import { providerIdsToServiceIds, providerIdToServiceId } from "./lib/adapters/platformAdapter";
 import type { ServiceId } from "./components/platformLogos";
 import { App as CapApp } from "@capacitor/app";
 import { useTasteProfile } from "./hooks/useTasteProfile";
-const IMMEDIATE_LOAD_COUNT = 5;
 import { logOnboardingEvent } from "./lib/analytics/logger";
 import { ONBOARDING_EVENTS } from "./lib/analytics/events";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -145,15 +144,14 @@ function AppContent() {
       justOnboardedRef.current = false;
       // Update if homepage sections change
       const sectionCount = [
-        home.forYou.items.length > 0,
         home.recentlyAdded.items.length > 0,
-        home.highestRated.items.length > 0,
         home.popular.items.length > 0,
-        home.hiddenGems.items.length > 0,
-      ].filter(Boolean).length + home.genreList.length;
+        home.perServiceCharts.length > 0,
+        home.genreSpotlight?.items.length ?? 0 > 0,
+      ].filter(Boolean).length;
 
       void logOnboardingEvent(ONBOARDING_EVENTS.FIRST_HOME_VIEW, {
-        has_taste_vector: !!home.tasteVector,
+        has_taste_vector: true,
         section_count: sectionCount,
       });
     }
@@ -473,13 +471,8 @@ function AppContent() {
     setPullDistance(0);
   }, [pullDistance, activeTab, home.reload]);
 
-  // Featured item from home content (skip watched unless showWatched is on)
-  const featured = useMemo(() => {
-    if (filters.showWatched || !home.featured) return home.featured;
-    if (!watchedIds.has(home.featured.id)) return home.featured;
-    // If the featured item is watched, pick next non-watched from popular
-    return home.popular.items.find((item) => !watchedIds.has(item.id)) || home.featured;
-  }, [home.featured, home.popular.items, filters.showWatched, watchedIds]);
+  // Phase 4: featured hero replaced by carousel in FeaturedHeroCarousel.
+  // The carousel uses home.popular.items directly (filtered in JSX).
 
   // ── Auth loading state ──
   if (auth.loading) {
@@ -652,21 +645,16 @@ function AppContent() {
               >
               {activeTab === "home" && (
                 <>
-                  {/* Featured Hero */}
-                  {featured ? (
-                    <FeaturedHero
-                      title={featured.title}
-                      subtitle={featured.type === 'tv' ? 'Trending on your services' : 'Popular right now'}
-                      image={featured.image}
-                      itemId={featured.id}
-                      services={featured.services}
-                      tags={[...(featured.type ? [featured.type === 'tv' ? 'TV Show' : featured.type === 'doc' ? 'Documentary' : 'Movie'] : []), ...(featured.year ? [String(featured.year)] : [])]}
-                      bookmarked={wl.bookmarkedIds.has(featured.id)}
-                      onToggleBookmark={() => handleToggleBookmark(featured)}
-                      scrollY={scrollY}
-                      watched={watchedIds.has(featured.id)}
+                  {/* Featured Hero Carousel */}
+                  {home.popular.items.length > 0 ? (
+                    <FeaturedHeroCarousel
+                      items={home.popular.items.filter(item => item.image && !watchedIds.has(item.id)).slice(0, 5)}
+                      bookmarkedIds={wl.bookmarkedIds}
+                      watchedIds={watchedIds}
                       userServices={connectedServiceIds}
-                      onInfoClick={() => handleItemSelect(featured)}
+                      onToggleBookmark={handleToggleBookmark}
+                      onItemSelect={handleItemSelect}
+                      scrollY={scrollY}
                     />
                   ) : home.loading ? (
                     <div className="w-full aspect-[4/3] bg-secondary/80 overflow-hidden">
@@ -694,15 +682,8 @@ function AppContent() {
                     </div>
                   ) : (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-                      {home.forYou.items.length > 0 && (
-                        <ContentRow title="For You" sectionKey="for-you" sourceSurface="home" items={filterLanguage(filterWatched(home.forYou.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
-                      )}
                       <ContentRow title="Recently Added" sectionKey="recently-added" sourceSurface="home" items={filterLanguage(filterWatched(home.recentlyAdded.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.recentlyAdded.loadMore} loadingMore={home.recentlyAdded.loadingMore} hasMore={home.recentlyAdded.hasMore} />
-                      <ContentRow title="Highest Rated" sectionKey="highest-rated" sourceSurface="home" items={filterLanguage(filterWatched(home.highestRated.items))} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.highestRated.loadMore} loadingMore={home.highestRated.loadingMore} hasMore={home.highestRated.hasMore} />
-                      <ContentRow title="Popular on Your Services" sectionKey="popular" sourceSurface="home" items={filterLanguage(filterWatched(home.popular.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.popular.loadMore} loadingMore={home.popular.loadingMore} hasMore={home.popular.hasMore} />
-                      {home.hiddenGems.items.length > 0 && (
-                        <ContentRow title="Hidden Gems" sectionKey="hidden-gems" sourceSurface="home" items={filterLanguage(filterWatched(home.hiddenGems.items)).filter((item) => (item.type === 'movie' && home.fetchMovies) || (item.type === 'tv' && home.fetchTV))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
-                      )}
+                      <ContentRow title="Trending Across Your Services" sectionKey="popular" sourceSurface="home" items={filterLanguage(filterWatched(home.popular.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.popular.loadMore} loadingMore={home.popular.loadingMore} hasMore={home.popular.hasMore} />
                       {reorderedUpcoming.length > 0 && (
                         <div className="mb-6 overflow-hidden">
                           <div className="flex items-center justify-between px-5 mb-3">
@@ -722,48 +703,38 @@ function AppContent() {
                           </div>
                         </div>
                       )}
-                      {home.genreList.map((genreId, idx) => (
-                        <LazyGenreSection
-                          key={genreId}
-                          genreId={genreId}
-                          immediate={idx < IMMEDIATE_LOAD_COUNT}
-                          baseParams={home.baseParams}
-                          sectionKeyBase={home.sectionKeyBase}
-                          filterGenreIds={home.filterGenreIds}
-                          fetchMovies={home.fetchMovies}
-                          fetchTV={home.fetchTV}
-                          excludeIds={home.genreExcludeIds}
-                          onNewIds={home.registerGenreIds}
-                          genreAffinities={home.genreAffinities}
-                          tasteVector={home.tasteVector}
-                          onItemSelect={handleItemSelect}
-                          bookmarkedIds={wl.bookmarkedIds}
-                          onToggleBookmark={handleToggleBookmark}
-                          userServices={connectedServiceIds}
-                          watchedIds={watchedIds}
-                          filterWatched={(items) => filterLanguage(filterWatched(items))}
-                        />
+                      {/* Per-Service Charts (Phase 4) */}
+                      {home.perServiceCharts.map((chart) => (
+                        <ContentRow key={`svc-${chart.serviceId}`} title={`Popular on ${chart.serviceName}`} sectionKey={`svc-chart-${chart.serviceId}`} sourceSurface="home" items={filterLanguage(filterWatched(chart.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       ))}
+
+                      {/* Critically Acclaimed (Phase 4, gated) */}
+                      {home.criticallyAcclaimed.length > 0 && (
+                        <ContentRow title="Critically Acclaimed" sectionKey="critically-acclaimed" sourceSurface="home" items={filterLanguage(filterWatched(home.criticallyAcclaimed))} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                      )}
+
+                      {/* Genre Spotlight (Phase 4) */}
+                      {home.genreSpotlight && home.genreSpotlight.items.length > 0 && (
+                        <ContentRow title={home.genreSpotlight.clusterName} sectionKey="genre-spotlight" sourceSurface="home" items={filterLanguage(filterWatched(home.genreSpotlight.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                      )}
+
                     </motion.div>
                   )}
                 </>
               )}
 
               {activeTab === "foryou" && (
-                <div className="px-0 pt-2">
-                  <h1 className="text-foreground text-[22px] px-5 mb-4" style={{ fontWeight: 700 }}>For You</h1>
-                  {home.forYou.items.length > 0 && (
-                    <ContentRow title="Recommended For You" sectionKey="foryou-recs" sourceSurface="for_you" items={filterLanguage(filterWatched(home.forYou.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
-                  )}
-                  {home.hiddenGems.items.length > 0 && (
-                    <ContentRow title="Hidden Gems" sectionKey="foryou-gems" sourceSurface="for_you" items={filterLanguage(filterWatched(home.hiddenGems.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
-                  )}
-                  {home.forYou.items.length === 0 && home.hiddenGems.items.length === 0 && !home.loading && (
-                    <p className="text-muted-foreground text-[14px] text-center px-5 py-12">
-                      Complete onboarding to see personalised recommendations here.
-                    </p>
-                  )}
-                </div>
+                <ForYouPage
+                  providerIds={connectedServices}
+                  connectedServiceIds={connectedServiceIds}
+                  sharedFilters={home.sharedFilters ?? null}
+                  filterWatched={filterWatched}
+                  filterLanguage={filterLanguage}
+                  onItemSelect={handleItemSelect}
+                  bookmarkedIds={wl.bookmarkedIds}
+                  onToggleBookmark={handleToggleBookmark}
+                  watchedIds={watchedIds}
+                />
               )}
 
               {activeTab === "browse" && (

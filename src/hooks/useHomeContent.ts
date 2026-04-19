@@ -1,37 +1,32 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useRecommendations } from './useRecommendations';
-import { useHiddenGems } from './useHiddenGems';
 import { useSectionData } from './useSectionData';
 import { clearSectionCache } from '@/lib/sectionSessionCache';
 import { prefetchServices } from '@/lib/utils/serviceCache';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
-import { invalidateRecommendationCache } from '@/lib/storage/recommendations';
-import storage from '@/lib/storage';
-import { getHomeGenres } from '@/lib/storage/userPreferences';
-import { serviceIdsToProviderIds, providerIdToServiceId } from '@/lib/adapters/platformAdapter';
-import { GENRE_NAME_TO_ID } from '@/lib/constants/genres';
-import { TASTE_CLUSTERS } from '@/lib/taste-v2/tasteClusters';
+import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import { buildFilterSets, type FilterSets } from '@/lib/recommendations-v2/hardFilters';
+import { fetchPerServiceCharts, type PerServiceChartRow } from '@/lib/recommendations-v2/rows/home/perServiceChart';
+import { fetchCriticallyAcclaimed } from '@/lib/recommendations-v2/rows/home/criticallyAcclaimed';
+import { fetchGenreSpotlight } from '@/lib/recommendations-v2/rows/home/genreSpotlight';
 import type { FilterState } from '@/components/FilterSheet';
 import type { ServiceId } from '@/components/platformLogos';
 import type { ContentItem } from '@/components/ContentCard';
-import { debug } from '@/lib/debugLogger';
-import { supabase } from '@/lib/supabase';
-import { getAuthUserId, isSupabaseActive } from '@/lib/storage';
-
-// Phase 3: GenreAffinities type kept for backward compat with callers
-export type GenreAffinities = Record<string, number>;
+import { GENRE_NAME_TO_ID } from '@/lib/constants/genres';
+import { serviceIdsToProviderIds } from '@/lib/adapters/platformAdapter';
 
 export function useHomeContent(providerIds: number[], filters?: FilterState) {
   const [sharedFilters, setSharedFilters] = useState<FilterSets | null>(null);
-  const [genreList, setGenreList] = useState<number[]>([]);
-  const [metaLoading, setMetaLoading] = useState(true);
   const [reloadCounter, setReloadCounter] = useState(0);
+
+  // Phase 4 Home rows
+  const [perServiceCharts, setPerServiceCharts] = useState<PerServiceChartRow[]>([]);
+  const [criticallyAcclaimed, setCriticallyAcclaimed] = useState<ContentItem[]>([]);
+  const [genreSpotlight, setGenreSpotlight] = useState<{ clusterName: string; emoji: string; items: ContentItem[] } | null>(null);
 
   const providerStr = providerIds.join(',');
 
-  // --- Build base params (ported from useContentService) ---
-  const { baseParams, filterKey, fetchMovies, fetchTV, filterGenreIds } = useMemo(() => {
+  // --- Build base params for TMDb discover ---
+  const { baseParams, filterKey, fetchMovies, fetchTV } = useMemo(() => {
     let providerPipe: string;
     if (filters?.services && filters.services.length > 0) {
       const filterProviderIds = serviceIdsToProviderIds(filters.services as ServiceId[]);
@@ -68,51 +63,22 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
 
     const key = `${providerStr}|${filters?.contentType || 'All'}|${filters?.cost || 'All'}|${filters?.services?.join(',') || ''}|${filters?.genres?.join(',') || ''}|${filters?.minRating || 0}`;
 
-    return { baseParams: params, filterKey: key, fetchMovies: fm, fetchTV: ft, filterGenreIds: genreIds };
+    return { baseParams: params, filterKey: key, fetchMovies: fm, fetchTV: ft };
   }, [providerStr, filters?.contentType, filters?.cost, filters?.services?.join(','), filters?.genres?.join(','), filters?.minRating]);
 
   // Composite key: includes reloadCounter so sections re-init on pull-to-refresh
   const sectionKeyBase = `${filterKey}|${reloadCounter}`;
 
-  // --- Genre section dedup (excludeIds built from fixed sections via useMemo) ---
-  // Genre sections still use the ref-based approach for cross-genre dedup
-  const genreExcludeRef = useRef(new Set<string>());
-
-  useEffect(() => {
-    genreExcludeRef.current.clear();
-  }, [sectionKeyBase]);
-
-  const registerGenreIds = useCallback((ids: string[]) => {
-    for (const id of ids) {
-      genreExcludeRef.current.add(id);
-    }
-  }, []);
-
   // --- Today's date for "recently added" ---
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
 
-  // --- Fixed sections via useSectionData ---
-  // All use skipExternalDedup: true — dedup handled by useMemo below
-  // Over-fetch: initialSize=15 to compensate for dedup filtering
+  // --- TMDb API sections ---
 
   const popular = useSectionData({
     sectionKey: `popular|${sectionKeyBase}`,
     baseParams,
     movieParams: { sort_by: 'popularity.desc' },
     tvParams: { sort_by: 'popularity.desc' },
-    fetchMovies,
-    fetchTV,
-    enabled: !!providerStr,
-    skipExternalDedup: true,
-    initialSize: 15,
-    batchSize: 8,
-  });
-
-  const highestRated = useSectionData({
-    sectionKey: `highestRated|${sectionKeyBase}`,
-    baseParams,
-    movieParams: { sort_by: 'vote_average.desc', 'vote_count.gte': 100 },
-    tvParams: { sort_by: 'vote_average.desc', 'vote_count.gte': 100 },
     fetchMovies,
     fetchTV,
     enabled: !!providerStr,
@@ -134,7 +100,7 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     batchSize: 8,
   });
 
-  // --- Build shared filter sets once for both recommendation hooks ---
+  // --- Build shared filter sets ---
   useEffect(() => {
     if (!providerStr) return;
     const serviceIds: string[] = providerIds
@@ -144,141 +110,53 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     buildFilterSets(serviceIds).then(setSharedFilters);
   }, [providerStr, reloadCounter]);
 
-  // --- Recommendations ("For You") ---
-  const recs = useRecommendations(providerIds, fetchMovies, fetchTV, filterGenreIds, sharedFilters);
+  // --- Phase 4 Home rows (fetch when filters are ready) ---
+  useEffect(() => {
+    if (!sharedFilters) return;
+    const serviceIds: string[] = providerIds
+      .map(id => providerIdToServiceId(id))
+      .filter(Boolean) as string[];
 
-  // --- Hidden Gems ---
-  const hiddenGems = useHiddenGems(providerIds, fetchMovies, fetchTV, filterGenreIds, sharedFilters);
+    Promise.all([
+      fetchPerServiceCharts(serviceIds, 3),
+      fetchCriticallyAcclaimed(sharedFilters.availableTmdbIds),
+      fetchGenreSpotlight(sharedFilters.availableTmdbIds),
+    ]).then(([charts, acclaimed, spotlight]) => {
+      setPerServiceCharts(charts);
+      setCriticallyAcclaimed(acclaimed);
+      setGenreSpotlight(spotlight);
+    }).catch(err => {
+      console.error('[useHomeContent] Phase 4 rows error:', err);
+    });
+  }, [sharedFilters, providerStr]);
 
-  // --- Render-time dedup (strict priority order) ---
-  // All fixed sections fetch in parallel; this useMemo enforces priority regardless of
-  // which section's async fetch completes first.
-  const { dedupedSections, fixedSectionIds } = useMemo(() => {
+  // --- Render-time dedup ---
+  const dedupedSections = useMemo(() => {
     const seen = new Set<string>();
-    const dedupList = (items: ContentItem[], sectionName: string) => {
-      const before = items.length;
-      const removed: string[] = [];
-      const result = items.filter((item) => {
-        if (seen.has(item.id)) { removed.push(item.id); return false; }
+    const dedupList = (items: ContentItem[]) => {
+      return items.filter((item) => {
+        if (seen.has(item.id)) return false;
         seen.add(item.id);
         return true;
       });
-      if (before > 0) {
-        debug.info('Dedup', `Section: ${sectionName}`, {
-          rawCount: before,
-          afterDedup: result.length,
-          removedCount: removed.length,
-          removedIds: removed.slice(0, 10),
-        });
-      }
-      return result;
     };
 
-    // Priority order: ForYou first pick, then down the list
-    const result = {
-      forYou: dedupList(recs.items, 'ForYou'),
-      recentlyAdded: dedupList(recentlyAdded.items, 'RecentlyAdded'),
-      highestRated: dedupList(highestRated.items, 'HighestRated'),
-      popular: dedupList(popular.items, 'Popular'),
-      hiddenGems: dedupList(hiddenGems.items, 'HiddenGems'),
+    return {
+      recentlyAdded: dedupList(recentlyAdded.items),
+      popular: dedupList(popular.items),
     };
+  }, [recentlyAdded.items, popular.items]);
 
-    debug.info('Dedup', 'Summary', {
-      totalSeen: seen.size,
-      perSection: {
-        forYou: result.forYou.length,
-        recentlyAdded: result.recentlyAdded.length,
-        highestRated: result.highestRated.length,
-        popular: result.popular.length,
-        hiddenGems: result.hiddenGems.length,
-      },
-    });
+  // --- Overall loading ---
+  const loading = !providerStr || (popular.loading && recentlyAdded.loading);
 
-    return { dedupedSections: result, fixedSectionIds: seen };
-  }, [recs.items, recentlyAdded.items, highestRated.items, popular.items, hiddenGems.items]);
-
-  // Build combined exclude set for genre sections (fixed section IDs + other genre section IDs)
-  const genreExcludeIds = useMemo(() => {
-    const combined = new Set(fixedSectionIds);
-    for (const id of genreExcludeRef.current) {
-      combined.add(id);
-    }
-    return combined;
-  }, [fixedSectionIds]);
-
-  // --- Load genre list from selected clusters (v2) or fallback to homeGenres ---
-  useEffect(() => {
-    let cancelled = false;
-    setMetaLoading(true);
-    async function load() {
-      try {
-        // Try to derive genres from the user's selected clusters
-        const clusterGenreIds: number[] = [];
-        if (isSupabaseActive()) {
-          const userId = getAuthUserId();
-          if (userId) {
-            const { data } = await supabase
-              .from('taste_profiles' as any)
-              .select('selected_clusters')
-              .eq('user_id', userId)
-              .maybeSingle();
-            const selectedClusters: string[] = (data as any)?.selected_clusters || [];
-            if (selectedClusters.length > 0) {
-              // Derive genre IDs from cluster tmdbGenreIds field
-              const seen = new Set<number>();
-              for (const clusterId of selectedClusters) {
-                const cluster = TASTE_CLUSTERS.find(c => c.id === clusterId);
-                if (cluster) {
-                  for (const gId of cluster.tmdbGenreIds) {
-                    if (!seen.has(gId)) {
-                      seen.add(gId);
-                      clusterGenreIds.push(gId);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        if (cancelled) return;
-
-        if (clusterGenreIds.length > 0) {
-          setGenreList(clusterGenreIds);
-        } else {
-          // Fallback: onboarding genre selections from homeGenres
-          const homeGenres = await getHomeGenres();
-          if (!cancelled) setGenreList(homeGenres);
-        }
-
-        debug.info('HomeContent', 'Meta loaded (v2)', {
-          genreCount: clusterGenreIds.length || 'fallback',
-        });
-      } catch (err) {
-        console.error('[useHomeContent] Error loading genres:', err);
-      } finally {
-        if (!cancelled) setMetaLoading(false);
-      }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, [reloadCounter]);
-
-  // --- Featured item (first popular item after dedup) ---
-  const featured = dedupedSections.popular.length > 0 ? dedupedSections.popular[0] : null;
-
-  // --- Overall loading (true until at least one fixed section has items) ---
-  const loading = !providerStr || (popular.loading && highestRated.loading && recentlyAdded.loading);
-
-  // --- Prefetch services for visible items (fire-and-forget) ---
+  // --- Prefetch services for visible items ---
   const prefetchedRef = useRef(false);
   useEffect(() => {
     if (prefetchedRef.current || loading) return;
     const allItems = [
       ...dedupedSections.popular.slice(0, 5),
       ...dedupedSections.recentlyAdded.slice(0, 5),
-      ...dedupedSections.highestRated.slice(0, 5),
-      ...dedupedSections.forYou.slice(0, 5),
     ];
     if (allItems.length === 0) return;
     prefetchedRef.current = true;
@@ -287,44 +165,26 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
       return { id: String(tmdbId), type: mediaType };
     });
     void prefetchServices(parsed);
-  }, [loading, dedupedSections.popular, dedupedSections.recentlyAdded, dedupedSections.highestRated, dedupedSections.forYou]);
+  }, [loading, dedupedSections.popular, dedupedSections.recentlyAdded]);
 
   // --- Reload all (pull-to-refresh) ---
   const reload = useCallback(async () => {
     clearSectionCache();
-    genreExcludeRef.current.clear();
-    // Invalidate recommendation + hidden gems localStorage caches
-    await Promise.all([
-      invalidateRecommendationCache(),
-      storage.removeItem('@app_hidden_gems'),
-    ]).catch(() => {});
     setReloadCounter((c) => c + 1);
-    // Reload recommendations and hidden gems with fresh data
-    await Promise.all([recs.reload(), hiddenGems.reload()]);
-  }, [recs.reload, hiddenGems.reload]);
+  }, []);
 
   return {
-    featured,
-    // Deduped fixed sections: spread original hook state (loadMore, hasMore, etc.) with deduped items
     popular: { ...popular, items: dedupedSections.popular },
-    highestRated: { ...highestRated, items: dedupedSections.highestRated },
     recentlyAdded: { ...recentlyAdded, items: dedupedSections.recentlyAdded },
-    forYou: { ...recs, items: dedupedSections.forYou },
-    hiddenGems: { ...hiddenGems, items: dedupedSections.hiddenGems },
-    // Genre section support
-    genreList,
-    genreAffinities: {} as GenreAffinities,  // Phase 3: empty, Phase 4 reintroduces
-    tasteVector: null,                        // Phase 3: v1 vector removed, v2 loaded internally by hooks
-    baseParams,
-    filterKey,
-    sectionKeyBase,
-    filterGenreIds,
+    // Shared filter sets (for ForYouPage to reuse)
+    sharedFilters,
+    // Phase 4 Home rows
+    perServiceCharts,
+    criticallyAcclaimed,
+    genreSpotlight,
     fetchMovies,
     fetchTV,
-    genreExcludeIds,
-    registerGenreIds,
     loading,
-    metaLoading,
     reload,
   };
 }

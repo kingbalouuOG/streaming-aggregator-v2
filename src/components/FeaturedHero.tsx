@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Info, Bookmark } from "lucide-react";
 import { EyeFilledIcon } from "./icons";
 import { motion } from "motion/react";
@@ -7,42 +7,44 @@ import { ImageSkeleton } from "./ImageSkeleton";
 import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 import type { ServiceId } from "./platformLogos";
+import type { ContentItem } from "./ContentCard";
 
-interface FeaturedHeroProps {
-  title: string;
-  subtitle: string;
-  image: string;
-  itemId?: string;
-  services: ServiceId[];
-  tags: string[];
-  bookmarked?: boolean;
-  onToggleBookmark?: () => void;
-  onInfoClick?: () => void;
-  scrollY?: number;
-  watched?: boolean;
+// ── Single hero card (used by both single and carousel modes) ──
+
+interface HeroCardProps {
+  item: ContentItem;
+  bookmarked: boolean;
+  watched: boolean;
   userServices?: ServiceId[];
+  onToggleBookmark: () => void;
+  onInfoClick: () => void;
+  scrollY: number;
 }
 
-export function FeaturedHero({ title, subtitle, image, itemId, services, tags, bookmarked, onToggleBookmark, onInfoClick, scrollY = 0, watched = false, userServices }: FeaturedHeroProps) {
-  const [loadedServices, setLoadedServices] = useState<ServiceId[]>(services);
+function HeroCard({ item, bookmarked, watched, userServices, onToggleBookmark, onInfoClick, scrollY }: HeroCardProps) {
+  const [loadedServices, setLoadedServices] = useState<ServiceId[]>(item.services);
 
   useEffect(() => {
-    if (services.length > 0) { setLoadedServices(services); return; }
-    if (!itemId) return;
-    const { tmdbId, mediaType } = parseContentItemId(itemId);
+    if (item.services.length > 0) { setLoadedServices(item.services); return; }
+    const { tmdbId, mediaType } = parseContentItemId(item.id);
     getCachedServices(String(tmdbId), mediaType).then(setLoadedServices);
-  }, [itemId, services]);
+  }, [item.id, item.services]);
 
   const displayServices = userServices?.length
     ? loadedServices.filter((s) => userServices.includes(s))
     : loadedServices;
 
-  // Parallax: image moves at 40% of scroll speed
   const parallaxOffset = scrollY * 0.4;
   const heroOpacity = Math.max(0, 1 - scrollY / 500);
 
+  const subtitle = item.type === 'tv' ? 'Trending on your services' : 'Popular right now';
+  const tags = [
+    ...(item.type ? [item.type === 'tv' ? 'TV Show' : item.type === 'doc' ? 'Documentary' : 'Movie'] : []),
+    ...(item.year ? [String(item.year)] : []),
+  ];
+
   return (
-    <div className="relative w-full h-[380px] overflow-hidden" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
+    <div className="relative w-full h-[380px] flex-shrink-0 overflow-hidden" style={{ scrollSnapAlign: "center" }}>
       {/* Background image with parallax */}
       <div
         className="absolute inset-0"
@@ -52,8 +54,8 @@ export function FeaturedHero({ title, subtitle, image, itemId, services, tags, b
         }}
       >
         <ImageSkeleton
-          src={image}
-          alt={title}
+          src={item.image}
+          alt={item.title}
           className="w-full h-full object-cover"
         />
       </div>
@@ -72,7 +74,7 @@ export function FeaturedHero({ title, subtitle, image, itemId, services, tags, b
         }}
       />
 
-      {/* Content - fade with scroll */}
+      {/* Content */}
       <div
         className="absolute bottom-0 left-0 right-0 px-5 pt-4 pb-5"
         style={{ opacity: heroOpacity }}
@@ -89,7 +91,7 @@ export function FeaturedHero({ title, subtitle, image, itemId, services, tags, b
 
         {/* Title */}
         <h1 className="text-white text-[28px] leading-tight mb-1" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>
-          {title}
+          {item.title}
         </h1>
         <p className="text-white/60 text-[13px] mb-3">{subtitle}</p>
 
@@ -143,3 +145,149 @@ export function FeaturedHero({ title, subtitle, image, itemId, services, tags, b
     </div>
   );
 }
+
+// ── Carousel component ──
+
+const AUTO_ROTATE_MS = 6000;
+const RESUME_DELAY_MS = 3000;
+
+interface FeaturedHeroCarouselProps {
+  items: ContentItem[];
+  bookmarkedIds: Set<string>;
+  watchedIds: Set<string>;
+  userServices?: ServiceId[];
+  onToggleBookmark: (item: ContentItem) => void;
+  onItemSelect: (item: ContentItem) => void;
+  scrollY?: number;
+}
+
+export function FeaturedHeroCarousel({
+  items,
+  bookmarkedIds,
+  watchedIds,
+  userServices,
+  onToggleBookmark,
+  onItemSelect,
+  scrollY = 0,
+}: FeaturedHeroCarouselProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const autoRotateRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isPausedRef = useRef(false);
+
+  const itemCount = items.length;
+
+  // Track active index from scroll position
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const idx = Math.round(el.scrollLeft / el.clientWidth);
+    setActiveIndex(Math.min(idx, itemCount - 1));
+  }, [itemCount]);
+
+  // Scroll to a specific index
+  const scrollToIndex = useCallback((idx: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ left: idx * el.clientWidth, behavior: "smooth" });
+  }, []);
+
+  // Auto-rotation
+  const stopAutoRotate = useCallback(() => {
+    if (autoRotateRef.current) {
+      clearInterval(autoRotateRef.current);
+      autoRotateRef.current = null;
+    }
+  }, []);
+
+  const startAutoRotate = useCallback(() => {
+    if (itemCount <= 1) return;
+    stopAutoRotate();
+    autoRotateRef.current = setInterval(() => {
+      if (isPausedRef.current) return;
+      setActiveIndex(prev => {
+        const next = (prev + 1) % itemCount;
+        scrollToIndex(next);
+        return next;
+      });
+    }, AUTO_ROTATE_MS);
+  }, [itemCount, scrollToIndex, stopAutoRotate]);
+
+  // Pause on touch, resume after delay
+  const handleTouchStart = useCallback(() => {
+    isPausedRef.current = true;
+    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+    resumeTimerRef.current = setTimeout(() => {
+      isPausedRef.current = false;
+    }, RESUME_DELAY_MS);
+  }, []);
+
+  useEffect(() => {
+    startAutoRotate();
+    return () => {
+      stopAutoRotate();
+      if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+    };
+  }, [startAutoRotate, stopAutoRotate]);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="relative" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
+      {/* Scrollable carousel */}
+      <div
+        ref={scrollRef}
+        className="flex overflow-x-auto no-scrollbar"
+        style={{
+          scrollSnapType: "x mandatory",
+          WebkitOverflowScrolling: "touch",
+          scrollbarWidth: "none",
+        }}
+        onScroll={handleScroll}
+        onPointerDown={handleTouchStart}
+        onPointerUp={handleTouchEnd}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        {items.map((item) => (
+          <HeroCard
+            key={item.id}
+            item={item}
+            bookmarked={bookmarkedIds.has(item.id)}
+            watched={watchedIds.has(item.id)}
+            userServices={userServices}
+            onToggleBookmark={() => onToggleBookmark(item)}
+            onInfoClick={() => onItemSelect(item)}
+            scrollY={scrollY}
+          />
+        ))}
+      </div>
+
+      {/* Dot indicators */}
+      {itemCount > 1 && (
+        <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-10">
+          {items.map((_, idx) => (
+            <button
+              key={idx}
+              className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                idx === activeIndex ? "bg-primary w-4" : "bg-white/40"
+              }`}
+              onClick={() => {
+                scrollToIndex(idx);
+                isPausedRef.current = true;
+                if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+                resumeTimerRef.current = setTimeout(() => { isPausedRef.current = false; }, RESUME_DELAY_MS);
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
