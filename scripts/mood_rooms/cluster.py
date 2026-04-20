@@ -34,9 +34,10 @@ UMAP_MIN_DIST = 0.0
 UMAP_METRIC = "cosine"
 UMAP_RANDOM_STATE = 42
 
-HDBSCAN_MIN_CLUSTER_SIZE = 50
+HDBSCAN_MIN_CLUSTER_SIZE = 30
 HDBSCAN_MIN_SAMPLES = 5
 HDBSCAN_METRIC = "euclidean"  # applied to UMAP space, not raw embeddings
+HDBSCAN_CLUSTER_SELECTION_METHOD = "leaf"  # terminal clusters; fragments mega-clusters
 
 
 @dataclass(frozen=True)
@@ -109,6 +110,7 @@ def run_hdbscan(embeddings: np.ndarray) -> ClusterResult:
         min_cluster_size=HDBSCAN_MIN_CLUSTER_SIZE,
         min_samples=HDBSCAN_MIN_SAMPLES,
         metric=HDBSCAN_METRIC,
+        cluster_selection_method=HDBSCAN_CLUSTER_SELECTION_METHOD,
         core_dist_n_jobs=1,
     )
     labels = clusterer.fit_predict(reduced).astype(np.int64)
@@ -175,6 +177,7 @@ def cluster_params_payload() -> dict:
             "min_cluster_size": HDBSCAN_MIN_CLUSTER_SIZE,
             "min_samples": HDBSCAN_MIN_SAMPLES,
             "metric": HDBSCAN_METRIC,
+            "cluster_selection_method": HDBSCAN_CLUSTER_SELECTION_METHOD,
             "version": _pkg_ver("hdbscan"),
         },
     }

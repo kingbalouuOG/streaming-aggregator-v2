@@ -68,6 +68,12 @@ DRY_RUN_SAMPLE_CLUSTERS = 10
 DRY_RUN_SAMPLE_TITLES = 5
 DRY_RUN_PROBE_CLUSTERS = 3
 
+# Any single cluster with > this share of the catalogue is flagged as a
+# mega-cluster during --dry-run. Rationale: a "room" of 1,500+ titles on a
+# 20K catalogue can't be meaningfully represented by 3-4 preview thumbnails
+# on the For You card, even if coverage gates technically pass.
+MEGA_CLUSTER_SHARE_THRESHOLD = 0.05
+
 
 log = logging.getLogger("recluster")
 
@@ -106,6 +112,7 @@ def _title_meta(titles: list[TitleRow], idx: int, genre_map: dict) -> TitleMeta:
         year=t.release_year,
         genres=genres,
         overview=t.overview,
+        original_language=t.original_language,
     )
 
 
@@ -205,6 +212,33 @@ def _print_dry_run_report(
         print(f"  OPENAI PROBE FAILURES: {len(probe_failures)} of {len(probe_results)}")
         for r in probe_failures:
             print(f"  Cluster {r['cluster_id']} (size {r['size']}): {r['error']}")
+        print("!" * 72)
+
+    # Mega-cluster banner: any single cluster exceeding the catalogue-share
+    # threshold. Surfaced up top because even with coverage gates cleared,
+    # a mega-cluster can't be meaningfully previewed on a For You card.
+    catalogue_size = len(titles)
+    mega_threshold_n = int(catalogue_size * MEGA_CLUSTER_SHARE_THRESHOLD)
+    cluster_sizes = {
+        cid: int((cluster_result.labels == cid).sum())
+        for cid in cluster_result.cluster_ids
+    }
+    mega_clusters = sorted(
+        ((cid, size) for cid, size in cluster_sizes.items() if size > mega_threshold_n),
+        key=lambda pair: pair[1], reverse=True,
+    )
+    if mega_clusters:
+        print()
+        print("!" * 72)
+        print(
+            f"  MEGA-CLUSTER WARNING: {len(mega_clusters)} cluster(s) exceed "
+            f"{int(MEGA_CLUSTER_SHARE_THRESHOLD * 100)}% of catalogue "
+            f"({mega_threshold_n}+ of {catalogue_size} titles)"
+        )
+        for cid, size in mega_clusters:
+            share = size / catalogue_size * 100.0
+            print(f"  Cluster {cid}: {size} titles ({share:.1f}% of catalogue)")
+        print("  Preview thumbnails on the For You card can't represent this well.")
         print("!" * 72)
 
     print()

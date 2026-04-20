@@ -38,6 +38,7 @@ class TitleRow:
     title: str
     release_year: int | None
     overview: str
+    original_language: str | None
     embedding: np.ndarray
 
 
@@ -194,13 +195,13 @@ def fetch_embeddings(cur) -> list[TitleRow]:
     cur.execute(
         """
         SELECT tmdb_id, media_type, title, release_year, COALESCE(overview, ''),
-               embedding::text
+               original_language, embedding::text
         FROM titles
         WHERE embedding IS NOT NULL
         """
     )
     rows: list[TitleRow] = []
-    for tmdb_id, media_type, title, release_year, overview, emb_text in cur:
+    for tmdb_id, media_type, title, release_year, overview, original_language, emb_text in cur:
         vec = np.fromstring(emb_text.strip("[]"), sep=",", dtype=np.float32)
         rows.append(
             TitleRow(
@@ -209,6 +210,7 @@ def fetch_embeddings(cur) -> list[TitleRow]:
                 title=title,
                 release_year=release_year,
                 overview=overview,
+                original_language=original_language,
                 embedding=vec,
             )
         )

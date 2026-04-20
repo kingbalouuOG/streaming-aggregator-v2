@@ -41,6 +41,7 @@ class TitleMeta:
     year: int | None
     genres: list[str]
     overview: str
+    original_language: str | None
 
 
 @dataclass(frozen=True)
@@ -96,19 +97,24 @@ def _build_prompt(titles: list[TitleMeta]) -> list[dict]:
     for t in titles[:OPENAI_MAX_TITLES_PER_CLUSTER]:
         year = f" ({t.year})" if t.year else ""
         genres = ", ".join(t.genres) if t.genres else "unspecified"
+        lang = f" lang={t.original_language}" if t.original_language else ""
         overview = (t.overview or "").strip().replace("\n", " ")
         if len(overview) > 240:
             overview = overview[:237] + "..."
-        rows.append(f"- {t.title}{year} [{genres}]: {overview}")
+        rows.append(f"- {t.title}{year} [{genres}{lang}]: {overview}")
 
     system = (
         "You label clusters of films and TV shows that share a taste "
         "neighbourhood. Produce a short evocative room name (2-4 words) "
         "and a single sentence describing what the titles have in common "
-        "at a mood or aesthetic level, not just a genre label."
+        "at a mood or aesthetic level, not just a genre label. If the "
+        "titles share an obvious regional or linguistic origin (e.g. most "
+        "are Korean, Bollywood, anime, Nordic), reflect that in the name "
+        "rather than reaching for a generic thematic label."
     )
     user = (
-        "Here are up to 20 titles most central to one cluster. Give the "
+        "Here are up to 20 titles most central to one cluster. Each row "
+        "includes a language code (ISO 639-1) where available. Give the "
         "room a name and description.\n\n" + "\n".join(rows)
     )
     return [
