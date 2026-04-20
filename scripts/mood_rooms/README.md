@@ -72,8 +72,11 @@ A dry run:
 - Runs HDBSCAN.
 - Prints cluster count, noise count, catalogue coverage.
 - Prints up to 10 sample clusters with their 5 most central titles.
-- Does not call OpenAI. Does not insert a row into `clustering_runs` or
-  any other table.
+- If `OPENAI_API_KEY` is present, probes OpenAI on the **three largest
+  clusters** and prints the generated labels. Failures are soft-logged,
+  the clustering report still prints, and a banner at the top of the
+  report surfaces any failure so it can't be missed.
+- Does not insert a row into `clustering_runs` or any other table.
 
 Expected output shape:
 
@@ -95,10 +98,13 @@ Pass or fail against IN-457:
 - Cluster count in [30, 60]: pass / fail
 - Catalogue coverage >= 70%: pass / fail
 - Coherence spot-check on sampled clusters: Joe judges
+- OpenAI probe succeeds on all 3 largest clusters and the labels look
+  reasonable: verifies API shape and credentials live before first write
 
 If the dry run fails the gates, tune `HDBSCAN_MIN_CLUSTER_SIZE` /
 `HDBSCAN_MIN_SAMPLES` in `cluster.py`, or escalate to IN-457 fallback
-(k-means or hybrid) before proceeding to a real run.
+(k-means or hybrid) before proceeding to a real run. If the probe fails
+on all three clusters, fix the OpenAI integration before anything else.
 
 ## Real run
 

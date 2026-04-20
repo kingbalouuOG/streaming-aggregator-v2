@@ -45,6 +45,7 @@ from label import (  # noqa: E402
     OPENAI_MAX_TITLES_PER_CLUSTER,
     PreviousCluster,
     TitleMeta,
+    probe_openai_label,
     resolve_cluster_label,
 )
 from persist import (  # noqa: E402
@@ -64,6 +65,7 @@ from persist import (  # noqa: E402
 
 DRY_RUN_SAMPLE_CLUSTERS = 10
 DRY_RUN_SAMPLE_TITLES = 5
+DRY_RUN_PROBE_CLUSTERS = 3
 
 
 log = logging.getLogger("recluster")
@@ -120,15 +122,92 @@ def _collect_central_ids_by_media(
     return {mt: sorted(ids) for mt, ids in out.items()}
 
 
+def _top_n_clusters_by_size(
+    cluster_result: ClusterResult,
+    n: int,
+) -> list[int]:
+    """Return the n largest cluster ids, sorted descending by member count."""
+    sizes = [
+        (cid, int((cluster_result.labels == cid).sum()))
+        for cid in cluster_result.cluster_ids
+    ]
+    sizes.sort(key=lambda pair: pair[1], reverse=True)
+    return [cid for cid, _ in sizes[:n]]
+
+
+def _run_openai_probe(
+    cur,
+    titles: list[TitleRow],
+    cluster_result: ClusterResult,
+    central_indices_per_cluster: dict[int, list[int]],
+    probe_cluster_ids: list[int],
+    openai_client,
+) -> list[dict]:
+    """Call OpenAI for each probed cluster, soft-fail on errors.
+
+    Purpose: during --dry-run, verify the OpenAI API shape and credentials
+    live before any real run writes. Labels generated here are shown in the
+    report and discarded.
+
+    Returns a list of {cluster_id, size, status, label|error} records,
+    one per probed cluster, in the same order as probe_cluster_ids.
+    """
+    ids_by_media = _collect_central_ids_by_media(
+        titles,
+        {cid: central_indices_per_cluster[cid] for cid in probe_cluster_ids},
+    )
+    genre_map = fetch_title_genres_bulk(cur, ids_by_media)
+
+    results: list[dict] = []
+    for cid in probe_cluster_ids:
+        size = int((cluster_result.labels == cid).sum())
+        titles_meta = [
+            _title_meta(titles, i, genre_map)
+            for i in central_indices_per_cluster[cid]
+        ]
+        try:
+            name, description = probe_openai_label(openai_client, titles_meta)
+            results.append({
+                "cluster_id": cid,
+                "size": size,
+                "status": "ok",
+                "label": name,
+                "description": description,
+            })
+        except Exception as exc:  # noqa: BLE001 - probe is best-effort
+            from persist import redact  # local import keeps cluster.py pure-numpy
+            results.append({
+                "cluster_id": cid,
+                "size": size,
+                "status": "fail",
+                "error": redact(str(exc)),
+            })
+    return results
+
+
 def _print_dry_run_report(
     titles: list[TitleRow],
     cluster_result: ClusterResult,
     central_indices_per_cluster: dict[int, list[int]],
+    probe_results: list[dict] | None,
 ) -> None:
     print()
     print("=" * 72)
     print("DRY RUN REPORT")
     print("=" * 72)
+
+    # Banner for any OpenAI probe failures — surfaced first so it can't be
+    # missed when scrolling to the "DRY RUN COMPLETE" line.
+    probe_failures = [r for r in (probe_results or []) if r["status"] == "fail"]
+    if probe_failures:
+        print()
+        print("!" * 72)
+        print(f"  OPENAI PROBE FAILURES: {len(probe_failures)} of {len(probe_results)}")
+        for r in probe_failures:
+            print(f"  Cluster {r['cluster_id']} (size {r['size']}): {r['error']}")
+        print("!" * 72)
+
+    print()
     print(f"Titles embedded:        {len(titles)}")
     print(f"Clusters found:         {len(cluster_result.cluster_ids)}")
     print(f"Noise count:            {int((cluster_result.labels == -1).sum())}")
@@ -148,6 +227,22 @@ def _print_dry_run_report(
             centrality_value = float(cluster_result.centrality[idx])
             print(f"    [{centrality_value:.4f}] {t.title}{year} [{t.media_type}]")
         print()
+
+    # Probe results section: shown even on all-success so Joe sees the
+    # generated labels and can judge label quality alongside cluster shape.
+    if probe_results:
+        print("-" * 72)
+        print(f"OpenAI label probe — {len(probe_results)} largest cluster(s):")
+        print("-" * 72)
+        for r in probe_results:
+            header = f"  Cluster {r['cluster_id']} (size {r['size']}) [{r['status'].upper()}]"
+            print(header)
+            if r["status"] == "ok":
+                print(f"    name:        {r['label']}")
+                print(f"    description: {r['description']}")
+            else:
+                print(f"    error:       {r['error']}")
+            print()
 
     print("DRY RUN COMPLETE - NO WRITES PERFORMED")
     print()
@@ -205,7 +300,28 @@ def _run_pipeline(dry_run: bool) -> int:
         }
 
         if dry_run:
-            _print_dry_run_report(titles, cluster_result, central_indices_per_cluster)
+            probe_results: list[dict] | None = None
+            if openai_client and cluster_result.cluster_ids:
+                probe_cluster_ids = _top_n_clusters_by_size(
+                    cluster_result, DRY_RUN_PROBE_CLUSTERS,
+                )
+                log.info(
+                    "Probing OpenAI on %d largest cluster(s): %s",
+                    len(probe_cluster_ids),
+                    probe_cluster_ids,
+                )
+                with conn.cursor() as cur:
+                    probe_results = _run_openai_probe(
+                        cur, titles, cluster_result,
+                        central_indices_per_cluster,
+                        probe_cluster_ids, openai_client,
+                    )
+            else:
+                log.info("Skipping OpenAI probe (no OPENAI_API_KEY or no clusters)")
+
+            _print_dry_run_report(
+                titles, cluster_result, central_indices_per_cluster, probe_results,
+            )
             return 0
 
         # Pre-write phase: open a run audit row inside the transaction so a

@@ -142,6 +142,21 @@ def _placeholder_label() -> tuple[uuid.UUID, str]:
     return fresh, f"Cluster {str(fresh)[:8]}"
 
 
+def probe_openai_label(
+    client: OpenAI,
+    titles: list[TitleMeta],
+) -> tuple[str, str]:
+    """One-shot label call used by the --dry-run probe.
+
+    Bypasses Jaccard stability so we always hit OpenAI — the purpose is to
+    verify the API shape and credentials live, before any real run writes.
+
+    Returns `(name, description)` on success. Propagates any API / parse
+    failure so the caller can soft-log it and continue.
+    """
+    return _generate_label(client, titles)
+
+
 def resolve_cluster_label(
     new_cluster_tmdb_ids: list[int],
     title_meta_for_labelling: list[TitleMeta],
