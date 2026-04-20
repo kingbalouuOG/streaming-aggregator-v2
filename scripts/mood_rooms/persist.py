@@ -51,14 +51,44 @@ class PreviousClusterRow:
 
 
 _CONNECTION_STRING_ENV = "SUPABASE_CONNECTION_STRING"
+
+# Layer 2: anything that looks like postgresql://user:pw@... prefix.
 _PG_URL_PATTERN = re.compile(r"postgresql://[^@\s]+@", re.IGNORECASE)
+
+# Layer 3: any non-whitespace token containing "@" and ending in ".supabase.co".
+# Catches the psycopg2 "could not translate host name" case, where a password
+# fragment gets concatenated with the real host before being echoed in the
+# error message (e.g. `"fragment@db.project.supabase.co"`).
+_SUPABASE_HOST_LEAK_PATTERN = re.compile(
+    r"\S*@\S*\.supabase\.co", re.IGNORECASE,
+)
+
+# Layer 4 trigger: specific psycopg2 failure mode that we know leaks a
+# password fragment into the error message text. Swap the whole message
+# for a generic hint rather than trying to scrub the bits.
+_HOST_TRANSLATION_HINT = (
+    "Connection failed - check URL encoding of special characters in the "
+    "password (@, :, /, ? must be percent-encoded in a postgresql:// URI)."
+)
 
 
 def redact(message: str) -> str:
     """Scrub credentials from a log/error string.
 
-    Two layers: exact match on the env var, then regex on any
-    `postgresql://user:pw@` prefix that survives exception formatting.
+    Three layers applied in order:
+
+      1. Exact-match replacement of the full SUPABASE_CONNECTION_STRING
+         env value (catches anything that echoes the connection string
+         verbatim).
+      2. Regex on any surviving `postgresql://user:pw@` prefix (catches
+         partial echoes and variant psycopg2 error formats).
+      3. Regex on any `<stuff>@<stuff>.supabase.co` token (catches the
+         specific case where a password fragment got parsed as part of
+         the host name and now appears bare, without a `postgresql://`
+         prefix — see psycopg2's "could not translate host name" error).
+
+    Layer 4 (category-specific replacement for psycopg2.OperationalError
+    host-translation failures) lives in `redact_exception()`.
     """
     if not message:
         return ""
@@ -67,7 +97,25 @@ def redact(message: str) -> str:
     if conn:
         scrubbed = scrubbed.replace(conn, "[REDACTED_CONNECTION_STRING]")
     scrubbed = _PG_URL_PATTERN.sub("postgresql://[REDACTED]@", scrubbed)
+    scrubbed = _SUPABASE_HOST_LEAK_PATTERN.sub("[REDACTED].supabase.co", scrubbed)
     return scrubbed
+
+
+def redact_exception(exc: BaseException) -> str:
+    """Redact an exception's message with awareness of its type.
+
+    Prefer this over `redact(str(exc))` when you have the exception
+    object in hand, because some failure modes (notably psycopg2's
+    `OperationalError: could not translate host name ...`) leak a
+    password fragment into the stringified message *before* any of
+    redact()'s regex anchors exist. For those, we replace the whole
+    message with a generic hint rather than attempting a scrub.
+    """
+    if isinstance(exc, psycopg2.OperationalError):
+        text = str(exc)
+        if "could not translate host name" in text:
+            return _HOST_TRANSLATION_HINT
+    return redact(str(exc))
 
 
 @contextmanager

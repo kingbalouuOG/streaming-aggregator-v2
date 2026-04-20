@@ -57,6 +57,7 @@ from persist import (  # noqa: E402
     finish_run,
     next_version,
     redact,
+    redact_exception,
     start_run,
     write_mood_room_titles,
     write_mood_rooms,
@@ -175,12 +176,11 @@ def _run_openai_probe(
                 "description": description,
             })
         except Exception as exc:  # noqa: BLE001 - probe is best-effort
-            from persist import redact  # local import keeps cluster.py pure-numpy
             results.append({
                 "cluster_id": cid,
                 "size": size,
                 "status": "fail",
-                "error": redact(str(exc)),
+                "error": redact_exception(exc),
             })
     return results
 
@@ -415,8 +415,10 @@ def _run_pipeline_with_guard(dry_run: bool) -> int:
     try:
         return _run_pipeline(dry_run)
     except Exception as exc:
-        # Never let psycopg2/OpenAI error messages echo the connection string.
-        message = redact(str(exc))
+        # Type-aware redaction: psycopg2's host-translation error leaks a
+        # password fragment into str(exc) before any regex anchor exists,
+        # so we need the exception object, not just its string form.
+        message = redact_exception(exc)
         log.error("Run failed: %s", message)
         if dry_run:
             return 1
@@ -434,7 +436,10 @@ def _run_pipeline_with_guard(dry_run: bool) -> int:
                     )
                 conn.commit()
         except Exception as audit_exc:  # noqa: BLE001 - best-effort audit
-            log.error("Also failed to record audit row: %s", redact(str(audit_exc)))
+            log.error(
+                "Also failed to record audit row: %s",
+                redact_exception(audit_exc),
+            )
         return 1
 
 

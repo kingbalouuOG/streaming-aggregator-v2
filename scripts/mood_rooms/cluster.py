@@ -6,10 +6,18 @@ Pure functions over numpy arrays. No I/O, no DB, no env.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
 from typing import Sequence
 
 import hdbscan
 import numpy as np
+
+
+def _hdbscan_version() -> str:
+    try:
+        return _pkg_version("hdbscan")
+    except PackageNotFoundError:
+        return "unknown"
 
 
 HDBSCAN_MIN_CLUSTER_SIZE = 50
@@ -92,7 +100,7 @@ def cluster_params_payload() -> dict:
         "min_cluster_size": HDBSCAN_MIN_CLUSTER_SIZE,
         "min_samples": HDBSCAN_MIN_SAMPLES,
         "metric": HDBSCAN_METRIC,
-        "hdbscan_version": hdbscan.__version__,
+        "hdbscan_version": _hdbscan_version(),
     }
 
 
