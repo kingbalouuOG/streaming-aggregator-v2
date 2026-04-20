@@ -28,6 +28,13 @@ Desktop.ini
 # TypeScript
 *.tsbuildinfo
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
 # Capacitor Android build artifacts
 android/app/build/
 android/app/release/
