@@ -849,6 +849,24 @@ Which fallback depends on what HDBSCAN actually produces. Don't pre-commit to on
 
 **Status:** ⏳ Not yet incorporated
 
+### IN-458: `getAvailableTmdbIds` does not distinguish by `media_type`
+
+**Source:** Phase 4.5 Gate 1 audit (schema design for `mood_room_titles`)
+
+**Detail:** The `get_available_tmdb_ids` RPC (migration 028) and its TypeScript consumer `getAvailableTmdbIds` in `src/lib/recommendations-v2/hardFilters.ts` return a `Set<number>` of bare `tmdb_id` values, with no `media_type` distinction. TMDb IDs are allocated from separate sequences for movies and TV and do collide in practice (e.g. `tmdb_id=555` can exist as both a movie and a TV show). When the user has the movie on Netflix but not the TV show (or vice versa), the filter treats both as available — an incorrect positive.
+
+Impact is codebase-wide, not mood-rooms-specific. All callers of `FilterSets.availableTmdbIds` inherit the imprecision: `ranker.ts` (For You rows), `useForYouContent` (Because You Watched anchors, More From Person), the upcoming `useMoodRoomsRow` and `MoodRoomPage`.
+
+The correct fix is to widen the RPC and filter set to `Set<{ tmdbId: number, mediaType: 'movie' | 'tv' }>` (or equivalent composite). This touches:
+- The RPC definition in a new migration (return `(tmdb_id, media_type)` pairs).
+- `getAvailableTmdbIds` signature and return type.
+- All call sites that use `.has(tmdbId)` — must become `.has({ tmdbId, mediaType })` or keyed on a composite string.
+- Frontend types for items that carry availability info.
+
+Not fixed in Phase 4.5 — that phase accepted the inherited imprecision because mood rooms inherit it at the same rate as every other For You row, and fixing it here would balloon scope. File for a future correctness pass (likely Phase 5/6 quality-sweep) alongside the existing consumers.
+
+**Status:** ⏳ Not yet incorporated
+
 ---
 
 ## Cross-phase notes
