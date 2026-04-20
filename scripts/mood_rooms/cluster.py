@@ -29,7 +29,7 @@ import umap
 EMBEDDING_DIM = 1536
 
 UMAP_N_COMPONENTS = 10
-UMAP_N_NEIGHBORS = 15
+UMAP_N_NEIGHBORS = 30  # B3: widened from 15 to smooth the manifold; reduces HDBSCAN noise rate
 UMAP_MIN_DIST = 0.0
 UMAP_METRIC = "cosine"
 UMAP_RANDOM_STATE = 42
