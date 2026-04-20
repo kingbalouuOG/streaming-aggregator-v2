@@ -230,8 +230,9 @@ Supabase migrations live in `supabase/migrations/` and are applied via `supabase
 | 026 | `026_security_linter_fixes.sql` | Infrastructure | ✅ Applied | Supabase security advisor — accepted linter warnings |
 | 027 | `027_function_search_path_pin.sql` | Infrastructure | ✅ Applied | Pin `search_path` on RPC functions per security advisor |
 | 028 | `028_available_tmdb_ids_rpc.sql` | Phase 3 | ✅ Applied | `get_available_tmdb_ids` RPC — single-query DISTINCT availability lookup |
-| 029 | *(taste_profiles RLS)* | Phase 5/6 (pre-launch blocker) | ⏳ Planned | Add RLS to `taste_profiles` with `auth.uid() = user_id` SELECT + UPDATE policies. Pre-existing gap surfaced by Phase 4 security review — not introduced by Phase 4. GDPR/privacy blocker for public launch. |
-| 030+ | *(mood rooms tables)* | Phase 4.5 | ⏳ Planned | Create `mood_rooms` and `mood_room_titles` tables |
+| 029 | `029_mood_rooms_table.sql` | Phase 4.5 | ✅ Applied (2026-04-19) | Create `mood_rooms` (cluster metadata + `centroid vector(1536)` for frontend taste-fit scoring) and `clustering_runs` (monthly job audit log). RLS: `authenticated SELECT` on `mood_rooms`; `service_role` only on `clustering_runs`. |
+| 030 | `030_mood_room_titles_table.sql` | Phase 4.5 | ✅ Applied (2026-04-19) | Join table mapping cluster membership: `(mood_room_id, tmdb_id, media_type)` composite PK, `centrality REAL`. Follows project convention — no FK to `titles`, application-level referential integrity (matches `streaming_availability`, `title_genres`, `title_credits`). RLS: `authenticated SELECT`. |
+| 031+ | *(taste_profiles RLS)* | Phase 5/6 (pre-launch blocker) | ⏳ Planned | Add RLS to `taste_profiles` with `auth.uid() = user_id` SELECT + UPDATE policies. Pre-existing gap surfaced by Phase 4 security review — not introduced by Phase 4. GDPR/privacy blocker for public launch. Shifted from 029 when Phase 4.5 took 029/030 for mood rooms. |
 
 Numbering continues forward as phases execute. The list above is the current plan; migration numbers may shift if phases add additional migrations as they develop.
 
