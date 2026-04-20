@@ -1,5 +1,17 @@
 """HDBSCAN clustering helpers for the mood rooms pipeline.
 
+Pipeline (per IN-457 fallback, UMAP preprocessing path):
+
+  1. UMAP reduces 1536D OpenAI embeddings to a low-dim space (default 10D)
+     using cosine distance on the raw vectors. This is required: HDBSCAN
+     on raw 1536D embeddings produces 2 clusters / 10% coverage due to the
+     curse of dimensionality (see Parking Lot IN-457).
+  2. HDBSCAN on the low-dim output (euclidean on UMAP space) produces the
+     cluster assignments.
+  3. Centroids and centrality are computed in the **original 1536D space**
+     so the frontend's cosineSim(tasteVector, room.centroid) still works.
+     UMAP space is assignment-only, never persisted.
+
 Pure functions over numpy arrays. No I/O, no DB, no env.
 """
 
@@ -11,18 +23,20 @@ from typing import Sequence
 
 import hdbscan
 import numpy as np
+import umap
 
 
-def _hdbscan_version() -> str:
-    try:
-        return _pkg_version("hdbscan")
-    except PackageNotFoundError:
-        return "unknown"
+EMBEDDING_DIM = 1536
 
+UMAP_N_COMPONENTS = 10
+UMAP_N_NEIGHBORS = 15
+UMAP_MIN_DIST = 0.0
+UMAP_METRIC = "cosine"
+UMAP_RANDOM_STATE = 42
 
 HDBSCAN_MIN_CLUSTER_SIZE = 50
 HDBSCAN_MIN_SAMPLES = 5
-HDBSCAN_METRIC = "euclidean"
+HDBSCAN_METRIC = "euclidean"  # applied to UMAP space, not raw embeddings
 
 
 @dataclass(frozen=True)
@@ -30,12 +44,20 @@ class ClusterResult:
     """Output of a clustering run.
 
     Arrays are aligned by index with the input `tmdb_ids` / `embeddings`.
+    Centroids are in the **original 1536D embedding space**, not UMAP space.
     """
 
     labels: np.ndarray          # shape (N,), int; -1 = noise, else cluster id
-    centroids: dict[int, np.ndarray]  # cluster_id -> unit-norm centroid (1536,)
+    centroids: dict[int, np.ndarray]  # cluster_id -> unit-norm 1536D centroid
     centrality: np.ndarray      # shape (N,), float32; cosine distance to own centroid
     cluster_ids: list[int]      # sorted unique non-noise cluster ids
+
+
+def _pkg_ver(name: str) -> str:
+    try:
+        return _pkg_version(name)
+    except PackageNotFoundError:
+        return "unknown"
 
 
 def l2_normalise(vectors: np.ndarray) -> np.ndarray:
@@ -45,16 +67,43 @@ def l2_normalise(vectors: np.ndarray) -> np.ndarray:
     return vectors / norms
 
 
-def run_hdbscan(embeddings: np.ndarray) -> ClusterResult:
-    """Fit HDBSCAN on L2-normalised embeddings and compute centroids + centrality.
+def reduce_dimensions(embeddings: np.ndarray) -> np.ndarray:
+    """Project raw embeddings to a low-dim space suitable for HDBSCAN.
 
-    Parameters are fixed constants at the top of this module. Treat them as
-    a starting point that can be tuned if the IN-457 fallback is triggered.
-    Caller is responsible for ensuring input is already L2-normalised; we
-    normalise defensively because HDBSCAN's euclidean metric on unit vectors
-    is equivalent to cosine distance.
+    Raw embeddings go in (not L2-normalised) because UMAP's cosine metric
+    already handles the unit-sphere geometry; pre-normalising would change
+    nothing here and confuses the input contract.
     """
-    normalised = l2_normalise(embeddings)
+    reducer = umap.UMAP(
+        n_components=UMAP_N_COMPONENTS,
+        n_neighbors=UMAP_N_NEIGHBORS,
+        min_dist=UMAP_MIN_DIST,
+        metric=UMAP_METRIC,
+        random_state=UMAP_RANDOM_STATE,
+    )
+    reduced = reducer.fit_transform(embeddings)
+    return np.asarray(reduced, dtype=np.float32)
+
+
+def run_hdbscan(embeddings: np.ndarray) -> ClusterResult:
+    """Full clustering pipeline: UMAP for assignment, centroids in 1536D.
+
+    HDBSCAN receives the low-dim UMAP output. Centroids and centrality are
+    computed from the **original 1536D embeddings** of the cluster members
+    so that downstream cosine-similarity comparisons against the user's
+    taste vector remain dimensionally consistent.
+
+    The caller is responsible for ensuring `embeddings` is a 2D array of
+    shape (N, 1536). We assert before returning to fail loudly rather
+    than silently persist malformed centroids.
+    """
+    if embeddings.ndim != 2 or embeddings.shape[1] != EMBEDDING_DIM:
+        raise ValueError(
+            f"expected embeddings of shape (N, {EMBEDDING_DIM}), "
+            f"got {embeddings.shape}"
+        )
+
+    reduced = reduce_dimensions(embeddings)
 
     clusterer = hdbscan.HDBSCAN(
         min_cluster_size=HDBSCAN_MIN_CLUSTER_SIZE,
@@ -62,9 +111,13 @@ def run_hdbscan(embeddings: np.ndarray) -> ClusterResult:
         metric=HDBSCAN_METRIC,
         core_dist_n_jobs=1,
     )
-    labels = clusterer.fit_predict(normalised).astype(np.int64)
+    labels = clusterer.fit_predict(reduced).astype(np.int64)
 
     cluster_ids = sorted(int(c) for c in np.unique(labels) if c != -1)
+
+    # Centroids: mean of the ORIGINAL 1536D members (not UMAP output),
+    # L2-normalised. This is the dimensional contract the frontend expects.
+    normalised = l2_normalise(embeddings)
 
     centroids: dict[int, np.ndarray] = {}
     for cid in cluster_ids:
@@ -75,6 +128,17 @@ def run_hdbscan(embeddings: np.ndarray) -> ClusterResult:
             centroid = centroid / norm
         centroids[cid] = centroid.astype(np.float32)
 
+    # Assertion: every centroid must be 1536D. A dimensional mismatch here
+    # silently breaks weekly-pool taste-fit scoring in the frontend.
+    for cid, c in centroids.items():
+        if c.shape != (EMBEDDING_DIM,):
+            raise AssertionError(
+                f"centroid for cluster {cid} has shape {c.shape}, "
+                f"expected ({EMBEDDING_DIM},)"
+            )
+
+    # Centrality: cosine distance of each title to its own cluster centroid,
+    # computed in 1536D. Low = more central.
     centrality = np.zeros(len(labels), dtype=np.float32)
     for cid, centroid in centroids.items():
         mask = labels == cid
@@ -92,15 +156,27 @@ def run_hdbscan(embeddings: np.ndarray) -> ClusterResult:
 def cluster_params_payload() -> dict:
     """Serialisable record of the parameters used for this run.
 
-    Stored on every `mood_rooms` row and on the `clustering_runs` audit row
-    so re-runs can compare like-for-like.
+    Captures both UMAP and HDBSCAN config with versions and seeds so that
+    a future run on the same catalogue with the same params should be
+    reproducible. Stored on every `mood_rooms` row and on the
+    `clustering_runs` audit row.
     """
     return {
-        "algorithm": "hdbscan",
-        "min_cluster_size": HDBSCAN_MIN_CLUSTER_SIZE,
-        "min_samples": HDBSCAN_MIN_SAMPLES,
-        "metric": HDBSCAN_METRIC,
-        "hdbscan_version": _hdbscan_version(),
+        "pipeline": "umap+hdbscan",
+        "umap": {
+            "n_components": UMAP_N_COMPONENTS,
+            "n_neighbors": UMAP_N_NEIGHBORS,
+            "min_dist": UMAP_MIN_DIST,
+            "metric": UMAP_METRIC,
+            "random_state": UMAP_RANDOM_STATE,
+            "version": _pkg_ver("umap-learn"),
+        },
+        "hdbscan": {
+            "min_cluster_size": HDBSCAN_MIN_CLUSTER_SIZE,
+            "min_samples": HDBSCAN_MIN_SAMPLES,
+            "metric": HDBSCAN_METRIC,
+            "version": _pkg_ver("hdbscan"),
+        },
     }
 
 

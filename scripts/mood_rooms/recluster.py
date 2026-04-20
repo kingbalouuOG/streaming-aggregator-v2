@@ -249,6 +249,19 @@ def _print_dry_run_report(
 
 
 def _run_pipeline(dry_run: bool) -> int:
+    """Pipeline with a two-scope connection model.
+
+    Scope 1: open a connection, pull all embeddings, close. No long-held
+    transaction during the compute phase.
+
+    UMAP + HDBSCAN run in memory with no DB connection open. This avoids
+    the Session pooler dropping an idle connection during the compute
+    window (which took ~7 min in the first dry-run attempt).
+
+    Scope 2: open a fresh connection for writes (non-dry-run) or for the
+    probe genre lookup (dry-run with OpenAI key). Single transaction
+    wraps all writes.
+    """
     start_ts = time.time()
 
     load_dotenv()
@@ -266,72 +279,72 @@ def _run_pipeline(dry_run: bool) -> int:
 
     params = cluster_params_payload()
 
+    # --- Scope 1: fetch embeddings, close connection. ---
     with connect() as conn:
-        conn.autocommit = False
-
-        # Fetch + cluster phase: read-only, no audit row yet.
         with conn.cursor() as cur:
             log.info("Pulling embeddings from titles...")
             titles = fetch_embeddings(cur)
-        if not titles:
-            log.error("No titles with embeddings found; aborting")
-            return 3
+    if not titles:
+        log.error("No titles with embeddings found; aborting")
+        return 3
 
-        embeddings = np.vstack([t.embedding for t in titles])
-        log.info("Loaded %d embeddings with shape %s", len(titles), embeddings.shape)
+    embeddings = np.vstack([t.embedding for t in titles])
+    log.info("Loaded %d embeddings with shape %s", len(titles), embeddings.shape)
 
-        log.info("Running HDBSCAN...")
-        hdbscan_start = time.time()
-        cluster_result = run_hdbscan(embeddings)
-        log.info(
-            "HDBSCAN fit: %d clusters, %d noise, %.1fs",
-            len(cluster_result.cluster_ids),
-            int((cluster_result.labels == -1).sum()),
-            time.time() - hdbscan_start,
+    # --- Compute phase: no DB connection held. ---
+    log.info("Running UMAP + HDBSCAN...")
+    compute_start = time.time()
+    cluster_result = run_hdbscan(embeddings)
+    log.info(
+        "Cluster fit: %d clusters, %d noise, %.1fs",
+        len(cluster_result.cluster_ids),
+        int((cluster_result.labels == -1).sum()),
+        time.time() - compute_start,
+    )
+
+    central_indices_per_cluster: dict[int, list[int]] = {
+        cid: _select_central_members(
+            titles, cluster_result.labels, cluster_result.centrality,
+            cid, OPENAI_MAX_TITLES_PER_CLUSTER,
         )
+        for cid in cluster_result.cluster_ids
+    }
 
-        # Pick most-central titles per cluster for labelling.
-        central_indices_per_cluster: dict[int, list[int]] = {
-            cid: _select_central_members(
-                titles, cluster_result.labels, cluster_result.centrality,
-                cid, OPENAI_MAX_TITLES_PER_CLUSTER,
+    # --- Scope 2a (dry-run): probe OpenAI on largest clusters. ---
+    if dry_run:
+        probe_results: list[dict] | None = None
+        if openai_client and cluster_result.cluster_ids:
+            probe_cluster_ids = _top_n_clusters_by_size(
+                cluster_result, DRY_RUN_PROBE_CLUSTERS,
             )
-            for cid in cluster_result.cluster_ids
-        }
-
-        if dry_run:
-            probe_results: list[dict] | None = None
-            if openai_client and cluster_result.cluster_ids:
-                probe_cluster_ids = _top_n_clusters_by_size(
-                    cluster_result, DRY_RUN_PROBE_CLUSTERS,
-                )
-                log.info(
-                    "Probing OpenAI on %d largest cluster(s): %s",
-                    len(probe_cluster_ids),
-                    probe_cluster_ids,
-                )
+            log.info(
+                "Probing OpenAI on %d largest cluster(s): %s",
+                len(probe_cluster_ids),
+                probe_cluster_ids,
+            )
+            with connect() as conn:
                 with conn.cursor() as cur:
                     probe_results = _run_openai_probe(
                         cur, titles, cluster_result,
                         central_indices_per_cluster,
                         probe_cluster_ids, openai_client,
                     )
-            else:
-                log.info("Skipping OpenAI probe (no OPENAI_API_KEY or no clusters)")
+        else:
+            log.info("Skipping OpenAI probe (no OPENAI_API_KEY or no clusters)")
 
-            _print_dry_run_report(
-                titles, cluster_result, central_indices_per_cluster, probe_results,
-            )
-            return 0
+        _print_dry_run_report(
+            titles, cluster_result, central_indices_per_cluster, probe_results,
+        )
+        return 0
 
-        # Pre-write phase: open a run audit row inside the transaction so a
-        # crash later leaves a 'failed' record, not silence.
+    # --- Scope 2b (real run): open, audit, label, write, commit, close. ---
+    with connect() as conn:
+        conn.autocommit = False
         with conn.cursor() as cur:
             version = next_version(cur)
             log.info("Writing version=%d", version)
             run_id = start_run(cur, version, params)
 
-            # Resolve labels (Jaccard stability then OpenAI fallback).
             central_ids_by_media = _collect_central_ids_by_media(
                 titles, central_indices_per_cluster,
             )
@@ -407,8 +420,9 @@ def _run_pipeline(dry_run: bool) -> int:
             )
 
         conn.commit()
-        log.info("Run complete in %.1fs", time.time() - start_ts)
-        return 0
+
+    log.info("Run complete in %.1fs", time.time() - start_ts)
+    return 0
 
 
 def _run_pipeline_with_guard(dry_run: bool) -> int:
