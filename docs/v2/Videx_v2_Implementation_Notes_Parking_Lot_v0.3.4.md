@@ -847,7 +847,28 @@ Option 3 is the locked choice. Supabase Pro exposes a direct PostgreSQL connecti
 
 Which fallback depends on what HDBSCAN actually produces. Don't pre-commit to one.
 
-**Status:** ⏳ Not yet incorporated
+**Phase 4.5 Gate 2 outcome (2026-04-20):** fallback triggered. Full tune sequence below.
+
+| Attempt | Change | Clusters | Coverage | Mega-cluster | Notes |
+|---|---|---|---|---|---|
+| 1 | Pure HDBSCAN, raw 1536D, `min_cluster_size=50`, `min_samples=5` | 2 | 10.2% | n/a | Curse-of-dimensionality — hard fail |
+| 2 | + UMAP preprocessing (10D, `n_neighbors=15`, `metric='cosine'`), defaults | 47 | 57.6% | 1578-title Bollywood blob ("Desert Shadows" mislabel) | Gate 2 fail: coverage + mega-cluster |
+| 3 | B1+B2: `min_cluster_size=30`, `cluster_selection_method='leaf'` | 96 | 37.1% | none (max 306) | Over-fragmented; leaf too aggressive at this scale |
+| 4 | Path 1: revert to `eom`, add `max_cluster_size=800`; keep B1 | 80 | 51.3% | none (max 777) | Mega-cluster resolved; coverage low |
+| 5 | B3: UMAP `n_neighbors` 15 → 30 | 68 | 53.5% | none (max 788) | Gate 2 approved |
+
+**Final parameters (stored in `cluster_params` on every `mood_rooms` row):**
+
+- UMAP: `n_components=10`, `n_neighbors=30`, `min_dist=0.0`, `metric='cosine'`, `random_state=42`
+- HDBSCAN: `min_cluster_size=30`, `min_samples=5`, `metric='euclidean'`, `cluster_selection_method='eom'`, `max_cluster_size=800`
+- Library versions: `umap-learn==0.5.12`, `hdbscan==0.8.42`
+- Labelling prompt carries `original_language` (ISO 639-1) per title — improved label quality (e.g. correct "Bollywood Melodrama" and "Tamil Tapestry of Tension" separation)
+
+**Coverage plateau is structural.** Three orthogonal tuning passes (`max_cluster_size` cap, UMAP neighbourhood width, HDBSCAN density thresholds) moved coverage across a narrow 51–58% band. ~45% of the catalogue sits in sparse regions of the 1536D OpenAI embedding space — they don't have dense neighbours to form dense-only clusters. This is a property of the catalogue's embedding distribution, not a pipeline failure.
+
+**Hybrid (Option 3) rejected:** k-means on the noise tail would buy coverage at the cost of incoherent synthetic rooms — titles forced into clusters they don't belong to, which undermines the mood-rooms UX premise. Quality over coverage. Noise titles still surface elsewhere on For You (Recommended, Hidden Gems, etc).
+
+**Status:** ✅ Incorporated with UMAP preprocessing (Option 1 path). Full tune sequence above.
 
 ### IN-458: `getAvailableTmdbIds` does not distinguish by `media_type`
 
@@ -866,6 +887,29 @@ The correct fix is to widen the RPC and filter set to `Set<{ tmdbId: number, med
 Not fixed in Phase 4.5 — that phase accepted the inherited imprecision because mood rooms inherit it at the same rate as every other For You row, and fixing it here would balloon scope. File for a future correctness pass (likely Phase 5/6 quality-sweep) alongside the existing consumers.
 
 **Status:** ⏳ Not yet incorporated
+
+### IN-459: Re-evaluate mood room coverage after 3 monthly runs
+
+**Source:** Phase 4.5 Gate 2 close-out (2026-04-20)
+
+**Detail:** The 53.5% coverage ceiling that Phase 4.5 shipped is based on one catalogue snapshot (20,098 embedded titles, April 2026). Three things could change the picture:
+
+1. **Catalogue growth.** As the sync pipeline adds titles, the embedding space gets denser and more clusterable regions may emerge.
+2. **User engagement data.** Once the surface is live and Phase 0 impressions are flowing, it becomes observable whether the ~9,400 non-clustered titles are being under-served in recommendations. If they are, the coverage gap matters. If users are already finding those titles via Recommended / Hidden Gems / Because You Watched, coverage is a vanity metric.
+3. **Embedding quality.** Any future change to `text-embedding-3-small` → `text-embedding-3-large` or a different provider would shift the density distribution significantly.
+
+**Action:** after three successful monthly clustering runs (i.e. first production run + two cron runs, ~3 months post-Phase-4.5-merge), review:
+
+- Coverage trend (is it moving? in which direction?)
+- Cluster count stability (are the 68 rooms persisting through re-clusters, or churning?)
+- Impressions + taps on mood-room cards (from `card_impressions` where `source_surface='mood_room'`)
+- Whether the ~9,400 non-clustered titles are being recommended at a healthy rate from other For You rows
+
+If coverage ceiling persists AND impression data shows under-served titles in sparse regions, revisit **hybrid approach (IN-457 Option 3)** in Phase 6. Add k-means on the noise tail to produce additional rooms, accepting the quality trade-off because the alternative (invisible titles) is worse.
+
+If coverage plateau is stable AND under-served titles are being surfaced elsewhere, leave as-is. The 70% target from the original hypothesis was a pre-data estimate; the empirical ceiling is the honest answer.
+
+**Status:** ⏳ Not yet incorporated (action item for Phase 5/6 post-launch review)
 
 ---
 
