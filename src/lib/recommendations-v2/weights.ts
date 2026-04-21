@@ -168,3 +168,78 @@ export const MAX_CONSECUTIVE_SAME_SERVICE = 2;
 
 /** Hidden Gems thresholds (re-exported from types for convenience) */
 export { HIDDEN_GEMS_FILTERS } from './types';
+
+// ── Mood Rooms (Phase 4.5) ──
+
+/**
+ * Number of mood rooms shown on the For You "Mood Rooms for Tonight" row
+ * per week. The weekly pool is selected once per (user, weekBucket) and
+ * cached in localStorage; ordering within the pool rotates by
+ * time-of-day affinity on each For You render.
+ *
+ * At 5 rooms per week and 69 total (April 2026 run #2), rotation through
+ * the full room set takes ~14 weeks.
+ */
+export const MOOD_ROOM_WEEKLY_POOL_SIZE = 5;
+
+/**
+ * Penalty applied to the taste-fit score of rooms featured in the
+ * previous week's pool, to nudge discovery toward unseen rooms.
+ * Absent previous-week key (first visit or cache cleared) => 0 penalty.
+ *
+ * Scale: taste-fit is a cosine similarity in [−1, 1]; a 0.05 penalty
+ * only displaces a previously-featured room if another room scores
+ * within 0.05 of it.
+ */
+export const MOOD_ROOM_VARIETY_PENALTY = 0.05;
+
+/**
+ * Time-of-day bucket inferred from the device's current local time.
+ * Used to reorder the weekly pool on each For You render: rooms with
+ * an affinity for the current bucket float to the top, the rest
+ * stable-shuffle beneath.
+ */
+export type MoodRoomTimeBucket =
+  | 'evening_weekday'   // Mon-Thu 18:00-23:00
+  | 'weekend_night'     // Fri/Sat/Sun evening
+  | 'sunday_afternoon'  // Sun 12:00-17:00
+  | 'default';
+
+/**
+ * Very small genre-affinity table per time bucket. Intentionally
+ * minimal per Brief §5: "keep the time-of-day rule set minimal".
+ * TMDb genre ids; see src/lib/constants/genres.ts.
+ *
+ * Affinity is scored by overlap count between the room's dominant
+ * genres (derived from its member titles) and the bucket's preferred
+ * genres. Zero overlap is fine — the room still renders, it just
+ * doesn't get a time-of-day boost.
+ */
+export const MOOD_ROOM_BUCKET_GENRE_AFFINITY: Record<MoodRoomTimeBucket, number[]> = {
+  evening_weekday: [18, 9648, 99, 10752],      // Drama, Mystery, Documentary, War (cerebral / prestige)
+  weekend_night: [28, 53, 27, 35, 80],         // Action, Thriller, Horror, Comedy, Crime (genre / cult)
+  sunday_afternoon: [10751, 16, 10749, 35],    // Family, Animation, Romance, Comedy (comfort / feel-good)
+  default: [],
+};
+
+/**
+ * Classify the current local date/time into a time-of-day bucket.
+ * Kept deliberately simple; revisit based on engagement data.
+ */
+export function getCurrentTimeBucket(now: Date = new Date()): MoodRoomTimeBucket {
+  const dayOfWeek = now.getDay();   // 0=Sunday, 6=Saturday
+  const hour = now.getHours();
+
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6;
+
+  if (dayOfWeek === 0 && hour >= 12 && hour < 17) {
+    return 'sunday_afternoon';
+  }
+  if (isWeekend && hour >= 18 && hour < 24) {
+    return 'weekend_night';
+  }
+  if (!isWeekend && hour >= 18 && hour < 23) {
+    return 'evening_weekday';
+  }
+  return 'default';
+}

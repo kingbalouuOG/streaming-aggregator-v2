@@ -55,6 +55,7 @@ const BUFFER_FLUSH_THRESHOLD = 100;
 export type ImpressionSurface =
   | 'home'
   | 'for_you'
+  | 'mood_room'
   | 'browse'
   | 'watchlist'
   | 'search'
