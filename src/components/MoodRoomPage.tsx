@@ -210,7 +210,7 @@ export function MoodRoomPage({
               <ContentCard
                 key={item.id}
                 item={item}
-                variant="wide"
+                variant="grid"
                 onSelect={onItemSelect}
                 bookmarked={bookmarkedIds.has(item.id)}
                 onToggleBookmark={onToggleBookmark}

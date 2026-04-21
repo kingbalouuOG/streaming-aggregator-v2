@@ -29,7 +29,17 @@ export interface ContentItem {
 
 interface ContentCardProps {
   item: ContentItem;
-  variant?: "default" | "wide";
+  /**
+   * Visual size of the card.
+   *
+   *   "default" — fixed 165x240 for horizontal ContentRow scrollers.
+   *   "wide"    — fixed 200x280 for horizontal ContentRow scrollers
+   *                that want slightly larger cards.
+   *   "grid"    — fills its parent column, maintains a 5:7 poster
+   *                aspect ratio. Use in 2-col (or wider) CSS grids
+   *                where fixed widths would overflow narrow columns.
+   */
+  variant?: "default" | "wide" | "grid";
   onSelect?: (item: ContentItem) => void;
   bookmarked?: boolean;
   onToggleBookmark?: (item: ContentItem) => void;
@@ -58,12 +68,20 @@ export function ContentCard({ item, variant = "default", onSelect, bookmarked = 
     setTimeout(() => setJustToggled(false), 400);
   };
 
+  const sizeClass =
+    variant === "grid" ? "w-full aspect-[5/7]" :
+    variant === "wide" ? "w-[200px] h-[280px]" :
+    "w-[165px] h-[240px]";
+  // Horizontal scrollers want shrink-0 so cards keep their fixed
+  // width as the row overflows. In a grid the cell determines width,
+  // and shrink-0 is a no-op — harmless to keep for the fixed
+  // variants and unnecessary for "grid".
+  const shrinkClass = variant === "grid" ? "" : "shrink-0";
+
   return (
     <div
       onClick={() => onSelect?.(item)}
-      className={`relative group shrink-0 rounded-xl overflow-hidden cursor-pointer ${
-        variant === "wide" ? "w-[200px] h-[280px]" : "w-[165px] h-[240px]"
-      }`}
+      className={`relative group ${shrinkClass} rounded-xl overflow-hidden cursor-pointer ${sizeClass}`}
     >
       {/* Image with skeleton */}
       <ImageSkeleton
