@@ -5,7 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 import { ContentCard, type ContentItem } from './ContentCard';
 import type { ServiceId } from './platformLogos';
 import {
-  getMoodRoomById,
+  getMoodRoomDetail,
   type MoodRoomDetail,
 } from '@/lib/api/supabaseMoodRooms';
 import type { FilterSets } from '@/lib/recommendations-v2/hardFilters';
@@ -81,7 +81,7 @@ export function MoodRoomPage({
             .filter(Boolean) as string[];
           filterSets = await buildFilterSets(serviceIds);
         }
-        const result = await getMoodRoomById(roomId, filterSets.availableTmdbIds);
+        const result = await getMoodRoomDetail(roomId, filterSets.availableTmdbIds);
         if (cancelled) return;
         setDetail(result);
       } catch (e) {
@@ -151,11 +151,11 @@ export function MoodRoomPage({
             className="text-foreground text-[22px] leading-tight"
             style={{ fontWeight: 700 }}
           >
-            {detail?.room.label ?? 'Mood Room'}
+            {detail?.label ?? 'Mood Room'}
           </h1>
-          {detail?.room.description ? (
+          {detail?.description ? (
             <p className="text-muted-foreground text-[14px] mt-1 leading-snug">
-              {detail.room.description}
+              {detail.description}
             </p>
           ) : null}
           {detail ? (

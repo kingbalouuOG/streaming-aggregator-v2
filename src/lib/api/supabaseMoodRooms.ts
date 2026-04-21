@@ -1,261 +1,235 @@
 /**
  * Mood rooms data access.
  *
- * Reads the current generation of mood_rooms / mood_room_titles produced
- * by the monthly Python clustering job (scripts/mood_rooms/recluster.py).
+ * Thin wrapper over three server-side RPCs introduced in migration 031:
+ *   - get_mood_rooms_for_user: availability-filtered, taste-ranked rooms
+ *   - get_mood_room_thumbnails: preview thumbnails for the For You cards
+ *   - get_mood_room_detail: full per-room title list for MoodRoomPage
  *
- * Every query filters by `version = (SELECT MAX(version) FROM mood_rooms)`
- * via inline subquery. We do not cache the max version in a module-level
- * variable: it survives hot-reload confusingly in dev and goes stale if a
- * re-clustering run completes while a client session is open.
+ * Earlier versions of this module did the availability counting and
+ * taste-fit scoring client-side, which tripped over PostgREST's
+ * 1000-row cap on the mood_room_titles read and silently filtered most
+ * rooms out. The RPCs do everything server-side in bounded payloads.
  *
- * Service availability is applied client-side against FilterSets.availableTmdbIds
- * (see IN-458 in the Parking Lot for the media_type-imprecision caveat
- * that mood rooms inherit from the rest of the app).
+ * Availability IDs are still `Set<number>` (tmdb_id only, no
+ * media_type). See IN-458 for the cross-type imprecision this inherits
+ * from the rest of the app.
  */
 
 import { supabase } from '../supabase';
+import { buildPosterUrl } from './tmdb';
+import { GENRE_NAMES } from '../constants/genres';
 import { titleRowToContentItem } from '../recommendations-v2/titleAdapter';
-import { EXTENDED_TITLE_SELECT, type ExtendedTitleRow } from '../recommendations-v2/types';
+import type { ExtendedTitleRow } from '../recommendations-v2/types';
 import type { ContentItem } from '@/components/ContentCard';
 
 
-const ROOM_METADATA_SELECT =
-  'id, label, description, centroid, title_count, version, is_curated';
-
-/** Core mood room metadata used for scoring and card rendering. */
-export interface MoodRoom {
-  id: string;
-  label: string;
-  description: string | null;
-  /** 1536D unit-normalised centroid; used for taste-fit scoring. */
-  centroid: number[];
-  titleCount: number;
-  version: number;
-  isCurated: boolean;
-}
-
-/** Mood room preview: metadata + 3-4 thumbnails for the For You card. */
+/** Ranked mood room with preview thumbnails, for the For You row. */
 export interface MoodRoomPreview {
-  room: MoodRoom;
+  room: {
+    id: string;
+    label: string;
+    description: string | null;
+    titleCount: number;
+    availableCount: number;
+    /** Cosine distance to user's taste vector; lower = closer. */
+    tasteDistance: number;
+  };
+  /** Up to 4 most-central available titles. */
   thumbnails: ContentItem[];
 }
 
-/** Full mood room page payload: metadata + ordered title grid. */
+
+/** Full detail payload for the per-room page. */
 export interface MoodRoomDetail {
-  room: MoodRoom;
-  /** Titles available on the user's services, sorted by centrality ascending. */
-  items: ContentItem[];
-  /** Total titles in the room regardless of availability. */
+  label: string;
+  description: string | null;
   totalTitleCount: number;
+  /** Availability-filtered, centrality-ordered (most central first). */
+  items: ContentItem[];
 }
 
 
-type RoomRow = {
-  id: string;
+type RankedRoomRow = {
+  room_id: string;
   label: string;
   description: string | null;
-  centroid: unknown;   // pgvector text form '[v1,v2,...]' or number[]
   title_count: number;
-  version: number;
-  is_curated: boolean;
+  available_count: number;
+  taste_distance: number;
 };
 
 
-function parseCentroid(raw: unknown): number[] {
-  if (Array.isArray(raw)) return raw.map(Number);
-  if (typeof raw === 'string') {
-    return JSON.parse(raw);
-  }
-  return [];
-}
+type ThumbnailRow = {
+  mood_room_id: string;
+  tmdb_id: number;
+  media_type: 'movie' | 'tv';
+  title: string;
+  poster_path: string | null;
+  release_year: number | null;
+  genre_ids: number[] | null;
+  centrality: number;
+};
 
 
-function rowToRoom(row: RoomRow): MoodRoom {
-  return {
-    id: row.id,
-    label: row.label,
-    description: row.description,
-    centroid: parseCentroid(row.centroid),
-    titleCount: row.title_count,
-    version: row.version,
-    isCurated: row.is_curated,
-  };
-}
+type DetailRow = {
+  label: string;
+  description: string | null;
+  total_title_count: number;
+  tmdb_id: number;
+  media_type: 'movie' | 'tv';
+  title: string;
+  poster_path: string | null;
+  release_year: number | null;
+  overview: string | null;
+  genre_ids: number[] | null;
+  vote_average: number | null;
+  vote_count: number | null;
+  popularity: number | null;
+  original_language: string | null;
+  runtime: number | null;
+  centrality: number;
+};
 
 
 /**
- * Fetch all mood rooms at the latest version that have at least
- * `minAvailableTitles` titles playable on the user's services.
+ * Fetch the taste-ranked mood rooms for a user, each with their preview
+ * thumbnails. Two round trips: one for ranking, one for thumbnails.
  *
- * Two-query design (Option A from plan §A7): pull all rooms, then
- * prune by availability client-side. At 68 rooms this is cheap and
- * avoids an RPC surface-expansion for filtering. availableTmdbIds is
- * tmdb_id-only (see IN-458); we inherit the imprecision.
+ * `tasteVector` is expected to be 1536D and L2-normalised (matches the
+ * room centroids). Pass null only if taste is unavailable — the RPC
+ * signature requires a vector, so we synthesise a neutral zero vector
+ * in that case and the scoring produces a coverage-ranked fallback.
  */
-export async function getLatestMoodRooms(
+export async function getRankedMoodRoomsWithThumbnails(
+  tasteVector: number[] | null,
   availableTmdbIds: Set<number>,
+  limit = 5,
   minAvailableTitles = 10,
-): Promise<MoodRoom[]> {
-  const latestVersion = await getLatestVersion();
-  if (latestVersion == null) return [];
+): Promise<MoodRoomPreview[]> {
+  if (availableTmdbIds.size === 0) return [];
 
-  const { data: rooms, error } = await supabase
-    .from('mood_rooms')
-    .select(ROOM_METADATA_SELECT)
-    .eq('version', latestVersion)
-    .returns<RoomRow[]>();
+  // The RPC requires a non-null vector. For cold-start users without a
+  // taste vector yet, a zero vector makes every room equidistant and
+  // the LIMIT clause slices essentially at random — acceptable fallback
+  // until interactions populate the vector.
+  const vector = tasteVector ?? new Array(1536).fill(0);
+  const vectorStr = `[${vector.join(',')}]`;
 
-  if (error || !rooms || rooms.length === 0) return [];
+  const { data: rankedRaw, error: rankErr } = await supabase.rpc('get_mood_rooms_for_user' as any, {
+    user_taste_vector: vectorStr,
+    available_tmdb_ids: Array.from(availableTmdbIds),
+    min_available_titles: minAvailableTitles,
+    result_limit: limit,
+  });
 
-  const availabilityByRoom = await getAvailabilityCountsByRoom(
-    rooms.map((r) => r.id),
-    availableTmdbIds,
-  );
+  if (rankErr || !rankedRaw) return [];
+  const ranked = rankedRaw as RankedRoomRow[];
+  if (ranked.length === 0) return [];
 
-  return rooms
-    .filter((r) => (availabilityByRoom.get(r.id) ?? 0) >= minAvailableTitles)
-    .map(rowToRoom);
+  const { data: thumbsRaw, error: thumbsErr } = await supabase.rpc('get_mood_room_thumbnails' as any, {
+    room_ids: ranked.map((r) => r.room_id),
+    available_tmdb_ids: Array.from(availableTmdbIds),
+    per_room_limit: 4,
+  });
+
+  if (thumbsErr) {
+    // Thumbnails are non-essential — we can still return rooms with
+    // empty thumbnail arrays rather than fail the whole row.
+    console.error('[moodRooms] thumbnails RPC failed:', thumbsErr.message);
+  }
+
+  const thumbs = (thumbsRaw ?? []) as ThumbnailRow[];
+  const thumbsByRoom = new Map<string, ThumbnailRow[]>();
+  for (const t of thumbs) {
+    const list = thumbsByRoom.get(t.mood_room_id) ?? [];
+    list.push(t);
+    thumbsByRoom.set(t.mood_room_id, list);
+  }
+
+  return ranked.map((r) => ({
+    room: {
+      id: r.room_id,
+      label: r.label,
+      description: r.description,
+      titleCount: r.title_count,
+      availableCount: r.available_count,
+      tasteDistance: r.taste_distance,
+    },
+    thumbnails: (thumbsByRoom.get(r.room_id) ?? []).map(thumbnailRowToContentItem),
+  }));
 }
 
 
 /**
- * Fetch one mood room plus every title in it, filtered by availability
- * and sorted by centrality ascending (most central first).
+ * Fetch one mood room's full title list for MoodRoomPage.
+ * Availability-filtered, centrality-sorted.
  */
-export async function getMoodRoomById(
+export async function getMoodRoomDetail(
   roomId: string,
   availableTmdbIds: Set<number>,
 ): Promise<MoodRoomDetail | null> {
-  const { data: roomData, error: roomError } = await supabase
-    .from('mood_rooms')
-    .select(ROOM_METADATA_SELECT)
-    .eq('id', roomId)
-    .maybeSingle<RoomRow>();
+  if (availableTmdbIds.size === 0) return null;
 
-  if (roomError || !roomData) return null;
+  const { data: dataRaw, error } = await supabase.rpc('get_mood_room_detail' as any, {
+    room_id: roomId,
+    available_tmdb_ids: Array.from(availableTmdbIds),
+  });
 
-  const { data: memberships, error: membershipError } = await supabase
-    .from('mood_room_titles')
-    .select('tmdb_id, media_type, centrality')
-    .eq('mood_room_id', roomId)
-    .order('centrality', { ascending: true })
-    .returns<Array<{ tmdb_id: number; media_type: 'movie' | 'tv'; centrality: number }>>();
+  if (error || !dataRaw) return null;
+  const data = dataRaw as DetailRow[];
+  if (data.length === 0) return null;
 
-  if (membershipError || !memberships) {
-    return {
-      room: rowToRoom(roomData),
-      items: [],
-      totalTitleCount: roomData.title_count,
-    };
-  }
-
-  const available = memberships.filter((m) => availableTmdbIds.has(m.tmdb_id));
-  const items = await hydrateTitles(available);
+  // Every row carries the same label/description/total. Pull from first.
+  const first = data[0];
+  const items = data.map(detailRowToContentItem);
 
   return {
-    room: rowToRoom(roomData),
+    label: first.label,
+    description: first.description,
+    totalTitleCount: first.total_title_count,
     items,
-    totalTitleCount: roomData.title_count,
   };
 }
 
 
-/**
- * Fetch the N most-central available titles for one room, for use as
- * preview thumbnails on the For You card.
- */
-export async function getMoodRoomPreviewThumbnails(
-  roomId: string,
-  availableTmdbIds: Set<number>,
-  limit = 4,
-): Promise<ContentItem[]> {
-  // Over-fetch to account for availability filtering. The most central
-  // title may not be on the user's services.
-  const fetchLimit = Math.max(limit * 4, 16);
-
-  const { data, error } = await supabase
-    .from('mood_room_titles')
-    .select('tmdb_id, media_type, centrality')
-    .eq('mood_room_id', roomId)
-    .order('centrality', { ascending: true })
-    .limit(fetchLimit)
-    .returns<Array<{ tmdb_id: number; media_type: 'movie' | 'tv'; centrality: number }>>();
-
-  if (error || !data) return [];
-
-  const available = data.filter((m) => availableTmdbIds.has(m.tmdb_id)).slice(0, limit);
-  return hydrateTitles(available);
+function thumbnailRowToContentItem(row: ThumbnailRow): ContentItem {
+  const genreIds = row.genre_ids ?? [];
+  const primaryGenreId = genreIds[0];
+  return {
+    id: `${row.media_type}-${row.tmdb_id}`,
+    title: row.title,
+    image: buildPosterUrl(row.poster_path) || '',
+    services: [],
+    year: row.release_year ?? undefined,
+    type: row.media_type,
+    genre: primaryGenreId ? GENRE_NAMES[primaryGenreId] : undefined,
+    genreIds,
+  };
 }
 
 
-async function getLatestVersion(): Promise<number | null> {
-  const { data, error } = await supabase
-    .from('mood_rooms')
-    .select('version')
-    .order('version', { ascending: false })
-    .limit(1)
-    .maybeSingle<{ version: number }>();
-
-  if (error || !data) return null;
-  return data.version;
-}
-
-
-async function getAvailabilityCountsByRoom(
-  roomIds: string[],
-  availableTmdbIds: Set<number>,
-): Promise<Map<string, number>> {
-  const counts = new Map<string, number>();
-  if (roomIds.length === 0) return counts;
-
-  const { data, error } = await supabase
-    .from('mood_room_titles')
-    .select('mood_room_id, tmdb_id')
-    .in('mood_room_id', roomIds)
-    .returns<Array<{ mood_room_id: string; tmdb_id: number }>>();
-
-  if (error || !data) return counts;
-
-  for (const row of data) {
-    if (!availableTmdbIds.has(row.tmdb_id)) continue;
-    counts.set(row.mood_room_id, (counts.get(row.mood_room_id) ?? 0) + 1);
-  }
-  return counts;
-}
-
-
-/**
- * Hydrate a list of (tmdb_id, media_type) pairs into ContentItem objects.
- *
- * Uses a single `tmdb_id = ANY(...)` query and client-side joins on
- * (tmdb_id, media_type) to pick the correct row when the same tmdb_id
- * exists as both a movie and a TV show. Preserves input order.
- */
-async function hydrateTitles(
-  rows: Array<{ tmdb_id: number; media_type: 'movie' | 'tv' }>,
-): Promise<ContentItem[]> {
-  if (rows.length === 0) return [];
-
-  const tmdbIds = Array.from(new Set(rows.map((r) => r.tmdb_id)));
-
-  const { data, error } = await supabase
-    .from('titles')
-    .select(EXTENDED_TITLE_SELECT)
-    .in('tmdb_id', tmdbIds)
-    .returns<ExtendedTitleRow[]>();
-
-  if (error || !data) return [];
-
-  const byKey = new Map<string, ExtendedTitleRow>();
-  for (const row of data) {
-    byKey.set(`${row.media_type}-${row.tmdb_id}`, row);
-  }
-
-  const items: ContentItem[] = [];
-  for (const r of rows) {
-    const meta = byKey.get(`${r.media_type}-${r.tmdb_id}`);
-    if (meta) items.push(titleRowToContentItem(meta));
-  }
-  return items;
+function detailRowToContentItem(row: DetailRow): ContentItem {
+  // Project onto the ExtendedTitleRow shape the existing adapter expects.
+  const titleLike: ExtendedTitleRow = {
+    tmdb_id: row.tmdb_id,
+    media_type: row.media_type,
+    title: row.title,
+    poster_path: row.poster_path,
+    backdrop_path: null,
+    overview: row.overview,
+    release_date: null,
+    release_year: row.release_year,
+    genre_ids: row.genre_ids,
+    vote_average: row.vote_average,
+    vote_count: row.vote_count,
+    popularity: row.popularity,
+    original_language: row.original_language,
+    runtime: row.runtime,
+    cast_top_5: null,
+    director: null,
+    rt_score: null,
+    imdb_rating: null,
+  };
+  return titleRowToContentItem(titleLike);
 }
