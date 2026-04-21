@@ -911,6 +911,28 @@ If coverage plateau is stable AND under-served titles are being surfaced elsewhe
 
 **Status:** ⏳ Not yet incorporated (action item for Phase 5/6 post-launch review)
 
+### IN-460: Upgrade `actions/setup-python` when v6 ships (Node.js 20 deprecation)
+
+**Source:** Phase 4.5 Gate 3 first successful workflow run (run #2, 2026-04-21)
+
+**Detail:** The `.github/workflows/mood-rooms-recluster.yml` workflow uses `actions/setup-python@v5`, which runs on Node.js 20. GitHub surfaces a deprecation notice on every run:
+
+> Node.js 20 actions are deprecated. Actions will be forced to run with Node.js 24 by default starting **June 2nd, 2026**. Node.js 20 will be removed from the runner on **September 16th, 2026**.
+
+Until the deprecation bites, the workflow runs normally. Between 2026-06-02 and 2026-09-16 the action will be force-upgraded to Node 24 (may introduce behaviour changes). After 2026-09-16 the workflow will fail outright unless we either pin to a Node-24-compatible version or set `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true` (which is a dead-end that only buys a short extension).
+
+**Action:** when `actions/setup-python@v6` is released with Node 24 support, bump the pin:
+
+```yaml
+- uses: actions/setup-python@v6  # was @v5
+```
+
+Same goes for `actions/checkout@v5` if GitHub releases a Node-24 major. Check both when making the change.
+
+Not urgent in April 2026 — just a calendar reminder to check setup-python's release page in May 2026 or set an alert for when v6 ships. No functional impact until the June deadline.
+
+**Status:** ⏳ Not yet incorporated (time-triggered action item)
+
 ---
 
 ## Cross-phase notes
