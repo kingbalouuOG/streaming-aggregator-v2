@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowLeft } from 'lucide-react';
 
@@ -67,6 +67,20 @@ export function MoodRoomPage({
 
   const impressionDedupRef = useRef<Set<string>>(new Set());
 
+  // Stabilise effect deps. The App.tsx parent re-renders on every
+  // scroll pixel (scrollY is state), which produces new identities for
+  // `providerIds` (array) and `sharedFilters` (object) on every render.
+  // If those leak into the data-fetch useEffect's dependency array, the
+  // fetch re-fires on every scroll pixel — setLoading flashes, re-fetch
+  // flickers the cards, and the user sees a visible "reload" on scroll.
+  // Collapse both to primitive signatures so React's Object.is can
+  // correctly memoise.
+  const providerKey = useMemo(
+    () => [...providerIds].sort().join(','),
+    [providerIds],
+  );
+  const availableIdsSize = sharedFilters?.availableTmdbIds.size ?? 0;
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -92,7 +106,8 @@ export function MoodRoomPage({
     })();
 
     return () => { cancelled = true; };
-  }, [roomId, providerIds, sharedFilters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, providerKey, availableIdsSize]);
 
   useEffect(() => {
     const unsubscribe = onSessionReset(() => {
@@ -105,8 +120,17 @@ export function MoodRoomPage({
   const filtered = filterLanguage(filterWatched(items));
   const visible = filtered.slice(0, visibleCount);
 
+  // Stable signature of the current visible set. `visible` is a new
+  // array identity on every render (recomputed from props + state), so
+  // using it directly in the effect dep array re-runs the effect on
+  // every render even when the actual set hasn't changed. The joined
+  // id string collapses to a primitive that React's Object.is can
+  // correctly compare.
+  const visibleIdsKey = visible.map((v) => v.id).join(',');
+
   // Record impressions for the currently-visible window. Runs whenever
-  // the slice changes (initial load, pagination).
+  // the visible set actually changes (initial load, pagination, filter
+  // change) — not on every parent re-render.
   useEffect(() => {
     if (visible.length === 0) return;
     const sessionId = getCurrentSessionId();
@@ -122,7 +146,8 @@ export function MoodRoomPage({
         position,
       });
     });
-  }, [visible]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleIdsKey]);
 
   const handleLoadMore = useCallback(() => {
     setVisibleCount((prev) => Math.min(prev + GRID_PAGE_SIZE, filtered.length));
