@@ -6,6 +6,7 @@ import { CategoryFilter } from "./components/CategoryFilter";
 import { ContentRow } from "./components/ContentRow";
 import { FeaturedHeroCarousel } from "./components/FeaturedHero";
 import { ForYouPage } from "./components/ForYouPage";
+import { MoodRoomPage } from "./components/MoodRoomPage";
 import { BottomNav } from "./components/BottomNav";
 import { ContentItem } from "./components/ContentCard";
 import { BrowsePage, BrowseStateSnapshot } from "./components/BrowsePage";
@@ -61,6 +62,7 @@ function AppContent() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [activeTab, setActiveTab] = useState("home");
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
+  const [selectedMoodRoomId, setSelectedMoodRoomId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [watchlistSubTab, setWatchlistSubTab] = useState<"want" | "watched">("want");
@@ -202,6 +204,22 @@ function AppContent() {
     setSelectedItem(null);
   };
 
+  const handleSelectMoodRoom = (roomId: string) => {
+    // Flush trigger (parity with handleItemSelect): any pending For You
+    // card impressions must be attributed to for_you, not to the room
+    // surface we're navigating into.
+    void flushNow();
+    if (scrollRef.current) {
+      savedScrollPositions.current[activeTab] = scrollRef.current.scrollTop;
+    }
+    setSelectedMoodRoomId(roomId);
+  };
+
+  const handleMoodRoomBack = () => {
+    pendingScrollRestore.current = savedScrollPositions.current[activeTab] ?? 0;
+    setSelectedMoodRoomId(null);
+  };
+
   const handleShowCalendar = () => {
     if (scrollRef.current) {
       savedScrollPositions.current[activeTab] = scrollRef.current.scrollTop;
@@ -217,6 +235,7 @@ function AppContent() {
       savedScrollPositions.current[activeTab] = scrollRef.current.scrollTop;
     }
     setSelectedItem(null);
+    setSelectedMoodRoomId(null);
     setShowCalendar(false);
     setActiveTab(tab);
   };
@@ -634,6 +653,28 @@ function AppContent() {
               onRate={handleRate}
             />
             </motion.div>
+          ) : selectedMoodRoomId ? (
+            <motion.div
+              key={`mood-room-${selectedMoodRoomId}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+            >
+            <MoodRoomPage
+              roomId={selectedMoodRoomId}
+              providerIds={connectedServices}
+              connectedServiceIds={connectedServiceIds}
+              sharedFilters={home.sharedFilters ?? null}
+              filterWatched={filterWatched}
+              filterLanguage={filterLanguage}
+              bookmarkedIds={wl.bookmarkedIds}
+              watchedIds={watchedIds}
+              onItemSelect={handleItemSelect}
+              onToggleBookmark={handleToggleBookmark}
+              onBack={handleMoodRoomBack}
+            />
+            </motion.div>
           ) : (
               <motion.div
                 key={`tab-${activeTab}`}
@@ -730,6 +771,7 @@ function AppContent() {
                   filterWatched={filterWatched}
                   filterLanguage={filterLanguage}
                   onItemSelect={handleItemSelect}
+                  onSelectMoodRoom={handleSelectMoodRoom}
                   bookmarkedIds={wl.bookmarkedIds}
                   onToggleBookmark={handleToggleBookmark}
                   watchedIds={watchedIds}

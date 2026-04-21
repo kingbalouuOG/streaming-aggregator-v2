@@ -4,7 +4,7 @@
  * Renders up to 8 rows of heavily personalised, slider-tunable content:
  *   1. Slider entry point ("Tune your recommendations")
  *   2. Recommended For You
- *   3. [Mood Rooms placeholder — not rendered in Phase 4]
+ *   3. Mood Rooms for Tonight (Phase 4.5, at For You position 2)
  *   4. Hidden Gems
  *   5. Because You Watched [Title 1] (conditional)
  *   6. Because You Watched [Title 2] (conditional)
@@ -17,8 +17,10 @@ import { useState, useCallback } from 'react';
 import { Sliders, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { ContentRow } from './ContentRow';
+import { MoodRoomsRow } from './MoodRoomsRow';
 import { SliderTray } from './SliderTray';
 import { useForYouContent } from '@/hooks/useForYouContent';
+import { useMoodRoomsRow } from '@/hooks/useMoodRoomsRow';
 import type { FilterSets } from '@/lib/recommendations-v2/hardFilters';
 import type { ContentItem } from './ContentCard';
 import type { ServiceId } from './platformLogos';
@@ -31,6 +33,7 @@ interface ForYouPageProps {
   filterWatched: (items: ContentItem[]) => ContentItem[];
   filterLanguage: (items: ContentItem[]) => ContentItem[];
   onItemSelect: (item: ContentItem) => void;
+  onSelectMoodRoom: (roomId: string) => void;
   bookmarkedIds: Set<string>;
   onToggleBookmark: (item: ContentItem) => void;
   watchedIds: Set<string>;
@@ -43,11 +46,13 @@ export function ForYouPage({
   filterWatched,
   filterLanguage,
   onItemSelect,
+  onSelectMoodRoom,
   bookmarkedIds,
   onToggleBookmark,
   watchedIds,
 }: ForYouPageProps) {
   const content = useForYouContent(providerIds, sharedFilters);
+  const moodRooms = useMoodRoomsRow(providerIds, sharedFilters);
   const [showSliderTray, setShowSliderTray] = useState(false);
 
   const applyFilters = (items: ContentItem[]) => filterLanguage(filterWatched(items));
@@ -106,6 +111,9 @@ export function ForYouPage({
               watchedIds={watchedIds}
             />
           )}
+
+          {/* Mood Rooms for Tonight (Phase 4.5, For You position 2) */}
+          <MoodRoomsRow rooms={moodRooms.rooms} onSelectRoom={onSelectMoodRoom} />
 
           {/* Hidden Gems */}
           {content.hiddenGems.length > 0 && (
