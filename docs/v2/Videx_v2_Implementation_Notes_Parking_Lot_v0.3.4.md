@@ -933,6 +933,23 @@ Not urgent in April 2026 — just a calendar reminder to check setup-python's re
 
 **Status:** ⏳ Not yet incorporated (time-triggered action item)
 
+### IN-461: Review FORBIDDEN_WORDS compound-noun carve-outs after May cron
+
+**Source:** Phase 4.5 relabel audit (2026-04-21)
+
+**Detail:** The programmatic `FORBIDDEN_WORDS` check in `scripts/mood_rooms/label.py` rejects any label whose whitespace-split tokens overlap the forbidden set (`whispers, echoes, shadows, whimsical, tales, chronicles, realm, allure, reverie, dreamscape, odyssey, tapestry, unleashed, unveiled`). The brief's own approved labels include two that would be rejected by this check if the LLM generated them:
+
+1. **"Bedtime Fairy Tales"** (room #29) — contains `tales`. The brief carves it out manually on the premise that "Fairy Tales" is an established compound noun, equivalent to the brief's own exception for "Stand-Up Showcase".
+2. **"American Music & Film Docs"** (room #12) — passes whitespace token count (5 tokens via `&`) but the `&` is a conjunction, not a content word.
+
+Neither survives the relabel because the relabel script is a hand-written override path with no validation. But the next cron run (May 2026) will validate all new LLM-generated labels against `FORBIDDEN_WORDS`. Stability preservation (Jaccard ≥ 0.8) means existing clusters keep their manual labels — so this only affects **new clusters in future runs**.
+
+**Decision (locked for now):** keep the check strict. The trade of losing "Fairy Tales" and similar compound phrasings to prevent a recurrence of the six-different-"Echoes"-rooms problem is correct. The LLM will find alternative phrasings for concepts that currently use forbidden head nouns.
+
+**Action for May post-run review:** for any new cluster generated in the May run, inspect the LLM's phrasing for concepts that previously would have wanted "Fairy Tales" / "Showcase" (kids' fantasy, comedy specials, anthology formats). If the alternative phrasings read as forced or worse than the forbidden-word version, revisit this decision and introduce a compound-noun allow-list. If alternatives are clean, leave as-is and remove this item at Phase 5 close-out.
+
+**Status:** ⏳ Not yet incorporated (May 2026 review)
+
 ---
 
 ## Cross-phase notes
