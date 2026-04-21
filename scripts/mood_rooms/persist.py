@@ -21,7 +21,15 @@ from typing import Iterator
 
 import numpy as np
 import psycopg2
+import psycopg2.extras
 from psycopg2.extras import Json, execute_values
+
+
+# Teach psycopg2 how to serialise Python uuid.UUID objects as PostgreSQL
+# UUID parameters. Without this, INSERTs that pass uuid.UUID via %s fail
+# with "can't adapt type 'UUID'". register_uuid is idempotent and globally
+# scoped; calling it at module import time covers every connection.
+psycopg2.extras.register_uuid()
 
 
 CONNECT_TIMEOUT_SECONDS = 30
