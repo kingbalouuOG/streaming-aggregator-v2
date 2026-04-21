@@ -166,6 +166,11 @@ def _run_openai_probe(
     )
     genre_map = fetch_title_genres_bulk(cur, ids_by_media)
 
+    # Accumulator of successful probe labels. Threaded into each subsequent
+    # probe's call so the LLM sees what's already been named and can avoid
+    # vocabulary collisions — same mechanism the real-run loop uses.
+    probe_previous_labels: list[str] = []
+
     results: list[dict] = []
     for cid in probe_cluster_ids:
         size = int((cluster_result.labels == cid).sum())
@@ -174,12 +179,15 @@ def _run_openai_probe(
             for i in central_indices_per_cluster[cid]
         ]
         try:
-            name, description = probe_openai_label(openai_client, titles_meta)
+            label, description = probe_openai_label(
+                openai_client, titles_meta, probe_previous_labels, cid,
+            )
+            probe_previous_labels.append(label)
             results.append({
                 "cluster_id": cid,
                 "size": size,
                 "status": "ok",
-                "label": name,
+                "label": label,
                 "description": description,
             })
         except Exception as exc:  # noqa: BLE001 - probe is best-effort
@@ -396,6 +404,14 @@ def _run_pipeline(dry_run: bool) -> int:
             mood_rooms_rows = []
             mood_room_titles_rows = []
 
+            # Running accumulator of labels used so far in this run (both
+            # stable-preserved and newly generated). Threaded into each
+            # resolve_cluster_label call so the LLM can avoid vocabulary
+            # collisions across clusters processed later in the loop.
+            # Placeholders (openai_failed=True) are junk; they don't get
+            # added since they carry no useful naming signal.
+            previous_labels: list[str] = []
+
             for cid in cluster_result.cluster_ids:
                 member_mask = cluster_result.labels == cid
                 member_tmdb_ids = [
@@ -410,9 +426,13 @@ def _run_pipeline(dry_run: bool) -> int:
                     title_meta_for_labelling=central_titles_meta,
                     previous_clusters=previous,
                     client=openai_client,
+                    previous_labels=previous_labels,
+                    cluster_id=cid,
                 )
                 if resolved.openai_failed:
                     openai_failures += 1
+                else:
+                    previous_labels.append(resolved.label)
 
                 mood_rooms_rows.append((
                     resolved.id,
