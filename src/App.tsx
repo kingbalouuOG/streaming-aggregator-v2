@@ -415,8 +415,10 @@ function AppContent() {
   // Delayed scroll restore — covers AnimatePresence exit animation (0.18s)
   // The useLayoutEffect above fires before the exit animation finishes,
   // so the browser clamps scrollTop to 0 when content swaps. This re-applies after.
+  // Triggers on either selectedItem or selectedMoodRoomId clearing; whichever
+  // pushed pendingScrollRestore is the one we're returning from.
   useEffect(() => {
-    if (selectedItem || pendingScrollRestore.current === null) return;
+    if (selectedItem || selectedMoodRoomId || pendingScrollRestore.current === null) return;
     const target = pendingScrollRestore.current;
     pendingScrollRestore.current = null;
 
@@ -427,13 +429,18 @@ function AppContent() {
       }
     }, 280);
     return () => clearTimeout(timer);
-  }, [selectedItem]);
+  }, [selectedItem, selectedMoodRoomId]);
 
   // ── Android back button ──
+  // Hierarchy: DetailPage > MoodRoomPage > Calendar > non-home tab > exit.
+  // DetailPage sits above MoodRoomPage in the render chain (a detail
+  // opened from within a room should back to the room, not to For You).
   useEffect(() => {
     const listener = CapApp.addListener("backButton", () => {
       if (selectedItem) {
-        setSelectedItem(null);
+        handleDetailBack();
+      } else if (selectedMoodRoomId) {
+        handleMoodRoomBack();
       } else if (showCalendar) {
         setShowCalendar(false);
       } else if (activeTab !== "home") {
@@ -443,7 +450,7 @@ function AppContent() {
       }
     });
     return () => { listener.then((l) => l.remove()); };
-  }, [selectedItem, showCalendar, activeTab]);
+  }, [selectedItem, selectedMoodRoomId, showCalendar, activeTab]);
 
   // ── Pull-to-refresh ──
   const [pullDistance, setPullDistance] = useState(0);
