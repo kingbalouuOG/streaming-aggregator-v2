@@ -950,6 +950,22 @@ Neither survives the relabel because the relabel script is a hand-written overri
 
 **Status:** ⏳ Not yet incorporated (May 2026 review)
 
+### IN-462: For You tab-switch preservation
+
+**Source:** Phase 4.5 Gate 4 smoke (2026-04-22)
+
+**Detail:** When the user switches away from For You (Home / Browse / Watchlist / Profile tabs) and back, `<ForYouPage />` conditionally unmounts and remounts. On remount, `useForYouContent` fires its load effect and re-runs the full pipeline: Stage 1 candidate retrieval via `match_titles_by_vector` (500 titles), extended metadata fetch, Because-You-Watched anchor resolution, MoreFrom person fetch, Watchlist row, plus the new mood-rooms RPCs. Observed on Gate 4 browser smoke: 20+ fetches totalling ~1.7MB transferred every time the user returns to For You.
+
+The `poolRef` in-memory cache inside `useForYouContent` is component-scoped, so unmount destroys it. Same for `useMoodRoomsRow`'s `poolCacheRef`. The localStorage weekly-pool cache survives, but the hook still fires the thumbnail RPC on remount to keep previews fresh.
+
+Impact: noticeable latency cost (~1-2s) on every tab bounce. Predates Phase 4.5 — this is how Phase 4 shipped — but now more visible because the mood rooms RPCs add a few more fetches to the tab-remount waterfall.
+
+**Not fixed in Phase 4.5.** Accepted as pre-existing architecture; fixing properly requires hoisting the candidate pool + row data out of the component scope (a store / context / Zustand / module-level cache with session-bound TTL) so the data survives tab unmount. That's a meaningful rewrite of `useForYouContent`'s cache model, too large to land inside a Gate 4 hotfix.
+
+**Action for Phase 5:** design a session-scoped store for For You's candidate pool + row results + slider state. Mood rooms piggyback on the same pattern (their weekly pool is already persisted but the previews aren't). Target: tab-switch cost drops to zero RPCs for returns within N minutes; re-fetch only on genuinely stale data (slider change, provider change, session timeout).
+
+**Status:** ⏳ Not yet incorporated (Phase 5)
+
 ---
 
 ## Cross-phase notes
