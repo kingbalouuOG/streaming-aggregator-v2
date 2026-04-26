@@ -115,18 +115,6 @@ function ensureInitialised(): void {
 export function recordImpression(input: RecordImpressionInput): void {
   ensureInitialised();
 
-  // TEMPORARY GATE 4 INSTRUMENTATION (remove before close-out):
-  // tracing why mood_room impressions never reach card_impressions.
-  if (input.sourceSurface === 'mood_room') {
-    console.log('[batcher] recordImpression(mood_room) called', {
-      contentId: input.contentId,
-      position: input.position,
-      supabaseActive: isSupabaseActive(),
-      userId: getAuthUserId() ? '<present>' : '<NULL>',
-      bufferSizeBefore: buffer.length,
-    });
-  }
-
   if (!isSupabaseActive()) return;
 
   const userId = getAuthUserId();
@@ -140,10 +128,6 @@ export function recordImpression(input: RecordImpressionInput): void {
     session_id: getCurrentSessionId(),
     shown_at: new Date().toISOString(),
   });
-
-  if (input.sourceSurface === 'mood_room') {
-    console.log('[batcher] mood_room buffered, total buffer size:', buffer.length);
-  }
 
   // Trigger 2: buffer size threshold.
   if (buffer.length >= BUFFER_FLUSH_THRESHOLD) {
