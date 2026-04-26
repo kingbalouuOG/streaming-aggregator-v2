@@ -132,20 +132,38 @@ export function MoodRoomPage({
   // the visible set actually changes (initial load, pagination, filter
   // change) — not on every parent re-render.
   useEffect(() => {
-    if (visible.length === 0) return;
+    // TEMPORARY GATE 4 INSTRUMENTATION (remove before close-out):
+    // mood_room impressions weren't appearing in card_impressions during
+    // browser smoke. Trace the path to find the early-return.
+    console.log('[mood_room] impression effect run', {
+      visibleLen: visible.length,
+      visibleIdsKey,
+      detailLoaded: !!detail,
+      filteredLen: filtered.length,
+    });
+    if (visible.length === 0) {
+      console.log('[mood_room] visible empty, returning');
+      return;
+    }
     const sessionId = getCurrentSessionId();
+    console.log('[mood_room] sessionId:', sessionId, 'about to record', visible.length, 'impressions');
+    let recorded = 0;
+    let skippedNan = 0;
+    let skippedDedup = 0;
     visible.forEach((item, position) => {
       const { tmdbId } = parseContentItemId(item.id);
-      if (Number.isNaN(tmdbId)) return;
+      if (Number.isNaN(tmdbId)) { skippedNan++; return; }
       const key = `${tmdbId}:${sessionId}`;
-      if (impressionDedupRef.current.has(key)) return;
+      if (impressionDedupRef.current.has(key)) { skippedDedup++; return; }
       impressionDedupRef.current.add(key);
       recordImpression({
         contentId: tmdbId,
         sourceSurface: 'mood_room',
         position,
       });
+      recorded++;
     });
+    console.log('[mood_room] effect done', { recorded, skippedNan, skippedDedup });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleIdsKey]);
 
