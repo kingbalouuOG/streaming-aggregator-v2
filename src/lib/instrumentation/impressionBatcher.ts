@@ -56,6 +56,7 @@ export type ImpressionSurface =
   | 'home'
   | 'for_you'
   | 'mood_room'
+  | 'anchor_room'
   | 'browse'
   | 'watchlist'
   | 'search'
@@ -65,6 +66,14 @@ export interface RecordImpressionInput {
   contentId: number;
   sourceSurface: ImpressionSurface;
   position: number;
+  /**
+   * Surface-specific context. Persisted into `card_impressions.metadata`
+   * (jsonb, migration 033). For `anchor_room`, expected shape is
+   * `{ anchor_tmdb_id, anchor_tier, anchor_source_cluster_id,
+   *    tier_1_inside_stated_cluster }`. Null/omitted for other surfaces
+   * today; reserved for future per-impression context.
+   */
+  metadata?: Record<string, unknown> | null;
 }
 
 // Internal buffered shape — matches the card_impressions table
@@ -76,6 +85,7 @@ interface BufferedImpression {
   position: number;
   session_id: string;
   shown_at: string; // ISO8601
+  metadata: Record<string, unknown> | null;
 }
 
 // ── Module state ────────────────────────────────────────────────
@@ -127,6 +137,7 @@ export function recordImpression(input: RecordImpressionInput): void {
     position: input.position,
     session_id: getCurrentSessionId(),
     shown_at: new Date().toISOString(),
+    metadata: input.metadata ?? null,
   });
 
   // Trigger 2: buffer size threshold.

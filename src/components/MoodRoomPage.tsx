@@ -12,15 +12,54 @@ import type { FilterSets } from '@/lib/recommendations-v2/hardFilters';
 import { buildFilterSets } from '@/lib/recommendations-v2/hardFilters';
 import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import { recordImpression } from '@/lib/instrumentation/impressionBatcher';
+import type { ImpressionSurface } from '@/lib/instrumentation/impressionBatcher';
 import { getCurrentSessionId, onSessionReset } from '@/lib/instrumentation/sessionId';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
+import { buildAnchoredRoom } from '@/lib/recommendations-v2/anchoredRoom';
+import type { SelectedAnchor } from '@/lib/recommendations-v2/anchorSelection';
+import type { AnchorRoomLabel } from '@/lib/recommendations-v2/anchorRoomLabels';
 
 
 const GRID_PAGE_SIZE = 30;
+const ANCHOR_ROOM_LIMIT = 30;
+const ANCHOR_ROOM_MATCH_LIMIT = 200;
 
 
-interface MoodRoomPageProps {
+/**
+ * Discriminator for the two room sources:
+ *   - 'global': HDBSCAN-clustered mood rooms (`mood_rooms` / `mood_room_titles`,
+ *               served via `get_mood_room_detail` RPC). Reached via tap on
+ *               the global Mood Rooms surface (v2.5 browse, deferred).
+ *   - 'anchor': Title-anchored "If you love {anchor}" rooms generated on
+ *               demand from the user's taste vector + the anchor's
+ *               embedding. Reached via tap on the For You anchored mood
+ *               rooms row.
+ *
+ * Per Phase 4 Title-Anchored Mood Rooms kick-off §1.5: parameterise the
+ * detail page with a swappable detail-fetcher rather than fork it.
+ * Impression batching, scroll preservation, and pagination logic stay
+ * shared; only the data fetch and the impression source_surface differ.
+ */
+type GlobalRoomProps = {
+  kind: 'global';
   roomId: string;
+};
+
+type AnchorRoomProps = {
+  kind: 'anchor';
+  anchor: SelectedAnchor;
+  anchorTitle: string;
+  anchorYear: number | null;
+  /**
+   * LLM-generated thematic label (IN-463). When present, the detail
+   * page header shows the thematic name + description; otherwise it
+   * falls back to "If you love {anchor}". Resolved by the parent hook
+   * before navigation; null while loading or on hard failure.
+   */
+  llmLabel: AnchorRoomLabel | null;
+};
+
+type MoodRoomPageProps = (GlobalRoomProps | AnchorRoomProps) & {
   providerIds: number[];
   connectedServiceIds: ServiceId[];
   sharedFilters: FilterSets | null;
@@ -31,35 +70,43 @@ interface MoodRoomPageProps {
   onItemSelect: (item: ContentItem) => void;
   onToggleBookmark: (item: ContentItem) => void;
   onBack: () => void;
-}
+};
 
 
 /**
- * Per-room view. Reached via a card tap on the For You mood-rooms row.
+ * Per-room detail view. Reached via card tap on either the global mood
+ * rooms surface (v2.5) or the For You anchored mood rooms row.
  *
  * Layout: header (room name + description + total title count) followed
- * by a grid of titles ordered by centrality ascending (most central
- * first), filtered to titles available on the user's services.
+ * by a grid of titles. Global rooms are ordered by centrality
+ * ascending (most central first); anchored rooms by cosine distance to
+ * the anchor (most similar first). Both filtered to titles available on
+ * the user's services.
  *
- * Pagination: lazy-load in batches of 30 when the room has > 50 titles.
+ * Pagination: lazy-load in batches of 30 when the room has > 30 titles.
  *
- * Impressions: every visible title emits a card_impression with
- * source_surface='mood_room'. Same dedup pattern as ContentRow
+ * Impressions: every visible title emits a card_impressions row.
+ * source_surface is 'mood_room' for global rooms, 'anchor_room' for
+ * anchored rooms. Anchored rooms carry metadata
+ * { anchor_tmdb_id, anchor_tier, anchor_source_cluster_id,
+ *   tier_1_inside_stated_cluster } in `card_impressions.metadata`
+ * (jsonb, migration 033). Same dedup pattern as ContentRow
  * (tmdb_id + session_id), session reset clears the dedup set.
  */
-export function MoodRoomPage({
-  roomId,
-  providerIds,
-  connectedServiceIds,
-  sharedFilters,
-  filterWatched,
-  filterLanguage,
-  bookmarkedIds,
-  watchedIds,
-  onItemSelect,
-  onToggleBookmark,
-  onBack,
-}: MoodRoomPageProps) {
+export function MoodRoomPage(props: MoodRoomPageProps) {
+  const {
+    providerIds,
+    connectedServiceIds,
+    sharedFilters,
+    filterWatched,
+    filterLanguage,
+    bookmarkedIds,
+    watchedIds,
+    onItemSelect,
+    onToggleBookmark,
+    onBack,
+  } = props;
+
   const [detail, setDetail] = useState<MoodRoomDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +128,13 @@ export function MoodRoomPage({
   );
   const availableIdsSize = sharedFilters?.availableTmdbIds.size ?? 0;
 
+  // Keyed identity of the room being viewed. Used as the effect dep so
+  // we re-fetch when the user navigates between rooms (global ↔ anchor
+  // or anchor ↔ different anchor).
+  const detailKey = props.kind === 'global'
+    ? `global:${props.roomId}`
+    : `anchor:${props.anchor.mediaType}-${props.anchor.tmdbId}`;
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -95,7 +149,11 @@ export function MoodRoomPage({
             .filter(Boolean) as string[];
           filterSets = await buildFilterSets(serviceIds);
         }
-        const result = await getMoodRoomDetail(roomId, filterSets.availableTmdbIds);
+
+        const result = props.kind === 'global'
+          ? await fetchGlobalRoomDetail(props.roomId, filterSets.availableTmdbIds)
+          : await fetchAnchoredRoomDetail(props, filterSets);
+
         if (cancelled) return;
         setDetail(result);
       } catch (e) {
@@ -107,7 +165,7 @@ export function MoodRoomPage({
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, providerKey, availableIdsSize]);
+  }, [detailKey, providerKey, availableIdsSize]);
 
   useEffect(() => {
     const unsubscribe = onSessionReset(() => {
@@ -128,6 +186,14 @@ export function MoodRoomPage({
   // correctly compare.
   const visibleIdsKey = visible.map((v) => v.id).join(',');
 
+  // Compute the impression payload once per room — anchor metadata is
+  // stable across the session.
+  const sourceSurface: ImpressionSurface =
+    props.kind === 'anchor' ? 'anchor_room' : 'mood_room';
+  const impressionMetadata = props.kind === 'anchor'
+    ? buildAnchorImpressionMetadata(props.anchor)
+    : null;
+
   // Record impressions for the currently-visible window. Runs whenever
   // the visible set actually changes (initial load, pagination, filter
   // change) — not on every parent re-render.
@@ -142,8 +208,9 @@ export function MoodRoomPage({
       impressionDedupRef.current.add(key);
       recordImpression({
         contentId: tmdbId,
-        sourceSurface: 'mood_room',
+        sourceSurface,
         position,
+        metadata: impressionMetadata,
       });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -236,4 +303,58 @@ export function MoodRoomPage({
       )}
     </motion.div>
   );
+}
+
+
+// ── Detail fetchers ────────────────────────────────────────────────
+
+async function fetchGlobalRoomDetail(
+  roomId: string,
+  availableTmdbIds: Set<number>,
+): Promise<MoodRoomDetail | null> {
+  return getMoodRoomDetail(roomId, availableTmdbIds);
+}
+
+async function fetchAnchoredRoomDetail(
+  props: AnchorRoomProps,
+  filterSets: FilterSets,
+): Promise<MoodRoomDetail | null> {
+  const result = await buildAnchoredRoom({
+    anchorTmdbId: props.anchor.tmdbId,
+    anchorMediaType: props.anchor.mediaType,
+    filterSets,
+    limit: ANCHOR_ROOM_LIMIT,
+    matchLimit: ANCHOR_ROOM_MATCH_LIMIT,
+    excludeWatchlist: false,
+  });
+
+  if (result.items.length === 0) return null;
+
+  // Prefer the LLM thematic label if the parent hook resolved it before
+  // navigation. Falls back to the v1 literal pattern.
+  const label = props.llmLabel?.label ?? `If you love ${props.anchorTitle}`;
+  const description = props.llmLabel?.description ?? null;
+
+  return {
+    label,
+    description,
+    totalTitleCount: result.filteredCount,
+    items: result.items,
+  };
+}
+
+
+function buildAnchorImpressionMetadata(
+  anchor: SelectedAnchor,
+): Record<string, unknown> {
+  // Snake_case keys to match the SQL convention; Postgres jsonb is
+  // case-sensitive and analytics queries on `metadata->>'anchor_tier'`
+  // will read these as written.
+  return {
+    anchor_tmdb_id: anchor.tmdbId,
+    anchor_media_type: anchor.mediaType,
+    anchor_tier: anchor.tier,
+    anchor_source_cluster_id: anchor.sourceClusterId,
+    tier_1_inside_stated_cluster: anchor.insideStatedCluster,
+  };
 }

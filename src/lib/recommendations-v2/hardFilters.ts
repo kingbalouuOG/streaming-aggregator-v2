@@ -9,6 +9,7 @@ import { supabase } from '../supabase';
 import { getAuthUserId, isSupabaseActive } from '../storage';
 import { getWatchlist } from '../storage/watchlist';
 import { getDismissedIds } from '../storage/recommendations';
+import type { MatchedTitle } from './types';
 
 /**
  * Get IDs of titles the user has thumbs-downed.
@@ -58,30 +59,75 @@ export async function getWatchlistIds(): Promise<Set<string>> {
  * results, with 20 parallel page fetches instead of 42 sequential.
  * PostgREST caps at 1000 rows per request regardless of .limit(),
  * so parallel pagination is necessary.
+ *
+ * Cold-start dominates For You's time-to-first-render — 20 paginated
+ * RPCs over residential WAN was the 5s spinner Joe saw on first open.
+ * We cache the resolved Set in localStorage keyed on the sorted service
+ * id list with a 10-minute TTL. Service changes invalidate via key
+ * change (different sorted list). On cache hit, this function returns
+ * synchronously-ish from JSON parse, no RPC.
  */
+const AVAILABLE_IDS_CACHE_PREFIX = 'videx.available_tmdb_ids.v1';
+const AVAILABLE_IDS_TTL_MS = 10 * 60 * 1000;
+
+interface AvailableIdsCacheEntry {
+  ids: number[];
+  computedAt: string;
+}
+
+function buildAvailableIdsCacheKey(serviceIds: string[]): string {
+  const sorted = [...serviceIds].sort().join(',');
+  return `${AVAILABLE_IDS_CACHE_PREFIX}.${sorted}`;
+}
+
+function readAvailableIdsCache(key: string): Set<number> | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AvailableIdsCacheEntry;
+    if (!Array.isArray(parsed.ids) || typeof parsed.computedAt !== 'string') return null;
+    const age = Date.now() - new Date(parsed.computedAt).getTime();
+    if (age > AVAILABLE_IDS_TTL_MS) return null;
+    return new Set(parsed.ids);
+  } catch {
+    return null;
+  }
+}
+
+function writeAvailableIdsCache(key: string, ids: Set<number>): void {
+  try {
+    const entry: AvailableIdsCacheEntry = {
+      ids: Array.from(ids),
+      computedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(key, JSON.stringify(entry));
+  } catch {
+    // Quota exhausted or storage disabled — drop silently.
+  }
+}
+
 export async function getAvailableTmdbIds(
   serviceIds: string[],
 ): Promise<Set<number>> {
   if (serviceIds.length === 0) return new Set();
 
+  const cacheKey = buildAvailableIdsCacheKey(serviceIds);
+  const cached = readAvailableIdsCache(cacheKey);
+  if (cached) return cached;
+
   try {
-    const PAGE_COUNT = 20;
-    const PAGE_SIZE = 1000;
+    // Migration 035 changed the RPC return shape from TABLE → jsonb
+    // (single-row JSONB array). One round trip instead of 20 paginated
+    // calls; saves ~1.5-2s on cold start over WAN.
+    const { data, error } = await supabase.rpc('get_available_tmdb_ids', {
+      service_ids: serviceIds,
+    });
+    if (error || !data) return new Set();
 
-    const pages = Array.from({ length: PAGE_COUNT }, (_, i) =>
-      supabase.rpc('get_available_tmdb_ids', { service_ids: serviceIds })
-        .range(i * PAGE_SIZE, (i + 1) * PAGE_SIZE - 1)
-    );
+    const ids = Array.isArray(data) ? data : [];
+    const allIds = new Set<number>(ids as number[]);
 
-    const results = await Promise.all(pages);
-    const allIds = new Set<number>();
-
-    for (const r of results) {
-      for (const row of ((r.data as any[]) || [])) {
-        allIds.add(row.tmdb_id as number);
-      }
-    }
-
+    if (allIds.size > 0) writeAvailableIdsCache(cacheKey, allIds);
     return allIds;
   } catch {
     return new Set();
@@ -97,6 +143,13 @@ export interface FilterSets {
 
 /**
  * Build all filter sets in parallel for the ranker.
+ *
+ * NOTE: signature INTENTIONALLY diverges from the Edge mirror at
+ * supabase/functions/_shared/recommendations-v2/hardFilters.ts which
+ * takes `(client, scope, serviceIds)` because it can't use the Supabase
+ * client singleton or the localStorage-backed getAuthUserId(). Drift CI
+ * catches file-level drift; this comment exists so the next person to
+ * "fix the mirror" doesn't break the divergence.
  */
 export async function buildFilterSets(serviceIds: string[]): Promise<FilterSets> {
   const [dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds] = await Promise.all([
@@ -110,3 +163,38 @@ export async function buildFilterSets(serviceIds: string[]): Promise<FilterSets>
 }
 
 export { getDismissedIds };
+
+
+/**
+ * Apply hard filters to a list of matched titles for an anchored row
+ * (Because You Watched, anchored mood rooms, future detail-page rooms).
+ *
+ * Differs from the pipeline's internal `applyHardFilters` only in that
+ * watchlist exclusion is opt-out: anchored mood rooms keep watchlist
+ * titles in the room (the row is "this neighbourhood as a place"; a
+ * shortlisted title belongs alongside its neighbours), while Because
+ * You Watched excludes them (the row is "more like X you haven't
+ * shortlisted yet").
+ *
+ * Availability filtering is skipped when `availableTmdbIds` is empty
+ * (treated as "no service constraint" rather than "no titles available")
+ * — same convention as the pipeline.
+ */
+export function applyAnchorHardFilters(
+  titles: MatchedTitle[],
+  filterSets: FilterSets,
+  options: { excludeWatchlist?: boolean } = {},
+): MatchedTitle[] {
+  const { excludeWatchlist = true } = options;
+  return titles.filter((t) => {
+    const contentKey = `${t.media_type}-${t.tmdb_id}`;
+    if (
+      filterSets.availableTmdbIds.size > 0
+      && !filterSets.availableTmdbIds.has(t.tmdb_id)
+    ) return false;
+    if (filterSets.dismissedIds.has(contentKey)) return false;
+    if (filterSets.thumbsDownIds.has(contentKey)) return false;
+    if (excludeWatchlist && filterSets.watchlistIds.has(contentKey)) return false;
+    return true;
+  });
+}

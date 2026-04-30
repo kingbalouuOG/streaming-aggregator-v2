@@ -1,0 +1,225 @@
+{
+  "main": {
+    "id": "a095bd9eb2c1d5fc",
+    "type": "split",
+    "children": [
+      {
+        "id": "ecce82ba62e2f0cf",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "6943266bc3f00758",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "wiki/entities/codebase/components.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "components"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "645c2f111c90d222",
+    "type": "split",
+    "children": [
+      {
+        "id": "953d39cb3fd3382f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "3b2084a4d4f4edc6",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "38efb202268ae507",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "5096754d9ab2331c",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "b5b12fad468a984f",
+    "type": "split",
+    "children": [
+      {
+        "id": "b1aa05405037a2bd",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "5cceb050304d805c",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "wiki/entities/codebase/components.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for components"
+            }
+          },
+          {
+            "id": "27429fc958e378dc",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "wiki/entities/codebase/components.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from components"
+            }
+          },
+          {
+            "id": "64266a9e8b1ad6ff",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "859a45dd5d6e479e",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "c9113eaae0936a71",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "wiki/entities/codebase/components.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of components"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "6943266bc3f00758",
+  "lastOpenFiles": [
+    "wiki/concepts/operations/solutions/react-numeric-falsy-renders-zero.md",
+    "wiki/entities/codebase/module-map.md",
+    "wiki/entities/codebase/components.md",
+    "wiki/registers/next-steps.md",
+    "wiki/registers/parking-lot.md",
+    "wiki/registers/pre-launch-blockers.md",
+    "wiki/registers/acceptance-gates.md",
+    "wiki/concepts/architecture/mood-rooms.md",
+    "wiki/registers/README.md",
+    "wiki/registers/cheatsheet.md",
+    "wiki/registers/deferred-items.md",
+    "wiki/registers/open-questions.md",
+    "wiki/registers",
+    "wiki/sources/raw-readme.md",
+    "wiki/sources/usp-and-strategy-summary.md",
+    "wiki/concepts/operations/strategy-version-log.md",
+    "wiki/concepts/operations/eval-harness.md",
+    "wiki/concepts/operations/risks-register.md",
+    "wiki/sources/reference.md",
+    "wiki/concepts/forward-planning/v3-conversational-discovery.md",
+    "wiki/concepts/forward-planning/monetisation-strategy.md",
+    "wiki/sources/forward-planning.md",
+    "wiki/concepts/product/tone-and-voice-guide.md",
+    "wiki/concepts/product/privacy-and-gdpr.md",
+    "wiki/concepts/product/user-personas.md",
+    "wiki/concepts/product/mission-and-pitch.md",
+    "wiki/sources/product.md",
+    "wiki/concepts/operations/solutions",
+    "sources",
+    "wiki/concepts/forward-planning",
+    "wiki/concepts/product",
+    "wiki/concepts/evaluations",
+    "wiki/concepts/decisions",
+    "wiki/concepts/operations",
+    "wiki/concepts/domain",
+    "wiki/concepts/techniques"
+  ]
+}

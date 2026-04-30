@@ -36,6 +36,12 @@ export interface TasteProfileV2 {
   interactionCount: number;
   bootstrappedFrom: BootstrapSource | null;
   sliders: SliderState;
+  /**
+   * Onboarding cluster picks (Step 4). Used by anchored mood rooms (Tier 2
+   * representative ranking) and by the Profile "Your Taste" summary. Empty
+   * array means the user hasn't completed Step 4 of onboarding.
+   */
+  selectedClusters: string[];
 }
 
 /** Interaction weight table — maps event_type to taste vector weight */

@@ -11,7 +11,8 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchCandidatePool, scoreCandidates, buildRowFromPool, fetchAnchorNeighbours } from '@/lib/recommendations-v2/ranker';
+import { fetchCandidatePool, scoreCandidates, buildRowFromPool } from '@/lib/recommendations-v2/ranker';
+import { buildAnchoredRoom } from '@/lib/recommendations-v2/anchoredRoom';
 import { buildFilterSets, type FilterSets } from '@/lib/recommendations-v2/hardFilters';
 import { getV2TasteProfile } from '@/lib/taste-v2/tasteProfileV2';
 import { getSliderState } from '@/lib/taste-v2/tasteProfileV2';
@@ -22,6 +23,8 @@ import { getWatchlist } from '@/lib/storage/watchlist';
 import { getComfortZoneRowCount, HIDDEN_GEMS_FILTERS } from '@/lib/recommendations-v2/weights';
 import { titleRowToContentItem } from '@/lib/recommendations-v2/titleAdapter';
 import { watchlistItemToContentItem } from '@/lib/adapters/contentAdapter';
+import { tryRenderForYouEdge } from '@/lib/recommendations-v2/edgeRender';
+import type { AnchorRoomPreview } from '@/hooks/useAnchorMoodRooms';
 import type { ContentItem } from '@/components/ContentCard';
 import type { SliderState } from '@/lib/taste-v2/types';
 import type { CandidatePool, ScoredCandidate, ExtendedTitleRow } from '@/lib/recommendations-v2/types';
@@ -46,6 +49,20 @@ export interface ForYouContentResult {
   moreFromPerson: MoreFromPersonRow | null;
   fromYourWatchlist: ContentItem[];
   sliders: SliderState | null;
+  /**
+   * The shared candidate pool from `fetchCandidatePool`. Exposed so the
+   * anchored mood rooms hook can use it for the Tier 3 fallback in
+   * `selectAnchors` without firing a second 500-candidate RPC. Null
+   * before the first load completes.
+   */
+  pool: CandidatePool | null;
+  /**
+   * Anchor rooms pre-built by the render-foryou-rows Edge Function (IN-466).
+   * When populated, useAnchorMoodRooms skips its anchor selection +
+   * per-anchor room generation and renders these directly. Null on the
+   * client-fallback path; the existing useAnchorMoodRooms flow runs.
+   */
+  prebuiltAnchorRooms: AnchorRoomPreview[] | null;
   loading: boolean;
   reload: () => Promise<void>;
   rerank: (sliders: SliderState) => void;
@@ -63,6 +80,10 @@ export function useForYouContent(
   const [becauseYouWatched, setBecauseYouWatched] = useState<BecauseYouWatchedRow[]>([]);
   const [moreFromPerson, setMoreFromPerson] = useState<MoreFromPersonRow | null>(null);
   const [fromYourWatchlist, setFromYourWatchlist] = useState<ContentItem[]>([]);
+  // Pool is exposed to consumers (anchored mood rooms hook) so we keep
+  // it in state, not just a ref. Updated alongside poolRef inside load().
+  const [pool, setPool] = useState<CandidatePool | null>(null);
+  const [prebuiltAnchorRooms, setPrebuiltAnchorRooms] = useState<AnchorRoomPreview[] | null>(null);
 
   const poolRef = useRef<CandidatePool | null>(null);
   const scoredRef = useRef<ScoredCandidate[] | null>(null);
@@ -94,21 +115,36 @@ export function useForYouContent(
     gemItems.forEach(item => usedIds.add(item.id));
     setHiddenGems(gemItems);
 
-    // 3. Outside Your Usual: bottom 30% cosine but above-median final score + quality
-    // Use nth-element selection instead of full sort for O(n) threshold computation
-    const cosine30thPctThreshold = nthSmallest(scored.map(c => c.scores.taste), Math.floor(scored.length * 0.3));
-    const medianFinal = nthSmallest(scored.map(c => c.finalScore), Math.floor(scored.length * 0.5));
-
-    const outsideCandidates = scored.filter(c =>
-      c.scores.taste <= cosine30thPctThreshold &&
-      c.finalScore >= medianFinal &&
-      (c.meta.imdb_rating == null || c.meta.imdb_rating >= 7.0)
+    // 3. Outside Your Usual: lower-taste candidates, intentionally varied.
+    // Three knobs that produced the empty-row complaints before:
+    //   (a) Cosine aperture widens 40%-80% with Comfort Zone (was 30%-60%).
+    //       At balanced slider, half the pool is in scope.
+    //   (b) IMDb >= 7.0 floor only applies if it leaves enough candidates.
+    //       When the floor would empty the row, fall back to the unfiltered
+    //       under-cosine set — quality matters but not at the cost of "the
+    //       row that's the whole reason this exists".
+    //   (c) maxPerGenre = 4 (was 2). Variety IS this row's purpose; double-
+    //       enforcing strict genre-spread on top of bottom-cosine selection
+    //       was producing 1-4 titles where 10 were configured.
+    const outsideCount = getComfortZoneRowCount(currentSliders.comfortZone);
+    const cosineAperture = 0.40 + currentSliders.comfortZone * 0.40;
+    const cosineThreshold = nthSmallest(
+      scored.map(c => c.scores.taste),
+      Math.max(outsideCount * 4, Math.floor(scored.length * cosineAperture)),
     );
 
-    const outsideCount = getComfortZoneRowCount(currentSliders.comfortZone);
+    const underThreshold = scored.filter(c => c.scores.taste <= cosineThreshold);
+    const withQualityFloor = underThreshold.filter(c =>
+      c.meta.imdb_rating == null || c.meta.imdb_rating >= 7.0
+    );
+    const outsideCandidates = withQualityFloor.length >= outsideCount
+      ? withQualityFloor
+      : underThreshold;
+
     const outsideItems = buildRowFromPool(outsideCandidates, currentSliders, {
       limit: outsideCount,
       excludeIds: usedIds,
+      maxPerGenre: 4,
     });
     setOutsideYourUsual(outsideItems);
   }, []);
@@ -125,9 +161,43 @@ export function useForYouContent(
   }, [buildRows]);
 
   // ── Main load function ──
+  // IN-466: try the render-foryou-rows Edge Function first. On any failure
+  // (timeout > 1.5s, 5xx, malformed JSON), fall through to the existing
+  // client-side pipeline. The fallback contract is the resilience layer
+  // that makes shipping the Edge path safe.
   const load = useCallback(async () => {
     if (!providerStr) { setLoading(false); return; }
     setLoading(true);
+
+    // ── Edge path ──
+    const edge = await tryRenderForYouEdge(providerIds);
+    if (edge) {
+      const anchorMax = edge.perAnchorLatencyMs.length > 0 ? Math.max(...edge.perAnchorLatencyMs) : 0;
+      console.log(
+        `[useForYouContent] edge: wall=${edge.wallclockMs}ms server=${edge.renderMs}ms `
+        + `anchorMax=${anchorMax}ms rec=${edge.recommendedForYou.length} `
+        + `gems=${edge.hiddenGems.length} outside=${edge.outsideYourUsual.length} `
+        + `byw=${edge.becauseYouWatched.length} mfp=${edge.moreFromPerson ? 1 : 0} `
+        + `wl=${edge.fromYourWatchlist.length} rooms=${edge.anchorRooms.length}`,
+      );
+      setSliders(edge.sliders);
+      setRecommendedForYou(edge.recommendedForYou);
+      setHiddenGems(edge.hiddenGems);
+      setOutsideYourUsual(edge.outsideYourUsual);
+      setBecauseYouWatched(edge.becauseYouWatched);
+      setMoreFromPerson(edge.moreFromPerson);
+      setFromYourWatchlist(edge.fromYourWatchlist);
+      setPrebuiltAnchorRooms(edge.anchorRooms);
+      poolRef.current = edge.pool;
+      setPool(edge.pool);
+      setLoading(false);
+      return;
+    }
+
+    // ── Client fallback path ──
+    // Anchor rooms hook needs to do its own work since the edge didn't
+    // pre-build them.
+    setPrebuiltAnchorRooms(null);
 
     try {
       // Fetch taste profile + slider state in parallel
@@ -163,6 +233,7 @@ export function useForYouContent(
         surface: 'foryou',
       });
       poolRef.current = pool;
+      setPool(pool);
 
       const scored = scoreCandidates(pool, sliderState, 'foryou');
       scoredRef.current = scored;
@@ -199,6 +270,8 @@ export function useForYouContent(
     moreFromPerson,
     fromYourWatchlist,
     sliders,
+    pool,
+    prebuiltAnchorRooms,
     loading,
     reload: load,
     rerank,
@@ -290,12 +363,14 @@ async function fetchBecauseYouWatched(
           ? titleRowToContentItem(anchorMeta)
           : { id: anchorKey, title: `Title ${anchor.content_id}`, image: '', services: [] };
 
-        const neighbours = await fetchAnchorNeighbours(
-          anchor.content_id,
-          anchor.media_type,
+        const { items: neighbours } = await buildAnchoredRoom({
+          anchorTmdbId: anchor.content_id,
+          anchorMediaType: anchor.media_type,
           filterSets,
-          12,
-        );
+          limit: 12,
+          matchLimit: 60,
+          excludeWatchlist: true,
+        });
 
         return neighbours.length > 0 ? { anchor: anchorItem, items: neighbours } : null;
       }),

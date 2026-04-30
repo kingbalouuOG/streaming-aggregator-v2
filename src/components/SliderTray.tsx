@@ -137,7 +137,7 @@ export function SliderTray({ isOpen, onClose, onSlidersChange, initialSliders }:
             </div>
 
             {/* Slider content — touch-action ensures slider drag isn't intercepted */}
-            <div className="flex-1 overflow-y-auto px-5 pb-6 no-scrollbar" style={{ touchAction: 'pan-y' }}>
+            <div className="flex-1 overflow-y-auto px-5 pb-6 no-scrollbar safe-bottom" style={{ touchAction: 'pan-y' }}>
               <p className="text-muted-foreground text-[13px] mb-5">
                 Changes take effect immediately.
               </p>

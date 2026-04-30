@@ -1,8 +1,12 @@
 # Videx v2 — Homepage & For You Surface Composition Hypothesis
 
-**Status:** v0.3 — Minor updates reflecting locked decisions from strategy review rounds 1-3
-**Version:** 0.3
+**Status:** v0.4 — Phase 4.5 redirect: For You "Mood Rooms for Tonight" row flips from global cosine ranking to title-anchored generation
+**Version:** 0.4
 **Purpose:** Define the composition logic, row types, ordering rules, and cold-start behaviour for the two primary content surfaces in v2: the Home surface (discovery-led) and the For You surface (personalised-led).
+
+**Changes from v0.3:**
+- §3.2 row 3 (Mood Rooms for Tonight): rewritten to describe the title-anchored ranking model. Five rooms per row, weekly refresh, named "If you love {anchor}" in v1. Five anchors picked per user from a tiered ladder; rooms generated on demand around each anchor. See Strategy v1.7 §5.2.1 for the full anchor selection logic. Underlying global rooms infrastructure (HDBSCAN clustering, monthly cron, `mood_rooms`/`mood_room_titles` tables) unchanged — those rooms back the deferred v2.5 dedicated browse surface and Phase 7 conversational discovery, not the For You row.
+- §3.6 (deferred v2.5 dedicated browse surface): confirmed this still uses the global HDBSCAN rooms, not anchored variants. The two surfaces are deliberately different: For You is fast personalised tonight-fit (anchored); v2.5 browse is slower exploration of the full clustered catalogue (global).
 
 **Changes from v0.2:**
 - **Section 3.2 (slider panel):** "Depth vs breadth" slider renamed to "Focused ↔ Varied" to reflect what the mechanism actually does. Videx has no episode-level progress tracking, so the "Finish what I start" framing was misleading.
@@ -191,18 +195,23 @@ In approximate order from top to bottom:
 - **Selection logic:** Stage 1 retrieval returns top 500 candidates; Stage 2 ranks them; top ~30 are shown. All sliders affect this row.
 - **Why row 1:** this is the headline feature of For You. If a user only looks at one row, this is the one that must be good.
 
-**2. Mood Rooms for Tonight (3–5 rooms, horizontal scroll of room cards)**
-- A selection of mood rooms that refreshes **weekly**, with shuffled order within the week so it feels fresh across sessions
-- Each room card shows: room name, short description, 3–4 preview thumbnails from room content
-- Tapping a room card opens the full room view (a dedicated sub-page or modal showing all titles in the room)
-- **Selection logic:** pick 3–5 mood rooms from the full set based on (time-of-day fit × taste fit × room variety). The full set refreshes weekly on a predictable schedule (e.g., every Monday), with different rooms featured each week to let users discover the full catalogue of rooms over time. Within the week, the order shuffles between sessions so the same user sees a slightly different arrangement each time they open For You.
-- **Why weekly, not daily:** this matches Spotify's Discover Weekly cadence. Weekly refresh is predictable, anticipated, and creates a "something new to explore" moment. Daily churn feels unpredictable and forces users to re-learn what's available each day. Shuffled ordering within the week maintains session-to-session freshness without the disorienting effect of daily room turnover.
-- **Mood room selection examples (week of 15 April):**
-  - Sunday afternoon set: "Comfort-watch British sitcoms," "Slow-burn character dramas," "Family-friendly adventures"
-  - Friday night set: "Cerebral sci-fi," "Neo-noir crime," "Cult comedies"
-  - Tuesday evening default: "Critically acclaimed recent TV," "Underrated prestige drama," "Hidden gems in your genres"
+**2. Mood Rooms for Tonight (5 rooms, horizontal scroll of room cards) — title-anchored**
+
+Phase 4.5 redirect (April 2026). The row no longer ranks the global HDBSCAN-clustered rooms by cosine distance to the user's taste vector. Instead, it generates one room per anchor around 5 user-specific anchor titles per weekly refresh.
+
+- Each room is named **"If you love {anchor}"** in v1 (LLM-generated thematic labels deferred to IN-463 Phase 4.5 fast-follow).
+- Each room card shows the anchor title under a soft "If you love" prefix, plus 4 preview thumbnails from the room contents.
+- Tapping a room card opens the full room view (`<MoodRoomPage>` with `kind='anchor'`) — 30 titles ordered by cosine distance from the anchor.
+- **Anchor selection ladder** (`src/lib/recommendations-v2/anchorSelection.ts`):
+  - **Tier 1 — Behavioural-positive intersection.** `thumbs_up ∩ (watched ∪ watchlist_add)` over the last 60 days, with three guards: (G1) combined-signal requirement; (G2) similarity gate `cos_sim(taste, anchor) >= 0.55`; (G3) cluster-coherence gate, active only when `taste_vector_interaction_count <= 5`, requires the anchor to sit within `cosine_distance <= 0.40` of at least one user-selected cluster centroid. Above 5 interactions, behavioural signal earns precedence and the guard is bypassed.
+  - **Tier 2 — Cluster representative titles** ranked by similarity to the user's taste vector. One per cluster (top-similarity rep wins).
+  - **Tier 3 — Top-finalScore fallback** from the existing `fetchCandidatePool` + `scoreCandidates` pipeline, gated by `finalScore > 0.65`. Only fires if Tier 1+2 yield < 5 anchors. Below the threshold, accept fewer than 5 anchors rather than ship low-confidence rooms.
+- **Cross-tier collision rule.** Each Tier 1 anchor "occupies" any cluster whose centroid sits within 0.40 cosine-distance; Tier 2 picks skip occupied clusters. Prevents a Tier 1 horror anchor from coexisting with a Tier 2 horror cluster anchor in the same row.
+- **Weekly refresh.** Anchor selections cached in localStorage by `(userId, weekBucket)`. `featuredLastWeek` exclusion ensures the row feels fresh week-on-week.
+- **No persistence.** Rooms are derived on demand from `(anchorTmdbIds, userId)`. No `user_anchor_rooms` table.
 - **Why row 2:** mood rooms are the Pillar 1 USP. They need prime positioning on For You.
-- **Cross-reference:** mood room clustering is generated by a monthly HDBSCAN job running as Python via GitHub Actions cron. See Recommendation Engine Strategy v1.6 Section 5.2 for the full execution model (psycopg2 direct connection, OpenAI-based two-pass labelling, stability-preserving re-clustering). The row on For You consumes from the `mood_rooms` and `mood_room_titles` tables; it does not run any clustering itself.
+- **Why anchored, not global.** The April 2026 diagnostic (`docs/v2/Mood_Rooms_Ranking_Quality_Investigation_2026_04_22.md`) and probe (`docs/v2/Mood_Rooms_Anchored_Probe_2026_04_26.md`) showed that global cosine ranking buries niche cluster picks beneath tonally-adjacent dense clusters. Anchored generation surfaces the user's stated and behavioural signals cleanly while keeping room-level coherence (one anchor per room is structurally easier than averaging picks).
+- **Global rooms infrastructure unchanged.** Monthly HDBSCAN cron continues; `mood_rooms`/`mood_room_titles` tables persist for v2.5 browse + Phase 7 conversational discovery. See Strategy v1.7 §5.2.1.
 
 **3. Hidden Gems (10–30 titles, horizontal scroll)**
 - Low-popularity, high-taste-fit titles from user's services
@@ -310,13 +319,17 @@ Within a given week's rotation, the specific rooms *displayed in what order* can
 
 ### 3.6 Dedicated mood rooms browse surface — deferred to v2.5
 
-The "Mood Rooms for Tonight" row on For You shows a rotating selection of 3–5 rooms per week.
+The "Mood Rooms for Tonight" row on For You shows 5 anchored rooms per week (Phase 4.5 redirect, April 2026).
 
-If we build a dedicated mood rooms browse surface (where users can see all 30–60 rooms as a grid), that surface would be a separate destination — accessed from within the For You row via "See all rooms" or from main navigation. That's a browse experience, not a feed.
+If we build a dedicated mood rooms browse surface (where users can see all 60+ globally-clustered rooms as a grid), that surface would be a separate destination — accessed from within the For You row via "See all rooms" or from main navigation. That's a browse experience, not a feed.
 
-For v2 MVP, we ship without the dedicated full-mood-rooms surface. Only the "Mood Rooms for Tonight" row on For You exists. The full browse surface is a **v2.5 addition** once we see how users engage with the weekly-rotated row.
+**The v2.5 browse surface uses the global HDBSCAN-clustered rooms, not the anchored rooms.** The two surfaces are deliberately different:
+- **For You** = personalised tonight-fit, anchored on user titles. 5 rooms per week. "If you love {anchor}". Generated on demand.
+- **v2.5 browse** = exploration of the full clustered catalogue. ~60 globally-clustered, LLM-labelled rooms. A grid, not a feed.
 
-This keeps v2 scope manageable and lets us learn whether users want to explore the full room catalogue or are satisfied with the curated weekly selection.
+The anchored row's underlying primitive (`buildAnchoredRoom`) is per-user and ephemeral; it does not enumerate over a fixed set of rooms and would not produce a sensible browse grid. The global rooms (with stable IDs, names, and large title counts) are the right substrate for browse — which is exactly why the Phase 4.5 redirect kept the global infrastructure alive.
+
+For v2 MVP, we ship without the dedicated full-mood-rooms surface. Only the For You row exists. The full browse surface is a **v2.5 addition** once we see how users engage with the weekly-rotated anchored row.
 
 ---
 

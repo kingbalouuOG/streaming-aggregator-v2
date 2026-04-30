@@ -11,7 +11,8 @@
  *
  * The pipeline is designed for a shared candidate pool: one RPC call fetches
  * 500 candidates that serve multiple For You rows. Per-anchor retrievals
- * (Because You Watched) use fetchAnchorNeighbours() with separate calls.
+ * (Because You Watched, anchored mood rooms) use buildAnchoredRoom() from
+ * ./anchoredRoom.
  */
 
 import { supabase } from '../supabase';
@@ -97,73 +98,6 @@ export async function fetchCandidatePool(
   return { matched: filtered, metadata, fetchedAt: Date.now() };
 }
 
-/**
- * Fetch neighbours of an anchor title for "Because You Watched" rows.
- * Uses the anchor title's embedding (not the user's taste vector).
- */
-export async function fetchAnchorNeighbours(
-  anchorTmdbId: number,
-  anchorMediaType: 'movie' | 'tv',
-  filterSets: FilterSets,
-  limit: number = 15,
-): Promise<ContentItem[]> {
-  // Fetch the anchor title's embedding
-  const { data: anchorRows, error: anchorError } = await supabase
-    .from('titles')
-    .select('embedding')
-    .eq('tmdb_id', anchorTmdbId)
-    .eq('media_type', anchorMediaType)
-    .limit(1);
-
-  if (anchorError || !anchorRows?.length) {
-    console.error('[Pipeline] Anchor embedding fetch failed:', anchorError?.message);
-    return [];
-  }
-
-  // PostgREST returns pgvector columns as serialised strings.
-  // Locked pattern from Phase 1 wire format spike: JSON.parse(row.embedding as string)
-  const embeddingStr = (anchorRows[0] as { embedding: string | null }).embedding;
-  if (!embeddingStr) return [];
-
-  let embedding: number[];
-  try {
-    embedding = JSON.parse(embeddingStr);
-  } catch {
-    console.error('[Pipeline] Failed to parse anchor embedding');
-    return [];
-  }
-
-  // Query for similar titles using the anchor's embedding
-  const vectorStr = `[${embedding.join(',')}]`;
-  const { data: matched, error: rpcError } = await supabase
-    .rpc('match_titles_by_vector', {
-      query_vector: vectorStr,
-      match_limit: limit * 5, // overfetch for hard filtering
-    });
-
-  if (rpcError || !matched) {
-    console.error('[Pipeline] Anchor RPC failed:', rpcError?.message);
-    return [];
-  }
-
-  const matchedTitles = (matched as MatchedTitle[]).filter(
-    t => !(t.tmdb_id === anchorTmdbId && t.media_type === anchorMediaType),
-  );
-
-  const filtered = applyHardFilters(matchedTitles, filterSets);
-  const topIds = filtered.slice(0, limit).map(t => t.tmdb_id);
-  if (topIds.length === 0) return [];
-
-  const metadata = await fetchExtendedMetadata(topIds);
-
-  return filtered.slice(0, limit).map(match => {
-    const meta = metadata.get(`${match.media_type}-${match.tmdb_id}`);
-    if (!meta) return null;
-    const similarity = distanceToSimilarity(match.distance);
-    return titleRowToContentItem(meta, scoreToMatchPercentage(similarity));
-  }).filter((item): item is ContentItem => item !== null);
-}
-
 // ── Stage 2: Weighted Scoring ──
 
 /**
@@ -229,7 +163,7 @@ export function buildRowFromPool(
   config: RowConfig = {},
   getServices?: (tmdbId: number, mediaType: string) => string[],
 ): ContentItem[] {
-  const { limit = 20, excludeIds } = config;
+  const { limit = 20, excludeIds, maxPerGenre = DEFAULT_MAX_PER_GENRE } = config;
 
   let candidates = scored;
 
@@ -244,7 +178,7 @@ export function buildRowFromPool(
 
   // Stage 2b: Genre spread diversity
   const genreWindow = getVarietyGenreWindow(sliders.variety);
-  candidates = applyGenreSpread(candidates, genreWindow, DEFAULT_MAX_PER_GENRE, limit);
+  candidates = applyGenreSpread(candidates, genreWindow, maxPerGenre, limit);
 
   // Stage 2c: Service de-clustering
   if (getServices) {
