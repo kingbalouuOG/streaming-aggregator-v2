@@ -253,13 +253,15 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
         {/* Rating badges + thumbs */}
         <div className="flex items-center justify-between gap-2.5 mb-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center gap-1.5 bg-secondary rounded-lg px-2.5 py-1.5">
-              <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
-              <span className="text-foreground text-[13px]" style={{ fontWeight: 600 }}>
-                {detail.imdbRating.toFixed(1)}
-              </span>
-              <span className="text-muted-foreground text-[11px]">IMDb</span>
-            </div>
+            {detail.imdbRating > 0 && (
+              <div className="flex items-center gap-1.5 bg-secondary rounded-lg px-2.5 py-1.5">
+                <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                <span className="text-foreground text-[13px]" style={{ fontWeight: 600 }}>
+                  {detail.imdbRating.toFixed(1)}
+                </span>
+                <span className="text-muted-foreground text-[11px]">IMDb</span>
+              </div>
+            )}
 
             {detail.rottenTomatoes > 0 && (
               <div className="flex items-center gap-1.5 bg-secondary rounded-lg px-2.5 py-1.5">

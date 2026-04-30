@@ -127,7 +127,7 @@ export function ContentCard({ item, variant = "default", onSelect, bookmarked = 
 
       {/* Title + meta */}
       <div className="absolute bottom-0 left-0 right-0 p-3">
-        {item.rating && (
+        {item.rating != null && item.rating > 0 && (
           <div className="flex items-center gap-1 mb-1">
             <span className="text-yellow-400 text-[11px]">&#9733;</span>
             <span className="text-white/80 text-[11px]">{item.rating.toFixed(1)}</span>
