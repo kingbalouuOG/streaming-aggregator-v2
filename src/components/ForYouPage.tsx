@@ -4,21 +4,29 @@
  * Renders up to 8 rows of heavily personalised, slider-tunable content:
  *   1. Slider entry point ("Tune your recommendations")
  *   2. Recommended For You
- *   3. [Mood Rooms placeholder — not rendered in Phase 4]
+ *   3. Mood Rooms for Tonight (title-anchored — Strategy v1.7 §5.3)
  *   4. Hidden Gems
  *   5. Because You Watched [Title 1] (conditional)
  *   6. Because You Watched [Title 2] (conditional)
  *   7. More From [Director/Actor] (conditional)
  *   8. Outside Your Usual
  *   9. From Your Watchlist (conditional)
+ *
+ * The mood rooms row swapped from global-centroid-cosine ranking to
+ * title-anchored generation in the Phase 4.5 redirect (April 2026).
+ * Global rooms persist in `mood_rooms`/`mood_room_titles` for v2.5
+ * browse + Phase 7 conversational discovery; the For You row is now
+ * `<AnchorMoodRoomsRow>`.
  */
 
 import { useState, useCallback } from 'react';
 import { Sliders, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { ContentRow } from './ContentRow';
+import { AnchorMoodRoomsRow } from './AnchorMoodRoomsRow';
 import { SliderTray } from './SliderTray';
 import { useForYouContent } from '@/hooks/useForYouContent';
+import { useAnchorMoodRooms, type AnchorRoomPreview } from '@/hooks/useAnchorMoodRooms';
 import type { FilterSets } from '@/lib/recommendations-v2/hardFilters';
 import type { ContentItem } from './ContentCard';
 import type { ServiceId } from './platformLogos';
@@ -31,6 +39,7 @@ interface ForYouPageProps {
   filterWatched: (items: ContentItem[]) => ContentItem[];
   filterLanguage: (items: ContentItem[]) => ContentItem[];
   onItemSelect: (item: ContentItem) => void;
+  onSelectAnchorRoom: (preview: AnchorRoomPreview) => void;
   bookmarkedIds: Set<string>;
   onToggleBookmark: (item: ContentItem) => void;
   watchedIds: Set<string>;
@@ -43,11 +52,19 @@ export function ForYouPage({
   filterWatched,
   filterLanguage,
   onItemSelect,
+  onSelectAnchorRoom,
   bookmarkedIds,
   onToggleBookmark,
   watchedIds,
 }: ForYouPageProps) {
   const content = useForYouContent(providerIds, sharedFilters);
+  const anchorRooms = useAnchorMoodRooms(
+    providerIds,
+    sharedFilters,
+    content.pool,
+    content.sliders,
+    content.prebuiltAnchorRooms,
+  );
   const [showSliderTray, setShowSliderTray] = useState(false);
 
   const applyFilters = (items: ContentItem[]) => filterLanguage(filterWatched(items));
@@ -106,6 +123,12 @@ export function ForYouPage({
               watchedIds={watchedIds}
             />
           )}
+
+          {/* Mood Rooms for Tonight — title-anchored */}
+          <AnchorMoodRoomsRow
+            rooms={anchorRooms.rooms}
+            onSelectRoom={onSelectAnchorRoom}
+          />
 
           {/* Hidden Gems */}
           {content.hiddenGems.length > 0 && (

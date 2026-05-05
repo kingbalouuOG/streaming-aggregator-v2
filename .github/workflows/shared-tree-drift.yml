@@ -1,0 +1,81 @@
+name: Shared tree drift check
+
+# IN-466 / ADR-011: src/lib/recommendations-v2/ and src/lib/taste-v2/ are
+# mirrored into supabase/functions/_shared/ for the render-foryou-rows
+# Edge Function. A change to one tree without a matching change to the
+# other produces "Edge Function returns plausible-but-stale rankings"
+# masked by the client-fallback path. This check fails any PR that
+# touches one without the other.
+#
+# Escape hatch: include `drift-allowed: <reason>` somewhere in the PR
+# body or in a commit message on the PR for an intentional one-sided
+# change (e.g. emergency client-only patch ahead of an Edge redeploy).
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/recommendations-v2/**'
+      - 'src/lib/taste-v2/**'
+      - 'supabase/functions/_shared/recommendations-v2/**'
+      - 'supabase/functions/_shared/taste-v2/**'
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect drift
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -e
+
+          changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+
+          touched_client=false
+          touched_shared=false
+
+          while IFS= read -r f; do
+            case "$f" in
+              src/lib/recommendations-v2/*|src/lib/taste-v2/*)
+                touched_client=true ;;
+              supabase/functions/_shared/recommendations-v2/*|supabase/functions/_shared/taste-v2/*)
+                touched_shared=true ;;
+            esac
+          done <<< "$changed"
+
+          if [ "$touched_client" = "$touched_shared" ]; then
+            echo "OK: client tree and shared tree changed in lockstep (or neither changed)."
+            exit 0
+          fi
+
+          # Escape hatch: drift-allowed marker in PR body or any commit message.
+          if echo "$PR_BODY" | grep -qi 'drift-allowed:'; then
+            echo "Drift detected but PR body contains 'drift-allowed:' marker — passing."
+            exit 0
+          fi
+          if git log "$BASE_SHA..$HEAD_SHA" --format=%B | grep -qi 'drift-allowed:'; then
+            echo "Drift detected but a commit message contains 'drift-allowed:' marker — passing."
+            exit 0
+          fi
+
+          echo "::error::Drift detected between src/lib/ tree and supabase/functions/_shared/ tree."
+          echo ""
+          echo "src/lib/{recommendations-v2,taste-v2}/ touched: $touched_client"
+          echo "supabase/functions/_shared/{recommendations-v2,taste-v2}/ touched: $touched_shared"
+          echo ""
+          echo "These two trees are mirrors (ADR-011 + IN-466). A change to one without a"
+          echo "matching change to the other will cause the Edge Function to return stale"
+          echo "rankings masked by the client-fallback path."
+          echo ""
+          echo "Either:"
+          echo "  1. Mirror the change into the other tree, or"
+          echo "  2. Add 'drift-allowed: <reason>' to the PR body or a commit message"
+          echo "     for an intentional one-sided change (e.g. emergency client patch"
+          echo "     ahead of an Edge redeploy)."
+          exit 1

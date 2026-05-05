@@ -25,7 +25,7 @@ interface BottomNavProps {
 export function BottomNav({ activeTab, onTabChange, watchlistCount = 0 }: BottomNavProps) {
   return (
     <nav
-      className="shrink-0 bg-nav-bg backdrop-blur-xl border-t"
+      className="shrink-0 bg-nav-bg backdrop-blur-xl border-t safe-bottom"
       style={{
         borderColor: "var(--border-subtle)",
         /* Capacitor: backdrop-blur fallback for older Android */

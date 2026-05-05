@@ -42,7 +42,7 @@ export async function getV2TasteProfile(): Promise<TasteProfileV2 | null> {
     .from('taste_profiles' as any)
     .select(
       'taste_vector_v2, taste_vector_updated_at, taste_vector_interaction_count, ' +
-      'taste_vector_bootstrapped_from, ' +
+      'taste_vector_bootstrapped_from, selected_clusters, ' +
       'slider_catalogue_age, slider_comfort_zone, slider_content_mix, slider_variety'
     )
     .eq('user_id', userId)
@@ -70,6 +70,7 @@ export async function getV2TasteProfile(): Promise<TasteProfileV2 | null> {
     updatedAt: row.taste_vector_updated_at || null,
     interactionCount: row.taste_vector_interaction_count ?? 0,
     bootstrappedFrom: row.taste_vector_bootstrapped_from as BootstrapSource | null,
+    selectedClusters: Array.isArray(row.selected_clusters) ? row.selected_clusters : [],
     sliders: {
       catalogueAge: row.slider_catalogue_age ?? DEFAULT_SLIDERS.catalogueAge,
       comfortZone: row.slider_comfort_zone ?? DEFAULT_SLIDERS.comfortZone,

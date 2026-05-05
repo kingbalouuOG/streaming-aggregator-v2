@@ -1,0 +1,265 @@
+# Log
+
+Append-only chronological record. Newest entries at the bottom. Format: `## [YYYY-MM-DD] {ingest|query|lint} | {subject}`. See [AGENTS.md](AGENTS.md).
+
+---
+
+## [2026-04-26] init | wiki bootstrapped
+- Created schema (AGENTS.md), README, index.md, log.md
+- Created empty raw/ and wiki/{entities,concepts,sources}/ directories
+- Pattern: Karpathy's LLM Wiki (https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
+
+## [2026-04-26] schema-update | added subfolder conventions
+- AGENTS.md: defined subfolders under raw/, wiki/entities/, wiki/concepts/
+- entities subfolders: apis, streaming-services, infrastructure, codebase
+- concepts subfolders: architecture, techniques, domain, operations, decisions, glossary
+- raw/ subfolders: codebase-snapshots, api-references, streaming-services, infrastructure, concepts, runbooks, adrs, reference, research, frontend, product, v2-strategy
+- AGENTS.md mutability note added: LLM may create raw files when explicitly directed by human
+
+## [2026-04-26] seed | bulk raw/ seeding (48 files)
+- raw/codebase-snapshots/: database-schema-snapshot, migration-changelog, module-map, hook-inventory, component-inventory, rpc-catalogue, event-taxonomy, package-json-annotated
+- raw/api-references/: tmdb-api-reference, omdb-api-reference, streaming-availability-api-reference
+- raw/infrastructure/: supabase-configuration, capacitor-reference, pgvector-pg_partman-pg_cron, rapidapi, hdbscan-and-github-actions
+- raw/streaming-services/: uk-services-reference (consolidated, 10 services)
+- raw/concepts/: embedding-model-primer, hdbscan-primer, two-surface-architecture, cold-start-strategy, rls-pattern, signal-weighting-overview, justwatch-as-source, uk-streaming-market
+- raw/runbooks/: sync-pipeline, embedding-backfill, edge-function-deployment, monthly-mood-room-recluster, apk-build-and-install, service-role-jwt-rotation, supabase-backup-restore, supabase-migration-workflow
+- raw/adrs/: adrs-combined (11 ADRs)
+- raw/reference/: glossary, phase-timeline, risks-register, strategy-version-log, eval-harness-reference
+- raw/research/: research-stubs (placeholders for 6 referenced inputs)
+- raw/frontend/: tailwind-v4-conventions, motion-animation-patterns, accessibility-checklist
+- raw/product/: mission-and-pitch, user-personas, privacy-policy-draft, tone-and-voice-guide
+- raw/v2-strategy/: README pointing to docs/v2/ originals to be copied in
+- Pending: ingest each into wiki/sources, wiki/entities, wiki/concepts; copy actual docs/v2/ files into raw/v2-strategy/, raw/solutions/, raw/plans/
+
+## [2026-04-26] schema-update | added split subfolders + raw/docs relationship note
+- raw/ subfolders added: phase-summaries, evaluations, solutions, plans, screenshots
+- AGENTS.md updated: `raw/` and `docs/` relationship section codifies snapshot semantics, refresh cadence, and source-of-truth in `docs/` not `raw/`
+- raw/v2-strategy/ now scoped to the seven canonical strategy/design docs only; phase summaries and evals split out
+
+## [2026-04-26] schema-update | added raw/forward-planning/ for post-v2 material
+- New folder for v3 thinking, monetisation, scaling, roadmap material
+- AGENTS.md updated with the folder and a status-field convention (exploratory | shortlisted | locked | shipped | parked)
+- README in folder explains the distinction from raw/v2-strategy/ and naming conventions
+
+## [2026-04-26] plan | full ingest
+
+86 raw files across 18 subfolders. Order:
+
+1. Foundational reads first: `reference/glossary.md`, `v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md`, `adrs/adrs-combined.md`, all `codebase-snapshots/`. These pin canonical column names (`event_type`, `content_id`), the two-surface architecture, and the locked v2 decisions everything else must align with.
+2. Ingest `codebase-snapshots/` and `reference/glossary.md` to build the entity backbone. **Gateway A pause**: review whether codebase items are entities or concepts, and whether glossary stays single-page.
+3. `v2-strategy/` (six docs after the strategy itself), `adrs/adrs-combined.md` (split into per-decision pages), `phase-summaries/` chronologically, then `evaluations/`. **Gateway B pause**: review ADR grouping, phase summary consolidation, strategy-vs-outcome split.
+4. Remaining: `api-references/`, `streaming-services/`, `infrastructure/`, `concepts/`, `runbooks/`, `solutions/`, `plans/`, `research/`, `frontend/`, `product/`, `forward-planning/`. **Gateway C pause**: full lint.
+
+Conflict policy per Step 4: v1.6.3 strategy + actual phase outcomes win over older intent. Forward-planning stays exploratory and never overrides locked decisions.
+
+AGENTS.md amendments: none planned up front. May propose splitting `concepts/decisions/` (currently a single subfolder housing all ADRs) if that proves unwieldy, or adding a `concepts/evaluations/` folder for eval reports if they don't fit cleanly under `decisions/`. Will flag at Gateway B.
+
+Log entries: one per subfolder (batched), three gateway entries, one final lint. Conflicts surfaced inline per Step 4 format. Begin now.
+
+## [2026-04-26] ingest | reference/glossary.md
+- New page: wiki/concepts/glossary.md (mirrors raw glossary, single page)
+- New source: wiki/sources/glossary.md
+- Cross-refs queued: every entity/concept page below references the glossary
+
+## [2026-04-26] ingest | codebase-snapshots/ (8 files)
+- New entities: database-schema, migrations, rpcs, module-map, components, hooks, event-taxonomy
+- package-json folded into module-map (no standalone page; runtime stack table + omissions section)
+- New source: wiki/sources/codebase-snapshots.md
+- Notes:
+  * Strategy v1.6.3 names `event_type` and `content_id` as canonical; codebase snapshot uses both. No conflict.
+  * Migration 021 intentionally skipped per snapshot. Strategy v1.6.3 §6 renumbering matches. No conflict.
+  * Conflict resolved: card_impressions column name `tmdb_id` in older docs (pre v1.6.1) superseded by `content_id` in raw/codebase-snapshots/database-schema-snapshot.md and strategy v1.6.3. Wiki entity reflects `content_id`. Event taxonomy page notes the rename.
+
+## [2026-04-26] structure-review | gateway A
+Decisions:
+- **Glossary kept as a single page** under wiki/concepts/glossary.md. Splitting by section (project / recommendation / signals / ops / stack) would fracture lookups. Re-evaluate only if it exceeds ~400 lines (currently ~90).
+- **Codebase items kept as entities, not concepts.** They describe concrete artefacts (tables, modules, hooks, RPCs, components) that exist in the repo. Concepts (RLS pattern, signal architecture) get their own pages and link in.
+- **No subfolder split inside entities/codebase/** for now. Seven pages is manageable; introduce sub-grouping (e.g. `entities/codebase/database/` vs `entities/codebase/frontend/`) only if it grows past ~15.
+- **Event taxonomy lives under entities/codebase/** rather than concepts/architecture/, because the table is a concrete catalogue of every emitted event in the codebase, not a pattern. The signal-architecture concept page (forthcoming) will link to it.
+- **package-json folded into module-map** — too small to merit its own entity page, sufficiently relevant to module map.
+- AGENTS.md not amended at this gateway. The schema's suggested layout fits cleanly. Will re-evaluate at Gateway B once ADR + phase + eval folders populate.
+
+## [2026-04-26] ingest | v2-strategy/ (8 files)
+- New sources: engine-strategy-v1-6-3, project-orchestration-v0-3-3, detail-page-signal-capture-spec-v0-3-2, home-foryou-composition-hypothesis-v0-3, implementation-guide-v0-2, implementation-notes-parking-lot-v0-3-4, design-reference-v0-1, v2-strategy-readme
+- New concepts (architecture): two-surface-architecture, home-surface, for-you-surface, recommendation-pipeline, taste-vector, service-fingerprints, mood-rooms, sliders, onboarding-flow, cold-start, signal-architecture, lifecycle-manager
+- Conflict resolved: `interaction_type` (older docs) superseded by `event_type` in strategy v1.6 and codebase. Wiki uses `event_type` throughout.
+- Conflict resolved: `tmdb_id` on `card_impressions` (older docs) superseded by `content_id` in strategy v1.6.1 and detail page spec v0.3.2. Wiki entity reflects `content_id`.
+- Conflict resolved: `dismiss` event type (older docs) superseded by `not_interested` in strategy v1.6.3 §7.2 and Phase 0 ADR-009. Wiki reflects `not_interested`; legacy term documented in glossary and ADR-009.
+- Conflict resolved: "Depth vs breadth" slider naming (older docs) superseded by "Focused ↔ Varied" in strategy v1.6 / hypothesis v0.3. Wiki reflects new name with rename history captured.
+- Conflict resolved: detail view as weak positive (older drafts of detail page spec) superseded by detail-view-NOT-positive in detail page spec v0.3.2 §3.1 (industry-aligned with Netflix/Prime/YouTube). Wiki reflects current spec.
+- Conflict resolved: share signal in weight tables (older drafts) superseded by removal in strategy v1.6 (no share button in v1 codebase). Wiki omits share signal.
+- Conflict resolved: strategy v1.5 static bootstrap weights 0.40/0.40/0.20 superseded by Phase 3 dynamic 4-band weights and acknowledged in strategy v1.6.3 §5.2. Wiki taste-vector and onboarding pages reflect dynamic weights with rename history.
+- Conflict resolved: strategy v1.5 expectation of 30-60 mood rooms at 70-80% coverage superseded by Phase 4.5 actuals (68 rooms at 53.5% coverage; coverage plateau structural) acknowledged in strategy v1.6.3 §5.2. Wiki mood-rooms page reflects actuals.
+- Conflict resolved: strategy v1.6.3 §5.2 5-component Stage 2 weight table represents intent; Phase 4 actuals shipped 3-component scoring sum (62.5/25/12.5) + diversity as post-processing per §5.2 Phase 4 implementation note. Wiki recommendation-pipeline page presents both with the implementation note explaining the difference.
+- Conflict resolved: strategy v1.5 said Phase 0 would ship 3 migrations (012-014); actual Phase 0 shipped 5 (012-016). Strategy v1.6.3 §6 renumbers downstream by +2. Wiki migrations entity uses actual numbering.
+- Conflict resolved: brief said Phase 0.5 enrichment scope was 5 columns; actual 4 + opportunistic backfill of pre-existing `runtime` column. Wiki phase-0-5 page reflects actual.
+- Conflict resolved: Phase 0.5 director gate. Brief had single 80% gate across all titles; phase split it post hoc by media_type (movies ≥95%, TV best-effort) per IN-PX-07. Wiki phase-0-5 page reflects split policy.
+
+## [2026-04-26] ingest | adrs/ (1 file → 11 per-ADR pages + index)
+- New per-ADR concepts under wiki/concepts/decisions/: adr-001 through adr-011
+- New source: wiki/sources/adrs-combined.md (acts as index)
+- Decision: split rather than keep combined, because individual decisions are linked from many entity and concept pages and the combined page would force readers to scan past unrelated context.
+
+## [2026-04-26] ingest | phase-summaries/ (10 files including 2 duplicated decisions)
+- New concepts (operations): phase-history, phase-0, phase-0-5, phase-1, phase-2, phase-2-5, phase-2-6, phase-3, phase-4
+- New source: wiki/sources/phase-summaries.md
+- Decision: per-phase pages (per AGENTS.md) plus a consolidated phase-history page (per Gateway B option). Both are useful: phase-history is the timeline scan; per-phase preserves specifics.
+- Note: no Phase 4.5 end-of-phase summary file exists despite Phase 4.5 being marked ✅ Complete in strategy v1.6.3 and orchestration v0.3.3. Phase 4.5 facts reconstructed from strategy + migrations + ADR-005. Flagged as missing in phase-summaries source page.
+- phase-summaries/phase-2-6-decision.md and phase-summaries/phase-2-6-variance-eval.md duplicate raw/evaluations/ files of the same name. Wiki treats them as evaluations.
+
+## [2026-04-26] ingest | evaluations/ (6 files)
+- New concepts (evaluations): phase-1-cluster-eval, phase-1-wire-format-spike, phase-2-service-discrimination-eval (consolidates baseline + 13-service eval), phase-2-6-decision, phase-2-6-variance-eval
+- New source: wiki/sources/evaluations.md
+- Decision: phase-2-service-discrimination-baseline.md and phase-2-service-discrimination-eval.md consolidated into one wiki concept page because the baseline is a frozen snapshot of the same metric for cosine drift comparison; treating them as separate pages would split a single evaluation thread.
+
+## [2026-04-26] structure-review | gateway B
+Decisions:
+- **ADRs split per-decision** rather than kept combined. Each ADR is linked from many entity and concept pages; per-page is more queryable. The combined source page acts as the index. Eleven `concepts/decisions/adr-*.md` pages plus one `sources/adrs-combined.md`.
+- **Phase summaries get both per-phase concept pages AND a consolidated phase-history page.** Per-phase preserves specifics (deviations, lessons, parking-lot adds). Phase-history is the timeline scan. Both are useful and they don't duplicate content; phase-history compresses, per-phase expands. Phase 4.5 has no per-phase page (no source file).
+- **Strategy vs outcome separation**: strategy intent lives on `concepts/architecture/*` (taste-vector, mood-rooms, recommendation-pipeline) with the actual Phase N outcome called out inline ("Phase 4 implementation note", "Phase 4.5 actuals"). Phase summaries on `concepts/operations/*` carry the deltas. This keeps strategy pages from drifting stale while preserving traceability.
+- **`concepts/evaluations/` folder added.** Eval reports are first-class concept pages, not subfolders of operations. AGENTS.md proposed `concepts/decisions/` for ADRs; evaluations sit alongside.
+- **AGENTS.md amendment proposed**: add `concepts/evaluations/` to the schema's listed subfolders under `wiki/concepts/`. Currently the schema lists architecture, techniques, domain, operations, decisions, glossary. Evaluation reports fit under none of these cleanly. Will edit AGENTS.md after Gateway C lint to consolidate any other schema tweaks at once.
+- AGENTS.md not amended yet at this gateway; will batch any schema changes at Gateway C.
+
+## [2026-04-26] ingest | api-references/ (3 files)
+- New entities: tmdb, omdb, streaming-availability-api
+- New source: wiki/sources/api-references.md
+- Notes: pinned TMDb sentinel-zero gotcha, OMDB IMDb-ID-preferred lookup, SA API BBC iPlayer empty catalogue gap.
+
+## [2026-04-26] ingest | streaming-services/ (1 consolidated file)
+- New entity: uk-services
+- New source: wiki/sources/streaming-services.md
+- Notes: 10 UK services consolidated into one entity page; per-service cards inline. Pricing reviewed quarterly per IN-XPS-007.
+
+## [2026-04-26] ingest | infrastructure/ (5 files)
+- New entities: supabase, capacitor, pgvector-pg_partman-pg_cron, rapidapi, github-actions
+- New source: wiki/sources/infrastructure.md
+- Notes: Supabase Pro tier locked; pg_partman installs to `public` not `partman`; partition RLS via event trigger pattern reused across the wiki.
+
+## [2026-04-26] ingest | concepts/ (8 files)
+- All eight primers map to existing concept pages already written from gateway A/B work.
+- New source: wiki/sources/concepts-primers.md (acts as routing index + conflict-note collector).
+- Conflicts resolved (recorded in source page):
+  * Conflict resolved: detail_view as "weak positive" in `signal-weighting-overview.md` superseded by detail_view = NOT positive (anchor only) in detail page spec v0.3.2 §3.1. Wiki signal-architecture page reflects current spec.
+  * Conflict resolved: "Surprising ↔ Safe" slider name in `signal-weighting-overview.md` superseded by "Comfort Zone" in composition hypothesis v0.3 / strategy v1.6.3. Wiki sliders page reflects current naming.
+  * Conflict resolved: "Continue Exploring" row in `two-surface-architecture.md` primer superseded by "More From [Director/Actor]" + "Outside Your Usual" per composition hypothesis v0.3 §3.2 and Phase 4 actuals. Wiki for-you-surface page reflects shipped Phase 4 names.
+
+## [2026-04-26] ingest | runbooks/ (8 files)
+- New concepts: sync-pipeline, embedding-backfill, edge-function-deployment, monthly-mood-room-recluster, apk-build-and-install, service-role-jwt-rotation, supabase-backup-restore, supabase-migration-workflow
+- New source: wiki/sources/runbooks.md
+- Conflicts resolved:
+  * Conflict resolved: workflow filename `recluster-mood-rooms.yml` in `monthly-mood-room-recluster.md` runbook superseded by `mood-rooms-recluster.yml` in orchestration v0.3.3 §6.1 and Phase 4.5 implementation. Wiki concept reflects current name.
+  * Conflict resolved: `--stage vectors` in `sync-pipeline.md` runbook superseded by Phase 1 deletion of legacy 24D `content_vector` (migration 019). Wiki concept retains the table for historical reference but flags it as inactive.
+
+## [2026-04-26] ingest | solutions/ (4 files)
+- New concepts under wiki/concepts/operations/solutions/: authenticated-role-missing-rls, sa-api-uk-service-coverage-gaps, supabase-advisor-accepted-warnings, supabase-content-cache-dead-code
+- New source: wiki/sources/solutions.md
+
+## [2026-04-26] ingest | plans/ (1 file)
+- New source: wiki/sources/plans.md
+- Note: `2026-03-15-001-feat-api-consolidation-content-cache-deep-linking-plan.md` documents the B1→E1 work that became ADR-001, migration 005 (authenticated RLS fix), and the foundational schema. Plan-time identifiers `interaction_type` / `tmdb_id` (on card_impressions) were superseded by canonical names in strategy v1.6+ — captured in plan source page.
+
+## [2026-04-26] ingest | research/ (1 markdown stub + 5 xlsx files)
+- New source: wiki/sources/research.md
+- Notes: stub list maps to six expected source files (Streaming Recommendation Algorithms Report, Consolidated Research Brief, JustWatch Hands-On Testing, Competitor Scan, CC Codebase Review Rounds 1-3, UK Market Data). Spreadsheets (Top_40, quiz_pair_pool_review × 2, videx-cluster-testing, videx_uk_providers) are filed as ⚠ unverified stubs because the wiki cannot parse XLSX directly. Re-ingest when content is exported to CSV/Markdown.
+
+## [2026-04-26] ingest | frontend/ (3 files)
+- New concepts under wiki/concepts/product/: accessibility-checklist, motion-animation-patterns, tailwind-v4-conventions
+- New source: wiki/sources/frontend.md
+- Decision: filed under concepts/product/ rather than concepts/architecture/ because they are product-shaping conventions (style, behaviour guard rails), not system architecture.
+
+## [2026-04-26] ingest | product/ (4 files)
+- New concepts under wiki/concepts/product/: mission-and-pitch, user-personas, privacy-and-gdpr, tone-and-voice-guide
+- New source: wiki/sources/product.md
+- Note: privacy-policy-draft.md becomes wiki/concepts/product/privacy-and-gdpr.md (renamed for the wiki because the page combines GDPR rights and the policy draft). Pre-launch blockers surfaced (taste_profiles RLS missing, delete-account wiring deferred, JWT rotation pending).
+
+## [2026-04-26] ingest | forward-planning/ (3 files)
+- New concepts under wiki/concepts/forward-planning/: monetisation-strategy, v3-conversational-discovery
+- New source: wiki/sources/forward-planning.md
+- Status: exploratory throughout per AGENTS.md status-field convention. Forward-planning material informs but does NOT override locked v2 decisions per Step 4 of the ingest brief.
+
+## [2026-04-26] ingest | reference/ (4 files; glossary already ingested at gateway A)
+- New concepts under wiki/concepts/operations/: risks-register, eval-harness, strategy-version-log
+- phase-timeline.md folded into existing wiki/concepts/operations/phase-history.md
+- New source: wiki/sources/reference.md
+
+## [2026-04-26] ingest | top-level (2 files)
+- New sources: wiki/sources/usp-and-strategy-summary.md, wiki/sources/raw-readme.md
+- Conflict resolved: USP & Strategy Summary §5 phase numbering ("Phase 0 → 1 → 3 → 4 → 5 → 6") omits 0.5/2/2.5/2.6/4.5; canonical sequence is in strategy v1.6.3 §7.2 and wiki phase-history page. Wiki summary source page flags this.
+
+## [2026-04-26] schema-update | AGENTS.md amendment
+- Added `concepts/evaluations/`, `concepts/product/`, `concepts/forward-planning/` to the listed subfolders under `wiki/concepts/`.
+- Expanded `concepts/operations/` description to cover phase summaries, post-mortems (under `solutions/`), risks register, eval-harness reference, and version log alongside runbooks.
+- Rationale: these subfolders were created during ingest and the schema description now matches reality. No restructuring of existing pages.
+
+## [2026-04-26] lint | gateway C
+**Scope:** all 110 wiki pages plus index.md, log.md, AGENTS.md. Programmatic link audit + grep for stale terms. raw/ files excluded from broken-link check (read-only sources).
+
+**Results:**
+
+- **Orphan pages: 0.** Every wiki page has at least one inbound link (from another wiki page or from index.md).
+- **Broken markdown links: 1 substantive + 3 in AGENTS.md examples.**
+  * Fixed: `wiki/entities/codebase/hooks.md` link to `../../sources/v2-strategy.md` corrected to `../../sources/engine-strategy-v1-6-3.md`.
+  * Not fixed (deliberate): three example links inside AGENTS.md frontmatter and code blocks (`wiki/entities/streaming-availability-api.md`, `wiki/entities/netflix.md`, `../entities/streaming-services/netflix.md`). These are illustrative templates demonstrating the linking convention, not actual content references. AGENTS.md is human-owned schema; leaving the examples intact.
+- **Stale-term audit:**
+  * `interaction_type`: 8 occurrences in 7 files. All in conflict-resolution / rename-history / version-log context. No stale claims.
+  * `tmdb_id`: many legitimate uses (column name on `titles`, `streaming_availability`, etc.). Stale uses on `card_impressions` checked: none in current claims; all in conflict-resolution context.
+  * `dismiss`: 1 occurrence (ADR-009, in rename-history context). Correct.
+  * "Depth vs breadth": all in rename-history context. Correct.
+  * Detail-view-as-positive (older signal-weighting primer claim) flagged in concepts-primers source page; current wiki signal-architecture and taste-vector pages reflect detail page spec v0.3.2 §3.1 (anchor only, NOT positive).
+- **Stray placeholder file: `videx-wiki/sources/v2-strategy.md`** (one-word "placeholder" content, accidentally created at the wrong path during ingest because the leading `wiki/` was dropped in the Write call). Deletion requires user approval; surfaced here for the human to remove. Not linked from anywhere; harmless but messy.
+
+**Contradictions surfaced earlier (already resolved during ingest, repeated here for the audit trail):**
+- `interaction_type` → `event_type` (strategy v1.6).
+- `tmdb_id` → `content_id` on `card_impressions` (strategy v1.6.1).
+- `dismiss` → `not_interested` event type (Phase 0, ADR-009).
+- "Depth vs breadth" → "Focused ↔ Varied" slider (composition hypothesis v0.3).
+- detail_view as weak positive → NOT positive, anchor only (detail page spec v0.3.2 §3.1).
+- Share signal in weight tables → removed (not implementable in v1 codebase).
+- Static bootstrap weights 0.40/0.40/0.20 → dynamic 4-band by watched-grid count (Phase 3).
+- 30-60 mood rooms at 70-80% coverage → 68 rooms at 53.5% (Phase 4.5 actuals; coverage plateau structural).
+- Stage 2 5-component table (intent) → 3-component sum + 2 post-processing (Phase 4 implementation).
+- Phase 0 3 migrations (012-014) planned → 5 migrations applied (012-016).
+- Phase 0.5 5 enrichment columns planned → 4 added + opportunistic backfill of pre-existing `runtime`.
+- Phase 0.5 single 80% director gate → split-by-media_type (movies ≥95%, TV best-effort) per IN-PX-07.
+- Migration 021 reserved → rolled into 022; numbering preserved with intentional gap.
+- Phase 3 9-file hook rewrite scope → 10 files (added `useTasteProfile`).
+- "Surprising ↔ Safe" / "Continue Exploring" naming in older primers → current canonical names per composition hypothesis v0.3.
+- Workflow filename `recluster-mood-rooms.yml` → `mood-rooms-recluster.yml`.
+- Sync `--stage vectors` → deprecated post Phase 1 (column dropped in migration 019).
+
+**Files outside wiki/ that the lint flagged but cannot delete:** `videx-wiki/sources/v2-strategy.md` (placeholder, see above).
+
+**Done criteria from Step 5 of the ingest brief:**
+- ✅ Every raw file has a corresponding `wiki/sources/{slug}.md`. (86 raw files → 27 source pages; collected source pages cover multi-file folders.)
+- ✅ Every `wiki/sources/` page is linked from at least one `wiki/entities/` or `wiki/concepts/` page.
+- ✅ `index.md` lists every wiki page (110 pages).
+- ✅ `log.md` has one entry per subfolder ingest (15) plus three gateway entries plus this final lint.
+- ✅ All contradictions surfaced in log.md with explicit resolution (16 distinct contradictions captured above and inline per subfolder).
+
+## [2026-04-26] enrich | wiki/registers/ — at-a-glance lookups
+On request: pull cross-cutting scannable views out of the existing wiki content. New top-level folder `wiki/registers/` with seven pages plus a README index:
+- parking-lot.md — every IN-XXX entry with status (56 entries, 32 ✅ / 18 ⏳ / 1 ⚠ / 1 🛑 / 4 🅿)
+- open-questions.md — strategy v1.6.3 §8.2 still-open + per-phase open items + risks register
+- pre-launch-blockers.md — 21 items grouped by stake (security, GDPR, ops, build/release, UX, process)
+- deferred-items.md — 49 items (v2.5 / Phase 5 / Phase 5/6 cleanup / post-v2 v3 / discharged / parked)
+- acceptance-gates.md — every numerical threshold (row-count gates, eval thresholds, ranking weights, slider mappings, signal weights, cold-start bootstrap, gating rules)
+- next-steps.md — Phase 4.5 close-out, Phase 5 outlook, Phase 6 launch, time-triggered reviews
+- cheatsheet.md — phases × branches × migrations × features map; service slug ↔ TMDb ↔ SA API; surface row composition; locked decisions one-liner
+- README.md — registers index
+
+AGENTS.md amended: added `wiki/registers/` to the schema's listed subfolders. Refresh-when-source-changes convention noted.
+
+index.md updated with a new top-level "Registers (at-a-glance)" section.
+
+Notes:
+- The Phase 4.5 IN-451 to IN-456 entries are flagged "Not yet incorporated" in the raw parking lot, but the work clearly shipped per ADR-005, strategy v1.6.3 §5.2, and orchestration v0.3.3 §3.4 actuals. Parking-lot register mirrors raw fidelity but flags the discrepancy and notes Phase 4.5 needs an end-of-phase summary file (also tracked in pre-launch-blockers #21).
+- No conflict resolution beyond what was already captured at Gateway C.
+- Total wiki page count: 110 → 118 (+ 8 new registers including README).
+
+## [2026-04-30] solution | react-numeric-falsy-renders-zero
+- New solution page: `wiki/concepts/operations/solutions/react-numeric-falsy-renders-zero.md`
+- Source: `docs/solutions/logic-errors/react-numeric-falsy-renders-zero.md`
+- Bug: `{item.rating && ...}` rendered "0" for titles with no IMDb rating because `&&` returns the falsy operand and React renders numeric 0 as text. DetailPage IMDb badge had no guard, rendered "0.0 IMDb" unconditionally.
+- Fix: explicit `> 0` guards in `ContentCard.tsx`, `BrowseCard.tsx`, `DetailPage.tsx`.
+- Prevention: never use `{value && ...}` for numerics; consider enabling `react/jsx-no-leaked-render`.

@@ -113,12 +113,13 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
           .not('embedding', 'is', null)
           .order('popularity', { ascending: false })
           .limit(500),
-        supabase.rpc('get_available_tmdb_ids', { service_ids: selectedServices })
-          .limit(1000),
+        // Migration 035: RPC returns a JSONB array of IDs in a single
+        // row, not a paginated table.
+        supabase.rpc('get_available_tmdb_ids', { service_ids: selectedServices }),
       ]);
 
-      const availSet = new Set(
-        ((availRes.data as any[]) || []).map((r: any) => r.tmdb_id as number)
+      const availSet = new Set<number>(
+        Array.isArray(availRes.data) ? (availRes.data as number[]) : []
       );
 
       const seenIds = new Set<number>();

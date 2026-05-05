@@ -1,7 +1,29 @@
 # Videx v2 — Implementation Notes Parking Lot
 
-**Status:** v0.3.4 — Phase 0.5 entries (IN-101 through IN-107) marked as ✅ Incorporated following Phase 0.5 closeout; four new entries filed from Phase 0.5 deviations
-**Version:** 0.3.4
+**Status:** v0.5 — IN-466 (server-side For You render via Edge Function) shipped; ✅ marked. Eight new entries filed from the IN-466 implementation + code review pass: IN-467 (mirror consolidation), IN-468 (Variant B SWR cache), IN-469 (cold-start mitigation), IN-470 (`featuredLastWeek` wiring), plus four cross-phase entries IN-XPS-010 (Pro→Free downgrade risks), IN-XPS-011 (verify_jwt CI guard), IN-XPS-012 (parity probe in CI), IN-XPS-013 (CORS tightening pre-launch).
+**Version:** 0.5
+
+**Changes from v0.4:**
+- **IN-466** status flipped from ⏳ → ✅ Incorporated. Server-side render landed via the `render-foryou-rows` Edge Function. Cold-fallback contract: client falls through to the existing `useForYouContent` pipeline on any Edge failure (5xx, malformed JSON, network, >1.5s timeout — tightened from the brief's 5s after the cold-instance profile came in 5-12s).
+- Phase 4.5 section gained four new entries from the IN-466 implementation:
+  - **IN-467**: long-term consolidation of `_shared/recommendations-v2/` mirror — the path-(a) mirror copy ships drift-controlled (CI check on `src/lib/recommendations-v2/` ↔ `_shared/recommendations-v2/`); a future refactor into a runtime-portable shared package eliminates duplication entirely.
+  - **IN-468**: Variant B — stale-while-revalidate localStorage snapshot of the rendered For You payload. Deferred pending measured warm p95; revisit if real-WAN p95 exceeds 1.0s.
+  - **IN-469**: Cold-start mitigation continuation. Variant A (warmup-foryou Edge Function fired from App.tsx mount) shipped this phase; future options include pg_cron-driven pre-warm to keep an instance permanently hot, and Variant B for instant-paint via cache.
+  - **IN-470**: wire `featuredLastWeek` through to the Edge Function for week-on-week anchor variety. Filed during the simplification pass when the request-body field was deleted as dead code (always passed as `[]`); revive when the threading is implemented.
+- Cross-phase section gained four new entries:
+  - **IN-XPS-010**: Pro→Free Supabase downgrade risk inventory — pg_partman + pg_cron breakage, project auto-pause, bandwidth/db-size ceilings — surfaced when cost optimisation came up during the IN-466 build.
+  - **IN-XPS-011**: CI guard against `verify_jwt = false` drift on user-callable Edge Functions. Pre-public-launch hardening — required because `extractUserIdFromJwt` decodes without verifying signature (relying on Supabase gateway pre-verification).
+  - **IN-XPS-012**: promote the parity probe (`scripts/_inspect_foryou_parity.mjs`) to a CI smoke test. The `shared-tree-drift` workflow only catches file-level drift; semantic divergence between Edge and client paths can still ship with both trees passing.
+  - **IN-XPS-013**: pre-launch CORS tightening on user-callable Edge Functions — currently `*`, should narrow to the known Capacitor + future web origins.
+
+**Changes from v0.3.4:**
+- Phase 4.5 section gained three new entries:
+  - **IN-463**: hybrid LLM labelling for anchored mood rooms — replace "If you love {anchor}" with thematic labels via gpt-4o-mini. Phase target 4.5 fast-follow. Depends on standing up the first request-time LLM Edge Function in this codebase.
+  - **IN-464**: detail-page "Make a room from this title" feature — Spotify-Song-Radio analogue using the room-generation primitive at `src/lib/recommendations-v2/anchoredRoom.ts`. Phase target 6+.
+  - **IN-465**: catalogue-sync gap surfaced by the anchored rooms probe — 3,807 tmdb_ids appear in `streaming_availability` but are absent from `titles` entirely. Replaces the probe's misdiagnosed "21% embedding gap" framing. Phase target post-Phase-4.5 investigation.
+- Onboarding-flow section gained one new entry:
+  - **IN-OB-006**: onboarding cluster taxonomy review under v2 engine assumptions. Three options (sharpen, drop, hybrid). Decision deferred until Phase 4.5 anchored rooms ship 3 months of telemetry. Phase target Phase 6 review.
+- Counts updated to reflect new entries.
 
 **Changes from v0.3.3:**
 - IN-101 through IN-107 status flipped from ⏳ Not yet incorporated → ✅ Incorporated. All seven Phase 0.5 entries are now reflected in shipped code and migration 017 on the `phase-0.5-content-enrichment` branch (commits `e813c39` through `c4a8916`).
@@ -847,7 +869,300 @@ Option 3 is the locked choice. Supabase Pro exposes a direct PostgreSQL connecti
 
 Which fallback depends on what HDBSCAN actually produces. Don't pre-commit to one.
 
+**Phase 4.5 Gate 2 outcome (2026-04-20):** fallback triggered. Full tune sequence below.
+
+| Attempt | Change | Clusters | Coverage | Mega-cluster | Notes |
+|---|---|---|---|---|---|
+| 1 | Pure HDBSCAN, raw 1536D, `min_cluster_size=50`, `min_samples=5` | 2 | 10.2% | n/a | Curse-of-dimensionality — hard fail |
+| 2 | + UMAP preprocessing (10D, `n_neighbors=15`, `metric='cosine'`), defaults | 47 | 57.6% | 1578-title Bollywood blob ("Desert Shadows" mislabel) | Gate 2 fail: coverage + mega-cluster |
+| 3 | B1+B2: `min_cluster_size=30`, `cluster_selection_method='leaf'` | 96 | 37.1% | none (max 306) | Over-fragmented; leaf too aggressive at this scale |
+| 4 | Path 1: revert to `eom`, add `max_cluster_size=800`; keep B1 | 80 | 51.3% | none (max 777) | Mega-cluster resolved; coverage low |
+| 5 | B3: UMAP `n_neighbors` 15 → 30 | 68 | 53.5% | none (max 788) | Gate 2 approved |
+
+**Final parameters (stored in `cluster_params` on every `mood_rooms` row):**
+
+- UMAP: `n_components=10`, `n_neighbors=30`, `min_dist=0.0`, `metric='cosine'`, `random_state=42`
+- HDBSCAN: `min_cluster_size=30`, `min_samples=5`, `metric='euclidean'`, `cluster_selection_method='eom'`, `max_cluster_size=800`
+- Library versions: `umap-learn==0.5.12`, `hdbscan==0.8.42`
+- Labelling prompt carries `original_language` (ISO 639-1) per title — improved label quality (e.g. correct "Bollywood Melodrama" and "Tamil Tapestry of Tension" separation)
+
+**Coverage plateau is structural.** Three orthogonal tuning passes (`max_cluster_size` cap, UMAP neighbourhood width, HDBSCAN density thresholds) moved coverage across a narrow 51–58% band. ~45% of the catalogue sits in sparse regions of the 1536D OpenAI embedding space — they don't have dense neighbours to form dense-only clusters. This is a property of the catalogue's embedding distribution, not a pipeline failure.
+
+**Hybrid (Option 3) rejected:** k-means on the noise tail would buy coverage at the cost of incoherent synthetic rooms — titles forced into clusters they don't belong to, which undermines the mood-rooms UX premise. Quality over coverage. Noise titles still surface elsewhere on For You (Recommended, Hidden Gems, etc).
+
+**Status:** ✅ Incorporated with UMAP preprocessing (Option 1 path). Full tune sequence above.
+
+### IN-458: `getAvailableTmdbIds` does not distinguish by `media_type`
+
+**Source:** Phase 4.5 Gate 1 audit (schema design for `mood_room_titles`)
+
+**Detail:** The `get_available_tmdb_ids` RPC (migration 028) and its TypeScript consumer `getAvailableTmdbIds` in `src/lib/recommendations-v2/hardFilters.ts` return a `Set<number>` of bare `tmdb_id` values, with no `media_type` distinction. TMDb IDs are allocated from separate sequences for movies and TV and do collide in practice (e.g. `tmdb_id=555` can exist as both a movie and a TV show). When the user has the movie on Netflix but not the TV show (or vice versa), the filter treats both as available — an incorrect positive.
+
+Impact is codebase-wide, not mood-rooms-specific. All callers of `FilterSets.availableTmdbIds` inherit the imprecision: `ranker.ts` (For You rows), `useForYouContent` (Because You Watched anchors, More From Person), the upcoming `useMoodRoomsRow` and `MoodRoomPage`.
+
+The correct fix is to widen the RPC and filter set to `Set<{ tmdbId: number, mediaType: 'movie' | 'tv' }>` (or equivalent composite). This touches:
+- The RPC definition in a new migration (return `(tmdb_id, media_type)` pairs).
+- `getAvailableTmdbIds` signature and return type.
+- All call sites that use `.has(tmdbId)` — must become `.has({ tmdbId, mediaType })` or keyed on a composite string.
+- Frontend types for items that carry availability info.
+
+Not fixed in Phase 4.5 — that phase accepted the inherited imprecision because mood rooms inherit it at the same rate as every other For You row, and fixing it here would balloon scope. File for a future correctness pass (likely Phase 5/6 quality-sweep) alongside the existing consumers.
+
 **Status:** ⏳ Not yet incorporated
+
+### IN-459: Re-evaluate mood room coverage after 3 monthly runs
+
+**Source:** Phase 4.5 Gate 2 close-out (2026-04-20)
+
+**Detail:** The 53.5% coverage ceiling that Phase 4.5 shipped is based on one catalogue snapshot (20,098 embedded titles, April 2026). Three things could change the picture:
+
+1. **Catalogue growth.** As the sync pipeline adds titles, the embedding space gets denser and more clusterable regions may emerge.
+2. **User engagement data.** Once the surface is live and Phase 0 impressions are flowing, it becomes observable whether the ~9,400 non-clustered titles are being under-served in recommendations. If they are, the coverage gap matters. If users are already finding those titles via Recommended / Hidden Gems / Because You Watched, coverage is a vanity metric.
+3. **Embedding quality.** Any future change to `text-embedding-3-small` → `text-embedding-3-large` or a different provider would shift the density distribution significantly.
+
+**Action:** after three successful monthly clustering runs (i.e. first production run + two cron runs, ~3 months post-Phase-4.5-merge), review:
+
+- Coverage trend (is it moving? in which direction?)
+- Cluster count stability (are the 68 rooms persisting through re-clusters, or churning?)
+- Impressions + taps on mood-room cards (from `card_impressions` where `source_surface='mood_room'`)
+- Whether the ~9,400 non-clustered titles are being recommended at a healthy rate from other For You rows
+
+If coverage ceiling persists AND impression data shows under-served titles in sparse regions, revisit **hybrid approach (IN-457 Option 3)** in Phase 6. Add k-means on the noise tail to produce additional rooms, accepting the quality trade-off because the alternative (invisible titles) is worse.
+
+If coverage plateau is stable AND under-served titles are being surfaced elsewhere, leave as-is. The 70% target from the original hypothesis was a pre-data estimate; the empirical ceiling is the honest answer.
+
+**Status:** ⏳ Not yet incorporated (action item for Phase 5/6 post-launch review)
+
+### IN-460: Upgrade `actions/setup-python` when v6 ships (Node.js 20 deprecation)
+
+**Source:** Phase 4.5 Gate 3 first successful workflow run (run #2, 2026-04-21)
+
+**Detail:** The `.github/workflows/mood-rooms-recluster.yml` workflow uses `actions/setup-python@v5`, which runs on Node.js 20. GitHub surfaces a deprecation notice on every run:
+
+> Node.js 20 actions are deprecated. Actions will be forced to run with Node.js 24 by default starting **June 2nd, 2026**. Node.js 20 will be removed from the runner on **September 16th, 2026**.
+
+Until the deprecation bites, the workflow runs normally. Between 2026-06-02 and 2026-09-16 the action will be force-upgraded to Node 24 (may introduce behaviour changes). After 2026-09-16 the workflow will fail outright unless we either pin to a Node-24-compatible version or set `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true` (which is a dead-end that only buys a short extension).
+
+**Action:** when `actions/setup-python@v6` is released with Node 24 support, bump the pin:
+
+```yaml
+- uses: actions/setup-python@v6  # was @v5
+```
+
+Same goes for `actions/checkout@v5` if GitHub releases a Node-24 major. Check both when making the change.
+
+Not urgent in April 2026 — just a calendar reminder to check setup-python's release page in May 2026 or set an alert for when v6 ships. No functional impact until the June deadline.
+
+**Status:** ⏳ Not yet incorporated (time-triggered action item)
+
+### IN-461: Review FORBIDDEN_WORDS compound-noun carve-outs after May cron
+
+**Source:** Phase 4.5 relabel audit (2026-04-21)
+
+**Detail:** The programmatic `FORBIDDEN_WORDS` check in `scripts/mood_rooms/label.py` rejects any label whose whitespace-split tokens overlap the forbidden set (`whispers, echoes, shadows, whimsical, tales, chronicles, realm, allure, reverie, dreamscape, odyssey, tapestry, unleashed, unveiled`). The brief's own approved labels include two that would be rejected by this check if the LLM generated them:
+
+1. **"Bedtime Fairy Tales"** (room #29) — contains `tales`. The brief carves it out manually on the premise that "Fairy Tales" is an established compound noun, equivalent to the brief's own exception for "Stand-Up Showcase".
+2. **"American Music & Film Docs"** (room #12) — passes whitespace token count (5 tokens via `&`) but the `&` is a conjunction, not a content word.
+
+Neither survives the relabel because the relabel script is a hand-written override path with no validation. But the next cron run (May 2026) will validate all new LLM-generated labels against `FORBIDDEN_WORDS`. Stability preservation (Jaccard ≥ 0.8) means existing clusters keep their manual labels — so this only affects **new clusters in future runs**.
+
+**Decision (locked for now):** keep the check strict. The trade of losing "Fairy Tales" and similar compound phrasings to prevent a recurrence of the six-different-"Echoes"-rooms problem is correct. The LLM will find alternative phrasings for concepts that currently use forbidden head nouns.
+
+**Action for May post-run review:** for any new cluster generated in the May run, inspect the LLM's phrasing for concepts that previously would have wanted "Fairy Tales" / "Showcase" (kids' fantasy, comedy specials, anthology formats). If the alternative phrasings read as forced or worse than the forbidden-word version, revisit this decision and introduce a compound-noun allow-list. If alternatives are clean, leave as-is and remove this item at Phase 5 close-out.
+
+**Status:** ⏳ Not yet incorporated (May 2026 review)
+
+### IN-462: For You tab-switch preservation
+
+**Source:** Phase 4.5 Gate 4 smoke (2026-04-22)
+
+**Detail:** When the user switches away from For You (Home / Browse / Watchlist / Profile tabs) and back, `<ForYouPage />` conditionally unmounts and remounts. On remount, `useForYouContent` fires its load effect and re-runs the full pipeline: Stage 1 candidate retrieval via `match_titles_by_vector` (500 titles), extended metadata fetch, Because-You-Watched anchor resolution, MoreFrom person fetch, Watchlist row, plus the new mood-rooms RPCs. Observed on Gate 4 browser smoke: 20+ fetches totalling ~1.7MB transferred every time the user returns to For You.
+
+The `poolRef` in-memory cache inside `useForYouContent` is component-scoped, so unmount destroys it. Same for `useMoodRoomsRow`'s `poolCacheRef`. The localStorage weekly-pool cache survives, but the hook still fires the thumbnail RPC on remount to keep previews fresh.
+
+Impact: noticeable latency cost (~1-2s) on every tab bounce. Predates Phase 4.5 — this is how Phase 4 shipped — but now more visible because the mood rooms RPCs add a few more fetches to the tab-remount waterfall.
+
+**Not fixed in Phase 4.5.** Accepted as pre-existing architecture; fixing properly requires hoisting the candidate pool + row data out of the component scope (a store / context / Zustand / module-level cache with session-bound TTL) so the data survives tab unmount. That's a meaningful rewrite of `useForYouContent`'s cache model, too large to land inside a Gate 4 hotfix.
+
+**Action for Phase 5:** design a session-scoped store for For You's candidate pool + row results + slider state. Mood rooms piggyback on the same pattern (their weekly pool is already persisted but the previews aren't). Target: tab-switch cost drops to zero RPCs for returns within N minutes; re-fetch only on genuinely stale data (slider change, provider change, session timeout).
+
+**Status:** ⏳ Not yet incorporated (Phase 5)
+
+### IN-463: Hybrid LLM labelling for anchored mood rooms
+
+**Source:** Phase 4 strategy review — title-anchored mood rooms shipped with "If you love {anchor}" labels in v1.
+
+**Detail:** Phase 4.5 redirect ships with literal-anchor naming. A future iteration could replace these with LLM-generated thematic labels (e.g. "Tarantino-style hangouts" instead of "If you love Once Upon a Time in Hollywood"). The pattern: pass anchor + top-N closest titles to gpt-4o-mini for a thematic name + one-sentence description. Cache labels keyed on `(anchor_tmdb_id, version_hash)` so the same anchor across users doesn't trigger duplicate LLM calls.
+
+**Pre-requisites:**
+- Stand up the first request-time LLM Edge Function in this codebase (see H1 from the Mood Rooms Anchored Investigation report — pattern to copy is `embed-new-titles/index.ts`)
+- Add a `mood_room_anchor_labels` table or equivalent kv cache
+- Rate-limit handling for the Edge Function (none exists today)
+
+**Why deferred:** "If you love {anchor}" is functional and honest. The probe report Section 5 confirmed the rooms read fine with literal naming. LLM labelling is polish, not a structural fix.
+
+**Trigger to revisit:** post-Phase-4.5 telemetry showing low CTR specifically attributed to the literal naming (e.g. user dwell on the row but low room-tap-through; suggests the names aren't compelling enough). Or strategist preference once the anchored row is stable.
+
+**Phase target:** Phase 4.5 fast-follow.
+
+**Status:** ⏳ Not yet incorporated.
+
+### IN-464: Detail-page "Make a room from this title" feature
+
+**Source:** Phase 4 strategy review — anchored rooms enable a Spotify-Song-Radio analogue at the detail-page level.
+
+**Detail:** Once anchored mood rooms are stable and the room-generation primitive is exposed at `src/lib/recommendations-v2/anchoredRoom.ts`, the detail page gains a "Mood room from this" affordance. Tapping generates an anchored room around the current detail-page title using the user's services. Optionally savable as a pinned room (which would reintroduce per-user room persistence — to be designed when this lands).
+
+**Pre-requisites:**
+- Phase 4.5 anchored rooms shipped and stable ✅ (the primitive `buildAnchoredRoom` exports from `src/lib/recommendations-v2/anchoredRoom.ts` as of the redirect)
+- Decision on persistence model for saved rooms (new `user_anchor_rooms` table, or a generalised "saved lists" model)
+- UI design for the detail-page affordance
+
+**Why deferred:** the room-generation primitive landed in Phase 4.5 to enable this; the remaining work is UI + storage decision, not a recommendation-engine decision.
+
+**Phase target:** Phase 6+.
+
+**Status:** ⏳ Not yet incorporated.
+
+### IN-465: Catalogue-sync gap surfaced by anchored rooms probe
+
+**Source:** Phase 4.5 keyword-less embedding backfill investigation (2026-04-27).
+
+**Detail:** The Mood Rooms Anchored Probe (`docs/v2/Mood_Rooms_Anchored_Probe_2026_04_26.md` §4.1) reported "79.2% on-service embedding coverage (14,492 / 18,298 titles)" and framed the 21% gap as a keyword-precondition issue in the embedding work-queue. The Phase 4.5 backfill investigation showed this framing is wrong:
+
+- **Whole `titles` table:** 20,116 rows; 20,109 embedded. Only **7 titles** in the entire catalogue lack embeddings, all of them TMDb-deleted stubs (404 on `/movie/{id}` or `/tv/{id}`) with no overview, no cast, no director, no runtime — genuinely un-enrichable.
+- **The "21% on-service gap" is 3,807 tmdb_ids** that appear in `streaming_availability` (heavily Prime-skewed: 6,333 stream-type rows for ~3,500 distinct titles, then Apple 491, Channel 4 195, ITVX 85, Netflix 63) but are **absent from the `titles` table entirely**. Sample tmdb_ids skew toward low numbers (`tv/3`, `movie/68`, `movie/72`…) — old catalogue or region-edge titles outside `scripts/sync-content.ts`'s discover sweep.
+
+The keyword-less embedding precondition is fine — relaxing it would bring in 7 unembeddable stubs. The actual gap is on the content-sync side. Three suspect causes (no investigation yet): (a) `sync-content.ts` discover sweep doesn't cover these IDs; (b) the SA→TMDb confirmation step has been dropping them silently (note `tmdb_confirmed: false` flag may already track this); (c) the SA sync writes `streaming_availability` rows even when the `titles` upsert fails.
+
+**Operational scope:** ~3,800 backfilled titles × full enrich is well within budget — TMDb at 50 req/sec is ~80 seconds of API time; embedding cost ~$0.05. The work is in writing/running the script, not paying for it.
+
+**Two questions to answer upfront when this gets prioritised** (before any backfill code):
+
+1. **Why does Prime fall outside the discover-sweep?** Test against TMDb directly. If it's a discover-endpoint quirk (e.g. `with_watch_providers=9` returns a partial set on Prime UK that excludes back-catalogue), the fix is potentially a Prime-specific discover query — paginate with date-range buckets, switch to `popularity.asc` over older years, or use a complementary endpoint (`/discover/movie?with_watch_monetization_types=flatrate&with_watch_providers=9`). If it's instead a region/availability filter issue (e.g. SA API surfacing a title to a UK Prime user that TMDb doesn't list as UK Prime), that's a different shape of fix — likely a tolerance loosening on the SA→TMDb confirmation step rather than a discover change. Diagnose first, fix appropriately.
+
+2. **Are the 3,807 missing titles concentrated in any genre / era / popularity tier?** Run a profile against `streaming_availability` joined with whatever metadata exists on the SA-supplied rows (release_year, genres, original_language). The decision changes significantly: if it's "obscure Prime back-catalogue from before 2010 that nobody searches for", the fix is low-priority and a one-off backfill is sufficient. If it's "current Prime exclusives users actually want" (recent releases, high IMDb rating, English-language), the fix is high-priority and may justify a recurring sync improvement, not just a backfill.
+
+Sample tmdb_ids from the original investigation already skew toward low numbers (`tv/3`, `movie/68`, `movie/72`…) which suggests "old catalogue" — but that's eyeballed, not rigorous. The profile run is a 30-minute query, well worth doing before scoping the fix.
+
+**Why deferred:** anchored mood rooms ship cleanly at the current coverage. The gap silently underweights ~3,800 titles regardless of ranking strategy (anchored or global) — same effect on both. Closing the gap is a content-sync improvement, not a Phase 4.5 ranking concern.
+
+**Phase target:** post-Phase-4.5 investigation. Likely a one-off backfill script + a sync-pipeline audit.
+
+**Status:** ⏳ Not yet incorporated.
+
+### IN-466: For You cold-start latency — broader architecture review
+
+**Source:** Joe's testing feedback (2026-04-30): "The first load on For You is too slow. It's a real issue that I don't really consider viable for me to go to market with."
+
+**Detail:** The For You surface's cold path (no localStorage caches warm) takes 4-6 seconds to render. Three quick wins have already shipped under the Phase 4.5 redirect umbrella:
+
+1. **localStorage cache for `availableTmdbIds`** — 10-minute TTL keyed on sorted service IDs. Second open within 10 minutes is instant. (April 2026, hardFilters.ts)
+2. **Migration 035: collapse `get_available_tmdb_ids` from TABLE → JSONB array** — eliminates 20 paginated round-trips for ~18k IDs in favour of one. Saves ~1.5-2s on cold start over WAN. (April 2026, migration 035)
+3. **Anchored mood rooms label cache (table + localStorage)** — IN-463 ships with two-tier caching (DB + per-user localStorage), so thematic labels don't add to cold-path latency on repeat opens. (April 2026, migration 034)
+
+**Remaining cold-path components, after the quick wins:**
+
+| Component | Cold-path cost | Reason |
+|---|---|---|
+| `getV2TasteProfile` | ~100-200ms | Single Supabase row read; profileCache 5-minute in-memory hit |
+| `buildFilterSets` (without availability cache) | ~500-800ms | Three parallel Supabase reads (dismissed, thumbsDown, watchlist) + getAvailableTmdbIds (now 1 round trip after 035) |
+| `fetchCandidatePool` | ~500-700ms | match_titles_by_vector RPC (500 results) + extended-metadata fetch (top 100 IDs) |
+| `useAnchorMoodRooms` | ~600-1000ms | selectAnchors (2 reads + cluster embeddings) + 5 parallel buildAnchoredRoom calls; max-of-set wallclock |
+| Background BYW + MoreFrom + Watchlist | non-blocking | Doesn't gate first paint, but adds visible row population delay |
+
+Net floor: **~2-3 seconds for first render after our quick wins**, dominated by RPC round-trip latency × number of queries. Beyond the quick wins, the architecture is fundamentally chatty — cold-start on residential WAN can't go much lower without restructuring the data flow.
+
+**Architectural options to investigate next**, in increasing scope:
+
+1. **Server-side render the first viewport.** An Edge Function that takes (userId, services, sliders) and returns a single JSON payload with the top 20 Recommended For You + 5 anchored mood rooms + Hidden Gems pre-computed. Reduces N round trips to 1. The Edge Function runs in Supabase's network with sub-50ms latency to Postgres, so it's much faster than serial client-side fetches over WAN. Reuses all existing pipeline code (ranker.ts, anchorSelection.ts, anchoredRoom.ts) but exposes a "render the row" endpoint per row type. **Estimated time-to-first-render after this: ~400-600ms.** Biggest impact, also biggest scope.
+
+2. **Persistent localStorage of computed rows.** On every successful For You load, snapshot the resolved rows (Recommended For You ContentItems + anchor previews + etc.) to localStorage with a 1-hour TTL. Next session shows cached rows instantly while fresh data fetches in the background; swap when fresh data resolves. Stale-while-revalidate pattern. Smaller scope than (1); helps repeat-session UX but doesn't help first-ever launch.
+
+3. **Pre-warm via Home tab.** If the user lands on Home first (typical), kick off the For You data fetches in parallel with Home's loads. By the time the user navigates to For You, the data is hot. Adds minor complexity to Home/For You coordination; helpful but doesn't address true cold-start (direct For You launch).
+
+4. **Realtime push for slider changes.** Instead of re-querying the pipeline on slider drag, server pushes pre-computed alternate-slider variants. Heavy infrastructure for a marginal UX win; defer.
+
+5. **Reduce candidate pool size.** Drop from 500 → 300 candidates; see if row quality holds. Simple test, ~300-400ms saved on the cold path. Low-cost A/B if we have the harness ready (Phase 4 rank-eval.ts script).
+
+**Pre-launch viability assessment:** the three quick wins shipped here bring cold-start from ~5s to ~2-3s. Joe's gate is "viable for go-to-market". Whether 2-3s clears the bar is a product call — Netflix does ~2s for similar cold paths over LTE. If it doesn't clear, **option (1) (server-side row render) is the right next investment**, in the order: write the Edge Function in a new `/functions/render-foryou-rows/` directory, return the same shape as `useForYouContent` does today, swap the hook to invoke the Edge Function as its primary data source with the existing client-side path as fallback.
+
+**Phase target:** discuss with strategist after Joe re-tests the post-quick-wins build. If still not viable, schedule **option (1)** as a dedicated Phase 4.7 or treat as a pre-launch blocker.
+
+**Status:** ✅ Incorporated (April 2026). Server-side render via `render-foryou-rows` Edge Function shipped as a dedicated phase (IN-466 kick-off brief). Architecture: path-(a) mirror copy of `recommendations-v2/` + `taste-v2/` into `supabase/functions/_shared/` per ADR-011, with `shared-tree-drift` CI check guarding against the two trees diverging. Auth: service-role + manual JWT decode + `withUserScope(uid)` helper, after the `auth-spike` showed user-JWT-scoped reads cost ~280ms of the 600ms budget in RLS overhead. Latency: warm p50 ~850ms wall (700ms server), cold 5-12s (Edge Function instance cold-start dominates). Cold case mitigated by Variant A warm-pinger (App.tsx fires `warmup-foryou` at mount). Client fallback contract intact: any Edge failure (5xx, malformed JSON, network, >1.5s timeout) falls through to the existing `useForYouContent` pipeline. Three follow-ups filed — IN-467, IN-468, IN-469 below — capturing the deliberate v1 trade-offs that should be revisited post-launch.
+
+---
+
+### IN-467: Long-term consolidation of `_shared/recommendations-v2/` mirror
+
+**Source:** IN-466 implementation — Cowork pushed back on the path-(a) "single canonical copy" framing as half-true. Mirror is canonical for Edge consumers but the client still imports from `src/lib/`. Path-(b) was the only route to one true copy across both runtimes.
+
+**Detail:** ADR-011 mandates shared modules live in `supabase/functions/_shared/`; that's the locked Edge Function pattern. To consolidate the *client* side as well would require either (a) refactoring `recommendations-v2/` + `taste-v2/` into a runtime-portable package consumed by both client and Deno via a build step, or (b) fully migrating the client off the mirror by routing all its calls through Edge Functions (longer-term: client only consumes Edge Function APIs, no shared code).
+
+The IN-466 build shipped option (a) of the original brief — mirror copy with a `shared-tree-drift` CI check. The CI check makes drift visible but doesn't eliminate it; emergency client-only fixes can ship with a `drift-allowed: <reason>` escape hatch in the PR body.
+
+**Why this matters:** every Phase 5+ change to weights, scoring, or row composition has to ship to *both* trees. The CI check enforces this, but the cognitive load is real and accumulates over months.
+
+**Phase target:** revisit after 1-2 months of accumulated Edge Function usage. If drift incidents are zero or low, leave as-is. If drift becomes a maintenance tax, schedule path-(b) as a dedicated phase (likely Phase 5/6 boundary).
+
+**Status:** ⏳ Filed; revisit after launch + 1-2 months of ops experience.
+
+---
+
+### IN-468: Variant B — stale-while-revalidate localStorage snapshot of For You payload
+
+**Source:** IN-466 phase summary — deferred per Cowork's "ship Edge Function FIRST, measure, then add snapshot" framing.
+
+**Detail:** Variant A (warm-pinger at app boot) closes the cold-start gap to ~800ms warm. For instant-paint UX, Variant B caches the rendered payload in localStorage with stale-while-revalidate semantics:
+- On `useForYouContent` mount: read cache, render immediately if hit. Fire fresh fetch in background. Replace state when fresh data lands.
+- TTL: 1 hour; invalidate on any explicit signal (thumbs ±, watchlist ±, marked watched, not interested), slider change, service change.
+- Storage: `videx.foryou_render.v1.{userId}` (~30 KB gzipped per user — confirmed via the `_measure_foryou_pool_size` script).
+
+**Trade-off:** the cache adds an instant-paint UX win but introduces invalidation complexity. The existing client-side caches (filter sets cache, anchor selection weekly cache) achieve a similar effect for repeat visits within a session, so the marginal value is for true cold-launch ("first open after the device booted").
+
+**Phase target:** revisit if the IN-466 warm-path p95 turns out to need it post-launch. Joe's gate is "viable to GTM"; if warm path holds at ~1s, defer indefinitely.
+
+**Status:** ⏳ Deferred; revisit post-launch if needed.
+
+---
+
+### IN-469: Cold-start mitigation continuation (warm-pinger evolution)
+
+**Source:** IN-466 phase summary — Variant A shipped this phase; further options noted for future.
+
+**Detail:** The cold-start profile measured during IN-466 build:
+- Cold-cold (first invocation after deploy): 12s
+- Cold instance (first batch): 5-6s
+- Warm steady-state: 800-1300ms
+
+Variant A (App.tsx-fired warm-pinger at mount) closes the cold gap *for users who open the app and wait a few seconds before navigating to For You*. Doesn't help if the user opens directly on the For You tab in <2s.
+
+Three further options on the table:
+1. **Pre-warm via Home tab** (original IN-466 entry option 3). When the user lands on Home, fire the full `render-foryou-rows` call in parallel with Home's loads. By the time they navigate to For You, data is hot. Adds Home/For You coordination complexity.
+2. **pg_cron-driven warm-pinger.** Schedule `warmup-foryou` invocation every 5 min via pg_cron. Keeps an Edge Function instance permanently warm. Costs ~8.6k invocations/month (free at our scale on Pro tier).
+3. **Variant B as the answer** (see IN-468). Skip cold-start entirely by reading from localStorage cache on first paint.
+
+**Phase target:** measure cold-start incidence in production telemetry first. If <10% of For You opens hit cold, no further work needed. If higher, schedule option 2 as the cheapest fix.
+
+**Status:** ⏳ Variant A shipped (App.tsx mount, IN-466). Further options deferred pending production cold-start telemetry.
+
+---
+
+### IN-470: Wire `featuredLastWeek` through to the Edge Function
+
+**Source:** Code review of IN-466 implementation (TypeScript review S7, 2026-04-30).
+
+**Detail:** The client-side `useAnchorMoodRooms` hook reads the previous week's anchor selection from localStorage (`videx.anchor_rooms.weekly.v1.{userId}.{weekBucket-1}`) and uses it to apply a variety penalty — anchors featured last week are excluded from this week's selection so the row feels fresh week-on-week.
+
+When the Edge Function path is taken (the default in IN-466), this signal is not threaded through. The Edge Function calls `selectAnchors` with no `featuredLastWeek` filter, so week-on-week variety degrades silently. The freshness within the current week still works (anchor selection is cached for 7 days locally).
+
+The Edge Function originally accepted a `featuredLastWeek?: string[]` field in its request body, but the field was always passed as `[]` because the threading from `useForYouContent` → `tryRenderForYouEdge` was never wired. Dropped during the IN-466 simplification pass to remove dead code; revive when the threading is implemented.
+
+**Fix when needed:** in `useForYouContent`, before invoking `tryRenderForYouEdge`, read the previous week's anchor cache from localStorage (use the same `buildWeekKey` helper from `useAnchorMoodRooms`), pass the keys through. Re-add the `featuredLastWeek?: string[]` field to the request body shape and the Edge Function orchestrator, plus the `selectAnchors` filter.
+
+**Phase target:** revisit when production telemetry shows users notice the same anchors recurring week-on-week. Likely Phase 5 or later.
+
+**Status:** ⏳ Filed; revisit if week-on-week anchor variety becomes a noticed problem.
 
 ---
 
@@ -994,6 +1309,79 @@ Wiring requires cascading delete across: `profiles`, `user_interactions`, `card_
 
 **Status:** ⏳ Deferred — revisit when Phase 4/5 needs to modify these files or when user feedback indicates retake quality is a problem
 
+### IN-XPS-010: Supabase Pro→Free downgrade risk inventory
+
+**Source:** Cost optimisation question raised during the IN-466 build (April 2026).
+
+**Detail:** Pre-launch, the question came up of downgrading the Supabase project from Pro to Free to reduce monthly spend. The codebase has several Pro-tier dependencies that would silently break on Free. Documented here so the trade-off is explicit before anyone tries it:
+
+**What breaks on Free:**
+
+1. **pg_partman partition creation.** Migration 014 sets up monthly partitioning of `card_impressions` via daily pg_cron maintenance. If pg_cron stops on Free, **next month's partition isn't created → INSERT failures → impression data loss** (cross-references IN-XPS-003 which flags this exact failure mode for partman monitoring).
+2. **Scheduled cron jobs.** `daily-content-sync` (migration 006), `enrich-new-titles` (Phase 0.5 cron), monthly mood-rooms-recluster trigger — all stop firing if pg_cron isn't available. Catalogue goes stale.
+3. **Project auto-pause.** Free projects pause after ~1 week of inactivity. App breaks until first request restarts it (~30s cold). Bigger issue once there are users than during dev.
+4. **Bandwidth ceiling.** Free is 5 GB/month. Each For You render is ~140 KB. ~35,000 renders/month hits the cap; at 2-3 renders/user/day, that caps active users at ~50-100.
+5. **Database size ceiling.** Free is 500 MB. Titles + embeddings alone are ~100 MB+; add `card_impressions`, `user_interactions`, `streaming_availability`, `taste_profiles` and the ceiling could already be near.
+6. **Daily backups.** Pro has PITR + daily backups. Free has weekly snapshots only. Less safety net.
+
+**What does NOT break on Free:**
+
+- All Edge Functions (sync-incremental, embed-new-titles, enrich-new-titles, label-anchor-room, render-foryou-rows, warmup-foryou). Free's 25s timeout is well above the 12s cold path.
+- pgvector + HNSW indexes work the same.
+- RLS, auth, all table queries — unchanged.
+- Local dev workflow (live reload, APK build) — unaffected.
+
+**If a downgrade is genuinely needed pre-launch:**
+
+1. Disable scheduled cron jobs first (or accept stale catalogue).
+2. Manually create `card_impressions` partitions ahead of time covering the planned downgrade window.
+3. Trigger the project at least weekly to prevent auto-pause.
+4. Verify current DB size is comfortably under 500 MB.
+
+**Reversibility:** the downgrade is reversible — re-upgrading restores everything. So a temporary downgrade is technically possible, but it's not free in operational risk.
+
+**Status:** ⏳ Documented; no action unless cost optimisation comes up again.
+
+### IN-XPS-011: CI guard against `verify_jwt = false` drift on user-callable Edge Functions
+
+**Source:** Security review of IN-466 (2026-04-30, hardening item H1).
+
+**Detail:** `extractUserIdFromJwt` in `supabase/functions/_shared/userScope.ts` decodes the JWT payload without verifying the signature, relying on Supabase's edge-runtime gateway to pre-verify the token (default `verify_jwt: true`). This is correct under current deploy posture but creates a silent-fail-open risk: if a future engineer disables `verify_jwt` for any user-callable Edge Function (e.g. to allow no-auth invocations), `extractUserIdFromJwt` would happily decode an attacker-forged `sub` claim from any well-formed unsigned JWT.
+
+**Fix:** add a CI check that fails the build if any function under `supabase/functions/` has `verify_jwt = false` set in `supabase/config.toml` without a co-located `// SECURITY:` justification comment in the function's `index.ts`. Cheap to add, catches the failure mode at PR review.
+
+**Alternative:** add an explicit `jose.jwtVerify(token, JWKS)` call in `extractUserIdFromJwt` cached behind a module-level promise — costs ~10ms per cold start, negligible vs RLS overhead we'd pay otherwise. Less ergonomic than the CI check.
+
+**Phase target:** pre-public-launch hardening sweep. Do not ship to production users without one of the two mitigations.
+
+**Status:** ⏳ Flagged; pre-public-launch.
+
+### IN-XPS-012: Promote parity probe to CI smoke test
+
+**Source:** Architecture review of IN-466 (2026-04-30, "Pattern Drift latent").
+
+**Detail:** ADR-012 calls out that the fallback path (existing client pipeline) and the Edge Function path must produce equivalent output. The `shared-tree-drift` CI workflow enforces *that the trees match at file level*, but a single PR can legally update both trees in lockstep with subtly different logic and the workflow passes. The only real safeguard against semantic divergence is the `scripts/_inspect_foryou_parity.mjs` probe — currently a one-shot manual script.
+
+**Fix:** create a fixture user in a dedicated CI-only Supabase project (or reuse the dev branch), seed deterministic interaction history, run the parity probe in CI on every PR that touches `src/lib/recommendations-v2/` or `supabase/functions/_shared/recommendations-v2/`. Fail if the Edge output diverges from the client output (same titles, same order modulo the documented variance bands).
+
+**Trade-off:** adds CI cost (one full Edge Function invocation per relevant PR) and requires the fixture user to be carefully maintained. But the gap is real — without it, "fallback would silently produce stale rankings" is a documented risk with no enforcement.
+
+**Phase target:** revisit after the first `drift-allowed:` escape-hatch use, or after the first production incident traceable to client-vs-Edge divergence.
+
+**Status:** ⏳ Filed; revisit on first signal of need.
+
+### IN-XPS-013: Pre-launch CORS tightening on user-callable Edge Functions
+
+**Source:** Security review of IN-466 (2026-04-30, hardening item H2).
+
+**Detail:** `render-foryou-rows` (and other user-callable Edge Functions) currently set `Access-Control-Allow-Origin: *`. Because the function requires a valid Bearer token, `*` doesn't grant cross-origin data access — but it does allow any origin to trigger render compute against a stolen token, making credential-theft consequences worse than they need to be.
+
+**Fix when public web build ships:** tighten CORS to known origins — the Capacitor app uses `https://localhost` (file:// equivalent), and any future web build will have a known origin like `https://app.videx.tv`. Add both to an allow-list. Today, `*` is correct because the dev workflow uses arbitrary LAN IPs.
+
+**Phase target:** pre-public-launch hardening sweep, alongside IN-XPS-011.
+
+**Status:** ⏳ Flagged; pre-public-launch.
+
 ---
 
 ## Onboarding implementation notes
@@ -1087,6 +1475,34 @@ If user abandons onboarding and re-opens app: decide whether to (a) resume from 
 
 **Status:** ⏳ Not yet incorporated
 
+### IN-OB-006: Onboarding cluster taxonomy review under v2 engine assumptions
+
+**Source:** Phase 4 mood rooms probe (April 2026) — surfaced empirical question about whether the v1-shaped onboarding clusters still serve the v2 engine.
+
+**Detail:** The current 14-cluster onboarding picker (Step 4) was designed for v1's 24D handcrafted vector where clusters mapped to dimension activations. In v2 the engine works on individual title embeddings. The probe confirmed:
+
+- Anchored rooms can surface signals **outside** stated cluster picks (Sinners → Horror for a user who never picked horror, where the user has clear behavioural evidence for horror but no horror cluster pick)
+- The Prestige-Award-Winners cluster is structurally diffuse (representatives spread across content neighbourhoods) — the centroid mismatch the brief flagged is real
+- Watched-grid picks (onboarding Step 3) are structurally well-aligned with the v2 engine because they're individual titles, not aggregated categories
+
+Three options for redesign, deliberately not selecting one:
+
+1. **Sharpen clusters.** Trim to fewer, tighter clusters. Drop Prestige. Validate each remaining cluster's representatives sit close in embedding space.
+2. **Drop clusters entirely.** Step 4 becomes a second round of title-picking (or merges with Step 3). Each pick is an anchor candidate natively.
+3. **Hybrid: titles within broad genre buckets.** 6–8 broad buckets organise the title-picking. Buckets are not stored as signals; the title picks are.
+
+**Required input from Phase 4.5 telemetry** (instrumented via migration 033 `card_impressions.metadata`):
+
+- Frequency of Tier 1 anchors falling outside any user-selected cluster (high frequency suggests cluster taxonomy is too narrow)
+- Per-cluster anchor surfacing rate (low rate for any cluster suggests that cluster is structurally weak, à la Prestige)
+- CTR by anchor source tier (does the user actually engage more with Tier 2 cluster-derived anchors than Tier 1 behavioural anchors? Tells us how much the cluster signal is worth)
+
+**Why deferred:** title-anchored mood rooms work regardless of which onboarding direction is chosen. Shipping Phase 4.5 with current clusters as Tier 2 source captures three months of telemetry that informs the redesign with data instead of guesswork.
+
+**Phase target:** Phase 6 review, post-Phase-4.5 telemetry analysis.
+
+**Status:** ⏳ Not yet incorporated
+
 ---
 
-*End of parking lot v0.3.1. All new entries from strategy review rounds 1-3 incorporated. Phase 6.5 section removed — cleanup is distributed across the phases that perform it. Ready for CC review as part of the v2 document set.*
+*End of parking lot v0.4. Phase 4.5 redirect added entries IN-463, IN-464, IN-465, IN-OB-006. All entries from strategy review rounds 1-3 incorporated. Phase 6.5 section removed — cleanup is distributed across the phases that perform it. Ready for CC review as part of the v2 document set.*

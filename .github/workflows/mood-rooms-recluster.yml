@@ -1,12 +1,12 @@
 name: Mood rooms recluster
 
-# Schedule is disabled until the first manual workflow_dispatch run is
-# validated against the IN-457 gates (cluster count, coverage, coherence).
-# See Phase 4.5 plan §2.7. To enable after Gate 3 approval, uncomment the
-# two lines below.
+# Monthly re-clustering cron. Gate 3 passed 2026-04-21 (run #2 wrote
+# version=1 with 69 clusters at 53.0% coverage and OpenAI label
+# quality confirmed). workflow_dispatch stays enabled alongside for
+# manual re-runs (e.g. after label prompt tuning).
 on:
-  # schedule:
-  #   - cron: '0 3 1 * *'   # 03:00 UTC, 1st of each month
+  schedule:
+    - cron: '0 3 1 * *'   # 03:00 UTC, 1st of each month
   workflow_dispatch:
 
 jobs:

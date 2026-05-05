@@ -1,0 +1,6 @@
+hdbscan==0.8.42
+numpy==1.26.4
+psycopg2-binary==2.9.11
+openai==2.32.0
+python-dotenv==1.2.2
+umap-learn==0.5.12

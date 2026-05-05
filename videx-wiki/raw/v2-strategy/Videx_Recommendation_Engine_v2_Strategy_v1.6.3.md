@@ -432,8 +432,10 @@ Both alternatives rejected in favour of the batch query + client-side scoring ap
 
 **Mood Rooms (Pillar 1 personalised discovery surface):**
 - **Definition:** organically clustered, LLM-labelled taste neighbourhoods emerging from the content embedding space. Clustering is global (same rooms for all users). Which rooms appear on a given user's For You surface and in what order is taste-fit-driven.
-- **Clustering method:** density-based clustering (HDBSCAN) over the 20K content embeddings. HDBSCAN produces variable-sized organic clusters and identifies noise (titles that don't fit cleanly anywhere).
-- **Expected output:** 30–60 mood rooms, each containing 50–500 titles, covering ~70–80% of the catalogue.
+- **Clustering method:** UMAP preprocessing (1536D → 10D) followed by density-based clustering (HDBSCAN) on the low-dim output. Pure HDBSCAN on raw 1536D embeddings fails on this catalogue (2 clusters, 10% coverage) because of the curse of dimensionality; UMAP is the canonical fix used by BERTopic / Top2Vec and is required here. Centroids and centrality are computed in the **original 1536D space** so the frontend's taste-fit scoring works against 1536D taste vectors.
+- **Expected output:** 30–60 mood rooms, each containing 30–800 titles, covering ~50–60% of the catalogue.
+- **Coverage ceiling is structural, not tunable.** Phase 4.5 ran four orthogonal tuning passes (UMAP `n_neighbors`, HDBSCAN `min_cluster_size`, `cluster_selection_method`, `max_cluster_size`) and coverage moved within a 51–58% band. ~45% of the 20K catalogue sits in sparse regions of the embedding space without dense neighbours. The pre-data estimate of 70–80% coverage proved optimistic for OpenAI `text-embedding-3-small` on this UK-focused catalogue. Full tune sequence: Parking Lot IN-457.
+- **Hybrid clustering (HDBSCAN + k-means on noise) rejected.** Would buy coverage at the cost of incoherent synthetic rooms — titles forced into clusters they don't belong to, which undermines the mood-rooms UX. Non-clustered titles still surface via other For You rows (Recommended, Hidden Gems, Because You Watched). Quality is prioritised over coverage. Revisit after 3 monthly runs per Parking Lot IN-459 if engagement data reveals under-served titles in sparse regions.
 - **Execution environment (locked):** Python script running via GitHub Actions monthly cron. HDBSCAN has no production-quality TypeScript implementation; the canonical Python library (`hdbscan`) is the right tool. Running it from GitHub Actions avoids the operational cost of a dedicated Python service or microservice.
 - **Script location:** `scripts/mood_rooms/recluster.py` in the main repo.
 - **Dependencies:** `hdbscan`, `numpy`, `psycopg2-binary`, `openai`, pinned in `scripts/mood_rooms/requirements.txt`.
@@ -649,7 +651,7 @@ The two prototype users will lose their existing taste profiles at this point. T
 | **Phase 0.5 backfill silently fails (`title_credits` cautionary tale).** | Row-count validation as hard acceptance criteria for every enrichment column. |
 | **Negative dwell signals collapse a user's taste vector during exploratory browsing.** | Negative session cap of −1.0. |
 | **pgvector wire format breaks client-side retrieval.** | Phase 1 spike produces a locked pattern before Phase 3 depends on it. |
-| **HDBSCAN produces bad clusters at 20K scale.** | Empirically validate in Phase 4.5. Fallback to a different clustering approach (k-means with fixed cluster count) if HDBSCAN output is unusable. |
+| ~~**HDBSCAN produces bad clusters at 20K scale.**~~ | ✅ Resolved in Phase 4.5: pure HDBSCAN failed (2 clusters, 10% coverage); UMAP preprocessing + HDBSCAN ships 68 clusters at 53.5% coverage. Hybrid fallback rejected (would degrade quality). Re-evaluate coverage after 3 monthly runs per IN-459. |
 | **GitHub Actions cron fails silently for mood room reclustering.** | Monitor workflow history monthly. Add a Supabase write timestamp that alerts if reclustering is >35 days old. |
 | **Hook-level rewrites in Phase 3 drag in more scope than expected.** | CC reviewed the coupling in round 2 and identified the specific files. Phase 3 spec enumerates them explicitly. |
 | **Phase 0.5 backfill takes longer than laptop uptime.** | Script supports resume-from-last-completed. Run overnight or in batches. |
@@ -670,7 +672,7 @@ The two prototype users will lose their existing taste profiles at this point. T
 2. **What's the right exploration ratio default?** Start at 20–25%, measure in Phase 4.
 3. **Slider → pipeline mapping specifics.** Confirm exact weight ranges empirically.
 4. **Watched-grid title selection algorithm** — how to select the 6 titles per round such that rounds produce differentiated, informative slices. Implementation details in parking lot IN-OB-002.
-5. **Does HDBSCAN produce 30-60 usable clusters at 20K scale?** Empirical validation in Phase 4.5. If not, fallback to k-means with fixed k.
+5. ~~**Does HDBSCAN produce 30-60 usable clusters at 20K scale?**~~ ✅ Resolved in Phase 4.5 (see Section 5.2 + Parking Lot IN-457): pure HDBSCAN failed with 2 clusters / 10% coverage; UMAP+HDBSCAN ships 68 coherent clusters at 53.5% coverage. Cluster-count gate met (slight overshoot, 68 vs 30-60 target; monitor stability across runs 2-3). Coverage plateau is structural — hybrid fallback rejected per Section 5.2.
 6. **Auto-generated taste summary quality.** Qualitative review of LLM-generated summaries before launch.
 7. **Genre taxonomy validation.** Final taxonomy reviewed during implementation.
 8. **Negative dwell signal calibration.** Are the proposed weights the right starting points?

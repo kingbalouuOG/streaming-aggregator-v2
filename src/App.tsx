@@ -6,6 +6,8 @@ import { CategoryFilter } from "./components/CategoryFilter";
 import { ContentRow } from "./components/ContentRow";
 import { FeaturedHeroCarousel } from "./components/FeaturedHero";
 import { ForYouPage } from "./components/ForYouPage";
+import { MoodRoomPage } from "./components/MoodRoomPage";
+import type { AnchorRoomPreview } from "./hooks/useAnchorMoodRooms";
 import { BottomNav } from "./components/BottomNav";
 import { ContentItem } from "./components/ContentCard";
 import { BrowsePage, BrowseStateSnapshot } from "./components/BrowsePage";
@@ -29,6 +31,7 @@ import { useWatchlist } from "./hooks/useWatchlist";
 import { useHomeContent } from "./hooks/useHomeContent";
 import { useUpcoming } from "./hooks/useUpcoming";
 import { providerIdsToServiceIds, providerIdToServiceId } from "./lib/adapters/platformAdapter";
+import { warmRenderForYou } from "./lib/recommendations-v2/edgeWarmup";
 import type { ServiceId } from "./components/platformLogos";
 import { App as CapApp } from "@capacitor/app";
 import { useTasteProfile } from "./hooks/useTasteProfile";
@@ -39,8 +42,33 @@ import { maintainCache } from "./lib/api/cache";
 import { flushNow } from "./lib/instrumentation/impressionBatcher";
 import { parseContentItemId } from "./lib/adapters/contentAdapter";
 import { emitContentInteraction } from "./lib/storage/interactions";
+import { useIntersectionObserver } from "./hooks/useIntersectionObserver";
 
 const categories = ["All", "Movies", "TV Shows", "Docs", "Anime"];
+
+/**
+ * Sentinel for the lazy-loaded Genre Spotlight chain. Mounts a thin
+ * div below the last rendered spotlight; when it scrolls into view,
+ * fires `onVisible` to load the next cluster. Re-keyed by the parent
+ * on each load so a fresh observer attaches to the new sentinel.
+ */
+function GenreSpotlightSentinel({
+  onVisible,
+  loading,
+}: {
+  onVisible: () => void;
+  loading: boolean;
+}) {
+  const { ref, isVisible } = useIntersectionObserver({
+    rootMargin: "300px 0px",
+    triggerOnce: true,
+  });
+  useEffect(() => {
+    if (isVisible && !loading) onVisible();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVisible]);
+  return <div ref={ref} className="h-1" />;
+}
 
 export default function App() {
   return (
@@ -61,6 +89,7 @@ function AppContent() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [activeTab, setActiveTab] = useState("home");
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
+  const [selectedAnchorRoom, setSelectedAnchorRoom] = useState<AnchorRoomPreview | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [watchlistSubTab, setWatchlistSubTab] = useState<"want" | "watched">("want");
@@ -73,6 +102,11 @@ function AppContent() {
 
   // --- Prune stale cache entries on startup ---
   useEffect(() => { maintainCache(); }, []);
+
+  // Warmup ref needs to be at component top-level (Hooks rule). The
+  // useEffect that consumes it is below, after connectedServices is
+  // declared, since we need user services to fire the warmup.
+  const warmedRef = useRef(false);
 
   // --- User preferences (onboarding, profile) ---
   const userId = auth.loading ? null : (auth.user?.id ?? null);
@@ -115,6 +149,21 @@ function AppContent() {
     [connectedServices.join(',')]
   );
 
+  // --- Warm the For You Edge Function (IN-466 Variant A) ---
+  // Fire-and-forget hit on render-foryou-rows itself once auth + prefs
+  // have resolved. Edge Function instances are per-function, so warming
+  // a noop function doesn't help — we have to warm the function we
+  // actually want hot. Cost: one extra full pipeline run per app
+  // session. Gain: first For You navigation hits ~800ms warm instead
+  // of 5-12s cold. Logic lives in edgeWarmup.ts.
+  useEffect(() => {
+    if (warmedRef.current) return;
+    if (auth.loading || userPrefs.loading) return;
+    if (!auth.session || connectedServices.length === 0) return;
+    warmedRef.current = true;
+    void warmRenderForYou(connectedServices);
+  }, [auth.loading, auth.session, userPrefs.loading, connectedServices.join(',')]);
+
   // Set of watched item IDs for detail page
   const watchedIds = useMemo(
     () => new Set(wl.watched.map((i) => i.id)),
@@ -147,7 +196,7 @@ function AppContent() {
         home.recentlyAdded.items.length > 0,
         home.popular.items.length > 0,
         home.perServiceCharts.length > 0,
-        home.genreSpotlight?.items.length ?? 0 > 0,
+        home.genreSpotlights.length > 0,
       ].filter(Boolean).length;
 
       void logOnboardingEvent(ONBOARDING_EVENTS.FIRST_HOME_VIEW, {
@@ -202,6 +251,22 @@ function AppContent() {
     setSelectedItem(null);
   };
 
+  const handleSelectAnchorRoom = (preview: AnchorRoomPreview) => {
+    // Flush trigger (parity with handleItemSelect): any pending For You
+    // card impressions must be attributed to for_you, not to the room
+    // surface we're navigating into.
+    void flushNow();
+    if (scrollRef.current) {
+      savedScrollPositions.current[activeTab] = scrollRef.current.scrollTop;
+    }
+    setSelectedAnchorRoom(preview);
+  };
+
+  const handleMoodRoomBack = () => {
+    pendingScrollRestore.current = savedScrollPositions.current[activeTab] ?? 0;
+    setSelectedAnchorRoom(null);
+  };
+
   const handleShowCalendar = () => {
     if (scrollRef.current) {
       savedScrollPositions.current[activeTab] = scrollRef.current.scrollTop;
@@ -217,6 +282,7 @@ function AppContent() {
       savedScrollPositions.current[activeTab] = scrollRef.current.scrollTop;
     }
     setSelectedItem(null);
+    setSelectedAnchorRoom(null);
     setShowCalendar(false);
     setActiveTab(tab);
   };
@@ -396,8 +462,10 @@ function AppContent() {
   // Delayed scroll restore — covers AnimatePresence exit animation (0.18s)
   // The useLayoutEffect above fires before the exit animation finishes,
   // so the browser clamps scrollTop to 0 when content swaps. This re-applies after.
+  // Triggers on either selectedItem or selectedMoodRoomId clearing; whichever
+  // pushed pendingScrollRestore is the one we're returning from.
   useEffect(() => {
-    if (selectedItem || pendingScrollRestore.current === null) return;
+    if (selectedItem || selectedAnchorRoom || pendingScrollRestore.current === null) return;
     const target = pendingScrollRestore.current;
     pendingScrollRestore.current = null;
 
@@ -408,13 +476,18 @@ function AppContent() {
       }
     }, 280);
     return () => clearTimeout(timer);
-  }, [selectedItem]);
+  }, [selectedItem, selectedAnchorRoom]);
 
   // ── Android back button ──
+  // Hierarchy: DetailPage > MoodRoomPage > Calendar > non-home tab > exit.
+  // DetailPage sits above MoodRoomPage in the render chain (a detail
+  // opened from within a room should back to the room, not to For You).
   useEffect(() => {
     const listener = CapApp.addListener("backButton", () => {
       if (selectedItem) {
-        setSelectedItem(null);
+        handleDetailBack();
+      } else if (selectedAnchorRoom) {
+        handleMoodRoomBack();
       } else if (showCalendar) {
         setShowCalendar(false);
       } else if (activeTab !== "home") {
@@ -424,7 +497,7 @@ function AppContent() {
       }
     });
     return () => { listener.then((l) => l.remove()); };
-  }, [selectedItem, showCalendar, activeTab]);
+  }, [selectedItem, selectedAnchorRoom, showCalendar, activeTab]);
 
   // ── Pull-to-refresh ──
   const [pullDistance, setPullDistance] = useState(0);
@@ -582,7 +655,7 @@ function AppContent() {
           onTouchStart={(e) => handlePullStart(e.touches[0].clientY)}
           onTouchMove={(e) => handlePullMove(e.touches[0].clientY)}
           onTouchEnd={handlePullEnd}
-          className="flex-1 overflow-y-auto pb-4 no-scrollbar"
+          className="flex-1 overflow-y-auto pb-4 no-scrollbar safe-top"
           style={{ overflowX: 'hidden', overscrollBehaviorX: 'none', transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined, transition: isPulling.current ? 'none' : 'transform 0.3s ease' }}
         >
           <AnimatePresence mode="wait">
@@ -632,6 +705,32 @@ function AppContent() {
               onMoveToWantToWatch={handleMoveToWantToWatch}
               userRating={wl.ratings[selectedItem.id] || null}
               onRate={handleRate}
+            />
+            </motion.div>
+          ) : selectedAnchorRoom ? (
+            <motion.div
+              key={`anchor-room-${selectedAnchorRoom.id}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+            >
+            <MoodRoomPage
+              kind="anchor"
+              anchor={selectedAnchorRoom.anchor}
+              anchorTitle={selectedAnchorRoom.anchorTitle}
+              anchorYear={selectedAnchorRoom.anchorYear}
+              llmLabel={selectedAnchorRoom.llmLabel}
+              providerIds={connectedServices}
+              connectedServiceIds={connectedServiceIds}
+              sharedFilters={home.sharedFilters ?? null}
+              filterWatched={filterWatched}
+              filterLanguage={filterLanguage}
+              bookmarkedIds={wl.bookmarkedIds}
+              watchedIds={watchedIds}
+              onItemSelect={handleItemSelect}
+              onToggleBookmark={handleToggleBookmark}
+              onBack={handleMoodRoomBack}
             />
             </motion.div>
           ) : (
@@ -712,9 +811,32 @@ function AppContent() {
                         <ContentRow title="Critically Acclaimed" sectionKey="critically-acclaimed" sourceSurface="home" items={filterLanguage(filterWatched(home.criticallyAcclaimed))} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
                       )}
 
-                      {/* Genre Spotlight (Phase 4) */}
-                      {home.genreSpotlight && home.genreSpotlight.items.length > 0 && (
-                        <ContentRow title={home.genreSpotlight.clusterName} sectionKey="genre-spotlight" sourceSurface="home" items={filterLanguage(filterWatched(home.genreSpotlight.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                      {/* Genre Spotlights (Phase 4 — lazy chain).
+                          Primary spotlight loads with the rest of Home; further
+                          clusters mount as the user scrolls past the previous
+                          one's sentinel. Cycle length = 16 (one per cluster). */}
+                      {home.genreSpotlights.map((spotlight, idx) =>
+                        spotlight.items.length > 0 ? (
+                          <ContentRow
+                            key={`genre-spotlight-${idx}`}
+                            title={spotlight.clusterName}
+                            sectionKey={`genre-spotlight-${idx}`}
+                            sourceSurface="home"
+                            items={filterLanguage(filterWatched(spotlight.items))}
+                            onItemSelect={handleItemSelect}
+                            bookmarkedIds={wl.bookmarkedIds}
+                            onToggleBookmark={handleToggleBookmark}
+                            userServices={connectedServiceIds}
+                            watchedIds={watchedIds}
+                          />
+                        ) : null,
+                      )}
+                      {home.canLoadMoreGenreSpotlights && (
+                        <GenreSpotlightSentinel
+                          key={`spotlight-sentinel-${home.genreSpotlights.length}`}
+                          onVisible={home.loadMoreGenreSpotlights}
+                          loading={home.spotlightsLoading}
+                        />
                       )}
 
                     </motion.div>
@@ -730,6 +852,7 @@ function AppContent() {
                   filterWatched={filterWatched}
                   filterLanguage={filterLanguage}
                   onItemSelect={handleItemSelect}
+                  onSelectAnchorRoom={handleSelectAnchorRoom}
                   bookmarkedIds={wl.bookmarkedIds}
                   onToggleBookmark={handleToggleBookmark}
                   watchedIds={watchedIds}

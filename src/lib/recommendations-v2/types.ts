@@ -139,6 +139,11 @@ export interface RowConfig {
   clusterIndex?: number;
   /** IDs already shown in other rows (for cross-row dedup) */
   excludeIds?: Set<string>;
+  /** Override DEFAULT_MAX_PER_GENRE for this row. Outside Your Usual
+      uses a higher value because variety is the row's whole point —
+      enforcing strict genre-spread on top of an already-narrow
+      bottom-cosine candidate set produces empty rows. */
+  maxPerGenre?: number;
 }
 
 /** Hidden Gems filter thresholds */

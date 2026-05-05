@@ -8,6 +8,7 @@ import { buildFilterSets, type FilterSets } from '@/lib/recommendations-v2/hardF
 import { fetchPerServiceCharts, type PerServiceChartRow } from '@/lib/recommendations-v2/rows/home/perServiceChart';
 import { fetchCriticallyAcclaimed } from '@/lib/recommendations-v2/rows/home/criticallyAcclaimed';
 import { fetchGenreSpotlight } from '@/lib/recommendations-v2/rows/home/genreSpotlight';
+import { getV2TasteProfile } from '@/lib/taste-v2/tasteProfileV2';
 import type { FilterState } from '@/components/FilterSheet';
 import type { ServiceId } from '@/components/platformLogos';
 import type { ContentItem } from '@/components/ContentCard';
@@ -21,7 +22,13 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
   // Phase 4 Home rows
   const [perServiceCharts, setPerServiceCharts] = useState<PerServiceChartRow[]>([]);
   const [criticallyAcclaimed, setCriticallyAcclaimed] = useState<ContentItem[]>([]);
-  const [genreSpotlight, setGenreSpotlight] = useState<{ clusterName: string; emoji: string; items: ContentItem[] } | null>(null);
+  type GenreSpotlightRow = { clusterName: string; emoji: string; items: ContentItem[] };
+  const [genreSpotlights, setGenreSpotlights] = useState<GenreSpotlightRow[]>([]);
+  const [spotlightsLoading, setSpotlightsLoading] = useState(false);
+  // User's onboarding cluster picks. Drives spotlight ordering — picked
+  // clusters surface first, the rest rotate weekly behind. Falls back to
+  // empty array (= pure week rotation) if profile isn't loaded yet.
+  const [selectedClusters, setSelectedClusters] = useState<string[]>([]);
 
   const providerStr = providerIds.join(',');
 
@@ -117,18 +124,80 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
       .map(id => providerIdToServiceId(id))
       .filter(Boolean) as string[];
 
-    Promise.all([
-      fetchPerServiceCharts(serviceIds, 3),
-      fetchCriticallyAcclaimed(sharedFilters.availableTmdbIds),
-      fetchGenreSpotlight(sharedFilters.availableTmdbIds),
-    ]).then(([charts, acclaimed, spotlight]) => {
-      setPerServiceCharts(charts);
-      setCriticallyAcclaimed(acclaimed);
-      setGenreSpotlight(spotlight);
-    }).catch(err => {
-      console.error('[useHomeContent] Phase 4 rows error:', err);
+    // Read profile to get selectedClusters for spotlight ordering. The
+    // result feeds both the local state (for `loadMoreGenreSpotlights`)
+    // and the primary fetch below.
+    void getV2TasteProfile().then((profile) => {
+      const picks = profile?.selectedClusters ?? [];
+      setSelectedClusters(picks);
+
+      // Build per-service-charts ID set as initial dedup seed for
+      // spotlights — Joe's "Goldbergs in adjacent sections" was a
+      // dedup miss. Per-service rows ship before spotlights so we
+      // can safely seed.
+      Promise.all([
+        fetchPerServiceCharts(serviceIds),
+        fetchCriticallyAcclaimed(sharedFilters!.availableTmdbIds),
+      ]).then(async ([charts, acclaimed]) => {
+        setPerServiceCharts(charts);
+        setCriticallyAcclaimed(acclaimed);
+
+        const seedExclude = new Set<string>();
+        for (const c of charts) for (const i of c.items) seedExclude.add(i.id);
+
+        const primarySpotlight = await fetchGenreSpotlight(
+          sharedFilters!.availableTmdbIds,
+          15,
+          0,
+          picks,
+          seedExclude,
+        );
+        setGenreSpotlights(primarySpotlight.items.length > 0 ? [primarySpotlight] : []);
+      }).catch((err) => {
+        console.error('[useHomeContent] Phase 4 rows error:', err);
+      });
     });
   }, [sharedFilters, providerStr]);
+
+  /**
+   * Lazy-load the next genre spotlight. Called from a scroll sentinel
+   * placed below the last rendered spotlight. Stops at 16 (the cluster
+   * cycle length) so we don't loop. No-op while a previous load is in
+   * flight.
+   */
+  const MAX_GENRE_SPOTLIGHTS = 16;
+  const loadMoreGenreSpotlights = useCallback(async () => {
+    if (!sharedFilters) return;
+    if (spotlightsLoading) return;
+    if (genreSpotlights.length >= MAX_GENRE_SPOTLIGHTS) return;
+
+    setSpotlightsLoading(true);
+    try {
+      const offset = genreSpotlights.length; // 0-based; primary was offset 0
+
+      // Build dedup set from everything already on Home (other genre
+      // spotlights + per-service charts). Same item appearing in two
+      // adjacent rows is the most visible dedup failure.
+      const exclude = new Set<string>();
+      for (const sp of genreSpotlights) for (const i of sp.items) exclude.add(i.id);
+      for (const c of perServiceCharts) for (const i of c.items) exclude.add(i.id);
+
+      const next = await fetchGenreSpotlight(
+        sharedFilters.availableTmdbIds,
+        15,
+        offset,
+        selectedClusters,
+        exclude,
+      );
+      // Always append (even if empty) so the sentinel chain advances
+      // to the next cluster on the next scroll trigger.
+      setGenreSpotlights((prev) => [...prev, next]);
+    } catch (err) {
+      console.error('[useHomeContent] loadMoreGenreSpotlights error:', err);
+    } finally {
+      setSpotlightsLoading(false);
+    }
+  }, [sharedFilters, spotlightsLoading, genreSpotlights, perServiceCharts, selectedClusters]);
 
   // --- Render-time dedup ---
   const dedupedSections = useMemo(() => {
@@ -181,7 +250,11 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     // Phase 4 Home rows
     perServiceCharts,
     criticallyAcclaimed,
-    genreSpotlight,
+    genreSpotlights,
+    spotlightsLoading,
+    canLoadMoreGenreSpotlights:
+      genreSpotlights.length > 0 && genreSpotlights.length < MAX_GENRE_SPOTLIGHTS,
+    loadMoreGenreSpotlights,
     fetchMovies,
     fetchTV,
     loading,
