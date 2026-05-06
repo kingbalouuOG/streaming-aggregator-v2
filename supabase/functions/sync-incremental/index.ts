@@ -84,8 +84,12 @@ async function fetchWithRetry(
       // Retry on server errors and rate limits
       if (res.status >= 500 || res.status === 429) {
         if (attempt < maxRetries) {
-          const backoff = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
-          console.log(`Retry ${attempt + 1}/${maxRetries} after ${backoff}ms (HTTP ${res.status})`);
+          // Honour Retry-After when present (RapidAPI returns it on 429).
+          // Falls back to exponential backoff for 5xx without a header.
+          const retryAfter = res.headers.get('retry-after');
+          const headerMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 0;
+          const backoff = headerMs > 0 ? headerMs : Math.pow(2, attempt) * 1000;
+          console.log(`Retry ${attempt + 1}/${maxRetries} after ${backoff}ms (HTTP ${res.status}${retryAfter ? `, Retry-After=${retryAfter}s` : ''})`);
           await delay(backoff);
           continue;
         }
@@ -113,6 +117,11 @@ async function saApiFetch(path: string): Promise<any> {
 
 // ── Sync logic ───────────────────────────────────────────
 
+// Cap the lookback window so a stuck/failed run can't compound API spend
+// when the next run finally succeeds. 36h is generous enough to cover one
+// missed daily run without balloning pagination on the SA API side.
+const MAX_SINCE_LOOKBACK_SECONDS = 36 * 3600;
+
 async function getLastSyncTimestamp(): Promise<number> {
   const { data } = await supabase
     .from('sync_log')
@@ -123,12 +132,16 @@ async function getLastSyncTimestamp(): Promise<number> {
     .limit(1)
     .single();
 
+  const nowSec = Math.floor(Date.now() / 1000);
+  const minSince = nowSec - MAX_SINCE_LOOKBACK_SECONDS;
+
   if (data?.completed_at) {
-    return Math.floor(new Date(data.completed_at).getTime() / 1000);
+    const lastCompleted = Math.floor(new Date(data.completed_at).getTime() / 1000);
+    return Math.max(lastCompleted, minSince);
   }
 
   // If no previous incremental sync, default to 24 hours ago
-  return Math.floor(Date.now() / 1000) - 86400;
+  return nowSec - 86400;
 }
 
 function extractTmdbId(saApiTmdbId: string): { tmdbId: number; mediaType: 'movie' | 'tv' } {
@@ -336,7 +349,8 @@ async function runIncrementalSync(sinceOverride?: number, syncId?: string): Prom
 
           hasMore = result.hasMore || false;
           cursor = result.nextCursor;
-          await delay(150);
+          // Pace requests below RapidAPI's per-second cap on the BASIC tier.
+          await delay(1100);
         } catch (err: any) {
           console.error(`Error fetching ${changeType} changes for ${service}:`, err.message);
           stats.errors++;
@@ -376,6 +390,10 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Declared outside try so the outer catch can mark the row as failed
+  // instead of leaving it stuck in 'running' forever.
+  let syncId: string | undefined;
+
   try {
     // Parse optional since parameter
     const url = new URL(req.url);
@@ -389,7 +407,7 @@ Deno.serve(async (req) => {
       .select('id')
       .single();
 
-    const syncId = syncLog?.id;
+    syncId = syncLog?.id;
 
     // Run the sync
     const stats = await runIncrementalSync(since, syncId);
@@ -417,6 +435,16 @@ Deno.serve(async (req) => {
     });
   } catch (err: any) {
     console.error('Sync failed:', err.message);
+    if (syncId) {
+      await supabase
+        .from('sync_log')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          errors: 1,
+        })
+        .eq('id', syncId);
+    }
     return new Response(JSON.stringify({ status: 'error', message: err.message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
