@@ -1,7 +1,12 @@
 # Videx v2 — Implementation Notes Parking Lot
 
-**Status:** v0.5 — IN-466 (server-side For You render via Edge Function) shipped; ✅ marked. Eight new entries filed from the IN-466 implementation + code review pass: IN-467 (mirror consolidation), IN-468 (Variant B SWR cache), IN-469 (cold-start mitigation), IN-470 (`featuredLastWeek` wiring), plus four cross-phase entries IN-XPS-010 (Pro→Free downgrade risks), IN-XPS-011 (verify_jwt CI guard), IN-XPS-012 (parity probe in CI), IN-XPS-013 (CORS tightening pre-launch).
-**Version:** 0.5
+**Status:** v0.6 — Phase 5 kickoff. IN-463 ✅ Incorporated (LLM thematic labels shipped, migration 034). IN-466 already ✅ in v0.5; restated here for the audit trail. IN-XPS-006 phase target confirmed as Phase 5 (delete account wiring) per Phase 5 brief §1.3. No new entries vs v0.5.
+**Version:** 0.6
+
+**Changes from v0.5:**
+- **IN-463** status flipped from ⏳ → ✅ Incorporated. LLM thematic labels for anchored mood rooms shipped via migration 034 (`mood_room_anchor_labels`) plus the `label-anchor-room` Edge Function (called server-side from `render-foryou-rows`). Replaces v1 templated labels for anchored rooms only — global mood rooms keep their cluster-derived labels.
+- **IN-XPS-006** phase target confirmed: stays in Phase 5. Delete account wiring lands alongside the other pre-launch security work in Phase 5 Workstream C; should not slip into Phase 6 unflagged.
+- All Phase 5 entries (IN-462, IN-458, IN-465, IN-467, IN-468, IN-469, IN-XPS-002, IN-XPS-004, IN-XPS-006, IN-XPS-011, IN-XPS-012, IN-XPS-013) confirmed in the Phase 5 brief and remain ⏳ Not yet incorporated. Status flips will land at Phase 5 close-out.
 
 **Changes from v0.4:**
 - **IN-466** status flipped from ⏳ → ✅ Incorporated. Server-side render landed via the `render-foryou-rows` Edge Function. Cold-fallback contract: client falls through to the existing `useForYouContent` pipeline on any Edge failure (5xx, malformed JSON, network, >1.5s timeout — tightened from the brief's 5s after the cold-instance profile came in 5-12s).
@@ -1005,7 +1010,7 @@ Impact: noticeable latency cost (~1-2s) on every tab bounce. Predates Phase 4.5 
 
 **Phase target:** Phase 4.5 fast-follow.
 
-**Status:** ⏳ Not yet incorporated.
+**Status:** ✅ Incorporated (April 2026). Migration 034 (`mood_room_anchor_labels`) added `mood_rooms.anchor_label_text` and `mood_rooms.anchor_label_generated_at`. New `label-anchor-room` Edge Function generates thematic labels via the LLM, called server-side from `render-foryou-rows`. Replaces literal-anchor naming on anchored rooms only; global mood rooms keep their cluster-derived labels.
 
 ### IN-464: Detail-page "Make a room from this title" feature
 
@@ -1279,7 +1284,9 @@ Fatal: Error: EPERM: operation not permitted, rename
 
 Wiring requires cascading delete across: `profiles`, `user_interactions`, `card_impressions`, `taste_profiles`, `user_services`, watchlist entries, and the Supabase auth user. Must be implemented before public launch.
 
-**Status:** ⏳ Flagged for pre-public-launch
+**Phase target:** Phase 5 (confirmed in Phase 5 brief §1.3 — should not slip to Phase 6 unflagged). Lands alongside the rest of Workstream C pre-launch security work.
+
+**Status:** ⏳ Flagged for pre-public-launch — scheduled for Phase 5.
 
 ### IN-XPS-007: Service pricing config needs review cadence *(Phase 3 carry-forward)*
 
