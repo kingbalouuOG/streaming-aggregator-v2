@@ -31,6 +31,40 @@ import type { SliderState } from '@/lib/taste-v2/types';
 import type { CandidatePool, PipelineContext, ScoredCandidate, ExtendedTitleRow } from '@/lib/recommendations-v2/types';
 import { EXTENDED_TITLE_SELECT } from '@/lib/recommendations-v2/types';
 
+/**
+ * Phase 5: fetch embeddings for the supplied scored candidates so MMR
+ * can compute redundancy. Reuses the batch select pattern from
+ * anchorSelection.ts:469. Returns a Map keyed by contentKey ("media_type-tmdb_id").
+ * Failures degrade to an empty map; MMR then no-ops and buildRowFromPool
+ * falls back to applyGenreSpread.
+ */
+async function fetchEmbeddingsForCandidates(
+  candidates: ScoredCandidate[],
+): Promise<Map<string, number[]>> {
+  const map = new Map<string, number[]>();
+  if (candidates.length === 0) return map;
+  if (!isSupabaseActive()) return map;
+
+  const tmdbIds = [...new Set(candidates.map((c) => c.tmdbId))];
+  try {
+    const { data, error } = await supabase
+      .from('titles' as any)
+      .select('tmdb_id, media_type, embedding')
+      .in('tmdb_id', tmdbIds);
+    if (error || !data) return map;
+    for (const row of data as Array<{ tmdb_id: number; media_type: string; embedding: string | number[] | null }>) {
+      if (row.embedding == null) continue;
+      const emb = typeof row.embedding === 'string' ? JSON.parse(row.embedding) : row.embedding;
+      if (Array.isArray(emb) && emb.length > 0) {
+        map.set(`${row.media_type}-${row.tmdb_id}`, emb);
+      }
+    }
+  } catch {
+    // Network or parse error → empty map → MMR falls through.
+  }
+  return map;
+}
+
 interface BecauseYouWatchedRow {
   anchor: ContentItem;
   items: ContentItem[];
@@ -93,6 +127,9 @@ export function useForYouContent(
   // rerank path (slider drag) reuses it so a re-rank doesn't refetch
   // viewing_context or call Device.getInfo() again.
   const ctxRef = useRef<PipelineContext>({});
+  // Phase 5: cache the embedding map built per load. MMR re-runs on
+  // slider drag without refetching from titles.
+  const embeddingMapRef = useRef<Map<string, number[]>>(new Map());
   const providerStr = providerIds.join(',');
 
   // ── Build rows from scored candidates ──
@@ -100,7 +137,7 @@ export function useForYouContent(
     const usedIds = new Set<string>();
 
     // 1. Recommended For You: top 20 after diversity
-    const recItems = buildRowFromPool(scored, currentSliders, { limit: 20, excludeIds: usedIds });
+    const recItems = buildRowFromPool(scored, currentSliders, { limit: 20, excludeIds: usedIds }, undefined, embeddingMapRef.current);
     recItems.forEach(item => usedIds.add(item.id));
     setRecommendedForYou(recItems);
 
@@ -116,7 +153,7 @@ export function useForYouContent(
         avg >= HIDDEN_GEMS_FILTERS.minVoteAverage
       );
     });
-    const gemItems = buildRowFromPool(gemCandidates, currentSliders, { limit: 15, excludeIds: usedIds });
+    const gemItems = buildRowFromPool(gemCandidates, currentSliders, { limit: 15, excludeIds: usedIds }, undefined, embeddingMapRef.current);
     gemItems.forEach(item => usedIds.add(item.id));
     setHiddenGems(gemItems);
 
@@ -150,7 +187,7 @@ export function useForYouContent(
       limit: outsideCount,
       excludeIds: usedIds,
       maxPerGenre: 4,
-    });
+    }, undefined, embeddingMapRef.current);
     setOutsideYourUsual(outsideItems);
   }, []);
 
@@ -251,6 +288,14 @@ export function useForYouContent(
 
       const scored = scoreCandidates(pool, sliderState, 'foryou', ctxRef.current);
       scoredRef.current = scored;
+
+      // Phase 5: fetch embeddings for top-200 by finalScore so MMR can
+      // diversify intra-row. Out-of-top-200 candidates that bubble up
+      // into Hidden Gems / Outside Your Usual rows get neutral 0
+      // redundancy (MMR degrades gracefully when an embedding is
+      // missing). Top-200 is the headroom that covers all three
+      // taste-vector rows in practice.
+      embeddingMapRef.current = await fetchEmbeddingsForCandidates(scored.slice(0, 200));
 
       // Build taste-vector-based rows — show these immediately
       buildRows(scored, sliderState);

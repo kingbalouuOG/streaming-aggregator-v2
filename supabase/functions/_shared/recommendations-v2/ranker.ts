@@ -8,11 +8,12 @@ import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { titleRowToContentItem } from './titleAdapter.ts';
 import { computeHomeRecencyScore, computeForYouRecencyScore } from './recency.ts';
 import { computeContextualScore } from './contextual.ts';
-import { applyGenreSpread, deClusterByService, applyContentMixRatio } from './diversity.ts';
+import { applyGenreSpread, applyMMR, deClusterByService, applyContentMixRatio } from './diversity.ts';
 import {
   getModulatedWeights,
   getContentMixMovieRatio,
   getVarietyGenreWindow,
+  getMMRLambda,
   distanceToSimilarity,
   scoreToMatchPercentage,
   DEFAULT_CANDIDATE_LIMIT,
@@ -118,6 +119,7 @@ export function buildRowFromPool(
   sliders: SliderState,
   config: RowConfig = {},
   getServices?: (tmdbId: number, mediaType: string) => string[],
+  embeddingMap?: Map<string, number[]>,
 ): ContentItem[] {
   const { limit = 20, excludeIds, maxPerGenre = DEFAULT_MAX_PER_GENRE } = config;
 
@@ -130,8 +132,14 @@ export function buildRowFromPool(
   const movieRatio = getContentMixMovieRatio(sliders.contentMix);
   candidates = applyContentMixRatio(candidates, movieRatio);
 
-  const genreWindow = getVarietyGenreWindow(sliders.variety);
-  candidates = applyGenreSpread(candidates, genreWindow, maxPerGenre, limit);
+  // Phase 5: MMR when embeddings available, applyGenreSpread fallback.
+  if (embeddingMap && embeddingMap.size > 0) {
+    const lambda = getMMRLambda(sliders.variety);
+    candidates = applyMMR(candidates, embeddingMap, { lambda, k: limit });
+  } else {
+    const genreWindow = getVarietyGenreWindow(sliders.variety);
+    candidates = applyGenreSpread(candidates, genreWindow, maxPerGenre, limit);
+  }
 
   if (getServices) {
     candidates = deClusterByService(candidates, getServices);

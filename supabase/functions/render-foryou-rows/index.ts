@@ -207,11 +207,15 @@ Deno.serve(async (req) => {
 
     const scored = scoreCandidates(pool, profile.sliders, 'foryou', ctx);
 
+    // Phase 5: fetch embeddings for top-200 by finalScore so MMR can
+    // diversify intra-row across all three taste-vector rows.
+    const embeddingMap = await fetchEmbeddingsForCandidates(supabase, scored.slice(0, 200));
+
     // Taste-vector rows. usedIds is shared across rec/gems/outside for
     // cross-row dedup — same contract as src/hooks/useForYouContent.ts.
     const usedIds = new Set<string>();
 
-    const recommendedForYou = buildRowFromPool(scored, profile.sliders, { limit: 20, excludeIds: usedIds });
+    const recommendedForYou = buildRowFromPool(scored, profile.sliders, { limit: 20, excludeIds: usedIds }, undefined, embeddingMap);
     recommendedForYou.forEach((item) => usedIds.add(item.id));
 
     const gemCandidates = scored.filter((c) => {
@@ -225,10 +229,10 @@ Deno.serve(async (req) => {
         && avg >= HIDDEN_GEMS_FILTERS.minVoteAverage
       );
     });
-    const hiddenGems = buildRowFromPool(gemCandidates, profile.sliders, { limit: 15, excludeIds: usedIds });
+    const hiddenGems = buildRowFromPool(gemCandidates, profile.sliders, { limit: 15, excludeIds: usedIds }, undefined, embeddingMap);
     hiddenGems.forEach((item) => usedIds.add(item.id));
 
-    const outsideYourUsual = buildOutsideYourUsual(scored, profile.sliders, usedIds);
+    const outsideYourUsual = buildOutsideYourUsual(scored, profile.sliders, usedIds, embeddingMap);
 
     // Conditional rows + anchor rooms run in parallel — they share the
     // pool + filter sets but otherwise touch different RPC paths, so
@@ -277,6 +281,7 @@ function buildOutsideYourUsual(
   scored: ScoredCandidate[],
   sliders: SliderState,
   usedIds: Set<string>,
+  embeddingMap: Map<string, number[]>,
 ): ContentItem[] {
   const outsideCount = getComfortZoneRowCount(sliders.comfortZone);
   const cosineAperture = 0.40 + sliders.comfortZone * 0.40;
@@ -297,7 +302,7 @@ function buildOutsideYourUsual(
     limit: outsideCount,
     excludeIds: usedIds,
     maxPerGenre: 4,
-  });
+  }, undefined, embeddingMap);
 }
 
 function nthSmallest(arr: number[], n: number): number {
@@ -305,6 +310,39 @@ function nthSmallest(arr: number[], n: number): number {
   const idx = Math.max(0, Math.min(n, arr.length - 1));
   const sorted = [...arr].sort((a, b) => a - b);
   return sorted[idx];
+}
+
+// ── Phase 5 MMR support: embedding fetch ─────────────────────────────
+// Mirrors the helper in src/hooks/useForYouContent.ts. Fetches the
+// 1536D pgvector for each tmdb_id in `candidates` so applyMMR can
+// compute redundancy. Failure or partial coverage degrades MMR
+// gracefully — buildRowFromPool falls back to applyGenreSpread when
+// the returned map is empty.
+
+async function fetchEmbeddingsForCandidates(
+  client: SupabaseClient,
+  candidates: ScoredCandidate[],
+): Promise<Map<string, number[]>> {
+  const map = new Map<string, number[]>();
+  if (candidates.length === 0) return map;
+
+  const tmdbIds = [...new Set(candidates.map((c) => c.tmdbId))];
+  try {
+    const { data, error } = await (client.from('titles') as any)
+      .select('tmdb_id, media_type, embedding')
+      .in('tmdb_id', tmdbIds);
+    if (error || !data) return map;
+    for (const row of data as Array<{ tmdb_id: number; media_type: string; embedding: string | number[] | null }>) {
+      if (row.embedding == null) continue;
+      const emb = typeof row.embedding === 'string' ? JSON.parse(row.embedding) : row.embedding;
+      if (Array.isArray(emb) && emb.length > 0) {
+        map.set(`${row.media_type}-${row.tmdb_id}`, emb);
+      }
+    }
+  } catch {
+    // Network or parse error → empty map → MMR no-op, fallback path.
+  }
+  return map;
 }
 
 // ── Phase 5 PipelineContext builder ──────────────────────────────────
