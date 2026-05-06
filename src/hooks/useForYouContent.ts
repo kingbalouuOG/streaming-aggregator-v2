@@ -322,7 +322,7 @@ async function fetchBecauseYouWatched(
     const thumbsUpSet = new Set(
       (thumbsRes.data as any[]).map((r: any) => `${r.media_type}-${r.content_id}`)
     );
-    // Deduplicate by content key (a title may have both watchlist_add and marked_watched)
+    // Deduplicate by content key (a title may have both watchlist_add and watched)
     const seen = new Set<string>();
     const qualifying = (engagementRes.data as any[])
       .filter((r: any) => {
@@ -508,7 +508,7 @@ async function fetchFromWatchlist(): Promise<ContentItem[]> {
         .from('user_interactions' as any)
         .select('content_id, media_type')
         .eq('user_id', userId)
-        .in('event_type', ['watched', 'marked_watched'])
+        .eq('event_type', 'watched')
         .limit(500);
 
       if (data) {

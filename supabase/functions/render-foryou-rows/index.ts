@@ -465,7 +465,7 @@ async function fetchFromWatchlist(scope: UserScope): Promise<ContentItem[]> {
     const [wlRes, watchedRes] = await Promise.all([
       scope.select('watchlist', 'tmdb_id, media_type, added_at, status, title, poster_path, genre_ids'),
       scope.select('user_interactions', 'content_id, media_type')
-        .in('event_type', ['watched', 'marked_watched'])
+        .eq('event_type', 'watched')
         .limit(500),
     ]);
 
