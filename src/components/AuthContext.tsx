@@ -142,16 +142,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [signOut]);
 
   const checkUsernameAvailable = useCallback(async (username: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('username', username)
-      .maybeSingle();
+    // Calls the username_available RPC (migration 038) instead of
+    // SELECT'ing from profiles directly. The RPC is SECURITY DEFINER
+    // and returns just a boolean, so anon callers no longer need
+    // unrestricted SELECT on the profiles table.
+    const { data, error } = await supabase.rpc('username_available', {
+      check_username: username,
+    });
     if (error) {
       console.error('[Auth] checkUsername error:', error);
       return false; // fail closed — assume taken when uncertain
     }
-    return data === null;
+    return data === true;
   }, []);
 
   const value = useMemo(() => ({
