@@ -27,12 +27,10 @@
 --
 -- ----------------------------------------------------------------
 -- Bearer token: matches the pattern in 006_cron_schedule.sql:19.
--- This service-role JWT is committed to source control intentionally
--- (Phase 0.5 inherits the precedent from Phase B1, it does not create
--- new exposure). See Parking Lot entry IN-XPS-004 for the rotation
--- plan: this and the existing 006 token must rotate to a secrets-
--- managed reference (vault.create_secret + vault.decrypted_secrets,
--- or similar) before public launch.
+-- Bearer token: read from Supabase Vault entry `service_role_key` per
+-- IN-XPS-004 (Phase 5 migration 039). The Vault entry must exist
+-- before this file is applied or re-applied. See migration 039
+-- docstring for the rotation procedure.
 -- ============================================
 
 SELECT cron.schedule(
@@ -43,7 +41,12 @@ SELECT cron.schedule(
     url := 'https://fmusugdcnnwiuzkbjquo.supabase.co/functions/v1/enrich-new-titles',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtdXN1Z2Rjbm53aXV6a2JqcXVvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTE5MTUzNSwiZXhwIjoyMDg2NzY3NTM1fQ.72SH7EjXEwh_RFiegV1eNonXOLVWMEtFMR7Jy3eZxt0'
+      'Authorization', 'Bearer ' || (
+        SELECT decrypted_secret
+          FROM vault.decrypted_secrets
+          WHERE name = 'service_role_key'
+          LIMIT 1
+      )
     ),
     body := '{}'::jsonb
   );
