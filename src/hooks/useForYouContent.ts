@@ -24,10 +24,11 @@ import { getComfortZoneRowCount, HIDDEN_GEMS_FILTERS } from '@/lib/recommendatio
 import { titleRowToContentItem } from '@/lib/recommendations-v2/titleAdapter';
 import { watchlistItemToContentItem } from '@/lib/adapters/contentAdapter';
 import { tryRenderForYouEdge } from '@/lib/recommendations-v2/edgeRender';
+import { buildPipelineContext } from '@/lib/recommendations-v2/pipelineContext';
 import type { AnchorRoomPreview } from '@/hooks/useAnchorMoodRooms';
 import type { ContentItem } from '@/components/ContentCard';
 import type { SliderState } from '@/lib/taste-v2/types';
-import type { CandidatePool, ScoredCandidate, ExtendedTitleRow } from '@/lib/recommendations-v2/types';
+import type { CandidatePool, PipelineContext, ScoredCandidate, ExtendedTitleRow } from '@/lib/recommendations-v2/types';
 import { EXTENDED_TITLE_SELECT } from '@/lib/recommendations-v2/types';
 
 interface BecauseYouWatchedRow {
@@ -88,6 +89,10 @@ export function useForYouContent(
   const poolRef = useRef<CandidatePool | null>(null);
   const scoredRef = useRef<ScoredCandidate[] | null>(null);
   const filterSetsRef = useRef<FilterSets | null>(null);
+  // Phase 5: cache the runtime PipelineContext built per load. The
+  // rerank path (slider drag) reuses it so a re-rank doesn't refetch
+  // viewing_context or call Device.getInfo() again.
+  const ctxRef = useRef<PipelineContext>({});
   const providerStr = providerIds.join(',');
 
   // ── Build rows from scored candidates ──
@@ -155,7 +160,7 @@ export function useForYouContent(
     const pool = poolRef.current;
     if (!pool || pool.matched.length === 0) return;
 
-    const scored = scoreCandidates(pool, newSliders, 'foryou');
+    const scored = scoreCandidates(pool, newSliders, 'foryou', ctxRef.current);
     scoredRef.current = scored;
     buildRows(scored, newSliders);
   }, [buildRows]);
@@ -170,7 +175,14 @@ export function useForYouContent(
     setLoading(true);
 
     // ── Edge path ──
-    const edge = await tryRenderForYouEdge(providerIds);
+    // Build ctx ahead of the Edge call so (a) the body carries the
+    // client's local hourOfDay (decision 9), and (b) ctxRef is
+    // populated for the rerank path that runs against the cached
+    // Edge-returned pool on slider drag.
+    const ctx = await buildPipelineContext();
+    ctxRef.current = ctx;
+
+    const edge = await tryRenderForYouEdge(providerIds, ctx);
     if (edge) {
       const anchorMax = edge.perAnchorLatencyMs.length > 0 ? Math.max(...edge.perAnchorLatencyMs) : 0;
       console.log(
@@ -200,7 +212,9 @@ export function useForYouContent(
     setPrebuiltAnchorRooms(null);
 
     try {
-      // Fetch taste profile + slider state in parallel
+      // Fetch taste profile + slider state in parallel.
+      // (ctx already built and stored in ctxRef.current before the
+      // Edge attempt above — reuse it for the client pipeline.)
       const [profile, sliderState] = await Promise.all([
         getV2TasteProfile(),
         getSliderState(),
@@ -235,7 +249,7 @@ export function useForYouContent(
       poolRef.current = pool;
       setPool(pool);
 
-      const scored = scoreCandidates(pool, sliderState, 'foryou');
+      const scored = scoreCandidates(pool, sliderState, 'foryou', ctxRef.current);
       scoredRef.current = scored;
 
       // Build taste-vector-based rows — show these immediately

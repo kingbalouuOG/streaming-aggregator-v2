@@ -17,7 +17,7 @@ import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import { readAccessToken } from './edgeWarmup';
 import type { ContentItem } from '@/components/ContentCard';
 import type { SliderState } from '@/lib/taste-v2/types';
-import type { CandidatePool, ExtendedTitleRow, MatchedTitle } from './types';
+import type { CandidatePool, ExtendedTitleRow, MatchedTitle, PipelineContext } from './types';
 import type { AnchorRoomPreview } from '@/hooks/useAnchorMoodRooms';
 
 const FUNCTION_PATH = '/functions/v1/render-foryou-rows';
@@ -60,6 +60,7 @@ export interface EdgeRenderPayload {
 
 export async function tryRenderForYouEdge(
   providerIds: number[],
+  ctx?: PipelineContext,
 ): Promise<EdgeRenderPayload | null> {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -77,6 +78,14 @@ export async function tryRenderForYouEdge(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
+  // Phase 5 decision 9: pass the client's local hourOfDay (and
+  // dayOfWeek for calendar-boundary safety) in the body so the Edge
+  // path scores against the same time-of-day bucket as the client
+  // would. Edge falls back to UTC if absent.
+  const body: { services: string[]; hourOfDay?: number; dayOfWeek?: number } = { services };
+  if (ctx?.hourOfDay != null) body.hourOfDay = ctx.hourOfDay;
+  if (ctx?.dayOfWeek != null) body.dayOfWeek = ctx.dayOfWeek;
+
   try {
     const res = await fetch(`${supabaseUrl}${FUNCTION_PATH}`, {
       method: 'POST',
@@ -85,7 +94,7 @@ export async function tryRenderForYouEdge(
         'Content-Type': 'application/json',
         apikey: anonKey,
       },
-      body: JSON.stringify({ services }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
 
