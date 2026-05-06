@@ -22,6 +22,7 @@ import type {
   MatchedTitle,
   ExtendedTitleRow,
   CandidatePool,
+  PipelineContext,
   ScoredCandidate,
   PipelineInput,
   ContentItem,
@@ -75,6 +76,7 @@ export function scoreCandidates(
   pool: CandidatePool,
   sliders: SliderState,
   surface: 'home' | 'foryou',
+  ctx: PipelineContext = {},
 ): ScoredCandidate[] {
   const weights = getModulatedWeights(sliders.catalogueAge);
 
@@ -89,7 +91,7 @@ export function scoreCandidates(
     const recency = surface === 'home'
       ? computeHomeRecencyScore(meta.release_date)
       : computeForYouRecencyScore(meta.release_date);
-    const contextual = computeContextualScore({ meta });
+    const contextual = computeContextualScore({ meta }, ctx);
 
     const finalScore =
       weights.taste * taste +

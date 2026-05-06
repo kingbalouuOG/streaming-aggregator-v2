@@ -33,6 +33,7 @@ import type {
   MatchedTitle,
   ExtendedTitleRow,
   CandidatePool,
+  PipelineContext,
   ScoredCandidate,
   PipelineInput,
   ContentItem,
@@ -103,11 +104,16 @@ export async function fetchCandidatePool(
 /**
  * Score all candidates in a pool using the weighted formula.
  * Returns scored candidates sorted by finalScore DESC.
+ *
+ * @param ctx Optional runtime context for the contextual scorer (Phase 5).
+ *   When omitted, the contextual sub-components fall back to neutral 0.5,
+ *   reproducing Phase 4 behaviour.
  */
 export function scoreCandidates(
   pool: CandidatePool,
   sliders: SliderState,
   surface: 'home' | 'foryou',
+  ctx: PipelineContext = {},
 ): ScoredCandidate[] {
   const weights = getModulatedWeights(sliders.catalogueAge);
 
@@ -126,8 +132,8 @@ export function scoreCandidates(
       ? computeHomeRecencyScore(meta.release_date)
       : computeForYouRecencyScore(meta.release_date);
 
-    // Contextual: Phase 4 placeholder (always 0.5)
-    const contextual = computeContextualScore({ meta });
+    // Contextual: Phase 5 — device, time-of-day, viewing context
+    const contextual = computeContextualScore({ meta }, ctx);
 
     // Weighted sum
     const finalScore =
