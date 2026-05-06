@@ -146,7 +146,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // SELECT'ing from profiles directly. The RPC is SECURITY DEFINER
     // and returns just a boolean, so anon callers no longer need
     // unrestricted SELECT on the profiles table.
-    const { data, error } = await supabase.rpc('username_available', {
+    //
+    // Cast: database.types.ts pre-dates migration 038 and doesn't list
+    // username_available in the Database type. Regenerating the types
+    // is a Phase 5/6 follow-up; cast `as any` for the RPC name only
+    // and rely on the runtime API contract.
+    const { data, error } = await (supabase.rpc as any)('username_available', {
       check_username: username,
     });
     if (error) {

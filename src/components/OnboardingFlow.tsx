@@ -119,7 +119,7 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
       ]);
 
       const availSet = new Set<number>(
-        Array.isArray(availRes.data) ? (availRes.data as number[]) : []
+        Array.isArray(availRes.data) ? (availRes.data as unknown as number[]) : []
       );
 
       const seenIds = new Set<number>();

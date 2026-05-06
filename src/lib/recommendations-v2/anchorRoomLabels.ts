@@ -48,8 +48,9 @@ export async function getCachedAnchorLabels(
   if (anchors.length === 0) return out;
 
   const tmdbIds = [...new Set(anchors.map((a) => a.tmdbId))];
-  const { data, error } = await supabase
-    .from('mood_room_anchor_labels' as any)
+  // mood_room_anchor_labels was added by migration 034 but database.types.ts
+  // hasn't been regenerated yet; cast via any until the types are refreshed.
+  const { data, error } = await (supabase.from as any)('mood_room_anchor_labels')
     .select('anchor_tmdb_id, anchor_media_type, label, description')
     .in('anchor_tmdb_id', tmdbIds);
 

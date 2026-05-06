@@ -25,14 +25,15 @@ export async function hasReportedRecently(
   mediaType: 'movie' | 'tv'
 ): Promise<boolean> {
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user?.id) return false;
+  const userId = session?.user?.id;
+  if (!userId) return false;
 
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const { data, error } = await supabase
     .from('availability_reports')
     .select('id')
-    .eq('user_id', session.user.id)
+    .eq('user_id', userId)
     .eq('tmdb_id', tmdbId)
     .eq('media_type', mediaType)
     .gte('created_at', twentyFourHoursAgo)
@@ -51,7 +52,8 @@ export async function hasReportedRecently(
 export async function submitReport(report: AvailabilityReport): Promise<ReportResult> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.id) {
+    const userId = session?.user?.id;
+    if (!userId) {
       return { success: false, error: 'Not authenticated' };
     }
 
@@ -60,11 +62,15 @@ export async function submitReport(report: AvailabilityReport): Promise<ReportRe
       return { success: false, rateLimited: true };
     }
 
+    // service_id is nullable in the application model ("All services"
+     // selection) but the generated Database type infers it as
+     // non-null. Cast through unknown for the insert; runtime accepts
+     // null per the actual column constraint.
     const { error } = await supabase.from('availability_reports').insert({
-      user_id: session.user.id,
+      user_id: userId,
       tmdb_id: report.tmdb_id,
       media_type: report.media_type,
-      service_id: report.service_id,
+      service_id: report.service_id as unknown as string,
       report_type: report.report_type,
       notes: report.notes?.trim() || null,
     });

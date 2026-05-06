@@ -48,11 +48,11 @@ async function fetchEmbeddingsForCandidates(
   const tmdbIds = [...new Set(candidates.map((c) => c.tmdbId))];
   try {
     const { data, error } = await supabase
-      .from('titles' as any)
+      .from('titles')
       .select('tmdb_id, media_type, embedding')
       .in('tmdb_id', tmdbIds);
     if (error || !data) return map;
-    for (const row of data as Array<{ tmdb_id: number; media_type: string; embedding: string | number[] | null }>) {
+    for (const row of data) {
       if (row.embedding == null) continue;
       const emb = typeof row.embedding === 'string' ? JSON.parse(row.embedding) : row.embedding;
       if (Array.isArray(emb) && emb.length > 0) {
