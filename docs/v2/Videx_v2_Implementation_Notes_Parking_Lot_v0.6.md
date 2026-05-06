@@ -1,12 +1,22 @@
 # Videx v2 — Implementation Notes Parking Lot
 
-**Status:** v0.6 — Phase 5 kickoff. IN-463 ✅ Incorporated (LLM thematic labels shipped, migration 034). IN-466 already ✅ in v0.5; restated here for the audit trail. IN-XPS-006 phase target confirmed as Phase 5 (delete account wiring) per Phase 5 brief §1.3. No new entries vs v0.5.
+**Status:** v0.6 — Phase 5 close-out. Phase 5 shipped four migrations (036–039) + CORS + verify_jwt CI guard + Database<> generic + foryou-parity CI workflow + contextual scoring + MMR. Status flips below reflect what landed; the Phase 5 summary at `docs/v2/phase-summaries/phase-5-summary.md` is authoritative for what shipped vs deferred.
 **Version:** 0.6
 
-**Changes from v0.5:**
-- **IN-463** status flipped from ⏳ → ✅ Incorporated. LLM thematic labels for anchored mood rooms shipped via migration 034 (`mood_room_anchor_labels`) plus the `label-anchor-room` Edge Function (called server-side from `render-foryou-rows`). Replaces v1 templated labels for anchored rooms only — global mood rooms keep their cluster-derived labels.
-- **IN-XPS-006** phase target confirmed: stays in Phase 5. Delete account wiring lands alongside the other pre-launch security work in Phase 5 Workstream C; should not slip into Phase 6 unflagged.
-- All Phase 5 entries (IN-462, IN-458, IN-465, IN-467, IN-468, IN-469, IN-XPS-002, IN-XPS-004, IN-XPS-006, IN-XPS-011, IN-XPS-012, IN-XPS-013) confirmed in the Phase 5 brief and remain ⏳ Not yet incorporated. Status flips will land at Phase 5 close-out.
+**Changes from v0.5 (Phase 5 kickoff portion):**
+- **IN-463** status flipped from ⏳ → ✅ Incorporated. LLM thematic labels for anchored mood rooms shipped via migration 034 (`mood_room_anchor_labels`) plus the `label-anchor-room` Edge Function. Replaces v1 templated labels for anchored rooms only — global mood rooms keep their cluster-derived labels.
+
+**Changes from v0.6 kickoff (Phase 5 close-out, 2026-05-06):**
+- **IN-XPS-002** ✅ Incorporated — username_available SECURITY DEFINER RPC + AuthContext rewire (migration 038).
+- **IN-XPS-004** ✅ Partially incorporated — Vault storage migration shipped (migration 039 + cron file edits); cryptographic rotation deferred to Phase 6 pending Supabase tooling (new `sb_secret_…` keys are opaque, fail `verify_jwt = true`).
+- **IN-XPS-006** Did NOT ship in Phase 5 despite scoping. Delete account wiring re-targeted to Phase 5.5 / Phase 6 as a focused follow-up.
+- **IN-XPS-011** ✅ Incorporated — six per-function `config.toml` files + `edge-fn-jwt-guard` CI workflow.
+- **IN-XPS-012** ✅ Workflow file added — `foryou-parity.yml` soft-skipped pending repo secrets configuration (`PARITY_*`).
+- **IN-XPS-013** ✅ Incorporated — shared `cors.ts` helper + tightened both browser-callable Edge Functions; `*` posture replaced with allow-listed echo.
+- **IN-458** Re-targeted to Phase 5.5 / 6 — migration 040 (typed pairs) deferred to keep Phase 5 scope tight; 0.8% collision rate, no functional regression.
+- **IN-462** Re-targeted to Phase 5.5 — forYouStore deferred pending IN-468/469 telemetry decisions (interact with the store shape).
+- **IN-465** Re-targeted to Phase 5.5 / 6 — backfill script not authored.
+- **IN-467/468/469** still gated on telemetry agent run 2026-05-11.
 
 **Changes from v0.4:**
 - **IN-466** status flipped from ⏳ → ✅ Incorporated. Server-side render landed via the `render-foryou-rows` Edge Function. Cold-fallback contract: client falls through to the existing `useForYouContent` pipeline on any Edge failure (5xx, malformed JSON, network, >1.5s timeout — tightened from the brief's 5s after the cold-instance profile came in 5-12s).
@@ -913,7 +923,9 @@ The correct fix is to widen the RPC and filter set to `Set<{ tmdbId: number, med
 
 Not fixed in Phase 4.5 — that phase accepted the inherited imprecision because mood rooms inherit it at the same rate as every other For You row, and fixing it here would balloon scope. File for a future correctness pass (likely Phase 5/6 quality-sweep) alongside the existing consumers.
 
-**Status:** ⏳ Not yet incorporated
+**Phase target update:** originally scoped into Phase 5 Workstream F (migration 040). Deferred at Phase 5 close to keep scope tight — collision rate is 0.8% with no functional regression today. Re-targeted to Phase 5.5 / Phase 6.
+
+**Status:** ⏳ Not yet incorporated (Phase 5.5 / 6).
 
 ### IN-459: Re-evaluate mood room coverage after 3 monthly runs
 
@@ -991,7 +1003,9 @@ Impact: noticeable latency cost (~1-2s) on every tab bounce. Predates Phase 4.5 
 
 **Action for Phase 5:** design a session-scoped store for For You's candidate pool + row results + slider state. Mood rooms piggyback on the same pattern (their weekly pool is already persisted but the previews aren't). Target: tab-switch cost drops to zero RPCs for returns within N minutes; re-fetch only on genuinely stale data (slider change, provider change, session timeout).
 
-**Status:** ⏳ Not yet incorporated (Phase 5)
+**Phase target update:** originally Phase 5 Workstream E. Deferred at Phase 5 close pending the telemetry agent's findings on warm-path p95 + cold-start incidence (run 2026-05-11) — those decisions feed into IN-468 (SWR cache) and IN-469 (cold-start mitigation), which interact with the IN-462 store shape. Re-targeted to Phase 5.5.
+
+**Status:** ⏳ Not yet incorporated (Phase 5.5).
 
 ### IN-463: Hybrid LLM labelling for anchored mood rooms
 
@@ -1054,7 +1068,9 @@ Sample tmdb_ids from the original investigation already skew toward low numbers 
 
 **Phase target:** post-Phase-4.5 investigation. Likely a one-off backfill script + a sync-pipeline audit.
 
-**Status:** ⏳ Not yet incorporated.
+**Phase 5 status:** scoped into Workstream F (one-off backfill script `scripts/backfill_missing_titles.ts`). Deferred — script not authored, profile-and-discover-fix questions in this entry are still unanswered. Re-targeted to Phase 5.5 / 6.
+
+**Status:** ⏳ Not yet incorporated (Phase 5.5 / 6).
 
 ### IN-466: For You cold-start latency — broader architecture review
 
@@ -1202,7 +1218,7 @@ The intent is to support username availability checking during signup. But as wr
 
 **Action:** add this to the pre-public-launch checklist. Not a blocker for v2 build, but must be addressed before v2 ships to any real users. Likely fix happens in Phase 5 (privacy hardening pass) or at a dedicated pre-launch security review.
 
-**Status:** ⏳ Flagged, not yet scheduled
+**Status:** ✅ Incorporated (Phase 5 — migration 038 replaces the open policy with a `username_available(check_username text)` SECURITY DEFINER RPC; `AuthContext.checkUsernameAvailable` rewired to use `supabase.rpc(...)` instead of selecting from `profiles` directly; anon SELECT on `profiles` now denied).
 
 ### IN-XPS-003: Verify pg_partman automatic partition creation after first month
 
@@ -1250,7 +1266,7 @@ SELECT * FROM partman.part_config WHERE parent_table = 'public.card_impressions'
 
 **Reference:** Phase 0.5 summary §5 first entry. Files: `supabase/migrations/006_cron_schedule.sql:19`, `supabase/cron/enrich_new_titles.sql` (embedded JWT).
 
-**Status:** ⏳ Flagged for pre-public-launch
+**Status:** ✅ Partially incorporated (Phase 5 — Vault storage migration done, cryptographic rotation deferred). Migration 039 + cron file edits move the inline JWT out of source into Supabase Vault. The four affected pg_cron jobs (`daily-content-sync`, `embed-new-titles`, `enrich-new-titles`, `refresh-service-fingerprints`) now read `vault.decrypted_secrets` at job execution. **Same JWT value remains** — full cryptographic rotation deferred to Phase 6 because the Supabase dashboard UI no longer exposes a path to issue a new long-lived JWT signed by the current ECC signing key (new keys are opaque `sb_secret_…` tokens that fail `verify_jwt = true` on Edge Functions). Phase 6 picks up rotation when Supabase ships JWT-format secret keys or we refactor Edge Function auth to validate opaque tokens. CI guard against re-introduction (`grep 'Bearer eyJ'` in SQL) — not added; the migration's removal of inline JWTs is the prevention.
 
 ### IN-XPS-005: Atomic tmp+rename is Windows-hostile for files under active observation
 
@@ -1284,9 +1300,9 @@ Fatal: Error: EPERM: operation not permitted, rename
 
 Wiring requires cascading delete across: `profiles`, `user_interactions`, `card_impressions`, `taste_profiles`, `user_services`, watchlist entries, and the Supabase auth user. Must be implemented before public launch.
 
-**Phase target:** Phase 5 (confirmed in Phase 5 brief §1.3 — should not slip to Phase 6 unflagged). Lands alongside the rest of Workstream C pre-launch security work.
+**Phase target:** originally Phase 5 (per Phase 5 brief §1.3). **Did not ship in Phase 5.** Workstream C focused on the higher-impact migrations (036–039 + CORS + verify_jwt CI). Delete account wiring requires a SECURITY DEFINER RPC that cascades across `profiles`, `user_interactions`, `card_impressions`, `taste_profiles`, `user_services`, watchlist, and `auth.users` — non-trivial and outside the time budget. **Re-targeted to Phase 5.5 / Phase 6** as a focused follow-up.
 
-**Status:** ⏳ Flagged for pre-public-launch — scheduled for Phase 5.
+**Status:** ⏳ Flagged for pre-public-launch — re-targeted to Phase 5.5 / 6.
 
 ### IN-XPS-007: Service pricing config needs review cadence *(Phase 3 carry-forward)*
 
@@ -1361,7 +1377,7 @@ Wiring requires cascading delete across: `profiles`, `user_interactions`, `card_
 
 **Phase target:** pre-public-launch hardening sweep. Do not ship to production users without one of the two mitigations.
 
-**Status:** ⏳ Flagged; pre-public-launch.
+**Status:** ✅ Incorporated (Phase 5 — chose the CI-check option). Six new per-function `supabase/functions/<name>/config.toml` files explicitly set `verify_jwt = true`, codifying the Supabase Edge Runtime default so a regression is git-detectable. New `.github/workflows/edge-fn-jwt-guard.yml` triggers on PRs touching `supabase/functions/**` and fails any PR where `verify_jwt = false` appears in a per-function config outside a reserved `_no_auth_/` namespace.
 
 ### IN-XPS-012: Promote parity probe to CI smoke test
 
@@ -1375,7 +1391,7 @@ Wiring requires cascading delete across: `profiles`, `user_interactions`, `card_
 
 **Phase target:** revisit after the first `drift-allowed:` escape-hatch use, or after the first production incident traceable to client-vs-Edge divergence.
 
-**Status:** ⏳ Filed; revisit on first signal of need.
+**Status:** ✅ Workflow file added (Phase 5); enforcement pending secrets. New `.github/workflows/foryou-parity.yml` triggers on push to `phase-*` and PR to `main`. Soft-skips with a warning when `PARITY_*` repo secrets aren't configured. Once Joe configures secrets (`PARITY_USER_JWT`, `PARITY_USER_ID`, `PARITY_SERVICES`, `PARITY_SUPABASE_URL`, `PARITY_SUPABASE_SERVICE_ROLE_KEY`) for a test user flagged via `profiles.is_test_user` (column already exists per IN-PRE-001), the probe enforces parity on every relevant PR.
 
 ### IN-XPS-013: Pre-launch CORS tightening on user-callable Edge Functions
 
@@ -1387,7 +1403,7 @@ Wiring requires cascading delete across: `profiles`, `user_interactions`, `card_
 
 **Phase target:** pre-public-launch hardening sweep, alongside IN-XPS-011.
 
-**Status:** ⏳ Flagged; pre-public-launch.
+**Status:** ✅ Incorporated (Phase 5). New shared helper `supabase/functions/_shared/cors.ts` exports `corsHeaders(origin)` that echoes the Origin header only when allow-listed. Allow-list: `capacitor://localhost`, `https://localhost`, regex `^http://localhost(:port)?$`, plus a `VIDEX_ALLOWED_DEV_ORIGINS` env hook for live-reload over LAN IP. Applied to both browser-callable Edge Functions (`render-foryou-rows`, `label-anchor-room`); the four cron-only functions don't face a browser. Verified post-deploy: allow-listed origin gets `Access-Control-Allow-Origin: capacitor://localhost` echoed back; unknown origin gets no `Access-Control-Allow-Origin` header (browser treats as rejected).
 
 ---
 
