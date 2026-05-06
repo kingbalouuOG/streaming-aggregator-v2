@@ -42,6 +42,7 @@ import {
   type SelectedAnchor,
 } from '../_shared/recommendations-v2/anchorSelection.ts';
 import { titleRowToContentItem } from '../_shared/recommendations-v2/titleAdapter.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 import { getComfortZoneRowCount, HIDDEN_GEMS_FILTERS } from '../_shared/recommendations-v2/weights.ts';
 import {
   EXTENDED_TITLE_SELECT,
@@ -103,26 +104,22 @@ interface ResponsePayload {
   renderMs: number;
 }
 
-// ── Constants ────────────────────────────────────────────────────────
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-  });
-}
-
 // ── Handler ──────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  // Per-request CORS lookup. Origin is echoed only if it's allow-listed
+  // (capacitor://localhost, https://localhost, http://localhost(:port),
+  // or a VIDEX_ALLOWED_DEV_ORIGINS env entry). See _shared/cors.ts.
+  const origin = req.headers.get('origin');
+  const cors = corsHeaders(origin);
+  const jsonResponse = (status: number, body: unknown): Response =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...cors, 'Content-Type': 'application/json' },
+    });
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: cors });
   }
   if (req.method !== 'POST') {
     return jsonResponse(405, { error: 'method not allowed' });

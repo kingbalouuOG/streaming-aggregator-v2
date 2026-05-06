@@ -34,6 +34,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders } from '../_shared/cors.ts';
 
 // ── Config ───────────────────────────────────────────────
 
@@ -54,12 +55,6 @@ const FORBIDDEN_WORDS = new Set([
   'unleashed', 'unveiled',
 ]);
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
 // ── Types ────────────────────────────────────────────────
 
 interface RequestBody {
@@ -73,13 +68,6 @@ interface RequestBody {
 }
 
 // ── Helpers ──────────────────────────────────────────────
-
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-  });
-}
 
 function validateBody(body: unknown): RequestBody | null {
   if (!body || typeof body !== 'object') return null;
@@ -206,8 +194,17 @@ async function callOpenAI(req: RequestBody): Promise<{ label: string; descriptio
 // ── Handler ──────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  // Per-request CORS lookup. See _shared/cors.ts for allow-list rules.
+  const origin = req.headers.get('origin');
+  const cors = corsHeaders(origin);
+  const jsonResponse = (status: number, body: unknown): Response =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...cors, 'Content-Type': 'application/json' },
+    });
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: cors });
   }
   if (req.method !== 'POST') {
     return jsonResponse(405, { error: 'method not allowed' });
