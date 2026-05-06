@@ -3,37 +3,47 @@
 -- Migration 039
 -- ============================================
 --
--- ⚠️ IRREVERSIBLE ⚠️
--- This migration is the second half of a two-step rotation. The first
--- step is out-of-repo and MUST happen before this migration is
--- applied. Sequence:
+-- Vault migration WITHOUT rotation. Phase 5 originally planned a full
+-- service-role JWT rotation here, but the Supabase dashboard UI no
+-- longer exposes a path to issue a new long-lived service-role JWT
+-- signed by the current ECC signing key — the API key model has moved
+-- to opaque `sb_secret_…` tokens that fail `verify_jwt = true` on our
+-- Edge Functions. Full rotation deferred to Phase 6 (parking-lot
+-- IN-XPS-004).
 --
---   1. Joe rotates the service-role key in the Supabase dashboard
---      (Project Settings → API → Service Role → Rotate). The previous
---      key remains valid for a short overlap window.
+-- What this migration DOES achieve in Phase 5: the inline JWT moves
+-- out of source code (006_cron_schedule.sql:19 + supabase/cron/*.sql)
+-- and into Supabase Vault. The token value is unchanged, but git
+-- history no longer leaks a usable credential, and future rotation
+-- becomes a single `vault.update_secret(...)` + cron unschedule/
+-- reschedule cycle (or just the secret update, with cron jobs picking
+-- up the new value at their next firing).
 --
---   2. Joe creates a Vault entry for the new key:
+-- Sequence (out-of-repo step 1, then this migration):
+--
+--   1. Joe creates a Vault entry containing the EXISTING legacy
+--      service-role JWT (the same string visible in
+--      006_cron_schedule.sql:19):
 --      SELECT vault.create_secret(
---        '<new-service-role-jwt>',
+--        '<paste-existing-legacy-service-role-jwt>',
 --        'service_role_key',
---        'Service role JWT used by pg_cron jobs to call user-callable Edge Functions'
+--        'Service role JWT used by pg_cron jobs. Phase 5 Vault '
+--        'migration without rotation; full rotation deferred to '
+--        'Phase 6 pending Supabase tooling.'
 --      );
 --
---   3. Joe applies this migration. It unschedules each existing cron
---      job (whose registration carries the OLD inline JWT) and re-
---      schedules with a Vault read. Until this migration applies, the
---      old jobs continue to run against the old key — which is fine,
---      because the old key is still valid during the overlap window.
+--   2. Joe applies this migration. It unschedules each existing cron
+--      job (whose registration carries the inline JWT) and re-
+--      schedules with a Vault read. The inline-JWT registrations
+--      still in cron.job today will be replaced.
 --
---   4. Joe revokes the old key in the dashboard once cron.job_run_details
---      shows successful runs from the new schedules.
+--   3. No "revoke old key" step — the same JWT is now read from
+--      Vault. Nothing to revoke.
 --
--- Rollback: only possible if step 4 has not happened. To roll back,
--- un-rotate the service-role key in the dashboard (re-instating the
--- old key as primary), then either git revert this migration or run
--- `cron.unschedule(...)` on each new schedule and re-run the original
--- migration 006 + the supabase/cron/*.sql files. After step 4 the
--- old key is gone and rollback requires another rotation.
+-- Rollback: fully reversible. Re-apply migration 006 and the three
+-- supabase/cron/*.sql files (in their pre-Phase-5 inline-JWT form,
+-- restored from git history if needed) to put the inline registrations
+-- back, then DELETE the vault entry.
 --
 -- Audit (run by CC 2026-05-06):
 --   grep -R 'Bearer ey' supabase/migrations/  → matches only 006:19
