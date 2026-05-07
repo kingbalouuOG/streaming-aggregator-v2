@@ -21,7 +21,7 @@ import { chromium } from "playwright-core";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const ROUTES = ["icons", "sectionhead", "contentcard", "servicestack"];
+const ROUTES = ["icons", "sectionhead", "contentcard", "servicestack", "bottomnav"];
 const THEMES = ["dark", "light"];
 const BASE = "http://localhost:3000";
 const OUT = "tmp/visual";

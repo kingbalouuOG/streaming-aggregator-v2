@@ -174,3 +174,57 @@ export function SparkleIcon({ className = "w-5 h-5" }: IconProps) {
     </svg>
   );
 }
+
+/* ─────────────────────────────────────────────────────────────
+ * Bottom-nav icons (Phase 2). Same 24×24 / 1.8 outline contract
+ * as the v3 set above; filled variants where the tab gets an
+ * "active" visual.
+ * ───────────────────────────────────────────────────────────── */
+
+/** Home — outline house. Bottom-nav Home tab (inactive). */
+export function HomeIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M4 11 L12 4 L20 11 L20 20 L14 20 L14 14 L10 14 L10 20 L4 20 Z" {...OUTLINE} />
+    </svg>
+  );
+}
+
+/** Home — filled. Active state for Home tab. */
+export function HomeFilledIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M4 11 L12 4 L20 11 L20 20 L14 20 L14 14 L10 14 L10 20 L4 20 Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** Search — outline magnifier. Bottom-nav Browse tab. */
+export function SearchIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <circle cx="11" cy="11" r="6" {...OUTLINE} />
+      <path d="M16 16 L20 20" {...OUTLINE} />
+    </svg>
+  );
+}
+
+/** User — outline person. Bottom-nav Profile tab. */
+export function UserIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <circle cx="12" cy="8" r="4" {...OUTLINE} />
+      <path d="M4 21 C 4 16 8 14 12 14 C 16 14 20 16 20 21" {...OUTLINE} />
+    </svg>
+  );
+}
+
+/** User — filled. Active state for Profile tab. */
+export function UserFilledIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <circle cx="12" cy="8" r="4" fill="currentColor" />
+      <path d="M4 21 C 4 16 8 14 12 14 C 16 14 20 16 20 21 L 4 21 Z" fill="currentColor" />
+    </svg>
+  );
+}

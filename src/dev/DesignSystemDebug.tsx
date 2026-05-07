@@ -23,6 +23,7 @@ import { Kicker } from "../components/Kicker";
 import { ContentCard, type ContentItem } from "../components/ContentCard";
 import { ServiceBadge, ServiceStack } from "../components/ServiceBadge";
 import type { ServiceId } from "../components/platformLogos";
+import { BottomNav } from "../components/BottomNav";
 
 // Picsum gives a stable random poster per seed without auth/network policy
 // pain — good enough for the debug surface, never reaches production.
@@ -160,6 +161,52 @@ export function SectionHeadDebug() {
           </h2>
         </div>
       </header>
+
+      <p style={{ marginTop: 56, fontSize: "var(--t-meta)", color: "var(--fg-faint)" }}>
+        Dev-only route. Tree-shaken from production builds via{" "}
+        <code>import.meta.env.DEV</code>.
+      </p>
+    </div>
+  );
+}
+
+export function BottomNavDebug() {
+  const [tab, setTab] = React.useState("home");
+  const Frame = ({ label, count }: { label: string; count: number }) => (
+    <div style={{ marginBottom: 24 }}>
+      <Kicker>{label}</Kicker>
+      <div
+        style={{
+          marginTop: 8,
+          background: "var(--surface-elev)",
+          borderRadius: "var(--r-card)",
+          overflow: "hidden",
+        }}
+      >
+        <BottomNav activeTab={tab} onTabChange={setTab} watchlistCount={count} />
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="editorial" style={{ paddingTop: 40, paddingBottom: 80, color: "var(--fg)" }}>
+      <h1
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--t-headline)",
+          fontWeight: 600,
+          fontVariationSettings: '"opsz" 48',
+          marginBottom: 24,
+        }}
+      >
+        BottomNav (Phase 2)
+      </h1>
+      <p style={{ fontSize: "var(--t-meta)", color: "var(--fg-soft)", marginBottom: 32 }}>
+        Active tab: <code style={{ color: "var(--primary)" }}>{tab}</code> — tap to change
+      </p>
+
+      <Frame label="DEFAULT — no unread" count={0} />
+      <Frame label="WITH UNREAD DOT" count={3} />
 
       <p style={{ marginTop: 56, fontSize: "var(--t-meta)", color: "var(--fg-faint)" }}>
         Dev-only route. Tree-shaken from production builds via{" "}
