@@ -60,7 +60,7 @@ Per-component checklist. One row = one PR. Tick the box when done. Do not bundle
 - [x] **`MoodRoomsRow` / `MoodRoomCard`** — 🟠 New tile design (square-ish, room-accent gradient, Fraunces label).
 - [x] **`ContentRow`** — 🔵 Wraps SectionHead. Card variants `default | wide | lead`.
 - [x] **`LazyGenreSection`** — 🔵 Wrap with SectionHead. Inner row stays.
-- [ ] **`CategoryFilter`** — 🔵 Editorial chip bar with kicker.
+- [x] **`CategoryFilter`** — 🔵 Editorial chip bar with kicker.
 - [ ] **`SliderTray`** — 🔵 Restyle handles, tick labels in DM Sans 11 tracked.
 - [ ] **`FilterSheet` / `ReportSheet`** — 🔵 Sheet shell uses `--shadow-sheet` + grabber pill.
 - [ ] **`AnchorMoodRoomCard`** — 🟠 Lifts cover-story treatment.
