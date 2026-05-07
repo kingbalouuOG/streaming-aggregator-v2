@@ -102,39 +102,37 @@ export function WatchlistPage({
     <div className="flex flex-col min-h-full">
       {/* Sticky header + tab bar */}
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl" style={{ backgroundColor: "var(--background)", paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
-        {/* Segmented tab bar */}
-        <div className="px-5 mb-4">
-        <div className="flex bg-secondary rounded-2xl p-1">
-          <button
-            onClick={() => handleTabChange("want")}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] transition-all duration-250 ${
-              activeTab === "want"
-                ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            style={{ fontWeight: 600 }}
-          >
-            <Bookmark
-              className="w-3.5 h-3.5"
-            />
-            Want to Watch ({watchlist.length})
-          </button>
-          <button
-            onClick={() => handleTabChange("watched")}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] transition-all duration-250 ${
-              activeTab === "watched"
-                ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            style={{ fontWeight: 600 }}
-          >
-            <CheckCircle2
-              className="w-3.5 h-3.5"
-            />
-            Watched ({watched.length})
-          </button>
+        {/* Editorial chip tabs — replace the segmented control. */}
+        <div className="px-5 pt-3 mb-4 flex gap-2">
+          {(["want", "watched"] as const).map((t) => {
+            const active = activeTab === t;
+            const label = t === "want" ? "Want to watch" : "Watched";
+            const count = t === "want" ? watchlist.length : watched.length;
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => handleTabChange(t)}
+                className="inline-flex items-center gap-2 px-3 py-1.5"
+                style={{
+                  background: active ? "var(--primary)" : "var(--surface-tint)",
+                  color: active ? "#fff" : "var(--fg-soft)",
+                  borderRadius: "var(--r-pill)",
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 13,
+                  fontWeight: active ? 600 : 500,
+                  letterSpacing: "0.01em",
+                  transition: "background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out)",
+                }}
+                aria-pressed={active ? "true" : "false"}
+              >
+                {t === "want" ? <Bookmark className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                <span>{label}</span>
+                <span style={{ opacity: active ? 0.85 : 0.6 }}>{count}</span>
+              </button>
+            );
+          })}
         </div>
-      </div>
       </div>
 
       {/* Category filter pills */}
@@ -867,7 +865,10 @@ function SwipeableListCard({
   );
 }
 
-/* ---- Empty State ---- */
+/* ---- Empty State ----
+ * Editor's-note tone per the Phase 4 matrix: kicker, Fraunces title,
+ * italic standfirst, no decorative icon-tile.
+ */
 function EmptyState({
   tab,
   onBrowse,
@@ -875,39 +876,65 @@ function EmptyState({
   tab: WatchlistTab;
   onBrowse: () => void;
 }) {
+  const isWant = tab === "want";
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col items-center justify-center py-20 text-center"
+      className="editorial flex flex-col items-start py-16"
     >
-      <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center mb-4">
-        {tab === "want" ? (
-          <Bookmark className="w-7 h-7 text-muted-foreground" />
-        ) : (
-          <CheckCircle2 className="w-7 h-7 text-muted-foreground" />
-        )}
-      </div>
-      <p
-        className="text-foreground text-[16px] mb-1"
-        style={{ fontWeight: 600 }}
+      <span
+        className="t-kicker"
+        style={{ marginBottom: 12 }}
       >
-        {tab === "want" ? "Nothing here yet" : "No watched titles"}
+        {isWant ? "EDITOR'S NOTE · YOUR LIST" : "EDITOR'S NOTE · ARCHIVE"}
+      </span>
+      <h2
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--t-headline)",
+          fontWeight: 600,
+          fontVariationSettings: '"opsz" 48',
+          letterSpacing: "-0.01em",
+          color: "var(--fg)",
+          lineHeight: 1.15,
+          margin: 0,
+          marginBottom: 12,
+        }}
+      >
+        {isWant ? "An empty queue is a fresh slate." : "Nothing watched yet — that's a feature."}
+      </h2>
+      <p
+        style={{
+          fontFamily: "var(--font-display)",
+          fontStyle: "italic",
+          fontSize: "var(--t-body)",
+          color: "var(--fg-soft)",
+          lineHeight: 1.45,
+          margin: 0,
+          marginBottom: 24,
+        }}
+      >
+        {isWant
+          ? "Bookmark shows and films as you browse — they'll land here, ready for tonight."
+          : "Mark titles as watched once you've finished them; they collect here as a private archive."}
       </p>
-      <p className="text-muted-foreground text-[13px] max-w-[240px] mb-5">
-        {tab === "want"
-          ? "Bookmark shows and movies while browsing to save them here"
-          : "Mark titles as watched to track your progress"}
-      </p>
-      {tab === "want" && (
+      {isWant && (
         <button
+          type="button"
           onClick={onBrowse}
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl transition-all hover:brightness-110 shadow-lg shadow-primary/30"
+          className="inline-flex items-center gap-2 px-5 py-2.5"
+          style={{
+            background: "var(--primary)",
+            color: "#fff",
+            borderRadius: "var(--r-pill)",
+            fontFamily: "var(--font-ui)",
+            fontSize: 14,
+            fontWeight: 600,
+          }}
         >
           <Plus className="w-4 h-4" />
-          <span className="text-[14px]" style={{ fontWeight: 600 }}>
-            Browse Content
-          </span>
+          <span>Browse content →</span>
         </button>
       )}
     </motion.div>
