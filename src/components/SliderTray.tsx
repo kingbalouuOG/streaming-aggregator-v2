@@ -115,44 +115,98 @@ export function SliderTray({ isOpen, onClose, onSlidersChange, initialSliders }:
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="relative w-full max-w-md rounded-t-3xl max-h-[90vh] flex flex-col"
-            style={{ backgroundColor: "var(--surface-elevated)" }}
+            className="relative w-full max-w-md max-h-[90vh] flex flex-col"
+            style={{
+              background: "var(--surface-elev)",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              boxShadow: "var(--shadow-sheet)",
+            }}
           >
-            {/* Drag handle */}
-            <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 rounded-full" style={{ background: "var(--drag-handle)" }} />
+            {/* Grabber pill — design-system §4 sheet anatomy */}
+            <div className="flex justify-center pt-2 pb-1">
+              <span
+                style={{
+                  width: 36,
+                  height: 4,
+                  borderRadius: "var(--r-pill)",
+                  background: "var(--hairline)",
+                }}
+              />
             </div>
 
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 pb-4 pt-1">
-              <h2 className="text-foreground text-[20px]" style={{ fontWeight: 700 }}>
-                Tune Your Recommendations
-              </h2>
+            {/* Header — kicker + Fraunces title */}
+            <div className="flex items-start justify-between px-5 pt-2 pb-4">
+              <div>
+                <span className="t-kicker">TUNE</span>
+                <h2
+                  className="mt-1"
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "var(--t-title)",
+                    fontWeight: 700,
+                    fontVariationSettings: '"opsz" 36',
+                    letterSpacing: "-0.01em",
+                    color: "var(--fg)",
+                    lineHeight: 1.15,
+                    margin: 0,
+                  }}
+                >
+                  Recommendations.
+                </h2>
+              </div>
               <button
+                type="button"
                 onClick={onClose}
-                className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                className="w-8 h-8 inline-flex items-center justify-center transition-colors"
+                style={{ color: "var(--fg-soft)" }}
+                aria-label="Close"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Slider content — touch-action ensures slider drag isn't intercepted */}
             <div className="flex-1 overflow-y-auto px-5 pb-6 no-scrollbar safe-bottom" style={{ touchAction: 'pan-y' }}>
-              <p className="text-muted-foreground text-[13px] mb-5">
+              <p
+                className="mb-5"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontStyle: "italic",
+                  fontSize: "var(--t-body)",
+                  color: "var(--fg-soft)",
+                  lineHeight: 1.4,
+                }}
+              >
                 Changes take effect immediately.
               </p>
 
               {!loaded ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                   {[0, 1, 2, 3].map(i => (
-                    <div key={i} className="h-16 rounded-xl bg-secondary animate-pulse" />
+                    <div
+                      key={i}
+                      className="h-16 animate-pulse"
+                      style={{ borderRadius: "var(--r-card)", background: "var(--surface-tint)" }}
+                    />
                   ))}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                   {SLIDER_CONFIG.map(({ key, left, right }) => (
                     <div key={key}>
-                      <div className="flex justify-between text-[12px] text-muted-foreground" style={{ marginBottom: '0.375rem' }}>
+                      <div
+                        className="flex justify-between"
+                        style={{
+                          fontFamily: "var(--font-ui)",
+                          fontSize: 11,
+                          fontWeight: 500,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.08em",
+                          color: "var(--fg-faint)",
+                          marginBottom: 8,
+                        }}
+                      >
                         <span>{left}</span>
                         <span className="text-right">{right}</span>
                       </div>
@@ -165,7 +219,17 @@ export function SliderTray({ isOpen, onClose, onSlidersChange, initialSliders }:
                         className="videx-slider"
                         style={{ ['--slider-fill' as any]: `${Math.round(sliders[key] * 100)}%` }}
                       />
-                      <p className="text-center text-[11px] text-primary" style={{ fontWeight: 500, marginTop: '0.25rem' }}>
+                      <p
+                        className="text-center"
+                        style={{
+                          fontFamily: "var(--font-ui)",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          letterSpacing: "0.04em",
+                          color: "var(--primary)",
+                          marginTop: 6,
+                        }}
+                      >
                         {getSliderLabel(key, sliders[key])}
                       </p>
                     </div>

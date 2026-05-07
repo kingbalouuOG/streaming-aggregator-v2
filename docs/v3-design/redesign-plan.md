@@ -61,7 +61,7 @@ Per-component checklist. One row = one PR. Tick the box when done. Do not bundle
 - [x] **`ContentRow`** — 🔵 Wraps SectionHead. Card variants `default | wide | lead`.
 - [x] **`LazyGenreSection`** — 🔵 Wrap with SectionHead. Inner row stays.
 - [x] **`CategoryFilter`** — 🔵 Editorial chip bar with kicker.
-- [ ] **`SliderTray`** — 🔵 Restyle handles, tick labels in DM Sans 11 tracked.
+- [x] **`SliderTray`** — 🔵 Restyle handles, tick labels in DM Sans 11 tracked.
 - [ ] **`FilterSheet` / `ReportSheet`** — 🔵 Sheet shell uses `--shadow-sheet` + grabber pill.
 - [ ] **`AnchorMoodRoomCard`** — 🟠 Lifts cover-story treatment.
 - [x] **`EditorsNote`** *(new)* — 🟣 Collapsed strip + modal. Reads from `editor_notes` table.
