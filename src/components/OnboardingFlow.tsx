@@ -49,6 +49,68 @@ interface OnboardingFlowProps {
 
 const TOTAL_STEPS = 5;
 
+/**
+ * Magazine-layout step heading per Phase 4 PR-U: kicker
+ * (uppercase tracked, --primary) → Fraunces title → italic Fraunces
+ * standfirst. Used by every step inside the flow.
+ */
+function StepHeader({
+  kicker,
+  title,
+  standfirst,
+}: {
+  kicker: string;
+  title: string;
+  standfirst?: string;
+}) {
+  return (
+    <div className="mb-2">
+      <span
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: 11,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "1.6px",
+          color: "var(--primary)",
+        }}
+      >
+        {kicker}
+      </span>
+      <h2
+        className="mt-2"
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--t-headline)",
+          fontWeight: 600,
+          fontVariationSettings: '"opsz" 48',
+          letterSpacing: "-0.01em",
+          color: "var(--fg)",
+          lineHeight: 1.15,
+          margin: 0,
+        }}
+      >
+        {title}
+      </h2>
+      {standfirst && (
+        <p
+          className="mt-2"
+          style={{
+            fontFamily: "var(--font-display)",
+            fontStyle: "italic",
+            fontSize: "var(--t-body)",
+            color: "var(--fg-soft)",
+            lineHeight: 1.4,
+            margin: 0,
+          }}
+        >
+          {standfirst}
+        </p>
+      )}
+    </div>
+  );
+}
+
 const slideVariants = {
   enter: (direction: number) => ({
     x: direction > 0 ? 300 : -300,
@@ -424,18 +486,27 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
           )}
 
           <motion.button
+            type="button"
             onClick={goNext}
             disabled={!canContinue[step] && step < TOTAL_STEPS - 1}
             whileTap={canContinue[step] || step === TOTAL_STEPS - 1 ? { scale: 0.97 } : undefined}
-            className={`w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-[15px] transition-all duration-300 ${
-              canContinue[step] || step === TOTAL_STEPS - 1
-                ? "bg-primary text-white shadow-lg shadow-primary/25"
-                : "bg-secondary text-muted-foreground cursor-not-allowed"
-            }`}
-            style={{ fontWeight: 600 }}
+            className="w-full flex items-center justify-center gap-2 py-3.5 transition-all"
+            style={{
+              borderRadius: "var(--r-pill)",
+              background: canContinue[step] || step === TOTAL_STEPS - 1
+                ? "var(--primary)"
+                : "var(--surface-tint)",
+              color: canContinue[step] || step === TOTAL_STEPS - 1
+                ? "#fff"
+                : "var(--fg-faint)",
+              fontFamily: "var(--font-ui)",
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: canContinue[step] || step === TOTAL_STEPS - 1 ? "pointer" : "not-allowed",
+            }}
           >
-            {getCtaText()}
-            {step < TOTAL_STEPS - 1 && <ArrowRight className="w-4.5 h-4.5" />}
+            <span>{getCtaText()}</span>
+            {step < TOTAL_STEPS - 1 && <ArrowRight className="w-4 h-4" />}
           </motion.button>
         </div>
         )}
@@ -534,7 +605,17 @@ function StepAccount({
         >
           <Popcorn className="text-white" style={{ width: 30, height: 30 }} />
         </motion.div>
-        <h2 className="text-foreground text-[22px] mb-0.5" style={{ fontWeight: 700 }}>Join VIDEX</h2>
+        <h2 style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--t-headline)",
+          fontWeight: 600,
+          fontVariationSettings: '"opsz" 48',
+          letterSpacing: "-0.01em",
+          color: "var(--fg)",
+          lineHeight: 1.15,
+          margin: 0,
+          marginBottom: 4,
+        }}>Join Videx.</h2>
         <p className="text-muted-foreground text-[13px]">Start discovering what to watch tonight</p>
       </div>
 
@@ -700,12 +781,11 @@ function StepServices({
             <Tv className="w-5 h-5 text-blue-400" />
           </div>
           <div>
-            <h2 className="text-foreground text-[20px]" style={{ fontWeight: 700 }}>
-              Your streaming services
-            </h2>
-            <p className="text-muted-foreground text-[13px]">
-              Which platforms are you subscribed to?
-            </p>
+            <StepHeader
+              kicker="STEP 2 OF 5 · YOUR STACK"
+              title="Your streaming services."
+              standfirst="Which platforms are you subscribed to?"
+            />
           </div>
         </motion.div>
       </div>
@@ -797,15 +877,11 @@ function StepWatchedGrid({
     <div className="flex flex-col h-full px-6 overflow-y-auto no-scrollbar">
       <div className="pt-4 pb-4">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-          <p className="text-primary text-[12px] mb-1" style={{ fontWeight: 600 }}>
-            Round {round + 1} of {totalRounds}
-          </p>
-          <h2 className="text-foreground text-[20px] mb-1" style={{ fontWeight: 700 }}>
-            What have you watched?
-          </h2>
-          <p className="text-muted-foreground text-[13px]">
-            Tap titles you've watched and enjoyed
-          </p>
+          <StepHeader
+            kicker={`STEP 3 OF 5 · ROUND ${round + 1}/${totalRounds}`}
+            title="What have you seen?"
+            standfirst="Tap the titles you've watched and enjoyed."
+          />
         </motion.div>
       </div>
 
@@ -906,13 +982,12 @@ function StepClusters({
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-foreground text-[20px]" style={{ fontWeight: 700 }}>
-                What do you love to watch?
-              </h2>
+              <StepHeader
+                kicker="STEP 4 OF 5 · YOUR TASTE"
+                title="What do you love?"
+                standfirst={`Pick at least ${MIN_CLUSTERS} that match your vibe.`}
+              />
             </div>
-            <p className="text-muted-foreground text-[13px]">
-              Pick at least {MIN_CLUSTERS} genres
-            </p>
           </div>
           <span
             className="bg-primary text-white text-[12px] px-2 py-0.5 rounded-full tabular-nums transition-opacity"
@@ -1043,12 +1118,13 @@ function StepTasteSummary({
     <div className="flex flex-col h-full px-6 overflow-y-auto no-scrollbar">
       <div className="pt-4 pb-4">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-          <h2 className="text-foreground text-[22px] mb-1" style={{ fontWeight: 700 }}>
-            Almost there 🎉
-          </h2>
-          <p className="text-muted-foreground text-[13px] mb-4">
-            Tune how we serve your recommendations.
-          </p>
+          <div className="mb-4">
+            <StepHeader
+              kicker="STEP 5 OF 5 · TUNING"
+              title="Almost there."
+              standfirst="One more pass — tune how we serve your recommendations."
+            />
+          </div>
         </motion.div>
 
         {/* Taste summary card with stats */}
