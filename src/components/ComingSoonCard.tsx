@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Bookmark } from "lucide-react";
-import { motion } from "motion/react";
-import { ServiceBadge } from "./ServiceBadge";
-import { ImageSkeleton } from "./ImageSkeleton";
+import { ServiceStack } from "./ServiceBadge";
 import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 import type { UpcomingRelease } from "@/hooks/useUpcoming";
@@ -15,23 +12,38 @@ interface ComingSoonCardProps {
   onToggleBookmark?: (item: UpcomingRelease) => void;
 }
 
-function formatDateBadge(dateStr: string): { top: string; bottom: string; isToday: boolean } {
+/**
+ * Format a YYYY-MM-DD release date into the date-pill labels:
+ *   today  → "TODAY"
+ *   else   → e.g. "FRI 12"
+ *
+ * The pill renders as two lines for non-today dates so the day-of-week
+ * tracks above the day-of-month at the same DM Sans size.
+ */
+function formatDatePill(dateStr: string): { line1: string; line2: string; isToday: boolean } {
   const date = new Date(dateStr + "T00:00:00");
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
 
   if (date.getTime() === today.getTime()) {
-    return { top: "TODAY", bottom: "", isToday: true };
+    return { line1: "TODAY", line2: "", isToday: true };
   }
 
   const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-  return { top: days[date.getDay()], bottom: String(date.getDate()), isToday: false };
+  return { line1: days[date.getDay()], line2: String(date.getDate()), isToday: false };
 }
 
+/**
+ * ComingSoonCard — vertical calendar entry per docs/v3-design/redesign-plan.md
+ * (date pill in primary, title under). Adopts the same anatomy that
+ * the upcoming CalendarStrip primitive will use, so the Home "Coming
+ * Soon" strip and the new CalendarStrip read as one visual family.
+ *
+ * No poster — editorial direction is typographic. If callers later
+ * need poster art they can compose around this primitive.
+ */
 export function ComingSoonCard({ item, onSelect, bookmarked, onToggleBookmark }: ComingSoonCardProps) {
-  const badge = formatDateBadge(item.releaseDate);
+  const pill = formatDatePill(item.releaseDate);
   const [services, setServices] = useState<ServiceId[]>(item.services);
 
   useEffect(() => {
@@ -43,71 +55,56 @@ export function ComingSoonCard({ item, onSelect, bookmarked, onToggleBookmark }:
     getCachedServices(String(tmdbId), mediaType).then(setServices);
   }, [item.id, item.services]);
 
+  // Quiet the unused-prop warning for bookmark wiring; today the card
+  // doesn't surface a bookmark control (per the editorial-strip spec),
+  // but the props stay so call sites don't churn when CalendarStrip
+  // adds its own bookmark affordance later.
+  void bookmarked;
+  void onToggleBookmark;
+
   return (
-    <div
+    <button
       onClick={() => onSelect(item)}
-      className="relative shrink-0 rounded-xl overflow-hidden cursor-pointer w-[140px] aspect-[3/4]"
+      className="shrink-0 text-left flex flex-col items-start gap-2 cursor-pointer"
+      style={{ width: 140 }}
     >
-      <ImageSkeleton
-        src={item.image}
-        alt={item.title}
-        className="w-full h-full object-cover"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-
-      {/* Date badge - top left */}
-      <div
-        className={`absolute top-2.5 left-2.5 rounded-lg px-1.5 py-1 text-center leading-tight ${
-          badge.isToday
-            ? "bg-primary text-white"
-            : "bg-black/60 backdrop-blur-sm text-white"
-        }`}
+      {/* Date pill — primary, two-line for dated entries, single line for TODAY */}
+      <span
+        className="inline-flex flex-col items-center justify-center px-3 py-1"
+        style={{
+          minWidth: 64,
+          minHeight: 36,
+          borderRadius: "var(--r-pill)",
+          background: "var(--primary)",
+          color: "#fff",
+          fontFamily: "var(--font-ui)",
+          fontWeight: 700,
+          letterSpacing: "0.06em",
+          lineHeight: 1.05,
+        }}
       >
-        <div className="text-[9px] tracking-wider" style={{ fontWeight: 700 }}>
-          {badge.top}
-        </div>
-        {badge.bottom && (
-          <div className="text-[14px] -mt-0.5" style={{ fontWeight: 700 }}>
-            {badge.bottom}
-          </div>
+        <span style={{ fontSize: 10 }}>{pill.line1}</span>
+        {pill.line2 && (
+          <span style={{ fontSize: 14, letterSpacing: 0 }}>{pill.line2}</span>
         )}
-      </div>
+      </span>
 
-      {/* Bookmark - top right */}
-      {onToggleBookmark && (
-        <motion.button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleBookmark(item);
-          }}
-          whileTap={{ scale: 0.75 }}
-          className={`absolute top-2.5 right-2.5 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 ${
-            bookmarked
-              ? "bg-primary text-white"
-              : "bg-black/40 backdrop-blur-sm text-white/70 hover:text-white"
-          }`}
-        >
-          <Bookmark className={`w-3.5 h-3.5 ${bookmarked ? "fill-current" : ""}`} />
-        </motion.button>
-      )}
+      {/* Title */}
+      <h3
+        className="line-clamp-2"
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: 14,
+          fontWeight: 600,
+          color: "var(--fg)",
+          lineHeight: 1.25,
+        }}
+      >
+        {item.title}
+      </h3>
 
-      {/* Bottom info */}
-      <div className="absolute bottom-0 left-0 right-0 p-2.5">
-        <div className="flex items-center gap-1 mb-1">
-          {services.slice(0, 2).map((s) => (
-            <ServiceBadge key={s} service={s} size="sm" />
-          ))}
-          {item.genre && (
-            <span className="text-white/60 text-[10px]">{item.genre}</span>
-          )}
-        </div>
-        <h3
-          className="text-white text-[12px] leading-tight line-clamp-2"
-          style={{ fontWeight: 600 }}
-        >
-          {item.title}
-        </h3>
-      </div>
-    </div>
+      {/* Service marks */}
+      {services.length > 0 && <ServiceStack services={services} size="sm" max={3} />}
+    </button>
   );
 }
