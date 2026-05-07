@@ -107,7 +107,7 @@ const OUTLINE = {
 export function BookmarkIcon({ className = "w-5 h-5" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className}>
-      <path d="M 5 3 H 19 V 21 L 12 17 L 5 21 Z" {...OUTLINE} />
+      <path d="M 5 3 L 19 3 L 19 21 L 12 17 L 5 21 Z" {...OUTLINE} />
     </svg>
   );
 }
@@ -115,8 +115,8 @@ export function BookmarkIcon({ className = "w-5 h-5" }: IconProps) {
 /** Bookmark — filled. Active state for ContentCard bookmark. */
 export function BookmarkFilledIcon({ className = "w-5 h-5" }: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor" stroke="none">
-      <path d="M 5 3 H 19 V 21 L 12 17 L 5 21 Z" />
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M 5 3 L 19 3 L 19 21 L 12 17 L 5 21 Z" fill="currentColor" stroke="none" />
     </svg>
   );
 }
