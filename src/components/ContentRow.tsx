@@ -9,7 +9,7 @@ import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 interface ContentRowProps {
   title: string;
   items: ContentItem[];
-  variant?: "default" | "wide";
+  variant?: "default" | "wide" | "lead" | "mosaic" | "grid";
   sectionKey?: string;
   sourceSurface?: ImpressionSurface;
   onItemSelect?: (item: ContentItem) => void;
@@ -107,7 +107,12 @@ export function ContentRow({ title, items, variant = "default", sectionKey, sour
     }
   }, [onLoadMore, hasMore, loadingMore]);
 
-  const skeletonWidth = variant === "wide" ? "w-[200px] h-[280px]" : "w-[165px] h-[240px]";
+  // Skeleton size approximates the card's poster + title block height
+  // (poster aspect 5:7 + ~44px title/meta block).
+  const skeletonWidth =
+    variant === "lead" ? "w-[358px] h-[545px]" :
+    variant === "wide" ? "w-[220px] h-[352px]" :
+    "w-[160px] h-[268px]";
 
   return (
     <section className="mb-6">
