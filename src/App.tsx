@@ -43,6 +43,7 @@ import { flushNow } from "./lib/instrumentation/impressionBatcher";
 import { parseContentItemId } from "./lib/adapters/contentAdapter";
 import { emitContentInteraction } from "./lib/storage/interactions";
 import { useIntersectionObserver } from "./hooks/useIntersectionObserver";
+import { IconsDebug } from "./dev/DesignSystemDebug";
 
 const categories = ["All", "Movies", "TV Shows", "Docs", "Anime"];
 
@@ -71,6 +72,15 @@ function GenreSpotlightSentinel({
 }
 
 export default function App() {
+  // Dev-only design-system debug routes. The entire `if` branch is
+  // statically eliminated in production builds by Vite, which also
+  // tree-shakes the `./dev/DesignSystemDebug` import since it has no
+  // other reference site.
+  if (import.meta.env.DEV) {
+    const debug = new URLSearchParams(window.location.search).get("debug");
+    if (debug === "icons") return <IconsDebug />;
+  }
+
   return (
     <ErrorBoundary>
       <AuthProvider>

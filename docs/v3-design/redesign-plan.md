@@ -16,7 +16,7 @@ Per-component checklist. One row = one PR. Tick the box when done. Do not bundle
 ## Phase 0 — Foundation (must land first, blocks all phases)
 
 - [x] **`src/index.css`** — 🟠 Replace tokens with `docs/v3-design/tokens.css`. Preserve any non-design tokens (e.g. capacitor inset vars). DoD: `:root` exposes every var listed in `design-system.md §3`.
-- [ ] **`src/components/icons.tsx`** — 🔵 Add: `bookmark`, `bookmarkF`, `close`, `chev-right`, `chev-down`, `expand`, `play-fill`, `sparkle`. All 1.8 stroke, 24×24 viewbox.
+- [x] **`src/components/icons.tsx`** — 🔵 Add: `bookmark`, `bookmarkF`, `close`, `chev-right`, `chev-down`, `expand`, `play-fill`, `sparkle`. All 1.8 stroke, 24×24 viewbox.
 - [ ] **`src/components/SectionHead.tsx`** *(new)* — 🟣 Props: `kicker?: string`, `title: string`, `standfirst?: string`, `right?: ReactNode`. Used by every row.
 - [ ] **`src/components/Kicker.tsx`** *(new)* — 🟣 Tiny wrapper for kicker text style (tracked uppercase orange).
 
