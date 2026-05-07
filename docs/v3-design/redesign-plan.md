@@ -30,7 +30,7 @@ Per-component checklist. One row = one PR. Tick the box when done. Do not bundle
 ## Phase 2 — App chrome
 
 - [x] **`src/components/BottomNav.tsx`** — 🔵 Restyle to blurred surface + new icons. No API change. Watchlist dot for unread.
-- [ ] **`src/App.tsx`** — 🔵 Audit for hard-coded colours / fonts; replace with tokens. No structural change.
+- [x] **`src/App.tsx`** — 🔵 Audit for hard-coded colours / fonts; replace with tokens. No structural change.
 - [x] **`src/components/ThemeContext.tsx`** — 🔵 Default `dark`. Toggle writes `data-theme` on `<html>`. No more in-component theme branching.
 
 ## Phase 3 — Reference screen (gold standard)

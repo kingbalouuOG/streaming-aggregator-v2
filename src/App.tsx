@@ -799,8 +799,8 @@ function AppContent() {
                       {reorderedUpcoming.length > 0 && (
                         <div className="mb-6 overflow-hidden">
                           <div className="flex items-center justify-between px-5 mb-3">
-                            <h2 className="text-foreground text-[17px]" style={{ fontWeight: 700 }}>Coming Soon</h2>
-                            <button onClick={handleShowCalendar} className="text-primary text-[13px]" style={{ fontWeight: 500 }}>See All</button>
+                            <h2 className="text-foreground" style={{ fontSize: "var(--t-section)", fontWeight: 700 }}>Coming Soon</h2>
+                            <button onClick={handleShowCalendar} className="text-primary" style={{ fontSize: "var(--t-meta)", fontWeight: 500 }}>See All</button>
                           </div>
                           <div className="flex gap-3 overflow-x-auto px-5 no-scrollbar" style={{ scrollbarWidth: "none" }}>
                             {reorderedUpcoming.slice(0, 8).map((item) => (
