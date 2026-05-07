@@ -24,6 +24,10 @@ import { ContentCard, type ContentItem } from "../components/ContentCard";
 import { ServiceBadge, ServiceStack } from "../components/ServiceBadge";
 import type { ServiceId } from "../components/platformLogos";
 import { BottomNav } from "../components/BottomNav";
+import { MagazineHero } from "../components/MagazineHero";
+import { EditorsNote } from "../components/EditorsNote";
+import { CalendarStrip } from "../components/CalendarStrip";
+import type { UpcomingRelease } from "../hooks/useUpcoming";
 
 // Picsum gives a stable random poster per seed without auth/network policy
 // pain — good enough for the debug surface, never reaches production.
@@ -163,6 +167,151 @@ export function SectionHeadDebug() {
       </header>
 
       <p style={{ marginTop: 56, fontSize: "var(--t-meta)", color: "var(--fg-faint)" }}>
+        Dev-only route. Tree-shaken from production builds via{" "}
+        <code>import.meta.env.DEV</code>.
+      </p>
+    </div>
+  );
+}
+
+export function MagazineHeroDebug() {
+  const item: ContentItem = {
+    id: "movie-hero",
+    title: "The Brutalist.",
+    image: poster("brutalist-hero"),
+    services: ["netflix", "prime", "apple"],
+    rating: 8.4,
+    year: 2024,
+    genre: "Drama",
+  };
+  return (
+    <div className="editorial" style={{ paddingTop: 24, paddingBottom: 80, color: "var(--fg)" }}>
+      <h1
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--t-headline)",
+          fontWeight: 600,
+          fontVariationSettings: '"opsz" 48',
+          marginBottom: 16,
+        }}
+      >
+        MagazineHero (Phase 5)
+      </h1>
+
+      <Kicker>DEFAULT</Kicker>
+      <div style={{ marginTop: 8, marginBottom: 32 }}>
+        <MagazineHero
+          item={item}
+          standfirst="A first-generation American architect rebuilds his life one impossible commission at a time."
+          onSelect={() => {}}
+        />
+      </div>
+
+      <Kicker>SERVICE-TINTED KICKER</Kicker>
+      <div style={{ marginTop: 8, marginBottom: 32 }}>
+        <MagazineHero
+          item={{ ...item, id: "movie-hero-2", title: "Slow Horses, season 5." }}
+          kicker="NEW ON APPLE TV+"
+          kickerColor="var(--svc-apple)"
+          standfirst="Jackson Lamb's reluctant misfits return — and the spies are louder than ever."
+          onSelect={() => {}}
+        />
+      </div>
+
+      <Kicker>NO STANDFIRST</Kicker>
+      <div style={{ marginTop: 8 }}>
+        <MagazineHero item={{ ...item, id: "movie-hero-3", title: "Ripley." }} kicker="EDITOR'S CHOICE" onSelect={() => {}} />
+      </div>
+
+      <p style={{ marginTop: 56, fontSize: "var(--t-meta)", color: "var(--fg-faint)" }}>
+        Dev-only route. Tree-shaken from production builds via{" "}
+        <code>import.meta.env.DEV</code>.
+      </p>
+    </div>
+  );
+}
+
+export function EditorsNoteDebug() {
+  return (
+    <div className="editorial" style={{ paddingTop: 40, paddingBottom: 80, color: "var(--fg)" }}>
+      <h1
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--t-headline)",
+          fontWeight: 600,
+          fontVariationSettings: '"opsz" 48',
+          marginBottom: 24,
+        }}
+      >
+        EditorsNote (Phase 5)
+      </h1>
+
+      <Kicker>COLLAPSED STRIP — tap to open</Kicker>
+      <div style={{ marginTop: 8, marginBottom: 32 }}>
+        <EditorsNote
+          kicker="EDITOR'S NOTE · 7 MAY"
+          teaser="A great prestige drama, three sci-fi misses, and the case for taking notes during the credits."
+          body={`A great prestige drama is rare in any year. The Brutalist is one — three and a half hours of patient cinema that earns every minute, and a reminder that the streaming services still know how to platform serious work when they want to.
+
+Elsewhere this week the sci-fi shelf is thin. Two of the three new high-concept releases stumble in the second act, and the third never finds a tone. Worth waiting on.
+
+The case for credits: Slow Horses keeps tucking jokes into the typography. Watch them. We do.`}
+        />
+      </div>
+
+      <Kicker>DEFAULT KICKER</Kicker>
+      <div style={{ marginTop: 8 }}>
+        <EditorsNote
+          teaser="The Brutalist earns every minute of its three-and-a-half-hour runtime."
+          body="A short note. Not every editorial has to be long; some weeks one sentence is enough."
+        />
+      </div>
+
+      <p style={{ marginTop: 56, fontSize: "var(--t-meta)", color: "var(--fg-faint)" }}>
+        Dev-only route. Tree-shaken from production builds via{" "}
+        <code>import.meta.env.DEV</code>.
+      </p>
+    </div>
+  );
+}
+
+export function CalendarStripDebug() {
+  const today = new Date();
+  const offsetDate = (days: number) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
+  const items: UpcomingRelease[] = [
+    { id: "movie-cal-1", title: "Mickey 17", image: poster("cal1"), services: ["prime"], releaseDate: offsetDate(0), type: "movie", rating: 0, genre: "" } as UpcomingRelease,
+    { id: "tv-cal-2",    title: "Severance S2 Finale", image: poster("cal2"), services: ["apple"], releaseDate: offsetDate(2), type: "tv", rating: 0, genre: "" } as UpcomingRelease,
+    { id: "movie-cal-3", title: "The Studio", image: poster("cal3"), services: ["apple", "netflix"], releaseDate: offsetDate(5), type: "tv", rating: 0, genre: "" } as UpcomingRelease,
+    { id: "movie-cal-4", title: "Conclave", image: poster("cal4"), services: ["prime"], releaseDate: offsetDate(9), type: "movie", rating: 0, genre: "" } as UpcomingRelease,
+    { id: "movie-cal-5", title: "A Real Pain", image: poster("cal5"), services: ["disney"], releaseDate: offsetDate(14), type: "movie", rating: 0, genre: "" } as UpcomingRelease,
+  ];
+
+  return (
+    <div style={{ paddingTop: 40, paddingBottom: 80, color: "var(--fg)" }}>
+      <div className="editorial" style={{ marginBottom: 16 }}>
+        <h1
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: "var(--t-headline)",
+            fontWeight: 600,
+            fontVariationSettings: '"opsz" 48',
+          }}
+        >
+          CalendarStrip (Phase 5)
+        </h1>
+      </div>
+      <CalendarStrip
+        items={items}
+        kicker="ON THE CALENDAR"
+        title="Coming up."
+        standfirst="The next two weeks across your stack."
+        onSelect={() => {}}
+      />
+      <p className="editorial" style={{ marginTop: 24, fontSize: "var(--t-meta)", color: "var(--fg-faint)" }}>
         Dev-only route. Tree-shaken from production builds via{" "}
         <code>import.meta.env.DEV</code>.
       </p>

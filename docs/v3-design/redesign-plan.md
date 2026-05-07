@@ -64,9 +64,9 @@ Per-component checklist. One row = one PR. Tick the box when done. Do not bundle
 - [ ] **`SliderTray`** — 🔵 Restyle handles, tick labels in DM Sans 11 tracked.
 - [ ] **`FilterSheet` / `ReportSheet`** — 🔵 Sheet shell uses `--shadow-sheet` + grabber pill.
 - [ ] **`AnchorMoodRoomCard`** — 🟠 Lifts cover-story treatment.
-- [ ] **`EditorsNote`** *(new)* — 🟣 Collapsed strip + modal. Reads from `editor_notes` table.
-- [ ] **`MagazineHero`** *(new)* — 🟣 New primitive used by Home + ForYou + MoodRoom.
-- [ ] **`CalendarStrip`** *(new)* — 🟣 Horizontal scroll of upcoming dates with service marks.
+- [x] **`EditorsNote`** *(new)* — 🟣 Collapsed strip + modal. Reads from `editor_notes` table.
+- [x] **`MagazineHero`** *(new)* — 🟣 New primitive used by Home + ForYou + MoodRoom.
+- [x] **`CalendarStrip`** *(new)* — 🟣 Horizontal scroll of upcoming dates with service marks.
 
 ## Phase 6 — Data / infra
 
