@@ -1,25 +1,6 @@
 import React from "react";
-import type { ServiceId } from "./platformLogos";
-
-export interface MoodRoomCardProps {
-  /** Stable id for the room — used as the React key + atmosphere hash. */
-  id: string;
-  /** Fraunces label rendered front-and-centre on the tile. */
-  label: string;
-  /** Optional second-line copy: title count, theme, etc. */
-  description?: string | null;
-  /** Optional total title count for the room. */
-  titleCount?: number;
-  /** Optional service marks for the bottom-right of the tile. */
-  services?: ServiceId[];
-  /**
-   * Atmosphere accent override. Six tokens are available
-   * (--atm-amber / rose / teal / violet / forest / slate).
-   * If omitted, the card hashes `id` to pick one deterministically.
-   */
-  accent?: string;
-  onSelect: () => void;
-}
+import { ImageSkeleton } from "./ImageSkeleton";
+import type { ContentItem } from "./ContentCard";
 
 const ATMOSPHERE_TINTS = [
   "var(--atm-amber)",
@@ -36,84 +17,270 @@ function atmosphereForKey(key: string): string {
   return ATMOSPHERE_TINTS[Math.abs(hash) % ATMOSPHERE_TINTS.length];
 }
 
+interface StackedThumbnailsProps {
+  thumbnails: ContentItem[];
+  /** Width of each thumbnail in CSS pixels. */
+  width: number;
+}
+
 /**
- * MoodRoomCard — square-ish tile per design-system.md / Phase 5 matrix:
- * room-accent gradient, Fraunces label centred, optional description and
- * title-count. Used by the global MoodRoomsRow surface (v2.5) and as a
- * primitive for any other "atmospheric tile" usage.
+ * Three-thumbnail "fan" — used by MoodRoomCard and AnchorMoodRoomCard.
+ * Renders up to three poster thumbnails side-by-side with subtle
+ * outward rotations so the middle one reads as the focal point.
+ */
+function StackedThumbnails({ thumbnails, width }: StackedThumbnailsProps) {
+  const tiles = thumbnails.slice(0, 3);
+  return (
+    <div className="flex justify-center items-end gap-1.5">
+      {tiles.map((t, i) => {
+        const rotation = i === 0 ? -4 : i === 2 ? 4 : 0;
+        const lift = i === 1 ? 0 : 6;
+        return (
+          <div
+            key={t.id}
+            className="overflow-hidden shrink-0"
+            style={{
+              width,
+              aspectRatio: "2 / 3",
+              borderRadius: "var(--r-md)",
+              transform: `translateY(${lift}px) rotate(${rotation}deg)`,
+              boxShadow: "0 8px 18px rgba(0,0,0,0.25)",
+              background: "var(--surface-tint)",
+            }}
+          >
+            <ImageSkeleton
+              src={t.image}
+              alt={t.title}
+              className="w-full h-full object-cover"
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export interface MoodRoomCardProps {
+  /** Stable id — used as the React key + atmosphere hash. */
+  id: string;
+  /** Fraunces label rendered front-and-centre on the tile. */
+  label: string;
+  /** Optional total title count for the room. */
+  titleCount?: number;
+  /** Up to 3 thumbnails for the fan. */
+  thumbnails: ContentItem[];
+  /** Atmosphere accent override (defaults to a hash of `id`). */
+  accent?: string;
+  /** Defaults to "MOOD ROOM"; override for "THE FEATURED ROOM" etc. */
+  kicker?: string;
+  /**
+   * Card width — `"100%"` (default) for grid layouts, fixed pixels
+   * (e.g. 220) for horizontal-scroll rows. `MoodRoomsRow` passes a
+   * fixed width; ForYou's "five more rooms" grid uses the default.
+   */
+  width?: number | string;
+  onSelect: () => void;
+}
+
+/**
+ * MoodRoomCard — square-ish atmosphere-tinted tile per design-system
+ * §3 atmosphere accents. Top half: a fan of three poster thumbnails.
+ * Bottom: kicker (with bullet · titles meta when titleCount > 0) +
+ * Fraunces label.
  */
 export function MoodRoomCard({
   id,
   label,
-  description,
   titleCount,
+  thumbnails,
   accent,
+  kicker = "MOOD ROOM",
+  width = "100%",
   onSelect,
 }: MoodRoomCardProps) {
   const tint = accent ?? atmosphereForKey(id);
+  const kickerLine =
+    typeof titleCount === "number" && titleCount > 0
+      ? `${kicker} · ${titleCount} TITLES`
+      : kicker;
 
   return (
     <button
       type="button"
       onClick={onSelect}
-      className="relative shrink-0 overflow-hidden text-left active:scale-[0.98] transition-transform"
+      className="relative shrink-0 overflow-hidden text-left active:scale-[0.99] transition-transform flex flex-col"
       style={{
-        width: 220,
-        aspectRatio: "1 / 1",
+        width,
+        minHeight: 220,
         borderRadius: "var(--r-card)",
-        // Atmosphere gradient: tint at the top → ink at the bottom for
-        // the editorial cover-tone effect. Layered over surface-elev so
-        // the tile reads on both light and dark themes.
-        background: `linear-gradient(155deg, ${tint} 0%, color-mix(in srgb, ${tint} 35%, var(--bg)) 65%, var(--bg) 100%), var(--surface-elev)`,
+        background: `linear-gradient(160deg, color-mix(in srgb, ${tint} 28%, var(--surface-elev)) 0%, var(--surface-elev) 70%)`,
+        border: "0.5px solid var(--hairline)",
       }}
     >
-      {/* Subtle inner highlight along the top to lift the gradient. */}
-      <span
-        aria-hidden
-        className="absolute inset-x-0 top-0 pointer-events-none"
-        style={{
-          height: 1,
-          background: "linear-gradient(to right, transparent, rgba(255,255,255,0.18), transparent)",
-        }}
-      />
+      <div className="pt-5 pb-3">
+        <StackedThumbnails thumbnails={thumbnails} width={64} />
+      </div>
+      <div className="px-4 pb-4 mt-auto">
+        <span
+          className="t-kicker"
+          style={{ color: `color-mix(in srgb, ${tint} 70%, white)` }}
+        >
+          {kickerLine}
+        </span>
+        <h3
+          className="line-clamp-2 mt-1"
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 16,
+            fontWeight: 700,
+            fontVariationSettings: '"opsz" 24',
+            letterSpacing: "-0.01em",
+            color: "var(--fg)",
+            lineHeight: 1.2,
+            margin: 0,
+          }}
+        >
+          {label}
+        </h3>
+      </div>
+    </button>
+  );
+}
 
-      {/* Title block — bottom-aligned. */}
-      <div className="absolute inset-x-0 bottom-0 p-5 flex flex-col gap-1.5">
-        {description && (
+export interface FeaturedMoodRoomCardProps {
+  id: string;
+  label: string;
+  titleCount: number;
+  /** Italic Fraunces standfirst — rendered with curly quotes around it. */
+  quote?: string;
+  /** Bullet stats line (e.g. "Strong fit · 42 titles · Across 5 of 6 services"). */
+  stats?: string;
+  thumbnails: ContentItem[];
+  accent?: string;
+  ctaLabel?: string;
+  onSelect: () => void;
+}
+
+/**
+ * FeaturedMoodRoomCard — the cover-story variant of MoodRoomCard.
+ * Same anatomy but bigger thumbnails, multi-line title, italic quote,
+ * bullet meta, and an "Enter the room →" pill CTA in the room's
+ * atmosphere tint.
+ */
+export function FeaturedMoodRoomCard({
+  id,
+  label,
+  titleCount,
+  quote,
+  stats,
+  thumbnails,
+  accent,
+  ctaLabel = "Enter the room",
+  onSelect,
+}: FeaturedMoodRoomCardProps) {
+  const tint = accent ?? atmosphereForKey(id);
+
+  return (
+    <div
+      className="overflow-hidden flex flex-col"
+      style={{
+        borderRadius: "var(--r-card)",
+        background: `linear-gradient(160deg, color-mix(in srgb, ${tint} 22%, var(--surface-elev)) 0%, var(--surface-elev) 80%)`,
+        border: "0.5px solid var(--hairline)",
+      }}
+    >
+      <div className="pt-8 pb-6">
+        <StackedThumbnails thumbnails={thumbnails} width={88} />
+      </div>
+      <div className="px-5 pb-5">
+        <div className="flex items-center gap-1.5 mb-2">
+          <span
+            aria-hidden
+            style={{
+              width: 14,
+              height: 1.5,
+              background: `color-mix(in srgb, ${tint} 70%, white)`,
+              borderRadius: 1,
+            }}
+          />
           <span
             className="t-kicker"
-            style={{ color: "rgba(255,255,255,0.78)" }}
+            style={{ color: `color-mix(in srgb, ${tint} 70%, white)` }}
           >
-            {description}
+            THE FEATURED ROOM · {titleCount} TITLES
           </span>
-        )}
+        </div>
         <h3
           className="line-clamp-3"
           style={{
             fontFamily: "var(--font-display)",
-            fontSize: 24,
+            fontSize: 26,
             fontWeight: 700,
-            fontVariationSettings: '"opsz" 36',
+            fontVariationSettings: '"opsz" 48',
             letterSpacing: "-0.01em",
-            color: "#fff",
+            color: "var(--fg)",
             lineHeight: 1.1,
             margin: 0,
           }}
         >
           {label}
         </h3>
-        {typeof titleCount === "number" && titleCount > 0 && (
-          <span
+        {quote && (
+          <p
+            className="mt-2"
             style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: 12,
-              color: "rgba(255,255,255,0.7)",
+              fontFamily: "var(--font-display)",
+              fontStyle: "italic",
+              fontSize: "var(--t-body)",
+              color: "var(--fg-soft)",
+              lineHeight: 1.45,
+              margin: 0,
             }}
           >
-            {titleCount} title{titleCount === 1 ? "" : "s"}
-          </span>
+            “{quote}”
+          </p>
         )}
+        {stats && (
+          <div className="flex items-center gap-1.5 mt-3">
+            <span
+              aria-hidden
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: tint,
+                flexShrink: 0,
+              }}
+            />
+            <span
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 12,
+                color: "var(--fg-soft)",
+              }}
+            >
+              {stats}
+            </span>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onSelect}
+          className="inline-flex items-center gap-2 mt-4 px-5 py-2.5"
+          style={{
+            background: `color-mix(in srgb, ${tint} 35%, var(--surface-tint))`,
+            color: `color-mix(in srgb, ${tint} 75%, white)`,
+            borderRadius: "var(--r-pill)",
+            fontFamily: "var(--font-ui)",
+            fontSize: 14,
+            fontWeight: 600,
+            border: `0.5px solid color-mix(in srgb, ${tint} 50%, transparent)`,
+          }}
+        >
+          <span>{ctaLabel}</span>
+          <span aria-hidden>→</span>
+        </button>
       </div>
-    </button>
+    </div>
   );
 }

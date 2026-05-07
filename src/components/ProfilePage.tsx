@@ -165,9 +165,29 @@ function ProfileLanding({
 
   return (
     <div className="flex flex-col min-h-full px-5 pb-8">
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl -mx-5 px-5"
-        style={{ backgroundColor: "var(--background)", paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
-        <h1 className="text-foreground text-[18px] pb-2" style={{ fontWeight: 700 }}>Profile</h1>
+      <div
+        className="sticky top-0 z-20 backdrop-blur-xl -mx-5 px-5 pb-3"
+        style={{
+          background: "color-mix(in srgb, var(--surface) 88%, transparent)",
+          paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))",
+        }}
+      >
+        <span className="t-kicker">YOU</span>
+        <h1
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: "var(--t-title)",
+            fontWeight: 700,
+            fontVariationSettings: '"opsz" 36',
+            letterSpacing: "-0.01em",
+            color: "var(--fg)",
+            lineHeight: 1.15,
+            margin: 0,
+            marginTop: 2,
+          }}
+        >
+          Profile.
+        </h1>
       </div>
 
       {/* Avatar & Info */}
@@ -282,23 +302,28 @@ function AccountDetailsPage({
   };
 
   return (
-    <SubPageShell title="Account Details" onBack={onBack}>
+    <SubPageShell kicker="ACCOUNT" title="Your details." onBack={onBack}>
       <div className="space-y-3 mb-6">
         <InputField label="Name" value={name} onChange={setName} />
         <InputField label="Email" value={email} onChange={setEmail} type="email" />
       </div>
       <button
+        type="button"
         onClick={handleSave}
         disabled={!isDirty}
-        className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-[14px] transition-colors ${
-          isDirty
-            ? "bg-primary text-white shadow-lg shadow-primary/25"
-            : "bg-secondary/60 text-muted-foreground"
-        }`}
-        style={{ fontWeight: 600 }}
+        className="w-full flex items-center justify-center gap-2 py-3.5 transition-colors"
+        style={{
+          background: isDirty ? "var(--primary)" : "var(--surface-tint)",
+          color: isDirty ? "#fff" : "var(--fg-faint)",
+          borderRadius: "var(--r-pill)",
+          fontFamily: "var(--font-ui)",
+          fontSize: 14,
+          fontWeight: 600,
+          cursor: isDirty ? "pointer" : "not-allowed",
+        }}
       >
         {isDirty && <Check className="w-4 h-4" />}
-        Save Changes
+        Save changes
       </button>
     </SubPageShell>
   );
@@ -327,7 +352,7 @@ function StreamingServicesPage({
   };
 
   return (
-    <SubPageShell title="Streaming Services" onBack={onBack}>
+    <SubPageShell kicker="SUBSCRIPTIONS" title="Streaming services." onBack={onBack}>
       <p className="text-muted-foreground text-[11px] uppercase tracking-widest mb-3" style={{ fontWeight: 600 }}>
         Choose your services
       </p>
@@ -383,7 +408,7 @@ function AppearancePage({ onBack }: { onBack: () => void }) {
   ];
 
   return (
-    <SubPageShell title="Appearance" onBack={onBack}>
+    <SubPageShell kicker="APPEARANCE" title="How it looks." onBack={onBack}>
       <div className="space-y-2.5">
         {options.map(opt => {
           const isActive = theme === opt.value;
@@ -465,7 +490,7 @@ function YourTastePage({
   }
 
   return (
-    <SubPageShell title="Your Taste" onBack={onBack}>
+    <SubPageShell kicker="PERSONALISATION" title="Your taste." onBack={onBack}>
       <h3 className="text-foreground text-[16px] mb-1" style={{ fontWeight: 700 }}>Your taste profile</h3>
       {summaryText && (
         <p className="text-muted-foreground text-[13px] mb-4 leading-relaxed">{summaryText}</p>
@@ -577,7 +602,7 @@ function RefinePreferencesPage({
   };
 
   return (
-    <SubPageShell title="Refine Preferences" onBack={onBack}>
+    <SubPageShell kicker="PERSONALISATION" title="Refine preferences." onBack={onBack}>
       <div className="flex items-center justify-between mb-3">
         <p className="text-muted-foreground text-[13px]">
           Select the genres that best match your taste
@@ -700,7 +725,7 @@ function TuneRecommendationsPage({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <SubPageShell title="Tune Your Recommendations" onBack={onBack}>
+    <SubPageShell kicker="TUNE" title="Recommendations." onBack={onBack}>
       <p className="text-muted-foreground text-[13px]" style={{ marginBottom: '2rem' }}>
         Adjust how Videx serves your recommendations. Changes take effect immediately.
       </p>
@@ -753,7 +778,7 @@ function TuneRecommendationsPage({ onBack }: { onBack: () => void }) {
 // ═════════════════════════════════════════════════════════
 function MonthlySpendPage({ connectedServices, onBack }: { connectedServices: string[]; onBack: () => void }) {
   return (
-    <SubPageShell title="Monthly Spend" onBack={onBack}>
+    <SubPageShell kicker="INSIGHTS" title="Monthly spend." onBack={onBack}>
       <SpendDashboard connectedServices={connectedServices} />
     </SubPageShell>
   );
@@ -767,7 +792,7 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   return (
-    <SubPageShell title="Privacy & Data" onBack={onBack}>
+    <SubPageShell kicker="SETTINGS" title="Privacy & data." onBack={onBack}>
       <p className="text-muted-foreground text-[13px] mb-5 leading-relaxed">
         Videx learns from what you watch, rate, and explore in the app to recommend content that matches your taste. We never sell this data or share it with other services.
       </p>
@@ -921,15 +946,57 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
 // ── Shared Sub-Components ───────────────────────────────
 // ═════════════════════════════════════════════════════════
 
-function SubPageShell({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
+function SubPageShell({
+  title,
+  kicker = "SETTINGS",
+  onBack,
+  children,
+}: {
+  title: string;
+  kicker?: string;
+  onBack: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col min-h-full px-5 pb-8">
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl -mx-5 px-5 flex items-center gap-3"
-        style={{ backgroundColor: "var(--background)", paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
-        <button onClick={onBack} className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+      <div
+        className="sticky top-0 z-20 backdrop-blur-xl -mx-5 px-5 flex items-start gap-3 pb-4"
+        style={{
+          background: "color-mix(in srgb, var(--surface) 88%, transparent)",
+          paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))",
+        }}
+      >
+        <button
+          type="button"
+          onClick={onBack}
+          className="w-9 h-9 inline-flex items-center justify-center shrink-0 mt-1"
+          style={{
+            borderRadius: "var(--r-md)",
+            background: "var(--surface-tint)",
+            color: "var(--fg-soft)",
+          }}
+          aria-label="Back"
+        >
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <h1 className="text-foreground text-[18px] py-2" style={{ fontWeight: 700 }}>{title}</h1>
+        <div>
+          <span className="t-kicker">{kicker}</span>
+          <h1
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: "var(--t-title)",
+              fontWeight: 700,
+              fontVariationSettings: '"opsz" 36',
+              letterSpacing: "-0.01em",
+              color: "var(--fg)",
+              lineHeight: 1.15,
+              margin: 0,
+              marginTop: 2,
+            }}
+          >
+            {title}
+          </h1>
+        </div>
       </div>
       <div className="pt-4">{children}</div>
     </div>
@@ -1024,13 +1091,37 @@ function InputField({ label, value, onChange, type = "text" }: {
   type?: string;
 }) {
   return (
-    <div className="relative rounded-xl border border-primary/30 bg-secondary/60 ring-1 ring-primary/10">
-      <label className="absolute top-2 left-3 text-muted-foreground text-[10px]">{label}</label>
+    <div
+      className="relative"
+      style={{
+        borderRadius: "var(--r-card)",
+        border: "0.5px solid var(--hairline)",
+        background: "var(--surface-elev)",
+      }}
+    >
+      <label
+        className="absolute top-2 left-3"
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: 10,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "1.4px",
+          color: "var(--fg-faint)",
+        }}
+      >
+        {label}
+      </label>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-transparent px-3 pt-6 pb-2 text-foreground text-[14px] outline-none"
+        className="w-full bg-transparent px-3 pt-6 pb-2 outline-none"
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: 14,
+          color: "var(--fg)",
+        }}
       />
     </div>
   );

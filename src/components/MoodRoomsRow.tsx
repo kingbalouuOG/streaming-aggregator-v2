@@ -43,7 +43,7 @@ export function MoodRoomsRow({
         style={{ scrollbarWidth: "none" }}
       >
         {rooms.map((room) => (
-          <MoodRoomCard {...room} key={room.id} />
+          <MoodRoomCard {...room} key={room.id} width={220} />
         ))}
       </div>
     </section>

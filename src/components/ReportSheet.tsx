@@ -107,18 +107,33 @@ export function ReportSheet({
             </div>
 
             {/* Header */}
-            <div className="flex items-center justify-between px-5 pb-4 pt-1">
-              <h2
-                className="text-foreground text-[20px]"
-                style={{ fontWeight: 700 }}
-              >
-                Report a problem
-              </h2>
+            <div className="flex items-start justify-between px-5 pt-2 pb-4">
+              <div>
+                <span className="t-kicker">FEEDBACK</span>
+                <h2
+                  className="mt-1"
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "var(--t-title)",
+                    fontWeight: 700,
+                    fontVariationSettings: '"opsz" 36',
+                    letterSpacing: "-0.01em",
+                    color: "var(--fg)",
+                    lineHeight: 1.15,
+                    margin: 0,
+                  }}
+                >
+                  Report a problem.
+                </h2>
+              </div>
               <button
+                type="button"
                 onClick={handleClose}
-                className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                className="w-8 h-8 inline-flex items-center justify-center"
+                style={{ color: "var(--fg-soft)" }}
+                aria-label="Close"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 

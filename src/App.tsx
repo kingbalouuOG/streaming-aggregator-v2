@@ -925,38 +925,9 @@ function AppContent() {
                         />
                       )}
 
-                      {/* Genre Spotlights (Phase 4 — lazy chain).
-                          Sit BEFORE the CalendarStrip so the calendar
-                          remains the foot of the page per design-system §5.
-                          Primary spotlight loads with the rest of Home;
-                          further clusters mount as the user scrolls past
-                          the previous one's sentinel. */}
-                      {home.genreSpotlights.map((spotlight, idx) =>
-                        spotlight.items.length > 0 ? (
-                          <ContentRow
-                            key={`genre-spotlight-${idx}`}
-                            kicker="GENRE"
-                            title={`${spotlight.clusterName}.`}
-                            sectionKey={`genre-spotlight-${idx}`}
-                            sourceSurface="home"
-                            items={filterLanguage(filterWatched(spotlight.items))}
-                            onItemSelect={handleItemSelect}
-                            bookmarkedIds={wl.bookmarkedIds}
-                            onToggleBookmark={handleToggleBookmark}
-                            userServices={connectedServiceIds}
-                            watchedIds={watchedIds}
-                          />
-                        ) : null,
-                      )}
-                      {home.canLoadMoreGenreSpotlights && (
-                        <GenreSpotlightSentinel
-                          key={`spotlight-sentinel-${home.genreSpotlights.length}`}
-                          onVisible={home.loadMoreGenreSpotlights}
-                          loading={home.spotlightsLoading}
-                        />
-                      )}
-
-                      {/* §5.7 — Calendar strip at the foot */}
+                      {/* §5.7 — Calendar strip. Anchored ABOVE the lazy
+                          genre chain so it stays put as the user scrolls;
+                          the chain loads beneath it. */}
                       {reorderedUpcoming.length > 0 && (
                         <CalendarStrip
                           items={reorderedUpcoming}
@@ -979,6 +950,35 @@ function AppContent() {
                               services: u.services, rating: u.rating, type: u.type,
                             })
                           }
+                        />
+                      )}
+
+                      {/* Genre Spotlights (Phase 4 — lazy chain). Sits
+                          BELOW the calendar; further clusters mount as
+                          the user scrolls past the previous sentinel,
+                          and the calendar stays anchored where it loaded. */}
+                      {home.genreSpotlights.map((spotlight, idx) =>
+                        spotlight.items.length > 0 ? (
+                          <ContentRow
+                            key={`genre-spotlight-${idx}`}
+                            kicker="GENRE"
+                            title={`${spotlight.clusterName}.`}
+                            sectionKey={`genre-spotlight-${idx}`}
+                            sourceSurface="home"
+                            items={filterLanguage(filterWatched(spotlight.items))}
+                            onItemSelect={handleItemSelect}
+                            bookmarkedIds={wl.bookmarkedIds}
+                            onToggleBookmark={handleToggleBookmark}
+                            userServices={connectedServiceIds}
+                            watchedIds={watchedIds}
+                          />
+                        ) : null,
+                      )}
+                      {home.canLoadMoreGenreSpotlights && (
+                        <GenreSpotlightSentinel
+                          key={`spotlight-sentinel-${home.genreSpotlights.length}`}
+                          onVisible={home.loadMoreGenreSpotlights}
+                          loading={home.spotlightsLoading}
                         />
                       )}
 

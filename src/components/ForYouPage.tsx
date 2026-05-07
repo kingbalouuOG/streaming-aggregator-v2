@@ -23,12 +23,12 @@ import { useState, useCallback, useMemo } from 'react';
 import { Sliders, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { ContentRow } from './ContentRow';
-import { ContentCard } from './ContentCard';
 import { SectionHead } from './SectionHead';
 import { Kicker } from './Kicker';
 import { MagazineHero } from './MagazineHero';
 import { CalendarStrip } from './CalendarStrip';
 import { SliderTray } from './SliderTray';
+import { MoodRoomCard, FeaturedMoodRoomCard } from './MoodRoomCard';
 import { useForYouContent } from '@/hooks/useForYouContent';
 import { useAnchorMoodRooms, type AnchorRoomPreview } from '@/hooks/useAnchorMoodRooms';
 import type { FilterSets } from '@/lib/recommendations-v2/hardFilters';
@@ -104,79 +104,108 @@ function ChipPill({
 }
 
 /**
- * CoverStoryMoodRoom — 1 featured (full-bleed lead) + 3 supporting
- * (mosaic) titles drawn from a single AnchorRoomPreview's thumbnails.
- * Per docs/v3-design/redesign-plan.md ForYouPage row + design-system §5.
+ * Approximate the "across N of M services" stat for the featured
+ * mood room — counts unique services across the room's thumbnails
+ * (the only signal we have client-side without a separate query).
+ */
+function buildRoomStats(room: AnchorRoomPreview, totalServices: number): string {
+  const services = new Set<string>();
+  room.thumbnails.forEach((t) => t.services.forEach((s) => services.add(s)));
+  const count = services.size;
+  const fitLabel = "Strong fit";
+  const acrossLabel =
+    count > 0 && totalServices > 0
+      ? `Across ${count} of ${totalServices} services`
+      : null;
+  return [fitLabel, `${room.titleCount} titles`, acrossLabel]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
+ * CoverStoryMoodRoom — featured anchor room + a 2×2 grid of more
+ * rooms below. Per the Phase-4 review: featured uses the
+ * FeaturedMoodRoomCard treatment (atmosphere-tinted frame, fanned
+ * thumbnails, italic quote, bullet stats, "Enter the room →" pill);
+ * the grid uses MoodRoomCards in the same atmosphere-tile family.
  */
 function CoverStoryMoodRoom({
-  room,
-  onSelectItem,
+  rooms,
   onSelectRoom,
-  bookmarkedIds,
-  onToggleBookmark,
-  userServices,
-  watchedIds,
+  totalServiceCount,
 }: {
-  room: AnchorRoomPreview;
-  onSelectItem: (item: ContentItem) => void;
+  rooms: AnchorRoomPreview[];
   onSelectRoom: (room: AnchorRoomPreview) => void;
-  bookmarkedIds: Set<string>;
-  onToggleBookmark: (item: ContentItem) => void;
-  userServices: ServiceId[];
-  watchedIds: Set<string>;
+  totalServiceCount: number;
 }) {
-  const featured = room.thumbnails[0];
-  const supporting = room.thumbnails.slice(1, 4);
-  if (!featured) return null;
+  if (rooms.length === 0) return null;
 
-  const title = room.llmLabel?.label ?? `If you love ${room.anchorTitle}.`;
+  const featured = rooms[0];
+  const more = rooms.slice(1, 5);
+  if (!featured.thumbnails.length) return null;
+
+  const featuredLabel = featured.llmLabel?.label ?? `If you love ${featured.anchorTitle}`;
+  const featuredQuote = featured.llmLabel?.description ?? undefined;
 
   return (
     <section className="mb-8">
-      <div className="editorial">
+      <div className="editorial mb-3">
         <SectionHead
-          kicker="COVER-STORY MOOD"
-          title={title}
-          standfirst={`${room.titleCount} titles tuned to this thread.`}
-          right={
-            <button
-              type="button"
-              onClick={() => onSelectRoom(room)}
-              className="text-primary"
-              style={{ fontSize: 'var(--t-meta)', fontWeight: 500 }}
-            >
-              See room →
-            </button>
-          }
+          kicker="THIS WEEK'S FEATURED ROOM"
+          title="Where you keep returning."
+          standfirst="The room your watch history suggests as your strongest fit, refreshed weekly."
         />
-        <div className="mb-3">
-          <ContentCard
-            item={featured}
-            variant="lead"
-            onSelect={onSelectItem}
-            bookmarked={bookmarkedIds.has(featured.id)}
-            onToggleBookmark={onToggleBookmark}
-            userServices={userServices}
-            watched={watchedIds.has(featured.id)}
-          />
-        </div>
-        {supporting.length > 0 && (
-          <div className="grid grid-cols-3 gap-3">
-            {supporting.map((item) => (
-              <ContentCard
-                key={item.id}
-                item={item}
-                variant="mosaic"
-                onSelect={onSelectItem}
-                bookmarked={bookmarkedIds.has(item.id)}
-                onToggleBookmark={onToggleBookmark}
-                userServices={userServices}
-                watched={watchedIds.has(item.id)}
-              />
-            ))}
-          </div>
-        )}
       </div>
+      <div className="editorial">
+        <FeaturedMoodRoomCard
+          id={featured.id}
+          label={featuredLabel}
+          titleCount={featured.titleCount}
+          quote={featuredQuote}
+          stats={buildRoomStats(featured, totalServiceCount)}
+          thumbnails={featured.thumbnails}
+          onSelect={() => onSelectRoom(featured)}
+        />
+      </div>
+
+      {more.length > 0 && (
+        <>
+          <div className="editorial mt-8 mb-3">
+            <SectionHead
+              kicker={`${more.length === 1 ? "ONE" : more.length === 2 ? "TWO" : more.length === 3 ? "THREE" : more.length === 4 ? "FOUR" : "FIVE"} MORE ROOM${more.length === 1 ? "" : "S"}`}
+              title="Your other taste neighbourhoods."
+              right={
+                <span
+                  style={{
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "1.6px",
+                    color: "var(--fg-soft)",
+                  }}
+                >
+                  ALL ROOMS →
+                </span>
+              }
+            />
+          </div>
+          <div className="editorial">
+            <div className="grid grid-cols-2 gap-3">
+              {more.map((room) => (
+                <MoodRoomCard
+                  key={room.id}
+                  id={room.id}
+                  label={room.llmLabel?.label ?? `If you love ${room.anchorTitle}`}
+                  titleCount={room.titleCount}
+                  thumbnails={room.thumbnails}
+                  onSelect={() => onSelectRoom(room)}
+                />
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -224,7 +253,7 @@ export function ForYouPage({
   // the active mood so the UX reads correctly.
   const inYourMood = recs.slice(topPick ? 1 : 0);
 
-  const coverStoryRoom = anchorRooms.rooms[0] ?? null;
+  const moodRooms = anchorRooms.rooms;
 
   const continueExploring = useMemo(() => applyFilters(content.hiddenGems), [applyFilters, content.hiddenGems]);
   const watchlistPreview = useMemo(
@@ -363,16 +392,12 @@ export function ForYouPage({
           />
         )}
 
-        {/* §5.5 — Cover-story mood room (1 featured + 3 supporting) */}
-        {coverStoryRoom && (
+        {/* §5.5 — Cover-story featured room + 5-more grid */}
+        {moodRooms.length > 0 && (
           <CoverStoryMoodRoom
-            room={coverStoryRoom}
-            onSelectItem={onItemSelect}
+            rooms={moodRooms}
             onSelectRoom={onSelectAnchorRoom}
-            bookmarkedIds={bookmarkedIds}
-            onToggleBookmark={onToggleBookmark}
-            userServices={connectedServiceIds}
-            watchedIds={watchedIds}
+            totalServiceCount={connectedServiceIds.length}
           />
         )}
 

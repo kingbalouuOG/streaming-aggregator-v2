@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { ImageSkeleton } from "./ImageSkeleton";
 import { ServiceStack } from "./ServiceBadge";
+import { getCachedServices } from "@/lib/utils/serviceCache";
+import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 import type { ContentItem } from "./ContentCard";
 import type { ServiceId } from "./platformLogos";
 
@@ -40,9 +42,20 @@ export function MagazineHero({
   userServices,
   onSelect,
 }: MagazineHeroProps) {
+  // Lazy-load services if the parent didn't pre-resolve them. Same
+  // pattern ContentCard uses — the discover endpoints often return
+  // items with empty services arrays, and the cached lookup fills
+  // them in. Without this the hero ServiceStack stays hidden.
+  const [resolved, setResolved] = useState<ServiceId[]>(item.services);
+  useEffect(() => {
+    if (item.services.length > 0) { setResolved(item.services); return; }
+    const { tmdbId, mediaType } = parseContentItemId(item.id);
+    getCachedServices(String(tmdbId), mediaType).then(setResolved);
+  }, [item.id, item.services]);
+
   const services = userServices?.length
-    ? item.services.filter((s) => userServices.includes(s))
-    : item.services;
+    ? resolved.filter((s) => userServices.includes(s))
+    : resolved;
 
   return (
     <button
