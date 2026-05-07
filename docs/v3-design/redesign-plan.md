@@ -48,7 +48,7 @@ Per-component checklist. One row = one PR. Tick the box when done. Do not bundle
 - [x] **`WatchlistPage`** — 🔵 Want-to-Watch / Watched tabs as editorial chips. Empty state with editor's note tone.
 - [x] **`BrowsePage`** — 🔵 New BrowseCard, restyled CategoryFilter (chip bar), search input adopts paper/ink surface.
 - [x] **`ProfilePage`** — 🔵 Settings list-row style. Service connections as ServiceBadge stack with chevrons.
-- [ ] **`CalendarPage`** — 🔵 Date pills new chip style. Service filter row as chips.
+- [x] **`CalendarPage`** — 🔵 Date pills new chip style. Service filter row as chips.
 - [ ] **`SpendDashboard`** — 🔵 Headline number Fraunces 56 / 700. Per-service rows with bar visualisation.
 - [x] **`MoodRoomPage`** — 🟠 Cover-story treatment lifted from For You. Big atmospheric hero; supporting grid below.
 - [ ] **`OnboardingFlow`** — 🔵 5-step state machine unchanged. Step screens adopt magazine layout (kicker + Fraunces title + body + primary CTA).

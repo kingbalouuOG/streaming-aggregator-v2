@@ -133,28 +133,35 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
               transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
-              <div className="flex gap-1.5 overflow-x-auto px-5 pb-3 no-scrollbar">
+              <div className="flex gap-2 overflow-x-auto px-5 pb-3 no-scrollbar">
                 <button
+                  type="button"
                   onClick={() => setServiceFilter("all")}
-                  className={`shrink-0 px-3 py-1.5 rounded-lg text-[12px] border transition-all ${
-                    serviceFilter === "all"
-                      ? "bg-primary/15 text-primary border-primary/30"
-                      : "bg-secondary/50 text-muted-foreground border-transparent"
-                  }`}
-                  style={{ fontWeight: serviceFilter === "all" ? 600 : 500 }}
+                  className="shrink-0 px-3 py-1.5"
+                  style={{
+                    background: serviceFilter === "all" ? "var(--primary)" : "var(--surface-tint)",
+                    color: serviceFilter === "all" ? "#fff" : "var(--fg-soft)",
+                    borderRadius: "var(--r-pill)",
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 12,
+                    fontWeight: serviceFilter === "all" ? 600 : 500,
+                    transition: "background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out)",
+                  }}
                 >
-                  All Services
+                  All services
                 </button>
                 {userServices.map((s) => (
                   <button
                     key={s}
+                    type="button"
                     onClick={() => setServiceFilter(s === serviceFilter ? "all" : s)}
-                    className={`shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] border transition-all ${
-                      serviceFilter === s
-                        ? "bg-primary/15 text-primary border-primary/30"
-                        : "bg-secondary/50 text-muted-foreground border-transparent"
-                    }`}
-                    style={{ fontWeight: serviceFilter === s ? 600 : 500 }}
+                    className="shrink-0 inline-flex items-center justify-center px-2 py-1"
+                    style={{
+                      background: serviceFilter === s ? "var(--primary-soft)" : "var(--surface-tint)",
+                      borderRadius: "var(--r-pill)",
+                      outline: serviceFilter === s ? "1px solid var(--primary-edge)" : "none",
+                      transition: "background var(--d-fast) var(--ease-out)",
+                    }}
                   >
                     <ServiceBadge service={s} size="sm" />
                   </button>
@@ -168,38 +175,50 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
         {uniqueDates.length > 0 && (
           <div
             ref={dateScrollRef}
-            className="flex gap-1.5 overflow-x-auto px-5 pt-1 pb-3 no-scrollbar"
+            className="flex gap-2 overflow-x-auto px-5 pt-1 pb-3 no-scrollbar"
           >
             <button
+              type="button"
               onClick={() => setDateFilter("all")}
-              className={`shrink-0 px-3 py-1.5 rounded-lg text-[12px] border transition-all ${
-                dateFilter === "all"
-                  ? "bg-primary/15 text-primary border-primary/30"
-                  : "bg-secondary/50 text-muted-foreground border-transparent"
-              }`}
-              style={{ fontWeight: dateFilter === "all" ? 600 : 500 }}
+              className="shrink-0 px-3 py-1.5"
+              style={{
+                background: dateFilter === "all" ? "var(--primary)" : "var(--surface-tint)",
+                color: dateFilter === "all" ? "#fff" : "var(--fg-soft)",
+                borderRadius: "var(--r-pill)",
+                fontFamily: "var(--font-ui)",
+                fontSize: 12,
+                fontWeight: dateFilter === "all" ? 600 : 500,
+                transition: "background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out)",
+              }}
             >
               All
             </button>
             {uniqueDates.map((date) => {
               const pill = formatDatePill(date);
               const isActive = dateFilter === date;
+              const isPrimary = isActive || pill.isToday;
               return (
                 <button
                   key={date}
+                  type="button"
                   data-today={pill.isToday}
                   onClick={() => setDateFilter(date === dateFilter ? "all" : date)}
-                  className={`shrink-0 flex flex-col items-center px-2.5 py-1 rounded-lg text-center border transition-all min-w-[40px] ${
-                    isActive
-                      ? "bg-primary/15 text-primary border-primary/30"
-                      : pill.isToday
-                        ? "bg-primary text-white border-primary"
-                        : "bg-secondary/50 text-muted-foreground border-transparent"
-                  }`}
-                  style={{ fontWeight: isActive || pill.isToday ? 600 : 500 }}
+                  className="shrink-0 flex flex-col items-center justify-center text-center"
+                  style={{
+                    minWidth: 48,
+                    minHeight: 36,
+                    padding: "4px 10px",
+                    background: isPrimary ? "var(--primary)" : "var(--surface-tint)",
+                    color: isPrimary ? "#fff" : "var(--fg-soft)",
+                    borderRadius: "var(--r-pill)",
+                    fontFamily: "var(--font-ui)",
+                    fontWeight: 700,
+                    lineHeight: 1.05,
+                    transition: "background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out)",
+                  }}
                 >
-                  <span className="text-[9px] tracking-wider">{pill.day}</span>
-                  <span className="text-[13px] -mt-0.5">{pill.num}</span>
+                  <span style={{ fontSize: 9, letterSpacing: "0.06em" }}>{pill.day}</span>
+                  <span style={{ fontSize: 13 }}>{pill.num}</span>
                 </button>
               );
             })}
