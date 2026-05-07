@@ -59,7 +59,7 @@ Per-component checklist. One row = one PR. Tick the box when done. Do not bundle
 - [x] **`FeaturedHero`** — 🟠 Replace card-style auto-rotator with editorial magazine hero. No auto-rotate; user swipes.
 - [x] **`MoodRoomsRow` / `MoodRoomCard`** — 🟠 New tile design (square-ish, room-accent gradient, Fraunces label).
 - [x] **`ContentRow`** — 🔵 Wraps SectionHead. Card variants `default | wide | lead`.
-- [ ] **`LazyGenreSection`** — 🔵 Wrap with SectionHead. Inner row stays.
+- [x] **`LazyGenreSection`** — 🔵 Wrap with SectionHead. Inner row stays.
 - [ ] **`CategoryFilter`** — 🔵 Editorial chip bar with kicker.
 - [ ] **`SliderTray`** — 🔵 Restyle handles, tick labels in DM Sans 11 tracked.
 - [ ] **`FilterSheet` / `ReportSheet`** — 🔵 Sheet shell uses `--shadow-sheet` + grabber pill.
