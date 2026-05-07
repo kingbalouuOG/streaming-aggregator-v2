@@ -23,7 +23,7 @@ Per-component checklist. One row = one PR. Tick the box when done. Do not bundle
 ## Phase 1 — Card primitives
 
 - [x] **`src/components/ContentCard.tsx`** — 🟠 New anatomy: bookmark TR (28×28, blur), rating pill BL only, no plan pill, no "new" ribbon. Variants: `default | wide | lead | mosaic`. Title and meta below. DoD: matches anatomy in `design-system.md §4`.
-- [ ] **`src/components/BrowseCard.tsx`** — 🔵 Adopts new ContentCard primitive in grid form. Maintain same hooks.
+- [x] **`src/components/BrowseCard.tsx`** — 🔵 Adopts new ContentCard primitive in grid form. Maintain same hooks.
 - [x] **`src/components/ServiceBadge.tsx`** — 🔵 24×24 squares; ServiceStack overlaps -8px; cap at 4 + `+N`.
 - [ ] **`src/components/ComingSoonCard.tsx`** — 🔵 Adopts CalendarStrip styling (date pill in primary, title under).
 
