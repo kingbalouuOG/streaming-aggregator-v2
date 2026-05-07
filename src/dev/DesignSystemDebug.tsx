@@ -51,7 +51,7 @@ export function IconsDebug() {
               border: "0.5px solid var(--hairline)",
             }}
           >
-            <Icon className="w-5 h-5" />
+            <Icon className="w-5 h-5 shrink-0" />
             <span style={{ fontSize: "var(--t-meta)", color: "var(--fg-soft)" }}>{name}</span>
           </div>
         ))}

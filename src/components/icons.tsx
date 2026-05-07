@@ -112,22 +112,11 @@ export function BookmarkIcon({ className = "w-5 h-5" }: IconProps) {
   );
 }
 
-/** Bookmark — filled. Active state for ContentCard bookmark.
- *  Both fill and stroke use currentColor (with rounded joins) so the
- *  visual bounds match BookmarkIcon's outline, where the 1.8px stroke
- *  extends ~0.9px outside the geometric path. Without the stroke the
- *  filled glyph reads ~25% smaller than its outline twin. */
+/** Bookmark — filled. Active state for ContentCard bookmark. */
 export function BookmarkFilledIcon({ className = "w-5 h-5" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className}>
-      <path
-        d="M 5 3 L 19 3 L 19 21 L 12 17 L 5 21 Z"
-        fill="currentColor"
-        stroke="currentColor"
-        strokeWidth={1.8}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
+      <path d="M 5 3 L 19 3 L 19 21 L 12 17 L 5 21 Z" fill="currentColor" />
     </svg>
   );
 }
