@@ -800,17 +800,15 @@ function AppContent() {
                     ) : null;
                   })()}
 
-                  {/* §5.2 — Editor's Note. Hardcoded sample until Phase 6
-                      adds the editor_notes table query to useHomeContent. */}
+                  {/* §5.2 — Editor's Note (Phase 6 wired). useHomeContent
+                      reads from the editor_notes table once-per-day and
+                      falls back to a baked-in sample when the table
+                      isn't yet populated. */}
                   <div className="editorial mb-8">
                     <EditorsNote
-                      kicker="EDITOR'S NOTE"
-                      teaser="A great prestige drama, three sci-fi misses, and the case for taking notes during the credits."
-                      body={`A great prestige drama is rare in any year, and this week we have one. Three and a half hours of patient cinema that earns every minute — and a reminder that the streaming services still know how to platform serious work when they want to.
-
-Elsewhere the sci-fi shelf is thin. Two of the three new high-concept releases stumble in the second act, and the third never finds a tone. Worth waiting on.
-
-The case for credits: keep watching after the cut. The best gags this season are tucked into the typography.`}
+                      kicker={home.editorNote.kicker}
+                      teaser={home.editorNote.teaser}
+                      body={home.editorNote.body}
                     />
                   </div>
 

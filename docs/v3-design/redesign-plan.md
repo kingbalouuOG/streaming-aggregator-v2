@@ -70,7 +70,7 @@ Per-component checklist. One row = one PR. Tick the box when done. Do not bundle
 
 ## Phase 6 — Data / infra
 
-- [ ] **`editor_notes` table** — 🟣 Supabase migration. Columns: `id, body, kicker, published_at, expires_at`. Read once-per-day cached.
+- [x] **`editor_notes` table** — 🟣 Supabase migration. Columns: `id, body, kicker, published_at, expires_at`. Read once-per-day cached.
 - [ ] **`recommendations-v2/rows/home/perServiceChart.ts`** — 🟢 Existing logic, no change. Just verify Home wires it.
 
 ---
