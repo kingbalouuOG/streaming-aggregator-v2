@@ -999,6 +999,13 @@ The case for credits: keep watching after the cut. The best gags this season are
                   bookmarkedIds={wl.bookmarkedIds}
                   onToggleBookmark={handleToggleBookmark}
                   watchedIds={watchedIds}
+                  upcoming={reorderedUpcoming}
+                  onSelectUpcoming={(u) =>
+                    handleItemSelect({
+                      id: u.id, title: u.title, image: u.image,
+                      services: u.services, rating: u.rating, type: u.type,
+                    })
+                  }
                 />
               )}
 
