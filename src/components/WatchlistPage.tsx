@@ -124,7 +124,6 @@ export function WatchlistPage({
                   letterSpacing: "0.01em",
                   transition: "background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out)",
                 }}
-                aria-pressed={active ? "true" : "false"}
               >
                 {t === "want" ? <Bookmark className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                 <span>{label}</span>

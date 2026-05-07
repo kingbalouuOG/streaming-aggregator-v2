@@ -46,7 +46,7 @@ Per-component checklist. One row = one PR. Tick the box when done. Do not bundle
 - [x] **`ForYouPage`** — 🟠 New section order (`design-system.md §5`). Mood chip refiner sits **above** "In your mood" (not as a primary nav). Cover-Story mood room block (1 featured + 3 supporting).
 - [x] **`DetailPage`** — 🟠 Editorial hero (full-bleed image + Fraunces title overlay). New "Where to watch" stack. Restyled chapter list.
 - [x] **`WatchlistPage`** — 🔵 Want-to-Watch / Watched tabs as editorial chips. Empty state with editor's note tone.
-- [ ] **`BrowsePage`** — 🔵 New BrowseCard, restyled CategoryFilter (chip bar), search input adopts paper/ink surface.
+- [x] **`BrowsePage`** — 🔵 New BrowseCard, restyled CategoryFilter (chip bar), search input adopts paper/ink surface.
 - [ ] **`ProfilePage`** — 🔵 Settings list-row style. Service connections as ServiceBadge stack with chevrons.
 - [ ] **`CalendarPage`** — 🔵 Date pills new chip style. Service filter row as chips.
 - [ ] **`SpendDashboard`** — 🔵 Headline number Fraunces 56 / 700. Per-service rows with bar visualisation.
