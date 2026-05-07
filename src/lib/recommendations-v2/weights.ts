@@ -5,17 +5,10 @@
  * and feature flags. Every ranker call site imports from this file.
  * Tuning the pipeline is a one-file change.
  *
- * ── Interim Weight Note ──
- * The base weights (taste 62.5%, recency 25%, contextual 12.5%) are normalized
- * from the Phase 4 brief's 50/20/10 allocation. These proportions are INTERIM:
- * the contextual component returns a neutral 0.5 for all candidates in Phase 4,
- * meaning it has zero ranking influence despite carrying 12.5% of the weight.
- *
- * When Phase 5 replaces the contextual placeholder with a real scorer (device,
- * time-of-day, viewing context), the relative balance between taste and recency
- * will shift — the contextual signal will absorb effective weight from both.
- * At that point, the base weights should be re-evaluated to ensure the three
- * components produce the desired ranking behavior.
+ * Phase 5: contextual scoring is now real (see contextual.ts). BASE_WEIGHTS
+ * still 62.5/25/12.5; the weight-split re-evaluation is deferred until
+ * prototype vectors rebase post-marked_watched fix. See phase-5-summary §7
+ * for the rank-eval-driven decision path.
  */
 
 import type { Stage2Weights } from './types';
@@ -92,7 +85,7 @@ export function getVarietyGenreWindow(slider: number): number {
 }
 
 /**
- * Variety slider → MMR λ parameter (reserved for Phase 5).
+ * Variety slider → MMR λ parameter (Phase 5; consumed by applyMMR in diversity.ts).
  * At 0.0: λ = 0.85 (strong relevance preference)
  * At 1.0: λ = 0.55 (strong diversity preference)
  */

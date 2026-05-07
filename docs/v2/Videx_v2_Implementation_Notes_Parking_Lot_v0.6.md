@@ -1407,6 +1407,173 @@ Wiring requires cascading delete across: `profiles`, `user_interactions`, `card_
 
 ---
 
+## Phase 5.5 follow-ups (filed 2026-05-07 from Phase 5 review pass)
+
+These came out of the post-merge review of PR #4 (security-sentinel + data-integrity-guardian + performance-oracle + kieran-typescript-reviewer + architecture-strategist + code-simplicity-reviewer). None are launch blockers; all are quality / hardening items that compound if left.
+
+### IN-PX-21: Regenerate `database.types.ts` and delete `as any` casts
+
+**Source:** Phase 5 TypeScript review (kieran-typescript-reviewer) + data-integrity audit.
+
+**Detail:** Phase 5 added migrations 036–038 + table `mood_room_anchor_labels` (migration 034). `src/lib/database.types.ts` predates these and was NOT regenerated. Phase 5 commits worked around the staleness with three `as any` / `(supabase.rpc as any)` / `(supabase.from as any)` casts in `AuthContext.tsx`, `anchorRoomLabels.ts`, and `interactionUpdate.ts`. Each cast suppresses real type signal at exactly the boundaries you most want types for (RPC payload shape, JSONB fields, table schema).
+
+**Fix:** Run `npx supabase gen types typescript --project-id fmusugdcnnwiuzkbjquo --schema public > src/lib/database.types.ts`. Delete each cast that has a "until regenerated" comment. Verify `npx tsc --noEmit` clean. Promote regen to a CI gate on every migration PR going forward (workflow file: `.github/workflows/typegen-check.yml` — run `gen types`, fail if diff against committed file).
+
+**Phase target:** Phase 5.5.
+
+**Status:** ⏳ Filed; trivial implementation, ~30 min.
+
+### IN-PX-22: Embedding fetch caching for MMR
+
+**Source:** Phase 5 performance review (performance-oracle).
+
+**Detail:** `fetchEmbeddingsForCandidates(top 200)` runs on every load (no cache) on both client and Edge paths. Wire payload ~3MB JSON over residential WAN = 600–1500ms transfer alone, dominant new Phase 5 latency cost. The user's top-200 by finalScore is highly stable across loads (taste vector + filters + sliders sticky over hours).
+
+**Fix:** Cache the embedding map keyed on `userId:tasteVectorHash:filterSetsHash`, 24h TTL on the client (localStorage) and per-instance memory on the Edge. Even a 5-minute session cache would help the back-button-into-ForYou case. Files: `src/hooks/useForYouContent.ts:41-66`, `supabase/functions/render-foryou-rows/index.ts` (`fetchEmbeddingsForCandidates`).
+
+**Phase target:** Phase 5.5.
+
+**Status:** ⏳ Filed.
+
+### IN-PX-23: MMR partial-coverage fallback
+
+**Source:** Phase 5 performance review.
+
+**Detail:** When `applyMMR` hits candidates without embeddings (e.g. Hidden Gems or Outside Your Usual rows pulling from below rank 200), it treats redundancy as 0 and falls back to pure `finalScore` ordering for those picks. Net effect: those rows lose intra-row diversity that `applyGenreSpread` actively enforced — same-genre clusters can appear. The current `buildRowFromPool` fallback to `applyGenreSpread` only triggers when the entire embeddingMap is empty, not on partial coverage.
+
+**Fix:** in `applyMMR`, if >50% of selected so far have no embedding, bail out and let the caller fall through to `applyGenreSpread`. File: `src/lib/recommendations-v2/diversity.ts:170-223`.
+
+**Phase target:** Phase 5.5.
+
+**Status:** ⏳ Filed; small change, observable user-facing diversity improvement.
+
+### IN-PX-24: Float32Array + cosine-norm precompute in MMR
+
+**Source:** Phase 5 performance review.
+
+**Detail:** `cosineSimilarity` recomputes vector norms on every call. With ~58M FLOPs per row in the worst case, precomputing each embedding's norm once when building the map saves ~3× on the hot loop. Float32Array (vs `number[]`) further halves memory and is JIT-friendlier under V8 / SIMD-vectorisable.
+
+**Fix:** Change `embeddingMap` shape to `Map<string, { vec: Float32Array; norm: number }>`. Inline the dot-product in `applyMMR`'s inner loop using the cached norm. File: `src/lib/recommendations-v2/diversity.ts:135-147`.
+
+**Phase target:** Phase 5.5 (after IN-PX-22 caching, since both touch the embedding map).
+
+**Status:** ⏳ Filed.
+
+### IN-PX-25: Test coverage for `computeContextualScore` and `applyMMR`
+
+**Source:** Phase 5 TypeScript review.
+
+**Detail:** Both new pure functions are determinism-friendly with non-trivial branching (time buckets × genres × viewing contexts × runtime thresholds for contextual; embedding presence × λ for MMR). Genre-boost tables in `weights.ts` are data, mature today, but anyone editing them needs a regression net. No tests today.
+
+**Fix:** Add ~5 tests in `src/lib/recommendations-v2/__tests__/` (or `scripts/test/`):
+- A late-night comedy candidate scores higher than a late-night documentary.
+- `with_family` + Horror genre candidate lands below 0.5.
+- `applyMMR(λ=1)` returns finalScore-sorted output (no diversification).
+- `applyMMR` with empty embeddingMap returns finalScore-sorted output (graceful degradation).
+- `applyMMR` with all candidates same embedding returns top-1 only (perfect redundancy).
+
+**Phase target:** Phase 5.5.
+
+**Status:** ⏳ Filed.
+
+### IN-PX-26: `buildRowFromPool` options object
+
+**Source:** Phase 5 TypeScript review + architecture review.
+
+**Detail:** `buildRowFromPool(scored, sliders, config, getServices?, embeddingMap?)` is now five positional parameters, two of which are optional. Callers that want to pass `embeddingMap` must pass `undefined` for `getServices`. Adding a sixth parameter (likely in Phase 6+) compounds the awkwardness.
+
+**Fix:** Convert to options object: `buildRowFromPool(scored, sliders, { config, getServices, embeddingMap })`. Touch points: `useForYouContent.ts` (3 call sites), `render-foryou-rows/index.ts` (3 call sites incl. `buildOutsideYourUsual`).
+
+**Phase target:** Phase 5.5 (do before any Phase 6 feature adds a 6th param).
+
+**Status:** ⏳ Filed.
+
+### IN-PX-27: `ViewingContext` type to source of truth
+
+**Source:** Phase 5 TypeScript review.
+
+**Detail:** `PipelineContext.viewingContext` is typed `string | null` but `contextual.ts:94` casts to `ViewingContext` (the union currently in `weights.ts`). Type narrowing happens at the wrong layer.
+
+**Fix:** Move `ViewingContext` from `weights.ts` to `types.ts`, change `PipelineContext.viewingContext` to `ViewingContext | null`, drop the cast. Bad strings get caught at the `profiles.viewing_context` boundary instead of silently neutralising at score time. Mirror to `_shared/recommendations-v2/types.ts` and `_shared/recommendations-v2/weights.ts`.
+
+**Phase target:** Phase 5.5.
+
+**Status:** ⏳ Filed.
+
+### IN-PX-28: `edge-fn-jwt-guard` gap — central `supabase/config.toml`
+
+**Source:** Phase 5 security review (security-sentinel).
+
+**Detail:** Current `.github/workflows/edge-fn-jwt-guard.yml` greps `supabase/functions/*/config.toml`. A future PR setting `[functions.<name>] verify_jwt = false` in the **central** `supabase/config.toml` would bypass the guard.
+
+**Fix:** Add a second grep step targeting `supabase/config.toml` for `verify_jwt\s*=\s*false`. Trivial.
+
+**Phase target:** Phase 5.5.
+
+**Status:** ⏳ Filed.
+
+### IN-PX-29: `username_available` rate-limit at gateway
+
+**Source:** Phase 5 security review.
+
+**Detail:** Migration 038's RPC returns a boolean — no data leak — but enables one-at-a-time username enumeration. With no rate limit, an attacker can enumerate the username space cheaply for credential-stuffing reconnaissance.
+
+**Fix:** Add per-IP rate-limit either via Supabase Auth Rate Limits (if the dashboard surface allows it for arbitrary RPCs), or via Cloudflare in front of `/rest/v1/rpc/username_available` once a hosted public web origin exists. Until public web ships, low priority.
+
+**Phase target:** Phase 6 (pre-public-launch).
+
+**Status:** ⏳ Filed.
+
+### IN-PX-30: Defence-in-depth in `extractUserIdFromJwt`
+
+**Source:** Phase 5 security review.
+
+**Detail:** `extractUserIdFromJwt` decodes JWT payload without verifying the signature, relying on Supabase gateway `verify_jwt = true` to reject unsigned tokens. Phase 5 locked in per-function `config.toml` configs to enforce this. But if a developer later moves a function under `_no_auth_/` AND calls `extractUserIdFromJwt`, they'd have a forgeable user ID with no signature check. The `_no_auth_/` directory is empty today.
+
+**Fix:** Add a runtime assertion in `extractUserIdFromJwt` that throws if the function path is under `_no_auth_/`. Or — simpler long-term — replace the hand-rolled decode with `jose.jwtVerify(token, JWKS)` cached behind a module-level promise (~5ms cold-start cost, negligible).
+
+**Phase target:** Phase 6 (pre-public-launch).
+
+**Status:** ⏳ Filed.
+
+### IN-PX-31: Trim `supabase/cron/*.sql` source-of-truth confusion
+
+**Source:** Phase 5 data-integrity review.
+
+**Detail:** Migration 039 unschedules + reschedules four cron jobs with Vault reads. The three `supabase/cron/*.sql` files (Phase 0.5–2 era operational automation) were also updated in Phase 5 to use Vault reads — but they have the same jobname-based upsert behaviour as the migration. Result: two source-of-truth files for the same registration. If anyone edits the schedule in one place but not the other, they'll silently overwrite each other on next re-apply.
+
+**Fix:** Either (a) make migration 039 the sole owner — add a comment header to each `supabase/cron/*.sql` saying "MANAGED BY MIGRATION 039 — DO NOT RE-APPLY"; or (b) delete the three files entirely (their schedules now live in 039). Recommend (b); their current existence is purely historical.
+
+**Phase target:** Phase 5.5.
+
+**Status:** ⏳ Filed.
+
+### IN-PX-32: Mirror tree consolidation
+
+**Source:** Phase 5 architecture review (architecture-strategist).
+
+**Detail:** `src/lib/recommendations-v2/*` and `supabase/functions/_shared/recommendations-v2/*` are bit-for-bit mirrors enforced by `shared-tree-drift` CI. Phase 5 brought the mirror to 11 files. The drift control is necessary but reactive — every refactor pays a mirror tax.
+
+**Fix:** Move leaf modules with no app-only dependencies (`weights.ts`, `contextual.ts`, `diversity.ts`, `recency.ts`, possibly `titleAdapter.ts`) into `supabase/functions/_shared/recommendations-v2/` as the source of truth. `src/lib/recommendations-v2/` re-exports them. Halves the drift surface without a build step. Modules that pull in app-only imports (`anchoredRoom.ts` uses `supabase` singleton; `ranker.ts` uses `@/lib/taste-v2/types`) stay mirrored.
+
+**Phase target:** Phase 6 boundary or earlier if drift incidents > 2 in any 30-day window (per IN-467).
+
+**Status:** ⏳ Filed; supersedes part of IN-467's "evaluation criteria".
+
+### IN-PX-33: Property-level parity probe
+
+**Source:** Phase 5 architecture review.
+
+**Detail:** `foryou-parity` workflow runs `scripts/_inspect_foryou_parity.mjs` as a smoke test. It catches semantic divergence at row-composition level on a fixture user. As Phase 5 doubled the parity surface (contextual + MMR + embedding fetch in BOTH paths), the next refactor will likely break parity in subtle ways the smoke probe misses.
+
+**Fix:** Extend the probe to property-level: deterministic seed + golden output checked into `scripts/test/foryou-parity-golden.json`. Re-run on every PR touching `recommendations-v2/` or `render-foryou-rows`. Diff against golden. Update golden via explicit `--update-golden` flag in the script when the change is intentional.
+
+**Phase target:** Phase 6 / before any new Edge-client paired feature.
+
+**Status:** ⏳ Filed.
+
+---
+
 ## Onboarding implementation notes
 
 *(Specific to the v2 onboarding flow build — applies to Phase 3 where onboarding gets wired to backend logic)*

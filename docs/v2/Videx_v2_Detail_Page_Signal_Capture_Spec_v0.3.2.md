@@ -410,7 +410,7 @@ user_interactions (existing table, expanded in migration 013)
 **event_type values (v2):**
 - `thumbs_up`, `thumbs_down`
 - `watchlist_add`, `watchlist_remove`
-- `marked_watched`
+- `watched` (was previously listed as `marked_watched`; the `marked_watched` event_type was dropped in Phase 5 migration 037 — only `watched` survives in `user_interactions.event_type`. Note: `marked_watched` is still a canonical `exit_reason` value inside `dwell_event` metadata, see line 237.)
 - `deep_link_click`
 - `not_interested` (renamed from `dismiss` in migration 013)
 - `detail_view` (fired on detail page open — already wired in v1 via `emitDetailView()` at `interactions.ts:99-111`, enhanced in Phase 0 to populate the new `source_surface` and `session_id` columns)

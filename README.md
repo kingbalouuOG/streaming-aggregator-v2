@@ -185,8 +185,9 @@ videx/
         weights.ts               Scoring weights, slider mappings, feature flags
         ranker.ts                Pipeline orchestrator (retrieval, scoring, row building)
         recency.ts               Recency scoring (piecewise linear + exponential decay)
-        contextual.ts            Contextual scoring (Phase 4 placeholder)
-        diversity.ts             Genre-spread, service de-clustering, content-mix ratio
+        contextual.ts            Contextual scoring (Phase 5: time-of-day + viewing-context + device sub-scorers)
+        pipelineContext.ts       Builds runtime PipelineContext from Capacitor Device + Date + profile (Phase 5)
+        diversity.ts             MMR (Phase 5), genre-spread fallback, service de-clustering, content-mix ratio
         hardFilters.ts           Hard filter construction (dismissed, thumbs-down, availability)
         titleAdapter.ts          Database row -> ContentItem mapper
         rows/home/               Home surface row builders
@@ -280,8 +281,8 @@ During onboarding, users select from 16 taste archetypes (e.g. "Feel-Good & Funn
 Multi-stage pipeline producing scored, diversified, service-spread results:
 
 1. **Stage 1 — Retrieval**: pgvector cosine similarity via `match_titles_by_vector` RPC (500 candidates)
-2. **Stage 2 — Scoring**: Weighted sum of taste similarity (62.5%), recency (25%), and contextual fit (12.5% placeholder). Catalogue-age slider modulates recency weight (10-30%).
-3. **Stage 2b — Diversity**: Genre-spread with taste-cluster secondary signal. Focused-Varied slider modulates genre repeat window.
+2. **Stage 2 — Scoring**: Weighted sum of taste similarity (62.5%), recency (25%), and contextual fit (12.5%). Contextual is composed of time-of-day, viewing-context, and device sub-scorers (Phase 5; was placeholder 0.5 in Phase 4). Catalogue-age slider modulates recency weight (10-30%).
+3. **Stage 2b — Diversity**: MMR over 1536D embeddings (Phase 5; λ from Variety slider). Embedding-absent fallback path uses genre-spread with taste-cluster secondary signal.
 4. **Stage 2c — De-clustering**: Positional constraint ensuring no more than 2 consecutive titles from the same streaming service.
 
 ### Delivery Sliders

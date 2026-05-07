@@ -964,7 +964,7 @@ Phase-specific gotchas to remember when briefing each phase. These supplement th
 
 ### 8.8 Phase 5 — Privacy hardening and pre-launch
 
-**IN-XPS-002 must be addressed.** The `profiles` table policy "Allow public username lookup" currently exposes the entire table to public reads. Before any real users sign up, this must be tightened to a SECURITY DEFINER function or restricted view.
+**IN-XPS-002 — ✅ resolved in Phase 5.** The wide-open `"Allow public username lookup"` policy on `profiles` was replaced by migration 038 with a `username_available(check_username text) RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE` RPC. `AuthContext.checkUsernameAvailable` calls the RPC; anon SELECT on `profiles` is now denied. Reference: `docs/v2/phase-summaries/phase-5-summary.md` §5.3.
 
 **Privacy disclosure copy** must accurately describe what's captured per the Detail Page Signal Spec. Generic privacy boilerplate is not acceptable.
 
