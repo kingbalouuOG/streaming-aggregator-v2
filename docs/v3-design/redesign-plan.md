@@ -35,7 +35,7 @@ Per-component checklist. One row = one PR. Tick the box when done. Do not bundle
 
 ## Phase 3 — Reference screen (gold standard)
 
-- [ ] **Home** — 🟠 Land this before any other screen. Order: Magazine hero → Editor's Note → Recently added (mosaic) → Charts → Editorial spotlight → 3 per-service rows → Free tonight → Critics' Picks → Calendar strip. Wires:
+- [x] **Home** — 🟠 Land this before any other screen. Order: Magazine hero → Editor's Note → Recently added (mosaic) → Charts → Editorial spotlight → 3 per-service rows → Free tonight → Critics' Picks → Calendar strip. Wires:
   - `useHomeContent` already returns most of this; add `editor_notes` table query.
   - Editorial spotlight: editorial-curated single title, falls back to top-trending.
   - Free tonight: `recommendations-v2/rows/home/freeTonightRow.ts` (existing).
@@ -58,7 +58,7 @@ Per-component checklist. One row = one PR. Tick the box when done. Do not bundle
 
 - [ ] **`FeaturedHero`** — 🟠 Replace card-style auto-rotator with editorial magazine hero. No auto-rotate; user swipes.
 - [ ] **`MoodRoomsRow` / `MoodRoomCard`** — 🟠 New tile design (square-ish, room-accent gradient, Fraunces label).
-- [ ] **`ContentRow`** — 🔵 Wraps SectionHead. Card variants `default | wide | lead`.
+- [x] **`ContentRow`** — 🔵 Wraps SectionHead. Card variants `default | wide | lead`.
 - [ ] **`LazyGenreSection`** — 🔵 Wrap with SectionHead. Inner row stays.
 - [ ] **`CategoryFilter`** — 🔵 Editorial chip bar with kicker.
 - [ ] **`SliderTray`** — 🔵 Restyle handles, tick labels in DM Sans 11 tracked.

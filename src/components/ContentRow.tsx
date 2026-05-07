@@ -1,5 +1,6 @@
 import React, { useRef, useCallback, useLayoutEffect, useEffect } from "react";
 import { ContentCard, ContentItem } from "./ContentCard";
+import { SectionHead } from "./SectionHead";
 import type { ServiceId } from "./platformLogos";
 import { getScrollPosition, setScrollPosition } from "@/lib/sectionSessionCache";
 import { recordImpression, type ImpressionSurface } from "@/lib/instrumentation/impressionBatcher";
@@ -9,6 +10,14 @@ import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 interface ContentRowProps {
   title: string;
   items: ContentItem[];
+  /** Optional taxonomic kicker (uppercase tracked) above the title. */
+  kicker?: string;
+  /** Override the default orange kicker — typically a service tint. */
+  kickerColor?: string;
+  /** Optional Fraunces italic standfirst under the title. */
+  standfirst?: string;
+  /** Optional trailing slot — typically a "See all →" link. */
+  right?: React.ReactNode;
   variant?: "default" | "wide" | "lead" | "mosaic" | "grid";
   sectionKey?: string;
   sourceSurface?: ImpressionSurface;
@@ -22,7 +31,7 @@ interface ContentRowProps {
   hasMore?: boolean;
 }
 
-export function ContentRow({ title, items, variant = "default", sectionKey, sourceSurface, onItemSelect, bookmarkedIds, onToggleBookmark, userServices, watchedIds, onLoadMore, loadingMore, hasMore }: ContentRowProps) {
+export function ContentRow({ title, items, kicker, kickerColor, standfirst, right, variant = "default", sectionKey, sourceSurface, onItemSelect, bookmarkedIds, onToggleBookmark, userServices, watchedIds, onLoadMore, loadingMore, hasMore }: ContentRowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadMoreCalledRef = useRef(false);
   const scrollLeftRef = useRef(0);
@@ -117,10 +126,14 @@ export function ContentRow({ title, items, variant = "default", sectionKey, sour
   return (
     <section className="mb-6">
       {/* Section header */}
-      <div className="flex items-center justify-between px-5 mb-3">
-        <h2 className="text-foreground text-[17px]" style={{ fontWeight: 700 }}>
-          {title}
-        </h2>
+      <div className="px-5">
+        <SectionHead
+          kicker={kicker}
+          kickerColor={kickerColor}
+          title={title}
+          standfirst={standfirst}
+          right={right}
+        />
       </div>
 
       {/* Horizontal scroll */}

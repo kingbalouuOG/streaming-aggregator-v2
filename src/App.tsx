@@ -4,7 +4,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { Loader2 } from "lucide-react";
 import { CategoryFilter } from "./components/CategoryFilter";
 import { ContentRow } from "./components/ContentRow";
-import { FeaturedHeroCarousel } from "./components/FeaturedHero";
+// FeaturedHeroCarousel — replaced on Home by <MagazineHero>; the file
+// stays for now until the Phase 5 FeaturedHero matrix row formally
+// retires it.
 import { ForYouPage } from "./components/ForYouPage";
 import { MoodRoomPage } from "./components/MoodRoomPage";
 import type { AnchorRoomPreview } from "./hooks/useAnchorMoodRooms";
@@ -17,7 +19,13 @@ import { WatchlistPage } from "./components/WatchlistPage";
 import { ProfilePage } from "./components/ProfilePage";
 import { OnboardingFlow, OnboardingData } from "./components/OnboardingFlow";
 import { CalendarPage } from "./components/CalendarPage";
-import { ComingSoonCard } from "./components/ComingSoonCard";
+// ComingSoonCard — Home no longer mounts these directly; the
+// CalendarStrip primitive renders them internally.
+import { MagazineHero } from "./components/MagazineHero";
+import { EditorsNote } from "./components/EditorsNote";
+import { CalendarStrip } from "./components/CalendarStrip";
+import { SectionHead } from "./components/SectionHead";
+import { ContentCard } from "./components/ContentCard";
 import { ThemeProvider, useTheme } from "./components/ThemeContext";
 import { AuthProvider, useAuth } from "./components/AuthContext";
 import AuthScreen from "./components/auth/AuthScreen";
@@ -760,28 +768,53 @@ function AppContent() {
               >
               {activeTab === "home" && (
                 <>
-                  {/* Featured Hero Carousel */}
-                  {home.popular.items.length > 0 ? (
-                    <FeaturedHeroCarousel
-                      items={home.popular.items.filter(item => item.image && !watchedIds.has(item.id)).slice(0, 5)}
-                      bookmarkedIds={wl.bookmarkedIds}
-                      watchedIds={watchedIds}
-                      userServices={connectedServiceIds}
-                      onToggleBookmark={handleToggleBookmark}
-                      onItemSelect={handleItemSelect}
-                      scrollY={scrollY}
-                    />
-                  ) : home.loading ? (
-                    <div className="w-full aspect-[4/3] bg-secondary/80 overflow-hidden">
-                      <div className="w-full h-full" style={{
-                        background: "linear-gradient(90deg, transparent 0%, var(--shimmer-color) 50%, transparent 100%)",
-                        backgroundSize: "200% 100%",
-                        animation: "shimmer 1.5s ease-in-out infinite",
-                      }} />
-                    </div>
-                  ) : null}
+                  {/* §5.1 — Magazine hero (single feature, replaces the
+                      auto-rotating FeaturedHeroCarousel pending Phase 5
+                      FeaturedHero matrix row). Picks the first popular,
+                      not-yet-watched item with poster art. */}
+                  {(() => {
+                    const heroItem = home.popular.items.find(
+                      (it) => it.image && !watchedIds.has(it.id),
+                    );
+                    return heroItem ? (
+                      <div className="editorial mb-8 mt-2">
+                        <MagazineHero
+                          item={heroItem}
+                          kicker="TODAY'S PICK"
+                          standfirst={`${heroItem.year ? heroItem.year + " · " : ""}${heroItem.genre ?? ""}`.trim() || undefined}
+                          userServices={connectedServiceIds}
+                          onSelect={handleItemSelect}
+                        />
+                      </div>
+                    ) : home.loading ? (
+                      <div className="editorial mb-8 mt-2">
+                        <div
+                          className="w-full overflow-hidden"
+                          style={{
+                            aspectRatio: "4 / 5",
+                            borderRadius: "var(--r-card)",
+                            background: "var(--surface-elev)",
+                          }}
+                        />
+                      </div>
+                    ) : null;
+                  })()}
 
-                  {/* Category filters */}
+                  {/* §5.2 — Editor's Note. Hardcoded sample until Phase 6
+                      adds the editor_notes table query to useHomeContent. */}
+                  <div className="editorial mb-8">
+                    <EditorsNote
+                      kicker="EDITOR'S NOTE"
+                      teaser="A great prestige drama, three sci-fi misses, and the case for taking notes during the credits."
+                      body={`A great prestige drama is rare in any year, and this week we have one. Three and a half hours of patient cinema that earns every minute — and a reminder that the streaming services still know how to platform serious work when they want to.
+
+Elsewhere the sci-fi shelf is thin. Two of the three new high-concept releases stumble in the second act, and the third never finds a tone. Worth waiting on.
+
+The case for credits: keep watching after the cut. The best gags this season are tucked into the typography.`}
+                    />
+                  </div>
+
+                  {/* Category filters — restyle deferred to Phase 5 */}
                   <CategoryFilter
                     categories={categories}
                     activeCategory={activeCategory}
@@ -797,35 +830,128 @@ function AppContent() {
                     </div>
                   ) : (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-                      <ContentRow title="Recently Added" sectionKey="recently-added" sourceSurface="home" items={filterLanguage(filterWatched(home.recentlyAdded.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.recentlyAdded.loadMore} loadingMore={home.recentlyAdded.loadingMore} hasMore={home.recentlyAdded.hasMore} />
-                      <ContentRow title="Trending Across Your Services" sectionKey="popular" sourceSurface="home" items={filterLanguage(filterWatched(home.popular.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.popular.loadMore} loadingMore={home.popular.loadingMore} hasMore={home.popular.hasMore} />
-                      {reorderedUpcoming.length > 0 && (
-                        <div className="mb-6 overflow-hidden">
-                          <div className="flex items-center justify-between px-5 mb-3">
-                            <h2 className="text-foreground" style={{ fontSize: "var(--t-section)", fontWeight: 700 }}>Coming Soon</h2>
-                            <button onClick={handleShowCalendar} className="text-primary" style={{ fontSize: "var(--t-meta)", fontWeight: 500 }}>See All</button>
+                      {/* §5.3 — Recently added */}
+                      <ContentRow
+                        kicker="JUST IN"
+                        title="Recently added."
+                        sectionKey="recently-added"
+                        sourceSurface="home"
+                        items={filterLanguage(filterWatched(home.recentlyAdded.items))}
+                        onItemSelect={handleItemSelect}
+                        bookmarkedIds={wl.bookmarkedIds}
+                        onToggleBookmark={handleToggleBookmark}
+                        userServices={connectedServiceIds}
+                        watchedIds={watchedIds}
+                        onLoadMore={home.recentlyAdded.loadMore}
+                        loadingMore={home.recentlyAdded.loadingMore}
+                        hasMore={home.recentlyAdded.hasMore}
+                      />
+
+                      {/* §5.4 — The Charts */}
+                      <ContentRow
+                        kicker="THE CHARTS"
+                        title="Trending across your stack."
+                        standfirst="What everyone's queueing tonight."
+                        sectionKey="popular"
+                        sourceSurface="home"
+                        items={filterLanguage(filterWatched(home.popular.items))}
+                        onItemSelect={handleItemSelect}
+                        bookmarkedIds={wl.bookmarkedIds}
+                        onToggleBookmark={handleToggleBookmark}
+                        userServices={connectedServiceIds}
+                        watchedIds={watchedIds}
+                        onLoadMore={home.popular.loadMore}
+                        loadingMore={home.popular.loadingMore}
+                        hasMore={home.popular.hasMore}
+                      />
+
+                      {/* §5.5 — Editorial spotlight (single full-bleed lead).
+                          Falls back to the second popular item; the first is
+                          already used by the Magazine hero. */}
+                      {(() => {
+                        const spotlight = home.popular.items.find(
+                          (it, i) => i > 0 && it.image && !watchedIds.has(it.id),
+                        );
+                        return spotlight ? (
+                          <div className="editorial mb-8">
+                            <SectionHead
+                              kicker="EDITORIAL SPOTLIGHT"
+                              title="One to watch tonight."
+                              standfirst="Pulled from the chart, with a recommendation."
+                            />
+                            <ContentCard
+                              item={spotlight}
+                              variant="lead"
+                              onSelect={handleItemSelect}
+                              bookmarked={wl.bookmarkedIds.has(spotlight.id)}
+                              onToggleBookmark={handleToggleBookmark}
+                              userServices={connectedServiceIds}
+                              watched={watchedIds.has(spotlight.id)}
+                            />
                           </div>
-                          <div className="flex gap-3 overflow-x-auto px-5 no-scrollbar" style={{ scrollbarWidth: "none" }}>
-                            {reorderedUpcoming.slice(0, 8).map((item) => (
-                              <ComingSoonCard
-                                key={item.id}
-                                item={item}
-                                onSelect={(u) => handleItemSelect({ id: u.id, title: u.title, image: u.image, services: u.services, rating: u.rating, type: u.type })}
-                                bookmarked={wl.bookmarkedIds.has(item.id)}
-                                onToggleBookmark={(u) => handleToggleBookmark({ id: u.id, title: u.title, image: u.image, services: u.services, rating: u.rating, type: u.type })}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {/* Per-Service Charts (Phase 4) */}
+                        ) : null;
+                      })()}
+
+                      {/* §5.6 — Per-service rows with service-tinted kickers */}
                       {home.perServiceCharts.map((chart) => (
-                        <ContentRow key={`svc-${chart.serviceId}`} title={`Popular on ${chart.serviceName}`} sectionKey={`svc-chart-${chart.serviceId}`} sourceSurface="home" items={filterLanguage(filterWatched(chart.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                        <ContentRow
+                          key={`svc-${chart.serviceId}`}
+                          kicker={`NEW ON ${chart.serviceName.toUpperCase()}`}
+                          kickerColor={`var(--svc-${chart.serviceId})`}
+                          title={`This week on ${chart.serviceName}.`}
+                          sectionKey={`svc-chart-${chart.serviceId}`}
+                          sourceSurface="home"
+                          items={filterLanguage(filterWatched(chart.items))}
+                          onItemSelect={handleItemSelect}
+                          bookmarkedIds={wl.bookmarkedIds}
+                          onToggleBookmark={handleToggleBookmark}
+                          userServices={connectedServiceIds}
+                          watchedIds={watchedIds}
+                        />
                       ))}
 
-                      {/* Critically Acclaimed (Phase 4, gated) */}
+                      {/* §5.7 — Critics' Picks */}
                       {home.criticallyAcclaimed.length > 0 && (
-                        <ContentRow title="Critically Acclaimed" sectionKey="critically-acclaimed" sourceSurface="home" items={filterLanguage(filterWatched(home.criticallyAcclaimed))} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                        <ContentRow
+                          kicker="CRITICS' PICKS"
+                          title="Decade-defining work."
+                          standfirst="High-rated cinema, surfaced from your stack."
+                          sectionKey="critically-acclaimed"
+                          sourceSurface="home"
+                          items={filterLanguage(filterWatched(home.criticallyAcclaimed))}
+                          variant="wide"
+                          onItemSelect={handleItemSelect}
+                          bookmarkedIds={wl.bookmarkedIds}
+                          onToggleBookmark={handleToggleBookmark}
+                          userServices={connectedServiceIds}
+                          watchedIds={watchedIds}
+                        />
+                      )}
+
+                      {/* §5.7 — Calendar strip at the foot */}
+                      {reorderedUpcoming.length > 0 && (
+                        <CalendarStrip
+                          items={reorderedUpcoming}
+                          kicker="ON THE CALENDAR"
+                          title="Coming up."
+                          standfirst="The next two weeks across your stack."
+                          right={
+                            <button
+                              type="button"
+                              onClick={handleShowCalendar}
+                              className="text-primary"
+                              style={{ fontSize: "var(--t-meta)", fontWeight: 500 }}
+                            >
+                              See all →
+                            </button>
+                          }
+                          onSelect={(u) =>
+                            handleItemSelect({
+                              id: u.id, title: u.title, image: u.image,
+                              services: u.services, rating: u.rating, type: u.type,
+                            })
+                          }
+                        />
                       )}
 
                       {/* Genre Spotlights (Phase 4 — lazy chain).

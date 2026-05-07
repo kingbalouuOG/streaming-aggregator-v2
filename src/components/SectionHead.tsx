@@ -4,6 +4,8 @@ import { Kicker } from "./Kicker";
 interface SectionHeadProps {
   /** Optional. Renders as a <Kicker> above the title. */
   kicker?: string;
+  /** Override the kicker's default --primary color (e.g. service tint). */
+  kickerColor?: string;
   /** Required. Fraunces 22 / 700 / opsz 36. */
   title: string;
   /** Optional. Italic Fraunces, magazine-pull-quote tone. */
@@ -24,11 +26,11 @@ interface SectionHeadProps {
  *
  * Anatomy: docs/v3-design/design-system.md §4.
  */
-export function SectionHead({ kicker, title, standfirst, right }: SectionHeadProps) {
+export function SectionHead({ kicker, kickerColor, title, standfirst, right }: SectionHeadProps) {
   return (
     <header className="flex items-end justify-between gap-4 mb-3">
       <div className="min-w-0">
-        {kicker && <Kicker>{kicker}</Kicker>}
+        {kicker && <Kicker color={kickerColor}>{kicker}</Kicker>}
         <h2
           className="mt-1"
           style={{
