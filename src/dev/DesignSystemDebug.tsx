@@ -24,10 +24,14 @@ import { ContentCard, type ContentItem } from "../components/ContentCard";
 import { ServiceBadge, ServiceStack } from "../components/ServiceBadge";
 import type { ServiceId } from "../components/platformLogos";
 
+// Picsum gives a stable random poster per seed without auth/network policy
+// pain — good enough for the debug surface, never reaches production.
+const poster = (seed: string) => `https://picsum.photos/seed/${seed}/500/700`;
+
 const SAMPLE: ContentItem = {
   id: "movie-1",
   title: "The Brutalist",
-  image: "https://image.tmdb.org/t/p/w500/o81mAlchcyLzcsIIcTvCERdEyL3.jpg",
+  image: poster("brutalist"),
   services: [],
   rating: 8.4,
   year: 2024,
@@ -37,6 +41,7 @@ const SAMPLE_LONG: ContentItem = {
   ...SAMPLE,
   id: "movie-2",
   title: "Everything Everywhere All at Once",
+  image: poster("eeaao"),
   rating: 8.0,
   year: 2022,
   genre: "Sci-Fi",
@@ -250,7 +255,7 @@ export function ContentCardDebug() {
       <div style={{ display: "flex", gap: 12, overflowX: "auto", marginTop: 8, marginBottom: 32, paddingBottom: 4 }}>
         <ContentCard item={SAMPLE} bookmarked={bookmarked.has(SAMPLE.id)} onToggleBookmark={toggle} />
         <ContentCard item={SAMPLE_LONG} bookmarked={bookmarked.has(SAMPLE_LONG.id)} onToggleBookmark={toggle} />
-        <ContentCard item={{ ...SAMPLE, id: "movie-3", rating: undefined }} watched bookmarked={false} onToggleBookmark={toggle} />
+        <ContentCard item={{ ...SAMPLE, id: "movie-3", image: poster("watched"), title: "Already Watched", rating: undefined }} watched bookmarked={false} onToggleBookmark={toggle} />
       </div>
 
       <Kicker>WIDE — 220</Kicker>

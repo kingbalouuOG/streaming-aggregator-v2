@@ -68,6 +68,7 @@ test-results/
 # Playwright
 playwright-report/
 playwright/.cache/
+tmp/
 
 # Temporary / scratch files
 temp_*.json
