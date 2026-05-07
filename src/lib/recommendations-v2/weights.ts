@@ -155,6 +155,115 @@ export function scoreToMatchPercentage(score: number): number {
   return Math.round(Math.max(30, Math.min(99, score * 100)));
 }
 
+// ── Phase 5 Contextual Scoring ──
+
+/** Sub-component weights inside the contextual score (must sum to 1.0). */
+export const CONTEXTUAL_TIME_WEIGHT = 0.4;
+export const CONTEXTUAL_VIEWING_WEIGHT = 0.4;
+export const CONTEXTUAL_DEVICE_WEIGHT = 0.2;
+
+/** Time-of-day buckets for contextual adaptation. Distinct from the
+ *  mood-room buckets above — those rotate global rooms; these score
+ *  individual candidates. */
+export type ContextualTimeBucket =
+  | 'late_night'        // 22:00–01:59
+  | 'weekday_morning'   // 06:00–08:59 Mon-Fri
+  | 'neutral';          // every other hour/day
+
+export function getContextualTimeBucket(
+  hourOfDay: number,
+  dayOfWeek: number,
+): ContextualTimeBucket {
+  // Late night wraps midnight: 22..23 || 0..1
+  if (hourOfDay >= 22 || hourOfDay < 2) return 'late_night';
+  const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+  if (isWeekday && hourOfDay >= 6 && hourOfDay < 9) return 'weekday_morning';
+  return 'neutral';
+}
+
+/** Per-bucket genre boosts. Values are deltas added to the bucket's
+ *  baseline 0.5 score, clamped to [0, 1]. Genre IDs from
+ *  src/lib/constants/genres.ts (TMDb canonical). Negative deltas allowed. */
+export const CONTEXTUAL_TIME_GENRE_BOOSTS: Record<
+  ContextualTimeBucket,
+  Record<number, number>
+> = {
+  late_night: {
+    35: 0.30,        // Comedy
+    16: 0.30,        // Animation (movie)
+    27: 0.20,        // Horror — late-night classic
+    10762: 0.20,     // Kids (TV) — animation TV
+  },
+  weekday_morning: {
+    99: 0.40,        // Documentary
+    10763: 0.40,     // News (TV)
+    10764: 0.20,     // Reality (TV) — quick-watch
+    35: 0.15,        // Comedy — light
+  },
+  neutral: {},
+};
+
+/** Late-night also boosts short-runtime movies (≤90 min). */
+export const CONTEXTUAL_LATE_NIGHT_RUNTIME_THRESHOLD = 90;
+export const CONTEXTUAL_LATE_NIGHT_RUNTIME_BOOST = 0.20;
+
+/** Viewing-context values stored in profiles.viewing_context.
+ *  Strategy v1.8 §3.x. */
+export type ViewingContext =
+  | 'solo'
+  | 'with_partner'
+  | 'with_family'
+  | 'with_friends'
+  | 'wind_down'
+  | 'background'
+  | 'focused';
+
+/** Per-context genre boosts. Same shape and clamping as the time table.
+ *  `solo` and `background` are intentionally absent — neutral baseline.
+ *  `background` would benefit from cosine-aware boosting (high-taste
+ *  candidates should rise) which can't be expressed as a static genre
+ *  table; deferred to a follow-up. */
+export const CONTEXTUAL_VIEWING_GENRE_BOOSTS: Partial<
+  Record<ViewingContext, Record<number, number>>
+> = {
+  with_partner: {
+    10749: 0.30,     // Romance
+    35: 0.20,        // Comedy
+    18: 0.10,        // Drama (light)
+  },
+  with_family: {
+    10751: 0.50,     // Family — strong boost
+    16: 0.30,        // Animation
+    27: -0.70,       // Horror — strong suppress
+    53: -0.40,       // Thriller — moderate suppress
+  },
+  with_friends: {
+    35: 0.40,        // Comedy
+    28: 0.30,        // Action
+    27: 0.20,        // Horror — group horror is fun
+    53: 0.10,        // Thriller
+  },
+  wind_down: {
+    35: 0.40,        // Comedy
+    18: 0.20,        // Drama (light)
+    10749: 0.20,     // Romance
+    53: -0.50,       // Thriller — suppress
+    27: -0.60,       // Horror — strong suppress
+    80: -0.30,       // Crime — moderate suppress
+  },
+  focused: {
+    18: 0.40,        // Drama (prestige)
+    99: 0.40,        // Documentary
+    36: 0.30,        // History
+    10752: 0.20,     // War
+  },
+};
+
+/** Mobile-only suppression for long-runtime movies (>120 min). Brief
+ *  §3.3 specifies 0.10–0.15 magnitude; midpoint 0.12. */
+export const CONTEXTUAL_MOBILE_LONG_RUNTIME_THRESHOLD = 120;
+export const CONTEXTUAL_MOBILE_LONG_RUNTIME_PENALTY = 0.12;
+
 // ── Pipeline Constants ──
 
 /** Default candidate retrieval limit for shared pool */

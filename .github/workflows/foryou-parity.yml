@@ -1,0 +1,73 @@
+name: For You parity probe
+
+# IN-XPS-012: Phase 5 Workstream D — promotes scripts/_inspect_foryou_parity.mjs
+# from a manual diagnostic into a CI smoke test.
+#
+# What the probe asserts (over the live render-foryou-rows Edge
+# Function output for a fixture user):
+#   1. Determinism — two consecutive calls produce identical rows.
+#   2. Filter-leak — no thumbs-down / dismissed / watchlist items in
+#      rec/gems/outside rows.
+#   3. Cross-row dedup — no title appears in two of {recForYou,
+#      hiddenGems, outsideYourUsual}.
+#   4. Anchor selection — categorises anchors by tier with thumbnail
+#      counts.
+#
+# Catches semantic divergence between Edge and client paths that the
+# shared-tree-drift workflow (file-level mirror enforcement) cannot
+# see. shared-tree-drift validates files; this validates behaviour.
+#
+# Test fixture: dedicated test user inside the existing Supabase
+# project, flagged via profiles.is_test_user (column added in
+# migration 011 / IN-PRE-001 — see Phase 5 plan §9.8). The probe
+# scopes itself to that user via USER_ID env var. Probe asserts
+# is_test_user = true for safety before running.
+#
+# Required GitHub repo secrets:
+#   USER_JWT — long-lived signed JWT for the test user
+#   USER_ID  — the test user's auth.users.id (uuid)
+#   SERVICES — comma-separated service ids for the test user's
+#              available-set (e.g. "netflix,prime,disney")
+#   SUPABASE_URL — project API URL
+#   SUPABASE_SERVICE_ROLE_KEY — for direct DB inspection in the probe
+
+on:
+  push:
+    branches:
+      - 'phase-*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install probe dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run For You parity probe
+        env:
+          USER_JWT: ${{ secrets.PARITY_USER_JWT }}
+          USER_ID: ${{ secrets.PARITY_USER_ID }}
+          SERVICES: ${{ secrets.PARITY_SERVICES }}
+          SUPABASE_URL: ${{ secrets.PARITY_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PARITY_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -e
+          if [ -z "$USER_JWT" ] || [ -z "$USER_ID" ] || [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::warning::Parity-probe secrets not configured for this branch."
+            echo "Required secrets: PARITY_USER_JWT, PARITY_USER_ID, PARITY_SERVICES,"
+            echo "PARITY_SUPABASE_URL, PARITY_SUPABASE_SERVICE_ROLE_KEY."
+            echo "Skipping probe. Configure repo secrets to enable enforcement."
+            exit 0
+          fi
+          node scripts/_inspect_foryou_parity.mjs

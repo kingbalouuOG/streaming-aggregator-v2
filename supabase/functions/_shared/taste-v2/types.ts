@@ -34,7 +34,7 @@ export interface TasteProfileV2 {
 
 export const INTERACTION_WEIGHTS: Record<string, number> = {
   thumbs_up: 1.0,
-  marked_watched: 0.5,
+  watched: 0.5,
   watchlist_add: 0.3,
   deep_link_click: 0.8,
   watchlist_remove: -0.4,
@@ -44,7 +44,7 @@ export const INTERACTION_WEIGHTS: Record<string, number> = {
 export const NEGATIVE_EVENTS = new Set(['thumbs_down', 'watchlist_remove']);
 
 export const TASTE_RELEVANT_EVENTS = [
-  'thumbs_up', 'thumbs_down', 'marked_watched',
+  'thumbs_up', 'thumbs_down', 'watched',
   'watchlist_add', 'watchlist_remove', 'deep_link_click',
 ] as const;
 

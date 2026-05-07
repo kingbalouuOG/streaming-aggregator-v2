@@ -68,6 +68,99 @@ export function scoreToMatchPercentage(score: number): number {
   return Math.round(Math.max(30, Math.min(99, score * 100)));
 }
 
+// ── Phase 5 Contextual Scoring ──
+
+export const CONTEXTUAL_TIME_WEIGHT = 0.4;
+export const CONTEXTUAL_VIEWING_WEIGHT = 0.4;
+export const CONTEXTUAL_DEVICE_WEIGHT = 0.2;
+
+export type ContextualTimeBucket =
+  | 'late_night'
+  | 'weekday_morning'
+  | 'neutral';
+
+export function getContextualTimeBucket(
+  hourOfDay: number,
+  dayOfWeek: number,
+): ContextualTimeBucket {
+  if (hourOfDay >= 22 || hourOfDay < 2) return 'late_night';
+  const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+  if (isWeekday && hourOfDay >= 6 && hourOfDay < 9) return 'weekday_morning';
+  return 'neutral';
+}
+
+export const CONTEXTUAL_TIME_GENRE_BOOSTS: Record<
+  ContextualTimeBucket,
+  Record<number, number>
+> = {
+  late_night: {
+    35: 0.30,
+    16: 0.30,
+    27: 0.20,
+    10762: 0.20,
+  },
+  weekday_morning: {
+    99: 0.40,
+    10763: 0.40,
+    10764: 0.20,
+    35: 0.15,
+  },
+  neutral: {},
+};
+
+export const CONTEXTUAL_LATE_NIGHT_RUNTIME_THRESHOLD = 90;
+export const CONTEXTUAL_LATE_NIGHT_RUNTIME_BOOST = 0.20;
+
+export type ViewingContext =
+  | 'solo'
+  | 'with_partner'
+  | 'with_family'
+  | 'with_friends'
+  | 'wind_down'
+  | 'background'
+  | 'focused';
+
+export const CONTEXTUAL_VIEWING_GENRE_BOOSTS: Partial<
+  Record<ViewingContext, Record<number, number>>
+> = {
+  with_partner: {
+    10749: 0.30,
+    35: 0.20,
+    18: 0.10,
+  },
+  with_family: {
+    10751: 0.50,
+    16: 0.30,
+    27: -0.70,
+    53: -0.40,
+  },
+  with_friends: {
+    35: 0.40,
+    28: 0.30,
+    27: 0.20,
+    53: 0.10,
+  },
+  wind_down: {
+    35: 0.40,
+    18: 0.20,
+    10749: 0.20,
+    53: -0.50,
+    27: -0.60,
+    80: -0.30,
+  },
+  focused: {
+    18: 0.40,
+    99: 0.40,
+    36: 0.30,
+    10752: 0.20,
+  },
+};
+
+export const CONTEXTUAL_MOBILE_LONG_RUNTIME_THRESHOLD = 120;
+export const CONTEXTUAL_MOBILE_LONG_RUNTIME_PENALTY = 0.12;
+
+// ── Pipeline Constants ──
+
 export const DEFAULT_CANDIDATE_LIMIT = 500;
 export const DEFAULT_MAX_PER_GENRE = 4;
 export const MAX_CONSECUTIVE_SAME_SERVICE = 2;

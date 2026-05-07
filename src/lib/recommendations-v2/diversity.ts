@@ -126,6 +126,102 @@ export function applyGenreSpread(
   return selected;
 }
 
+// ── Phase 5: Maximal Marginal Relevance (MMR) ──
+
+/**
+ * Cosine similarity between two embedding vectors. Both must be the
+ * same dimensionality. Returns 0 if either vector has zero norm.
+ */
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA * normB);
+  return denom === 0 ? 0 : dot / denom;
+}
+
+/**
+ * Greedy Maximal Marginal Relevance over scored candidates.
+ *
+ * MMR balances relevance (finalScore) against intra-row redundancy
+ * (cosine similarity to already-selected items). λ controls the
+ * tradeoff: λ=1 returns top-finalScore (no diversification), λ=0
+ * picks for maximum diversity regardless of relevance.
+ *
+ * The Adventure↔Comfort slider maps to λ via getMMRLambda
+ * (weights.ts:99-101): λ=0.85 at full Comfort, λ=0.55 at full
+ * Adventure, default 0.7 at midpoint.
+ *
+ * Embeddings come from `embeddingMap` keyed by contentKey
+ * ("media_type-tmdb_id"). Candidates without an embedding entry are
+ * still selectable — their redundancy contribution is treated as 0
+ * (neutral). This keeps the algorithm robust against partial
+ * embedding coverage.
+ *
+ * Replaces applyGenreSpread for intra-row diversity (brief §3.5 +
+ * §4.4). Cross-service de-clustering still runs as a post-MMR pass.
+ */
+export function applyMMR(
+  candidates: ScoredCandidate[],
+  embeddingMap: Map<string, number[]>,
+  opts: { lambda: number; k: number },
+): ScoredCandidate[] {
+  if (candidates.length === 0) return [];
+  const k = Math.min(opts.k, candidates.length);
+  if (k === 0) return [];
+
+  // Start from the highest-finalScore candidate.
+  const remaining = [...candidates].sort((a, b) => b.finalScore - a.finalScore);
+  const selected: ScoredCandidate[] = [remaining.shift()!];
+
+  // Cache embeddings looked up so far to avoid repeated map.get() in
+  // the inner loop. Only the SELECTED candidates' embeddings drive
+  // redundancy; the candidates being scored just need their own.
+  const selectedEmbeddings: Array<number[] | null> = [
+    embeddingMap.get(selected[0].contentKey) ?? null,
+  ];
+
+  while (selected.length < k && remaining.length > 0) {
+    let bestIdx = -1;
+    let bestScore = -Infinity;
+
+    for (let i = 0; i < remaining.length; i++) {
+      const c = remaining[i];
+      const cEmb = embeddingMap.get(c.contentKey);
+
+      // Redundancy = max cosine similarity to any already-selected item.
+      // Missing embedding → 0 (neutral, doesn't penalise selection).
+      let maxRedundancy = 0;
+      if (cEmb) {
+        for (const sEmb of selectedEmbeddings) {
+          if (!sEmb) continue;
+          const sim = cosineSimilarity(cEmb, sEmb);
+          if (sim > maxRedundancy) maxRedundancy = sim;
+        }
+      }
+
+      const mmrScore = opts.lambda * c.finalScore - (1 - opts.lambda) * maxRedundancy;
+      if (mmrScore > bestScore) {
+        bestScore = mmrScore;
+        bestIdx = i;
+      }
+    }
+
+    if (bestIdx === -1) break;
+    const picked = remaining.splice(bestIdx, 1)[0];
+    selected.push(picked);
+    selectedEmbeddings.push(embeddingMap.get(picked.contentKey) ?? null);
+  }
+
+  return selected;
+}
+
 // ── Cross-Service De-clustering ──
 
 /**

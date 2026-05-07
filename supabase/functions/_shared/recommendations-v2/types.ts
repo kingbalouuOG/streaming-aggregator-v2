@@ -77,6 +77,26 @@ export interface PipelineInput {
 }
 
 /**
+ * Runtime context passed through scoring. Phase 5: feeds the
+ * contextual scorer (device, time-of-day, viewing context). Each
+ * field is optional — the scorer falls back to neutral 0.5 for any
+ * missing component, matching the Phase 4 placeholder behaviour for
+ * absent inputs.
+ *
+ * Time-of-day source-of-truth (Phase 5 plan decision 9): the client
+ * computes hourOfDay from new Date().getHours() (local time) and
+ * passes it in the render-foryou-rows POST body. The Edge Function
+ * reads from the body and falls back to UTC if absent, so the two
+ * paths agree on the bucket they computed against.
+ */
+export interface PipelineContext {
+  hourOfDay?: number;
+  dayOfWeek?: number;
+  devicePlatform?: 'android' | 'ios' | 'web';
+  viewingContext?: string | null;
+}
+
+/**
  * Cached candidate pool from Stage 1 retrieval. Mirrors the client type:
  * metadata is a Map<> for in-Edge consumers; the orchestrator serialises
  * to { matched, metadataObj, fetchedAt } at the response boundary.

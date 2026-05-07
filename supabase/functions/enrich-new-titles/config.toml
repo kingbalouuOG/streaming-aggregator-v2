@@ -1,0 +1,5 @@
+# Per-function config for enrich-new-titles.
+# Cron-invoked with service-role JWT — verify_jwt remains true.
+# Phase 5 Workstream C — IN-XPS-011 codifies verify_jwt as explicit.
+
+verify_jwt = true

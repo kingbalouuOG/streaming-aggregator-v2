@@ -87,6 +87,7 @@ export async function supaGetWatchlist() {
 
 export async function supaGetWatchlistItem(id: number, type: string): Promise<WatchlistItem | null> {
   const userId = getAuthUserId();
+  if (!userId) return null;
   const { data, error } = await supabase
     .from('watchlist')
     .select('*')
@@ -110,6 +111,7 @@ export async function supaAddToWatchlist(
   status: 'want_to_watch' | 'watched' = 'want_to_watch'
 ): Promise<WatchlistItem> {
   const userId = getAuthUserId();
+  if (!userId) throw new Error('[SupaStorage] addToWatchlist: not authenticated');
   const now = new Date().toISOString();
 
   const row = {
@@ -145,6 +147,7 @@ export async function supaUpdateWatchlistItem(
   updates: Partial<WatchlistItem>
 ): Promise<WatchlistItem | null> {
   const userId = getAuthUserId();
+  if (!userId) return null;
   const now = new Date().toISOString();
 
   const row: Record<string, any> = { updated_at: now };
@@ -174,6 +177,7 @@ export async function supaUpdateWatchlistItem(
 
 export async function supaRemoveFromWatchlist(id: number, type: string): Promise<boolean> {
   const userId = getAuthUserId();
+  if (!userId) return false;
   const { error, count } = await supabase
     .from('watchlist')
     .delete({ count: 'exact' })
@@ -191,6 +195,7 @@ export async function supaRemoveFromWatchlist(id: number, type: string): Promise
 
 export async function supaClearWatchlist(): Promise<void> {
   const userId = getAuthUserId();
+  if (!userId) return;
   const { error } = await supabase
     .from('watchlist')
     .delete()
@@ -239,6 +244,7 @@ export async function supaSaveUserProfile(
   profile: Partial<UserProfile> & { userId: string; name: string; email: string }
 ): Promise<void> {
   const userId = getAuthUserId();
+  if (!userId) throw new Error('[SupaStorage] saveUserProfile: not authenticated');
   const { error } = await supabase
     .from('profiles')
     .upsert({
@@ -273,6 +279,7 @@ export async function supaHasCompletedOnboarding(): Promise<boolean> {
 
 export async function supaSetOnboardingCompleted(completed: boolean): Promise<void> {
   const userId = getAuthUserId();
+  if (!userId) throw new Error('[SupaStorage] setOnboardingCompleted: not authenticated');
   const { error } = await supabase
     .from('profiles')
     .update({ onboarding_completed: completed, updated_at: new Date().toISOString() })
@@ -291,6 +298,7 @@ export async function supaSetOnboardingCompleted(completed: boolean): Promise<vo
 /** Get services as platform objects matching the app's UserPreferences.platforms shape */
 export async function supaGetServices(): Promise<Array<{ id: number; name: string; selected: boolean }>> {
   const userId = getAuthUserId();
+  if (!userId) return [];
   const { data, error } = await supabase
     .from('user_services')
     .select('service_id')
@@ -318,6 +326,7 @@ export async function supaGetSelectedPlatforms(): Promise<number[]> {
 /** Replace all user services (delete-then-insert) */
 export async function supaSetServices(serviceIds: string[]): Promise<void> {
   const userId = getAuthUserId();
+  if (!userId) throw new Error('[SupaStorage] setServices: not authenticated');
 
   // Delete existing
   const { error: delError } = await supabase
@@ -354,6 +363,7 @@ export async function supaSetServices(serviceIds: string[]): Promise<void> {
 
 export async function supaGetGenres(): Promise<Array<{ genreId: string; rank: number }>> {
   const userId = getAuthUserId();
+  if (!userId) return [];
   const { data, error } = await supabase
     .from('user_genres')
     .select('genre_id, rank')
@@ -365,12 +375,15 @@ export async function supaGetGenres(): Promise<Array<{ genreId: string; rank: nu
     throw error;
   }
 
-  return (data || []).map((row) => ({ genreId: row.genre_id, rank: row.rank }));
+  // rank is nullable in the schema; default to 0 to satisfy the
+  // non-null app-side type. Real data will always have rank set.
+  return (data || []).map((row) => ({ genreId: row.genre_id, rank: row.rank ?? 0 }));
 }
 
 /** Replace all user genres (delete-then-insert) */
 export async function supaSetGenres(genres: Array<{ genreId: string; rank: number }>): Promise<void> {
   const userId = getAuthUserId();
+  if (!userId) throw new Error('[SupaStorage] setGenres: not authenticated');
 
   const { error: delError } = await supabase
     .from('user_genres')

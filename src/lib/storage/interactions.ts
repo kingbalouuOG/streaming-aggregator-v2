@@ -8,6 +8,7 @@
 
 import { isSupabaseActive, getAuthUserId } from '../storage';
 import { supabase } from '../supabase';
+import type { Json } from '../database.types';
 import { invalidateDismissedIdsCache } from './recommendations';
 import { getCurrentSessionId } from '../instrumentation/sessionId';
 
@@ -69,7 +70,7 @@ export async function emitInteraction(event: InteractionEvent): Promise<void> {
         media_type: event.media_type ?? null,
         source_surface: event.source_surface ?? null,
         session_id: event.session_id ?? null,
-        metadata: event.metadata ?? {},
+        metadata: (event.metadata ?? {}) as unknown as Json,
       });
 
     if (error) {
@@ -240,7 +241,10 @@ export async function getUserInteractions(
       return [];
     }
 
-    return data || [];
+    // Database returns string for event_type; cast to the narrowed
+    // InteractionEventType union the caller expects. Runtime values
+    // are constrained by the CHECK constraint to stay in the union.
+    return (data ?? []) as unknown as InteractionEvent[];
   } catch (err) {
     console.error('[Interactions] Unexpected error querying interactions:', err);
     return [];

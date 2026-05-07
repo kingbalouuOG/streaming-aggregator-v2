@@ -40,7 +40,7 @@ export async function applyInteractionIncremental(
 
   // Fetch the title's embedding
   const { data, error } = await supabase
-    .from('titles' as any)
+    .from('titles')
     .select('embedding')
     .eq('tmdb_id', tmdbId)
     .eq('media_type', mediaType)
@@ -99,7 +99,7 @@ export async function recomputeFromInteractions(
 
   // Fetch all taste-relevant interactions
   const { data: interactions, error } = await supabase
-    .from('user_interactions' as any)
+    .from('user_interactions')
     .select('content_id, media_type, event_type, metadata, created_at')
     .eq('user_id', userId)
     .in('event_type', [...TASTE_RELEVANT_EVENTS])
@@ -130,7 +130,7 @@ export async function recomputeFromInteractions(
 
   // Batch fetch embeddings
   const { data: titleRows, error: embedError } = await supabase
-    .from('titles' as any)
+    .from('titles')
     .select('tmdb_id, media_type, embedding')
     .in('tmdb_id', tmdbIds)
     .not('embedding', 'is', null);
@@ -164,10 +164,12 @@ export async function recomputeFromInteractions(
     const baseWeight = INTERACTION_WEIGHTS[interaction.event_type];
     if (baseWeight === undefined) continue;
 
-    // Handle deep_link_click confidence level
+    // Handle deep_link_click confidence level. Metadata is JSON; cast
+    // to a record shape for the field access — the runtime value comes
+    // from emitInteraction which writes a plain object.
     let weight = baseWeight;
     if (interaction.event_type === 'deep_link_click') {
-      const confidence = interaction.metadata?.confidence;
+      const confidence = (interaction.metadata as { confidence?: string } | null)?.confidence;
       weight = confidence === 'low' ? 0.4 : 0.8;
     }
 
@@ -175,7 +177,10 @@ export async function recomputeFromInteractions(
     // This is handled implicitly: the event log contains separate events,
     // and their weights sum naturally (0.5 + 1.0 = 1.5)
 
-    // Apply decay
+    // Apply decay. created_at is nullable in the schema but always set
+    // by emitInteraction (column defaults to now() if absent). Skip
+    // rows with null created_at — unreachable in practice.
+    if (!interaction.created_at) continue;
     const halfLife = BEHAVIOURAL_EVENTS.has(interaction.event_type)
       ? BEHAVIOURAL_HALF_LIFE_DAYS
       : EXPLICIT_HALF_LIFE_DAYS;

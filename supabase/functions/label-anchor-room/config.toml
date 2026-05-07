@@ -1,0 +1,5 @@
+# Per-function config for label-anchor-room.
+# Phase 5 Workstream C — IN-XPS-011 codifies verify_jwt as the
+# explicit setting per Edge Function.
+
+verify_jwt = true

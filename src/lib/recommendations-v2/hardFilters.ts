@@ -124,8 +124,11 @@ export async function getAvailableTmdbIds(
     });
     if (error || !data) return new Set();
 
+    // Migration 035 changed get_available_tmdb_ids to return a JSONB
+    // number array; database.types.ts still reflects the pre-035
+    // TABLE return shape until regenerated. Cast through unknown.
     const ids = Array.isArray(data) ? data : [];
-    const allIds = new Set<number>(ids as number[]);
+    const allIds = new Set<number>(ids as unknown as number[]);
 
     if (allIds.size > 0) writeAvailableIdsCache(cacheKey, allIds);
     return allIds;

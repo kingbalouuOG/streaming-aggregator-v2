@@ -42,12 +42,14 @@ import {
   type SelectedAnchor,
 } from '../_shared/recommendations-v2/anchorSelection.ts';
 import { titleRowToContentItem } from '../_shared/recommendations-v2/titleAdapter.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 import { getComfortZoneRowCount, HIDDEN_GEMS_FILTERS } from '../_shared/recommendations-v2/weights.ts';
 import {
   EXTENDED_TITLE_SELECT,
   type CandidatePool,
   type ContentItem,
   type ExtendedTitleRow,
+  type PipelineContext,
   type ScoredCandidate,
 } from '../_shared/recommendations-v2/types.ts';
 import { getV2TasteProfile } from '../_shared/taste-v2/tasteProfileV2.ts';
@@ -58,6 +60,12 @@ import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 interface RequestBody {
   services: string[];
+  /** Phase 5 decision 9: client passes its local hour-of-day in the
+   *  body so the contextual scorer doesn't desync against the Edge's
+   *  UTC clock. Optional — UTC fallback if absent. Validated 0–23. */
+  hourOfDay?: number;
+  /** Paired with hourOfDay for calendar-boundary safety. 0=Sun…6=Sat. */
+  dayOfWeek?: number;
 }
 
 const MAX_SERVICES = 20;
@@ -103,26 +111,22 @@ interface ResponsePayload {
   renderMs: number;
 }
 
-// ── Constants ────────────────────────────────────────────────────────
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-  });
-}
-
 // ── Handler ──────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  // Per-request CORS lookup. Origin is echoed only if it's allow-listed
+  // (capacitor://localhost, https://localhost, http://localhost(:port),
+  // or a VIDEX_ALLOWED_DEV_ORIGINS env entry). See _shared/cors.ts.
+  const origin = req.headers.get('origin');
+  const cors = corsHeaders(origin);
+  const jsonResponse = (status: number, body: unknown): Response =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...cors, 'Content-Type': 'application/json' },
+    });
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: cors });
   }
   if (req.method !== 'POST') {
     return jsonResponse(405, { error: 'method not allowed' });
@@ -148,6 +152,28 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Phase 5: validate optional time-of-day inputs when supplied.
+  if (body.hourOfDay != null) {
+    if (
+      typeof body.hourOfDay !== 'number'
+      || !Number.isInteger(body.hourOfDay)
+      || body.hourOfDay < 0
+      || body.hourOfDay > 23
+    ) {
+      return jsonResponse(400, { error: 'hourOfDay must be integer 0..23' });
+    }
+  }
+  if (body.dayOfWeek != null) {
+    if (
+      typeof body.dayOfWeek !== 'number'
+      || !Number.isInteger(body.dayOfWeek)
+      || body.dayOfWeek < 0
+      || body.dayOfWeek > 6
+    ) {
+      return jsonResponse(400, { error: 'dayOfWeek must be integer 0..6' });
+    }
+  }
+
   const userId = extractUserIdFromJwt(req);
   if (!userId) {
     return jsonResponse(401, { error: 'unauthorized' });
@@ -166,6 +192,12 @@ Deno.serve(async (req) => {
 
     const filterSets = await buildFilterSets(supabase, scope, body.services);
 
+    // Phase 5: build PipelineContext for the contextual scorer.
+    // hourOfDay / dayOfWeek prefer the body fields (client local time,
+    // decision 9). Fallback to UTC server time when absent. devicePlatform
+    // inferred from User-Agent header. viewingContext from profiles.
+    const ctx = await buildEdgePipelineContext(req, body, supabase, userId);
+
     const pool = await fetchCandidatePool(supabase, {
       tasteVector: profile.tasteVector,
       filterSets,
@@ -173,13 +205,17 @@ Deno.serve(async (req) => {
       surface: 'foryou',
     });
 
-    const scored = scoreCandidates(pool, profile.sliders, 'foryou');
+    const scored = scoreCandidates(pool, profile.sliders, 'foryou', ctx);
+
+    // Phase 5: fetch embeddings for top-200 by finalScore so MMR can
+    // diversify intra-row across all three taste-vector rows.
+    const embeddingMap = await fetchEmbeddingsForCandidates(supabase, scored.slice(0, 200));
 
     // Taste-vector rows. usedIds is shared across rec/gems/outside for
     // cross-row dedup — same contract as src/hooks/useForYouContent.ts.
     const usedIds = new Set<string>();
 
-    const recommendedForYou = buildRowFromPool(scored, profile.sliders, { limit: 20, excludeIds: usedIds });
+    const recommendedForYou = buildRowFromPool(scored, profile.sliders, { limit: 20, excludeIds: usedIds }, undefined, embeddingMap);
     recommendedForYou.forEach((item) => usedIds.add(item.id));
 
     const gemCandidates = scored.filter((c) => {
@@ -193,10 +229,10 @@ Deno.serve(async (req) => {
         && avg >= HIDDEN_GEMS_FILTERS.minVoteAverage
       );
     });
-    const hiddenGems = buildRowFromPool(gemCandidates, profile.sliders, { limit: 15, excludeIds: usedIds });
+    const hiddenGems = buildRowFromPool(gemCandidates, profile.sliders, { limit: 15, excludeIds: usedIds }, undefined, embeddingMap);
     hiddenGems.forEach((item) => usedIds.add(item.id));
 
-    const outsideYourUsual = buildOutsideYourUsual(scored, profile.sliders, usedIds);
+    const outsideYourUsual = buildOutsideYourUsual(scored, profile.sliders, usedIds, embeddingMap);
 
     // Conditional rows + anchor rooms run in parallel — they share the
     // pool + filter sets but otherwise touch different RPC paths, so
@@ -245,6 +281,7 @@ function buildOutsideYourUsual(
   scored: ScoredCandidate[],
   sliders: SliderState,
   usedIds: Set<string>,
+  embeddingMap: Map<string, number[]>,
 ): ContentItem[] {
   const outsideCount = getComfortZoneRowCount(sliders.comfortZone);
   const cosineAperture = 0.40 + sliders.comfortZone * 0.40;
@@ -265,7 +302,7 @@ function buildOutsideYourUsual(
     limit: outsideCount,
     excludeIds: usedIds,
     maxPerGenre: 4,
-  });
+  }, undefined, embeddingMap);
 }
 
 function nthSmallest(arr: number[], n: number): number {
@@ -273,6 +310,96 @@ function nthSmallest(arr: number[], n: number): number {
   const idx = Math.max(0, Math.min(n, arr.length - 1));
   const sorted = [...arr].sort((a, b) => a - b);
   return sorted[idx];
+}
+
+// ── Phase 5 MMR support: embedding fetch ─────────────────────────────
+// Mirrors the helper in src/hooks/useForYouContent.ts. Fetches the
+// 1536D pgvector for each tmdb_id in `candidates` so applyMMR can
+// compute redundancy. Failure or partial coverage degrades MMR
+// gracefully — buildRowFromPool falls back to applyGenreSpread when
+// the returned map is empty.
+
+async function fetchEmbeddingsForCandidates(
+  client: SupabaseClient,
+  candidates: ScoredCandidate[],
+): Promise<Map<string, number[]>> {
+  const map = new Map<string, number[]>();
+  if (candidates.length === 0) return map;
+
+  const tmdbIds = [...new Set(candidates.map((c) => c.tmdbId))];
+  try {
+    const { data, error } = await (client.from('titles') as any)
+      .select('tmdb_id, media_type, embedding')
+      .in('tmdb_id', tmdbIds);
+    if (error || !data) return map;
+    for (const row of data as Array<{ tmdb_id: number; media_type: string; embedding: string | number[] | null }>) {
+      if (row.embedding == null) continue;
+      const emb = typeof row.embedding === 'string' ? JSON.parse(row.embedding) : row.embedding;
+      if (Array.isArray(emb) && emb.length > 0) {
+        map.set(`${row.media_type}-${row.tmdb_id}`, emb);
+      }
+    }
+  } catch {
+    // Network or parse error → empty map → MMR no-op, fallback path.
+  }
+  return map;
+}
+
+// ── Phase 5 PipelineContext builder ──────────────────────────────────
+// Mirrors src/lib/recommendations-v2/pipelineContext.ts on the Edge
+// side. Sources of truth:
+//   - hourOfDay / dayOfWeek: prefer body (client local time, decision 9);
+//     fall back to UTC `new Date()` if absent (legacy clients).
+//   - devicePlatform: parse User-Agent header.
+//   - viewingContext: profiles.viewing_context via withUserScope.
+
+function inferDevicePlatformFromUserAgent(
+  ua: string | null,
+): 'android' | 'ios' | 'web' | undefined {
+  if (!ua) return undefined;
+  const lower = ua.toLowerCase();
+  if (lower.includes('android')) return 'android';
+  // Capacitor on iOS sends "iPhone" / "iPad" / "iPod" UA fragments.
+  if (lower.includes('iphone') || lower.includes('ipad') || lower.includes('ipod')) {
+    return 'ios';
+  }
+  // Generic browser UAs (desktop, non-Capacitor mobile web): treat as web.
+  return 'web';
+}
+
+async function buildEdgePipelineContext(
+  req: Request,
+  body: RequestBody,
+  client: SupabaseClient,
+  userId: string,
+): Promise<PipelineContext> {
+  const ctx: PipelineContext = {};
+
+  // Time-of-day: body-first, UTC fallback.
+  const now = new Date();
+  ctx.hourOfDay = body.hourOfDay ?? now.getUTCHours();
+  ctx.dayOfWeek = body.dayOfWeek ?? now.getUTCDay();
+
+  // Device platform from User-Agent.
+  const platform = inferDevicePlatformFromUserAgent(req.headers.get('user-agent'));
+  if (platform) ctx.devicePlatform = platform;
+
+  // viewing_context from the user's profile row. profiles is keyed on
+  // `id`, not `user_id`, so withUserScope's select helper doesn't fit
+  // (it auto-applies .eq('user_id', userId)). Use the service-role
+  // client directly with an explicit .eq('id', userId).
+  try {
+    const { data } = await (client.from('profiles') as any)
+      .select('viewing_context')
+      .eq('id', userId)
+      .maybeSingle();
+    const vc = (data as { viewing_context?: string | null } | null)?.viewing_context;
+    if (vc) ctx.viewingContext = vc;
+  } catch {
+    // Leave viewingContext unset on any error — scorer falls back to neutral.
+  }
+
+  return ctx;
 }
 
 // ── Because You Watched ──────────────────────────────────────────────
@@ -465,7 +592,7 @@ async function fetchFromWatchlist(scope: UserScope): Promise<ContentItem[]> {
     const [wlRes, watchedRes] = await Promise.all([
       scope.select('watchlist', 'tmdb_id, media_type, added_at, status, title, poster_path, genre_ids'),
       scope.select('user_interactions', 'content_id, media_type')
-        .in('event_type', ['watched', 'marked_watched'])
+        .eq('event_type', 'watched')
         .limit(500),
     ]);
 

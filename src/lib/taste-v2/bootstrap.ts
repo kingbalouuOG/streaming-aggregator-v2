@@ -20,7 +20,7 @@ export async function fetchServiceCentroids(
   if (serviceIds.length === 0) return [];
 
   const { data, error } = await supabase
-    .from('service_fingerprints' as any)
+    .from('service_fingerprints')
     .select('centroid')
     .in('service_id', serviceIds)
     .eq('variant', 'v1_popularity')
@@ -50,7 +50,7 @@ export async function fetchTitleEmbeddings(
   const tmdbIds = titles.map(t => t.tmdbId);
 
   const { data, error } = await supabase
-    .from('titles' as any)
+    .from('titles')
     .select('tmdb_id, embedding')
     .in('tmdb_id', tmdbIds)
     .not('embedding', 'is', null);

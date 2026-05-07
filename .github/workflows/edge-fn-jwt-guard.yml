@@ -1,0 +1,64 @@
+name: Edge Function JWT verify guard
+
+# IN-XPS-011: Phase 5 Workstream C pre-launch security control.
+# Fails any PR that introduces `verify_jwt = false` in a per-function
+# `supabase/functions/<name>/config.toml`. The Supabase Edge Runtime
+# default is verify_jwt = true; making the per-function setting
+# explicit (Phase 5 Step 5.1) means a silent regression to the
+# "anyone can call this without a valid JWT" posture is now
+# git-detectable. This workflow makes it CI-detectable too.
+#
+# Escape hatch: namespace any genuinely public endpoint under a
+# `_no_auth_/` prefix. The grep below restricts to non-prefixed paths
+# so future public functions live in their own folder by convention.
+# (The historical exceptions `auth-spike` and `warmup-foryou` are both
+# already deleted.)
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/**/config.toml'
+      - '.github/workflows/edge-fn-jwt-guard.yml'
+
+jobs:
+  jwt-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Detect verify_jwt = false in user-callable functions
+        run: |
+          set -e
+
+          # Find every per-function config.toml that is NOT under
+          # supabase/functions/_no_auth_/, and grep for the disallowed
+          # setting. -l prints filenames; the if guard treats "no
+          # match" (grep exit 1) as success.
+          offenders=$(
+            find supabase/functions -mindepth 2 -maxdepth 2 -name config.toml \
+              -not -path 'supabase/functions/_no_auth_/*' \
+              -print0 \
+              | xargs -0 grep -l -E '^\s*verify_jwt\s*=\s*false' \
+              || true
+          )
+
+          if [ -z "$offenders" ]; then
+            echo "OK: no user-callable Edge Function has verify_jwt = false."
+            exit 0
+          fi
+
+          echo "::error::verify_jwt = false detected in user-callable Edge Function config."
+          echo ""
+          echo "Offending files:"
+          echo "$offenders"
+          echo ""
+          echo "Setting verify_jwt = false on a user-callable Edge Function disables"
+          echo "the Supabase gateway's JWT signature check, opening the function to"
+          echo "anonymous calls without an Authorization header. The default is true;"
+          echo "Phase 5 made the setting explicit per IN-XPS-011 so a regression is"
+          echo "PR-visible."
+          echo ""
+          echo "If this function is genuinely public, move it under"
+          echo "  supabase/functions/_no_auth_/<name>/"
+          echo "and add a brief justification in the PR description."
+          exit 1

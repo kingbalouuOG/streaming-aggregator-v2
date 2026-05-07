@@ -19,11 +19,12 @@ import { supabase } from '../supabase';
 import { titleRowToContentItem } from './titleAdapter';
 import { computeHomeRecencyScore, computeForYouRecencyScore } from './recency';
 import { computeContextualScore } from './contextual';
-import { applyGenreSpread, deClusterByService, applyContentMixRatio } from './diversity';
+import { applyGenreSpread, applyMMR, deClusterByService, applyContentMixRatio } from './diversity';
 import {
   getModulatedWeights,
   getContentMixMovieRatio,
   getVarietyGenreWindow,
+  getMMRLambda,
   distanceToSimilarity,
   scoreToMatchPercentage,
   DEFAULT_CANDIDATE_LIMIT,
@@ -33,6 +34,7 @@ import type {
   MatchedTitle,
   ExtendedTitleRow,
   CandidatePool,
+  PipelineContext,
   ScoredCandidate,
   PipelineInput,
   ContentItem,
@@ -103,11 +105,16 @@ export async function fetchCandidatePool(
 /**
  * Score all candidates in a pool using the weighted formula.
  * Returns scored candidates sorted by finalScore DESC.
+ *
+ * @param ctx Optional runtime context for the contextual scorer (Phase 5).
+ *   When omitted, the contextual sub-components fall back to neutral 0.5,
+ *   reproducing Phase 4 behaviour.
  */
 export function scoreCandidates(
   pool: CandidatePool,
   sliders: SliderState,
   surface: 'home' | 'foryou',
+  ctx: PipelineContext = {},
 ): ScoredCandidate[] {
   const weights = getModulatedWeights(sliders.catalogueAge);
 
@@ -126,8 +133,8 @@ export function scoreCandidates(
       ? computeHomeRecencyScore(meta.release_date)
       : computeForYouRecencyScore(meta.release_date);
 
-    // Contextual: Phase 4 placeholder (always 0.5)
-    const contextual = computeContextualScore({ meta });
+    // Contextual: Phase 5 — device, time-of-day, viewing context
+    const contextual = computeContextualScore({ meta }, ctx);
 
     // Weighted sum
     const finalScore =
@@ -155,13 +162,20 @@ export function scoreCandidates(
 
 /**
  * Build a row from the scored candidate pool.
- * Applies content-mix ratio, genre spread, and service de-clustering.
+ * Applies content-mix ratio, intra-row diversity, and service de-clustering.
+ *
+ * Phase 5: when an `embeddingMap` is provided, intra-row diversity uses
+ * MMR (applyMMR with lambda derived from the variety slider). When the
+ * map is absent, falls back to the Phase 4 applyGenreSpread heuristic
+ * — preserves backward compatibility for callers not yet upgraded.
+ * applyGenreSpread is removed at Phase 5 close-out (commit 12.5).
  */
 export function buildRowFromPool(
   scored: ScoredCandidate[],
   sliders: SliderState,
   config: RowConfig = {},
   getServices?: (tmdbId: number, mediaType: string) => string[],
+  embeddingMap?: Map<string, number[]>,
 ): ContentItem[] {
   const { limit = 20, excludeIds, maxPerGenre = DEFAULT_MAX_PER_GENRE } = config;
 
@@ -176,11 +190,18 @@ export function buildRowFromPool(
   const movieRatio = getContentMixMovieRatio(sliders.contentMix);
   candidates = applyContentMixRatio(candidates, movieRatio);
 
-  // Stage 2b: Genre spread diversity
-  const genreWindow = getVarietyGenreWindow(sliders.variety);
-  candidates = applyGenreSpread(candidates, genreWindow, maxPerGenre, limit);
+  // Stage 2b: intra-row diversity. MMR when embeddings are available,
+  // applyGenreSpread fallback otherwise (Phase 4 behaviour).
+  if (embeddingMap && embeddingMap.size > 0) {
+    const lambda = getMMRLambda(sliders.variety);
+    candidates = applyMMR(candidates, embeddingMap, { lambda, k: limit });
+  } else {
+    const genreWindow = getVarietyGenreWindow(sliders.variety);
+    candidates = applyGenreSpread(candidates, genreWindow, maxPerGenre, limit);
+  }
 
-  // Stage 2c: Service de-clustering
+  // Stage 2c: Service de-clustering — runs AFTER intra-row diversity
+  // for both MMR and fallback paths (brief §4.5 ordering).
   if (getServices) {
     candidates = deClusterByService(candidates, getServices);
   }

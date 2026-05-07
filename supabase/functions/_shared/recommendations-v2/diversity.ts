@@ -73,6 +73,70 @@ export function applyGenreSpread(
   return selected;
 }
 
+// ── Phase 5: Maximal Marginal Relevance (MMR) ──
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA * normB);
+  return denom === 0 ? 0 : dot / denom;
+}
+
+export function applyMMR(
+  candidates: ScoredCandidate[],
+  embeddingMap: Map<string, number[]>,
+  opts: { lambda: number; k: number },
+): ScoredCandidate[] {
+  if (candidates.length === 0) return [];
+  const k = Math.min(opts.k, candidates.length);
+  if (k === 0) return [];
+
+  const remaining = [...candidates].sort((a, b) => b.finalScore - a.finalScore);
+  const selected: ScoredCandidate[] = [remaining.shift()!];
+  const selectedEmbeddings: Array<number[] | null> = [
+    embeddingMap.get(selected[0].contentKey) ?? null,
+  ];
+
+  while (selected.length < k && remaining.length > 0) {
+    let bestIdx = -1;
+    let bestScore = -Infinity;
+
+    for (let i = 0; i < remaining.length; i++) {
+      const c = remaining[i];
+      const cEmb = embeddingMap.get(c.contentKey);
+
+      let maxRedundancy = 0;
+      if (cEmb) {
+        for (const sEmb of selectedEmbeddings) {
+          if (!sEmb) continue;
+          const sim = cosineSimilarity(cEmb, sEmb);
+          if (sim > maxRedundancy) maxRedundancy = sim;
+        }
+      }
+
+      const mmrScore = opts.lambda * c.finalScore - (1 - opts.lambda) * maxRedundancy;
+      if (mmrScore > bestScore) {
+        bestScore = mmrScore;
+        bestIdx = i;
+      }
+    }
+
+    if (bestIdx === -1) break;
+    const picked = remaining.splice(bestIdx, 1)[0];
+    selected.push(picked);
+    selectedEmbeddings.push(embeddingMap.get(picked.contentKey) ?? null);
+  }
+
+  return selected;
+}
+
 export function deClusterByService(
   candidates: ScoredCandidate[],
   getServices: (tmdbId: number, mediaType: string) => string[],

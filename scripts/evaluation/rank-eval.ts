@@ -1,11 +1,21 @@
 /**
- * Offline Evaluation Harness — Phase 4
+ * Offline Evaluation Harness — Phase 5 update
  *
  * Runs the full ranking pipeline against a real user's data and outputs
  * scored results + row assignments for manual inspection.
  *
+ * Phase 5 changes:
+ *   - Uses the real contextual scorer (computeContextualScore) instead
+ *     of the hardcoded 0.5 placeholder.
+ *   - Compares three candidate weight splits side-by-side per the Phase
+ *     5 brief §3.4 (60/25/15, 55/25/20, 50/25/25 — taste/recency/contextual).
+ *   - Accepts optional --hour, --day, --device, --viewing-context flags
+ *     for ctx overrides; defaults to current local Date for hour/day,
+ *     'web' for device, profile.viewing_context from DB for viewing.
+ *
  * Usage:
  *   npx tsx scripts/evaluation/rank-eval.ts --user-id <uuid>
+ *   npx tsx scripts/evaluation/rank-eval.ts --user-id <uuid> --hour 23 --viewing-context wind_down
  *
  * Reads VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY from .env file.
  * Not a test suite — a diagnostic tool for inspecting ranker behavior.
@@ -14,6 +24,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import { computeContextualScore } from '../../src/lib/recommendations-v2/contextual';
+import type { PipelineContext } from '../../src/lib/recommendations-v2/types';
 
 // Load .env from project root (run from project root via npx tsx)
 function loadEnv(): Record<string, string> {
@@ -41,16 +53,21 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Parse CLI args
-const args = process.argv.slice(2);
-const userIdIdx = args.indexOf('--user-id');
-if (userIdIdx === -1 || !args[userIdIdx + 1]) {
-  console.error('Usage: npx tsx scripts/evaluation/rank-eval.ts --user-id <uuid>');
+// ── CLI ──
+
+function flag(name: string): string | undefined {
+  const idx = process.argv.indexOf(`--${name}`);
+  if (idx === -1) return undefined;
+  return process.argv[idx + 1];
+}
+
+const userId = flag('user-id');
+if (!userId) {
+  console.error('Usage: npx tsx scripts/evaluation/rank-eval.ts --user-id <uuid> [--hour H] [--day D] [--device android|ios|web] [--viewing-context VAL]');
   process.exit(1);
 }
-const userId = args[userIdIdx + 1];
 
-// ── Scoring functions (duplicated from pipeline for standalone use) ──
+// ── Scoring helpers (duplicated for standalone use) ──
 
 function distanceToSimilarity(distance: number): number {
   return Math.max(0, Math.min(1, 1 - distance / 2));
@@ -65,10 +82,22 @@ function computeForYouRecencyScore(releaseDate: string | null, halfLifeDays = 18
   return Math.exp(-0.693 * daysSince / halfLifeDays);
 }
 
-function getModulatedWeights(catalogueAgeSlider: number) {
+interface Stage2Weights {
+  taste: number;
+  recency: number;
+  contextual: number;
+}
+
+/** Modulate a base weight set by the catalogue-age slider. The base
+ *  weights replace the prior hardcoded 5:1 taste:contextual ratio so
+ *  we can test alternate splits cleanly. */
+function modulateWeights(base: Stage2Weights, catalogueAgeSlider: number): Stage2Weights {
+  // Mirrors getModulatedWeights from src/lib/recommendations-v2/weights.ts
+  // but parameterized on the base ratio.
   const rawRecency = 0.30 - catalogueAgeSlider * 0.20;
   const nonRecencyBudget = 1.0 - rawRecency;
-  const contextual = nonRecencyBudget / 6; // 5:1 ratio
+  const ratio = base.taste / base.contextual; // taste:contextual ratio at base
+  const contextual = nonRecencyBudget / (1 + ratio);
   const taste = nonRecencyBudget - contextual;
   return { taste, recency: rawRecency, contextual };
 }
@@ -80,16 +109,28 @@ function parseRtScore(rtScore: string | null | undefined): number {
   return Math.min(1.0, Math.max(0.0, parseInt(match[1], 10) / 100));
 }
 
+// ── Weight split candidates per Phase 5 brief §3.4 ──
+const WEIGHT_SPLITS: Record<string, Stage2Weights> = {
+  'phase4-baseline (62.5/25/12.5)': { taste: 0.625, recency: 0.25, contextual: 0.125 },
+  'split-A (60/25/15)':             { taste: 0.60,  recency: 0.25, contextual: 0.15  },
+  'split-B (55/25/20)':             { taste: 0.55,  recency: 0.25, contextual: 0.20  },
+  'split-C (50/25/25)':             { taste: 0.50,  recency: 0.25, contextual: 0.25  },
+};
+
 // ── Main ──
 
 async function main() {
-  console.log(`\n=== Videx v2 Ranking Pipeline Evaluation ===`);
+  console.log(`\n=== Videx v2 Ranking Pipeline Evaluation (Phase 5) ===`);
   console.log(`User ID: ${userId}\n`);
 
-  // 1. Fetch user profile
+  // 1. Fetch user profile (taste_profiles)
   const { data: profile, error: profileErr } = await supabase
     .from('taste_profiles')
-    .select('taste_vector_v2, slider_catalogue_age, slider_comfort_zone, slider_content_mix, slider_variety, taste_vector_interaction_count, taste_vector_bootstrapped_from, selected_clusters')
+    .select(
+      'taste_vector_v2, slider_catalogue_age, slider_comfort_zone, '
+      + 'slider_content_mix, slider_variety, taste_vector_interaction_count, '
+      + 'taste_vector_bootstrapped_from, selected_clusters'
+    )
     .eq('user_id', userId)
     .maybeSingle();
 
@@ -101,7 +142,6 @@ async function main() {
   const tasteVector: number[] | null = profile.taste_vector_v2
     ? JSON.parse(profile.taste_vector_v2 as string)
     : null;
-
   if (!tasteVector) {
     console.error('User has no taste vector. Complete onboarding first.');
     process.exit(1);
@@ -120,147 +160,169 @@ async function main() {
   console.log('Selected clusters:', profile.selected_clusters);
   console.log(`Taste vector: ${tasteVector.length}D\n`);
 
-  // 2. Fetch user interactions
+  // 1b. Build PipelineContext (Phase 5)
+  const ctx: PipelineContext = {};
+  ctx.hourOfDay = flag('hour') != null ? parseInt(flag('hour')!, 10) : new Date().getHours();
+  ctx.dayOfWeek = flag('day') != null ? parseInt(flag('day')!, 10) : new Date().getDay();
+  const dev = flag('device');
+  if (dev === 'android' || dev === 'ios' || dev === 'web') ctx.devicePlatform = dev;
+
+  // viewing_context: --viewing-context flag, else read from profiles.
+  const vcOverride = flag('viewing-context');
+  if (vcOverride) {
+    ctx.viewingContext = vcOverride;
+  } else {
+    const { data: profileRow } = await supabase
+      .from('profiles')
+      .select('viewing_context')
+      .eq('id', userId)
+      .maybeSingle();
+    const vc = (profileRow as { viewing_context?: string | null } | null)?.viewing_context;
+    if (vc) ctx.viewingContext = vc;
+  }
+
+  console.log('PipelineContext:', ctx);
+
+  // 2. Fetch user interactions (summary)
   const { data: interactions } = await supabase
     .from('user_interactions')
-    .select('event_type, content_id, media_type, created_at')
+    .select('event_type')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(100);
-
+    .limit(200);
   const interactionSummary: Record<string, number> = {};
   for (const i of (interactions ?? [])) {
     interactionSummary[i.event_type] = (interactionSummary[i.event_type] ?? 0) + 1;
   }
-  console.log('Interaction summary:', interactionSummary);
+  console.log('Interaction summary (last 200):', interactionSummary);
 
   // 3. Fetch candidates via RPC
   const vectorStr = `[${tasteVector.join(',')}]`;
-  const { data: matched, error: rpcErr } = await supabase
-    .rpc('match_titles_by_vector', {
-      query_vector: vectorStr,
-      match_limit: 500,
-    });
-
+  const { data: matched, error: rpcErr } = await supabase.rpc('match_titles_by_vector', {
+    query_vector: vectorStr,
+    match_limit: 500,
+  });
   if (rpcErr || !matched) {
     console.error('RPC failed:', rpcErr?.message);
     process.exit(1);
   }
-
-  console.log(`\nStage 1: Retrieved ${matched.length} candidates from vector search\n`);
+  console.log(`\nStage 1: Retrieved ${matched.length} candidates from vector search`);
 
   // 4. Fetch metadata
   const tmdbIds = matched.map((m: any) => m.tmdb_id);
   const { data: titleData } = await supabase
     .from('titles')
-    .select('tmdb_id, media_type, title, release_date, release_year, genre_ids, vote_average, vote_count, popularity, rt_score, imdb_rating, director, cast_top_5')
+    .select(
+      'tmdb_id, media_type, title, release_date, release_year, genre_ids, '
+      + 'vote_average, vote_count, popularity, runtime, rt_score, imdb_rating, '
+      + 'director, cast_top_5'
+    )
     .in('tmdb_id', tmdbIds);
-
   const metaMap = new Map<string, any>();
   for (const row of (titleData ?? [])) {
     metaMap.set(`${row.media_type}-${row.tmdb_id}`, row);
   }
 
-  // 5. Score candidates
-  const weights = getModulatedWeights(sliders.catalogueAge);
-  console.log('Stage 2 weights:', weights);
+  // 5. Score candidates against ALL weight splits — emit comparison table.
+  type Candidate = {
+    key: string;
+    title: string;
+    mediaType: string;
+    year: number | null;
+    taste: number;
+    recency: number;
+    contextual: number;
+    finalByLabel: Record<string, number>;
+    popularity: number | null;
+    voteAverage: number | null;
+    runtime: number | null;
+    rtScore: string | null;
+    imdbRating: number | null;
+    genres: number[] | null;
+    director: string | null;
+  };
 
-  const scored = matched
-    .map((m: any) => {
-      const key = `${m.media_type}-${m.tmdb_id}`;
-      const meta = metaMap.get(key);
-      if (!meta) return null;
+  const candidates: Candidate[] = [];
+  for (const m of matched as any[]) {
+    const key = `${m.media_type}-${m.tmdb_id}`;
+    const meta = metaMap.get(key);
+    if (!meta) continue;
 
-      const taste = distanceToSimilarity(m.distance);
-      const recency = computeForYouRecencyScore(meta.release_date);
-      const contextual = 0.5; // placeholder
+    const taste = distanceToSimilarity(m.distance);
+    const recency = computeForYouRecencyScore(meta.release_date);
+    const contextual = computeContextualScore({ meta }, ctx);
 
-      const finalScore =
-        weights.taste * taste +
-        weights.recency * recency +
-        weights.contextual * contextual;
+    const finalByLabel: Record<string, number> = {};
+    for (const [label, base] of Object.entries(WEIGHT_SPLITS)) {
+      const w = modulateWeights(base, sliders.catalogueAge);
+      finalByLabel[label] = w.taste * taste + w.recency * recency + w.contextual * contextual;
+    }
 
-      return {
-        key,
-        title: meta.title,
-        mediaType: m.media_type,
-        year: meta.release_year,
-        scores: { taste, recency, contextual },
-        finalScore,
-        popularity: meta.popularity,
-        voteAverage: meta.vote_average,
-        rtScore: meta.rt_score,
-        imdbRating: meta.imdb_rating,
-        genres: meta.genre_ids,
-        director: meta.director,
-      };
-    })
-    .filter(Boolean)
-    .sort((a: any, b: any) => b.finalScore - a.finalScore);
+    candidates.push({
+      key,
+      title: meta.title,
+      mediaType: m.media_type,
+      year: meta.release_year,
+      taste,
+      recency,
+      contextual,
+      finalByLabel,
+      popularity: meta.popularity,
+      voteAverage: meta.vote_average,
+      runtime: meta.runtime,
+      rtScore: meta.rt_score,
+      imdbRating: meta.imdb_rating,
+      genres: meta.genre_ids,
+      director: meta.director,
+    });
+  }
 
-  // 6. Output top 50
-  console.log(`\n=== Top 50 Scored Candidates ===\n`);
-  console.log(`${'#'.padStart(3)} | ${'Score'.padStart(6)} | ${'Taste'.padStart(6)} | ${'Recncy'.padStart(6)} | ${'Pop'.padStart(7)} | ${'IMDb'.padStart(5)} | ${'RT'.padStart(4)} | Title`);
-  console.log('-'.repeat(100));
+  // 6. Per-split top 20 + composition deltas
+  console.log(`\n=== Top 20 by weight split ===\n`);
+  const topByLabel: Record<string, Candidate[]> = {};
+  for (const label of Object.keys(WEIGHT_SPLITS)) {
+    const sorted = [...candidates].sort(
+      (a, b) => b.finalByLabel[label] - a.finalByLabel[label],
+    );
+    const top = sorted.slice(0, 20);
+    topByLabel[label] = top;
 
-  for (let i = 0; i < Math.min(50, scored.length); i++) {
-    const c = scored[i]!;
-    const rt = c.rtScore ? parseRtScore(c.rtScore).toFixed(2) : ' N/A';
-    const imdb = c.imdbRating != null ? c.imdbRating.toFixed(1) : ' N/A';
+    console.log(`\n--- ${label} ---`);
+    console.log(`${'#'.padStart(3)} | ${'Score'.padStart(6)} | ${'Taste'.padStart(6)} | ${'Recncy'.padStart(6)} | ${'Ctx'.padStart(5)} | ${'Pop'.padStart(7)} | ${'IMDb'.padStart(5)} | Title`);
+    console.log('-'.repeat(110));
+    top.forEach((c, i) => {
+      const imdb = c.imdbRating != null ? c.imdbRating.toFixed(1) : ' N/A';
+      console.log(
+        `${String(i + 1).padStart(3)} | ${c.finalByLabel[label].toFixed(4)} | ${c.taste.toFixed(4)} | ${c.recency.toFixed(4)} | ${c.contextual.toFixed(3)} | ${String(c.popularity?.toFixed(1) ?? 'N/A').padStart(7)} | ${imdb.padStart(5)} | ${c.title} (${c.year ?? '?'}) [${c.mediaType}]`
+      );
+    });
+  }
+
+  // 7. Cross-split composition deltas: how many titles in baseline top 20
+  //    survive in each candidate split's top 20?
+  console.log(`\n\n=== Composition deltas vs Phase 4 baseline ===\n`);
+  const baselineLabel = 'phase4-baseline (62.5/25/12.5)';
+  const baselineTop20 = new Set(topByLabel[baselineLabel].map((c) => c.key));
+  for (const label of Object.keys(WEIGHT_SPLITS)) {
+    if (label === baselineLabel) continue;
+    const candidateTop20 = new Set(topByLabel[label].map((c) => c.key));
+    const overlap = [...baselineTop20].filter((k) => candidateTop20.has(k)).length;
+    const movedIn = [...candidateTop20].filter((k) => !baselineTop20.has(k)).length;
+    const movedOut = 20 - overlap;
     console.log(
-      `${String(i + 1).padStart(3)} | ${c.finalScore.toFixed(4)} | ${c.scores.taste.toFixed(4)} | ${c.scores.recency.toFixed(4)} | ${String(c.popularity?.toFixed(1) ?? 'N/A').padStart(7)} | ${imdb.padStart(5)} | ${rt.padStart(4)} | ${c.title} (${c.year ?? '?'}) [${c.mediaType}]`
+      `${label}: ${overlap}/20 overlap with baseline, +${movedIn} new, -${movedOut} dropped`
     );
   }
 
-  // 7. Row assignments
-  console.log(`\n=== Row Assignments ===\n`);
+  // 8. Contextual signal range (sanity check)
+  const ctxScores = candidates.map((c) => c.contextual);
+  const ctxMin = Math.min(...ctxScores);
+  const ctxMax = Math.max(...ctxScores);
+  const ctxAvg = ctxScores.reduce((a, b) => a + b, 0) / ctxScores.length;
+  console.log(`\nContextual score distribution: min=${ctxMin.toFixed(3)} avg=${ctxAvg.toFixed(3)} max=${ctxMax.toFixed(3)}`);
+  console.log(`(All-0.5 average = contextual signal not differentiating; widening = signal active.)`);
 
-  // Recommended For You: top 20
-  const recForYou = scored.slice(0, 20);
-  console.log(`Recommended For You (${recForYou.length}):`);
-  recForYou.forEach((c: any, i: number) => console.log(`  ${i + 1}. ${c.title} (${c.year}) — score ${c.finalScore.toFixed(4)}`));
-
-  // Hidden Gems
-  const gems = scored.filter((c: any) =>
-    c.popularity >= 2 && c.popularity <= 20 &&
-    (c.voteAverage ?? 0) >= 7.0
-  ).slice(0, 15);
-  console.log(`\nHidden Gems (${gems.length}):`);
-  gems.forEach((c: any, i: number) => console.log(`  ${i + 1}. ${c.title} (${c.year}) — score ${c.finalScore.toFixed(4)}, pop ${c.popularity}`));
-
-  // Outside Your Usual
-  const cosineScores = scored.map((c: any) => c.scores.taste);
-  cosineScores.sort((a: number, b: number) => a - b);
-  const cosine30th = cosineScores[Math.floor(cosineScores.length * 0.3)] ?? 0;
-  const medianFinal = [...scored].sort((a: any, b: any) => a.finalScore - b.finalScore)[Math.floor(scored.length / 2)]?.finalScore ?? 0;
-
-  const comfortCount = 5 + Math.round(sliders.comfortZone * 10);
-  const outside = scored.filter((c: any) =>
-    c.scores.taste <= cosine30th &&
-    c.finalScore >= medianFinal &&
-    (c.imdbRating == null || c.imdbRating >= 7.0)
-  ).slice(0, comfortCount);
-  console.log(`\nOutside Your Usual (${outside.length}, comfort zone slider=${sliders.comfortZone}):`);
-  outside.forEach((c: any, i: number) => console.log(`  ${i + 1}. ${c.title} (${c.year}) — taste ${c.scores.taste.toFixed(4)}, final ${c.finalScore.toFixed(4)}`));
-
-  // Diversity metrics
-  console.log(`\n=== Diversity Metrics (Top 20) ===\n`);
-  const top20 = scored.slice(0, 20);
-  const genreDist = new Map<number, number>();
-  const typeDist = { movie: 0, tv: 0 };
-  for (const c of top20) {
-    const pg = (c.genres ?? [])[0];
-    if (pg) genreDist.set(pg, (genreDist.get(pg) ?? 0) + 1);
-    if (c.mediaType === 'movie') typeDist.movie++;
-    else typeDist.tv++;
-  }
-
-  console.log('Genre distribution:', Object.fromEntries(genreDist));
-  console.log('Distinct genres:', genreDist.size);
-  console.log('Media type:', typeDist);
-  console.log(`Movie ratio: ${(typeDist.movie / 20 * 100).toFixed(0)}%`);
-
-  console.log(`\n=== Evaluation Complete ===\n`);
+  console.log(`\n=== Evaluation complete. Pick the split with the most defensible composition delta and update BASE_WEIGHTS. ===\n`);
 }
 
 main().catch(console.error);

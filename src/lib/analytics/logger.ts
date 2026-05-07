@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import type { Json } from '../database.types';
 import type { OnboardingEventName, OnboardingEventMetadata } from './events';
 
 export async function logOnboardingEvent<T extends OnboardingEventName>(
@@ -14,7 +15,7 @@ export async function logOnboardingEvent<T extends OnboardingEventName>(
     const { error } = await supabase.from('onboarding_events').insert({
       user_id: session.user.id,
       event_name: eventName,
-      metadata: metadata as Record<string, unknown>,
+      metadata: metadata as unknown as Json,
     });
     if (error) console.error(`[Analytics] Failed '${eventName}':`, error.message);
   } catch (err) {

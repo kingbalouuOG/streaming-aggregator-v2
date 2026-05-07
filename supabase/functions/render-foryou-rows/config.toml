@@ -1,0 +1,7 @@
+# Per-function config for render-foryou-rows.
+# Phase 5 Workstream C — IN-XPS-011 codifies verify_jwt as the
+# explicit setting per Edge Function so the
+# `.github/workflows/edge-fn-jwt-guard.yml` CI check can fail any PR
+# that flips it to false on a user-callable function.
+
+verify_jwt = true
