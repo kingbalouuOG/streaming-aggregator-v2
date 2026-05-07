@@ -86,13 +86,23 @@ export function ReportSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="relative w-full max-w-md bg-surface-elevated rounded-t-3xl max-h-[90vh] flex flex-col"
+            className="relative w-full max-w-md max-h-[90vh] flex flex-col"
+            style={{
+              background: "var(--surface-elev)",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              boxShadow: "var(--shadow-sheet)",
+            }}
           >
-            {/* Drag handle */}
-            <div className="flex justify-center pt-3 pb-1">
-              <div
-                className="w-10 h-1 rounded-full"
-                style={{ background: "var(--drag-handle)" }}
+            {/* Grabber pill — design-system §4 sheet anatomy */}
+            <div className="flex justify-center pt-2 pb-1">
+              <span
+                style={{
+                  width: 36,
+                  height: 4,
+                  borderRadius: "var(--r-pill)",
+                  background: "var(--hairline)",
+                }}
               />
             </div>
 
