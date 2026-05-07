@@ -65,27 +65,38 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  // Apply the data-theme attribute and sync Capacitor status bar style
+  // Apply the data-theme attribute and sync Capacitor status bar style.
+  //
+  // The CSS in src/index.css resolves both `:root` and
+  // `[data-theme="dark"]` to dark tokens, so omitting the attribute
+  // would render dark too — but always writing the attribute is
+  // unambiguous in DevTools and makes the chosen theme inspectable.
+  //
+  // The hex literals below mirror the canonical surface tokens
+  // (--bg / --paper from tokens.css §3); keep them in lockstep
+  // with that file. Native API surface (StatusBar, NavigationBar,
+  // <meta name="theme-color">) doesn't accept CSS var() so we have
+  // to pass the raw value.
   useEffect(() => {
+    const SURFACE_HEX = { dark: "#0a0a0f", light: "#f5f1e8" } as const;
     const root = document.documentElement;
-    if (resolvedTheme === "light") {
-      root.setAttribute("data-theme", "light");
-    } else {
-      root.removeAttribute("data-theme");
-    }
-    // Light theme → dark status bar icons; Dark theme → light (white) status bar icons
+    root.setAttribute("data-theme", resolvedTheme);
+
+    // Light theme → dark status bar icons; Dark theme → light icons
     StatusBar.setStyle({
       style: resolvedTheme === "dark" ? Style.Dark : Style.Light,
     }).catch(() => {});
+
     // Sync <meta name="theme-color"> for browser chrome
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
-      metaThemeColor.setAttribute("content", resolvedTheme === "dark" ? "#0a0a0f" : "#f5f4f1");
+      metaThemeColor.setAttribute("content", SURFACE_HEX[resolvedTheme]);
     }
+
     // Match Android navigation bar to the app theme
     if (Capacitor.isNativePlatform()) {
       NavigationBar.setColor({
-        color: resolvedTheme === "dark" ? "#0a0a0f" : "#f5f4f1",
+        color: SURFACE_HEX[resolvedTheme],
         darkButtons: resolvedTheme === "light",
       }).catch(() => {});
     }
