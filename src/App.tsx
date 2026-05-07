@@ -43,7 +43,7 @@ import { flushNow } from "./lib/instrumentation/impressionBatcher";
 import { parseContentItemId } from "./lib/adapters/contentAdapter";
 import { emitContentInteraction } from "./lib/storage/interactions";
 import { useIntersectionObserver } from "./hooks/useIntersectionObserver";
-import { IconsDebug, SectionHeadDebug, ContentCardDebug } from "./dev/DesignSystemDebug";
+import { IconsDebug, SectionHeadDebug, ContentCardDebug, ServiceStackDebug } from "./dev/DesignSystemDebug";
 
 const categories = ["All", "Movies", "TV Shows", "Docs", "Anime"];
 
@@ -81,6 +81,7 @@ export default function App() {
     if (debug === "icons") return <IconsDebug />;
     if (debug === "sectionhead") return <SectionHeadDebug />;
     if (debug === "contentcard") return <ContentCardDebug />;
+    if (debug === "servicestack") return <ServiceStackDebug />;
   }
 
   return (

@@ -21,6 +21,8 @@ import {
 import { SectionHead } from "../components/SectionHead";
 import { Kicker } from "../components/Kicker";
 import { ContentCard, type ContentItem } from "../components/ContentCard";
+import { ServiceBadge, ServiceStack } from "../components/ServiceBadge";
+import type { ServiceId } from "../components/platformLogos";
 
 const SAMPLE: ContentItem = {
   id: "movie-1",
@@ -153,6 +155,61 @@ export function SectionHeadDebug() {
           </h2>
         </div>
       </header>
+
+      <p style={{ marginTop: 56, fontSize: "var(--t-meta)", color: "var(--fg-faint)" }}>
+        Dev-only route. Tree-shaken from production builds via{" "}
+        <code>import.meta.env.DEV</code>.
+      </p>
+    </div>
+  );
+}
+
+export function ServiceStackDebug() {
+  const ALL: ServiceId[] = ["netflix", "prime", "disney", "apple", "now", "paramount", "itvx"];
+  const Row = ({ label, services, size }: { label: string; services: ServiceId[]; size?: "sm" | "md" | "lg" }) => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: "0.5px solid var(--hairline)" }}>
+      <span style={{ fontSize: "var(--t-meta)", color: "var(--fg-soft)" }}>{label}</span>
+      <ServiceStack services={services} size={size} />
+    </div>
+  );
+
+  return (
+    <div className="editorial" style={{ paddingTop: 40, paddingBottom: 80, color: "var(--fg)" }}>
+      <h1
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--t-headline)",
+          fontWeight: 600,
+          fontVariationSettings: '"opsz" 48',
+          marginBottom: 24,
+        }}
+      >
+        ServiceBadge & ServiceStack (Phase 1)
+      </h1>
+
+      <Kicker>SINGLE BADGE — sizes</Kicker>
+      <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "12px 0", marginBottom: 16 }}>
+        <ServiceBadge service="netflix" size="sm" />
+        <ServiceBadge service="netflix" size="md" />
+        <ServiceBadge service="netflix" size="lg" />
+        <span style={{ fontSize: "var(--t-meta)", color: "var(--fg-faint)" }}>sm 20 · md 24 (default) · lg 32</span>
+      </div>
+
+      <Kicker>STACK — overlap & cap</Kicker>
+      <div style={{ marginTop: 8 }}>
+        <Row label="1 service" services={ALL.slice(0, 1)} />
+        <Row label="2 services" services={ALL.slice(0, 2)} />
+        <Row label="3 services" services={ALL.slice(0, 3)} />
+        <Row label="4 services (cap)" services={ALL.slice(0, 4)} />
+        <Row label="5 services → +1" services={ALL.slice(0, 5)} />
+        <Row label="7 services → +3" services={ALL} />
+      </div>
+
+      <div style={{ height: 32 }} />
+      <Kicker>STACK — sm size</Kicker>
+      <div style={{ marginTop: 8 }}>
+        <Row label="5 services" services={ALL.slice(0, 5)} size="sm" />
+      </div>
 
       <p style={{ marginTop: 56, fontSize: "var(--t-meta)", color: "var(--fg-faint)" }}>
         Dev-only route. Tree-shaken from production builds via{" "}
