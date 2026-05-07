@@ -43,7 +43,7 @@ import { flushNow } from "./lib/instrumentation/impressionBatcher";
 import { parseContentItemId } from "./lib/adapters/contentAdapter";
 import { emitContentInteraction } from "./lib/storage/interactions";
 import { useIntersectionObserver } from "./hooks/useIntersectionObserver";
-import { IconsDebug } from "./dev/DesignSystemDebug";
+import { IconsDebug, SectionHeadDebug } from "./dev/DesignSystemDebug";
 
 const categories = ["All", "Movies", "TV Shows", "Docs", "Anime"];
 
@@ -79,6 +79,7 @@ export default function App() {
   if (import.meta.env.DEV) {
     const debug = new URLSearchParams(window.location.search).get("debug");
     if (debug === "icons") return <IconsDebug />;
+    if (debug === "sectionhead") return <SectionHeadDebug />;
   }
 
   return (
