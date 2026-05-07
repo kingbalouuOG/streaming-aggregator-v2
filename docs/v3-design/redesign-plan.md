@@ -56,7 +56,7 @@ Per-component checklist. One row = one PR. Tick the box when done. Do not bundle
 
 ## Phase 5 — Atomic content components
 
-- [ ] **`FeaturedHero`** — 🟠 Replace card-style auto-rotator with editorial magazine hero. No auto-rotate; user swipes.
+- [x] **`FeaturedHero`** — 🟠 Replace card-style auto-rotator with editorial magazine hero. No auto-rotate; user swipes.
 - [ ] **`MoodRoomsRow` / `MoodRoomCard`** — 🟠 New tile design (square-ish, room-accent gradient, Fraunces label).
 - [x] **`ContentRow`** — 🔵 Wraps SectionHead. Card variants `default | wide | lead`.
 - [ ] **`LazyGenreSection`** — 🔵 Wrap with SectionHead. Inner row stays.
