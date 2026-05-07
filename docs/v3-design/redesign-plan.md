@@ -63,7 +63,7 @@ Per-component checklist. One row = one PR. Tick the box when done. Do not bundle
 - [x] **`CategoryFilter`** — 🔵 Editorial chip bar with kicker.
 - [x] **`SliderTray`** — 🔵 Restyle handles, tick labels in DM Sans 11 tracked.
 - [x] **`FilterSheet` / `ReportSheet`** — 🔵 Sheet shell uses `--shadow-sheet` + grabber pill.
-- [ ] **`AnchorMoodRoomCard`** — 🟠 Lifts cover-story treatment.
+- [x] **`AnchorMoodRoomCard`** — 🟠 Lifts cover-story treatment.
 - [x] **`EditorsNote`** *(new)* — 🟣 Collapsed strip + modal. Reads from `editor_notes` table.
 - [x] **`MagazineHero`** *(new)* — 🟣 New primitive used by Home + ForYou + MoodRoom.
 - [x] **`CalendarStrip`** *(new)* — 🟣 Horizontal scroll of upcoming dates with service marks.

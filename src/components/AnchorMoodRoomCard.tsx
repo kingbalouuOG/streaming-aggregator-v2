@@ -11,77 +11,105 @@ interface AnchorMoodRoomCardProps {
 /**
  * Card for the anchored "Mood Rooms for Tonight" row on For You.
  *
- * Visual contract is intentionally identical to MoodRoomCard: 200×280
- * frame, 2×2 thumbnail grid in the top portion, label below.
+ * Phase 5 redesign per the matrix: "Lifts cover-story treatment."
+ * Each card now reads as a tiny magazine cover — full-bleed lead
+ * thumbnail, dark gradient at the bottom, kicker + Fraunces label
+ * overlaid. The 2×2 mosaic has been retired in favour of the
+ * editorial direction; the additional thumbnails surface inside the
+ * MoodRoomPage detail when the user opens the room.
  *
  * Label rendering:
- *   - When `preview.llmLabel` is present (IN-463 thematic label resolved),
- *     show that as the primary line, with the anchor title underneath
- *     as a soft "Inspired by {anchor}" attribution.
- *   - While the LLM label is loading or after a hard failure, show the
- *     v1 fallback "If you love {anchor}".
+ *   - When `preview.llmLabel` is present, kicker becomes
+ *     "INSPIRED BY {ANCHOR}" and the heading uses the LLM label.
+ *   - While the LLM label is loading or after a hard failure, the
+ *     kicker is "IF YOU LOVE" and the heading is the anchor title.
  */
 export function AnchorMoodRoomCard({ preview, onSelect }: AnchorMoodRoomCardProps) {
-  const tiles = preview.thumbnails.slice(0, 4);
-  const hasTiles = tiles.length > 0;
+  const lead = preview.thumbnails[0];
   const llm = preview.llmLabel;
+
+  const kicker = llm
+    ? `INSPIRED BY ${preview.anchorTitle.toUpperCase()}`
+    : "IF YOU LOVE";
+  const title = llm ? llm.label : `${preview.anchorTitle}.`;
 
   return (
     <button
       type="button"
       onClick={() => onSelect(preview)}
-      className="shrink-0 w-[200px] h-[280px] rounded-xl overflow-hidden bg-surface-elevated text-left flex flex-col focus:outline-none focus:ring-2 focus:ring-primary"
+      className="relative shrink-0 overflow-hidden text-left flex flex-col focus:outline-none active:scale-[0.99] transition-transform"
+      style={{
+        width: 200,
+        height: 280,
+        borderRadius: "var(--r-card)",
+        background: "var(--surface-elev)",
+      }}
+      aria-label={title}
     >
-      {/* Thumbnail area (top 60%) — identical to MoodRoomCard */}
-      <div className="relative w-full h-[168px] bg-black/40">
-        {hasTiles ? (
-          <div className="grid grid-cols-2 grid-rows-2 gap-px w-full h-full">
-            {tiles.map((t) => (
-              <div key={t.id} className="relative overflow-hidden">
-                <ImageSkeleton
-                  src={t.image}
-                  alt={t.title}
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-              </div>
-            ))}
-            {Array.from({ length: Math.max(0, 4 - tiles.length) }).map((_, i) => (
-              <div key={`filler-${i}`} className="bg-black/60" />
-            ))}
-          </div>
-        ) : (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-[12px]">
-            No previews
-          </div>
-        )}
-      </div>
+      {/* Lead thumbnail — full-bleed */}
+      {lead ? (
+        <ImageSkeleton
+          src={lead.image}
+          alt={lead.title}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      ) : (
+        <div
+          className="absolute inset-0"
+          style={{ background: "var(--surface-tint)" }}
+        />
+      )}
 
-      {/* Label area (bottom 40%). */}
-      <div className="flex-1 flex flex-col justify-center px-3 py-3">
-        {llm ? (
-          <>
-            <h3
-              className="text-foreground text-[14px] leading-tight line-clamp-2"
-              style={{ fontWeight: 600 }}
-            >
-              {llm.label}
-            </h3>
-            <span className="text-muted-foreground text-[11px] mt-0.5 line-clamp-1">
-              Inspired by {preview.anchorTitle}
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="text-muted-foreground text-[11px] uppercase tracking-wide">
-              If you love
-            </span>
-            <h3
-              className="text-foreground text-[14px] leading-tight line-clamp-2 mt-0.5"
-              style={{ fontWeight: 600 }}
-            >
-              {preview.anchorTitle}
-            </h3>
-          </>
+      {/* Bottom gradient — read the title block */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(to top, rgba(10,10,15,0.94) 0%, rgba(10,10,15,0.55) 35%, rgba(10,10,15,0.05) 60%, rgba(10,10,15,0) 100%)",
+        }}
+      />
+
+      {/* Title block — bottom-aligned, magazine-cover style */}
+      <div className="absolute inset-x-0 bottom-0 p-4 flex flex-col gap-1">
+        <span
+          className="line-clamp-1"
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: 10,
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "1.4px",
+            color: "var(--primary)",
+          }}
+        >
+          {kicker}
+        </span>
+        <h3
+          className="line-clamp-2"
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 18,
+            fontWeight: 700,
+            fontVariationSettings: '"opsz" 36',
+            letterSpacing: "-0.01em",
+            color: "#fff",
+            lineHeight: 1.1,
+            margin: 0,
+          }}
+        >
+          {title}
+        </h3>
+        {preview.titleCount > 0 && (
+          <span
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 11,
+              color: "rgba(255,255,255,0.7)",
+              marginTop: 2,
+            }}
+          >
+            {preview.titleCount} titles
+          </span>
         )}
       </div>
     </button>
