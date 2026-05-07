@@ -9,7 +9,7 @@
 **Changes from v0.6 kickoff (Phase 5 close-out, 2026-05-06):**
 - **IN-XPS-002** ✅ Incorporated — username_available SECURITY DEFINER RPC + AuthContext rewire (migration 038).
 - **IN-XPS-004** ✅ Partially incorporated — Vault storage migration shipped (migration 039 + cron file edits); cryptographic rotation deferred to Phase 6 pending Supabase tooling (new `sb_secret_…` keys are opaque, fail `verify_jwt = true`).
-- **IN-XPS-006** Did NOT ship in Phase 5 despite scoping. Delete account wiring re-targeted to Phase 5.5 / Phase 6 as a focused follow-up.
+- **IN-XPS-006** Did NOT ship in Phase 5 despite scoping. **Re-audited 2026-05-07**: backend RPC `delete_own_account` exists in production + client wiring is in place; UI is intentionally gated off (disabled button + "not yet available" notice). Re-targeted to Phase 5.5 with a clear five-step plan (audit RPC, capture in version-controlled migration, test, flip UI gate, add type-username-to-confirm).
 - **IN-XPS-011** ✅ Incorporated — six per-function `config.toml` files + `edge-fn-jwt-guard` CI workflow.
 - **IN-XPS-012** ✅ Workflow file added — `foryou-parity.yml` soft-skipped pending repo secrets configuration (`PARITY_*`).
 - **IN-XPS-013** ✅ Incorporated — shared `cors.ts` helper + tightened both browser-callable Edge Functions; `*` posture replaced with allow-listed echo.
@@ -1300,9 +1300,24 @@ Fatal: Error: EPERM: operation not permitted, rename
 
 Wiring requires cascading delete across: `profiles`, `user_interactions`, `card_impressions`, `taste_profiles`, `user_services`, watchlist entries, and the Supabase auth user. Must be implemented before public launch.
 
-**Phase target:** originally Phase 5 (per Phase 5 brief §1.3). **Did not ship in Phase 5.** Workstream C focused on the higher-impact migrations (036–039 + CORS + verify_jwt CI). Delete account wiring requires a SECURITY DEFINER RPC that cascades across `profiles`, `user_interactions`, `card_impressions`, `taste_profiles`, `user_services`, watchlist, and `auth.users` — non-trivial and outside the time budget. **Re-targeted to Phase 5.5 / Phase 6** as a focused follow-up.
+**Re-audit during Phase 5 review (2026-05-07):** the original framing above was incomplete. Actual state:
 
-**Status:** ⏳ Flagged for pre-public-launch — re-targeted to Phase 5.5 / 6.
+- ✅ **Backend RPC `delete_own_account` exists in production.** Referenced in [`027_function_search_path_pin.sql:28`](supabase/migrations/027_function_search_path_pin.sql:28) — its `search_path` is pinned, which means it's already deployed. Typed in `database.types.ts:1479`.
+- ✅ **Client wiring is in place.** [`AuthContext.tsx:132-142`](src/components/AuthContext.tsx:132) calls `supabase.rpc('delete_own_account')`, then clears localStorage and signs out. [`App.tsx:914`](src/App.tsx:914) threads `auth.deleteAccount` to `ProfilePage`'s `onDeleteAccount` prop.
+- ❌ **The UI is intentionally gated off.** The "Delete Account" button inside the confirmation modal at [`ProfilePage.tsx:887-893`](src/components/ProfilePage.tsx:887) is `disabled` with `cursor-not-allowed`, and the modal carries the "not yet available" notice. Clicking it does nothing.
+- ⚠️ **The RPC's definition is NOT in any version-controlled migration.** It was created via Studio at some point (likely Phase 3) and lives in production unaudited from the repo side. Migration 027 only pins its `search_path`. There's no record in source control of what the RPC actually does — what tables it cascades across, what `auth.users` row deletion behaviour, what error handling. This is a real audit gap.
+
+**Phase target:** originally Phase 5 (per Phase 5 brief §1.3). **Did not ship in Phase 5.** Re-targeted to Phase 5.5.
+
+**Phase 5.5 implementation steps:**
+
+1. **Audit the existing RPC.** Run `\df+ public.delete_own_account` in Studio to dump the function body. Verify it cascades across all six user-scoped tables AND deletes the `auth.users` row. Compare against the brief's GDPR Article 17 list.
+2. **Capture the RPC in a new migration** (e.g. `041_delete_own_account.sql`) so the source-of-truth is git-tracked. Use `CREATE OR REPLACE FUNCTION` so the production state is reproduced from git on a fresh project. Reference IN-PX-31 (cron source-of-truth confusion) — same anti-pattern.
+3. **Test on a throwaway account.** Create a test user via Studio, populate it with sample interactions / watchlist / preferences, run the RPC, verify zero rows remain across all tables and the auth.users row is gone.
+4. **Flip the UI gate.** Replace the disabled button at `ProfilePage.tsx:887-893` with one that fires `onDeleteAccount`, shows a loading state during the RPC call, handles error toasts, and on success navigates back to the sign-in screen.
+5. **Add a final-confirmation flow.** GDPR-compliant pattern: type-username-to-confirm before the destructive action fires. Current modal only has a single click between intent and execution.
+
+**Status:** ⏳ Re-targeted to Phase 5.5 — wiring exists in code, UI gate + RPC audit + version-controlled migration are the missing pieces.
 
 ### IN-XPS-007: Service pricing config needs review cadence *(Phase 3 carry-forward)*
 
@@ -1409,7 +1424,7 @@ Wiring requires cascading delete across: `profiles`, `user_interactions`, `card_
 
 ## Phase 5.5 follow-ups (filed 2026-05-07 from Phase 5 review pass)
 
-These came out of the post-merge review of PR #4 (security-sentinel + data-integrity-guardian + performance-oracle + kieran-typescript-reviewer + architecture-strategist + code-simplicity-reviewer). None are launch blockers; all are quality / hardening items that compound if left.
+These came out of the post-merge review of PR #4 (security-sentinel + data-integrity-guardian + performance-oracle + kieran-typescript-reviewer + architecture-strategist + code-simplicity-reviewer + a doc audit) plus a Phase 5 close-out review of legal disclosures. IN-PX-21 through IN-PX-33 are quality/hardening; IN-PX-34 and IN-PX-35 are pre-launch legal blockers (privacy policy + GDPR Article 20).
 
 ### IN-PX-21: Regenerate `database.types.ts` and delete `as any` casts
 
@@ -1569,6 +1584,71 @@ These came out of the post-merge review of PR #4 (security-sentinel + data-integ
 **Fix:** Extend the probe to property-level: deterministic seed + golden output checked into `scripts/test/foryou-parity-golden.json`. Re-run on every PR touching `recommendations-v2/` or `render-foryou-rows`. Diff against golden. Update golden via explicit `--update-golden` flag in the script when the change is intentional.
 
 **Phase target:** Phase 6 / before any new Edge-client paired feature.
+
+**Status:** ⏳ Filed.
+
+### IN-PX-34: Privacy Policy text + functional legal links
+
+**Source:** Phase 5 close-out review (2026-05-07) — gap surfaced when Joe asked whether the privacy text was app-specific or boilerplate.
+
+**Detail:** Two distinct surfaces, with one already-good and one a pre-launch blocker:
+
+**Already in good shape (no action):** Profile → Privacy & Data → "What Videx learns about you" modal at [`ProfilePage.tsx:814-836`](src/components/ProfilePage.tsx:814) is custom-written and lines up with the Detail Page Signal Capture Spec. Lists exactly what gets tracked ("what you rate, what you add to your watchlist, what you mark as watched, titles you mark as not interested, which services you tap to start watching, titles you tap to view details, how long you spend looking at title details, your genre and taste preferences, your streaming service subscriptions") and explicitly what doesn't ("location, other apps, anything outside Videx, actual viewing on streaming platforms"). This is the user-facing privacy disclosure for IN-XPS-001 and is correctly app-specific.
+
+**Pre-launch blocker (action needed):** at the signup flow, [`OnboardingFlow.tsx:636-637`](src/components/OnboardingFlow.tsx:636) reads:
+
+> *"By creating an account, you agree to our Terms of Service and Privacy Policy"*
+
+The "Terms of Service" and "Privacy Policy" text is styled as `<span className="text-primary">` to look like links — but they are plain `<span>` elements, not anchors. There is no `PrivacyPolicy.tsx` page in `src/components/`, no `/privacy` or `/terms` route in `App.tsx`, no markdown file under `docs/legal/`. Users visually see "links" that go nowhere.
+
+**Why it's blocking:** UK GDPR + Apple App Store + Google Play Store all require a functional privacy policy URL/page accessible BEFORE account creation. Shipping with non-functional placeholder links is a store-rejection risk for Phase 6 (iOS in particular — Apple's review explicitly checks for working links).
+
+**What needs writing (app-specific, not boilerplate):**
+- **What data we collect** — match the "What Videx learns" modal content exactly. Reference Detail Page Signal Capture Spec.
+- **Where it's stored** — Supabase project (London region, UK data residency). Pro tier with PITR backups.
+- **Third parties** — TMDb (content metadata), OMDB (IMDB ratings), Streaming Availability via RapidAPI (deep link URLs), OpenAI (embeddings + LLM labels for mood rooms). Each call out what's sent and whether PII flows.
+- **What we don't do** — no ad networks, no cross-app tracking, no location, no ML training on user content, no data sales.
+- **User rights** — access, deletion (link to IN-XPS-006 once landed), portability (link to IN-PX-35 once landed), correction.
+- **Retention** — `card_impressions` rolled up after 90 days (per migration 014); rest persists until account deletion.
+- **Contact** — support email, postal address (UK ICO requires this).
+
+**Implementation:**
+1. Author `docs/legal/privacy-policy.md` and `docs/legal/terms-of-service.md` as version-controlled source.
+2. Render via a new `PrivacyPolicyPage.tsx` / `TermsPage.tsx` component reading the markdown (use `react-markdown` or copy text inline).
+3. Wire signup-flow spans to clickable links opening these pages (modal sheet on mobile, route on web).
+4. Add a "Legal" entry to Profile → Settings linking to both.
+
+**Phase target:** Phase 5.5 (block-of-work alongside IN-XPS-006 — same legal-disclosures cluster).
+
+**Status:** ⏳ Filed.
+
+### IN-PX-35: Functional "Download my data" — GDPR Article 20
+
+**Source:** Phase 5 close-out review (2026-05-07).
+
+**Detail:** [`ProfilePage.tsx:771`](src/components/ProfilePage.tsx:771) has a "Download my data" button that on click fires:
+
+```ts
+toast.success("Download started", { description: "Your data export will be ready shortly." })
+```
+
+That's the entire implementation. No actual data export happens. The toast is misleading — there is no download started, no email queued, no file generated.
+
+**Why it's blocking:** GDPR Article 20 (right to data portability) requires that data subjects can obtain their personal data in "a structured, commonly used and machine-readable format." UK GDPR carries the same requirement post-Brexit. Shipping with a fake-success toast is worse than not having the button at all (it actively misrepresents what the app does, which is a separate consumer-protection issue beyond GDPR).
+
+**What needs to ship:**
+1. **Backend** — a SECURITY DEFINER RPC `export_user_data()` that returns a JSON blob containing all user-scoped rows: `profiles` (one row, the caller's), `taste_profiles`, `user_services`, `user_genres`, `watchlist`, `user_interactions`, `card_impressions` (last 90 days; older rows already rolled up to aggregates). Optionally also onboarding events from `onboarding_events`.
+2. **Format** — JSON is the lowest-friction; CSV is more user-readable for watchlist specifically. Recommend JSON top-level with one CSV file per table inside if exporting via ZIP. For Phase 5.5, JSON-only is fine.
+3. **Delivery** — three options:
+   - **Sync small export:** RPC returns the JSON, client triggers `Blob` download. Works for small accounts (<500 watchlist + <few thousand interactions). Simplest implementation.
+   - **Async via email:** RPC kicks off a job, sends an email with the export attached or a signed S3 URL. Required for large accounts.
+   - **In-app file save:** Capacitor's Filesystem plugin to write the JSON to the device. Mobile-friendliest.
+   Recommend sync-Blob for Phase 5.5 (covers 99% of accounts at current scale), upgrade to async when an account size exceeds the sync limit.
+4. **UI** — replace the toast with: loading state on the button while the RPC runs, success toast linking to the saved file path, error toast on failure.
+
+**Caveat:** the `export_user_data` RPC uses the same audit pattern as `delete_own_account` — IT must have its definition in a version-controlled migration. Don't repeat the IN-XPS-006 source-of-truth gap.
+
+**Phase target:** Phase 5.5 (legal-disclosures cluster with IN-XPS-006 + IN-PX-34).
 
 **Status:** ⏳ Filed.
 
