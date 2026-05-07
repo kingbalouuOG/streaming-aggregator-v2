@@ -69,7 +69,7 @@ export function BottomNav({ activeTab, onTabChange, watchlistCount = 0 }: Bottom
               key={id}
               onClick={() => onTabChange(id)}
               whileTap={{ scale: 0.88 }}
-              className="flex flex-col items-center gap-1 py-1.5 px-4 rounded-xl"
+              className="flex flex-col items-center gap-1 py-1.5 px-2 rounded-xl"
               style={{
                 color: isActive ? "var(--primary)" : "var(--fg-faint)",
                 transition: "color var(--d-fast) var(--ease-out)",
@@ -103,6 +103,7 @@ export function BottomNav({ activeTab, onTabChange, watchlistCount = 0 }: Bottom
                 )}
               </div>
               <span
+                className="whitespace-nowrap"
                 style={{
                   fontFamily: "var(--font-ui)",
                   fontSize: 10,
