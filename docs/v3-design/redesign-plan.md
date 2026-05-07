@@ -1,0 +1,93 @@
+# Videx — Redesign plan
+
+Per-component checklist. One row = one PR. Tick the box when done. Do not bundle rows.
+
+**Status legend**
+
+- 🟢 **Unchanged** — logic kept, tokens auto-inherit
+- 🔵 **UI Update** — restyle, no behaviour change
+- 🟠 **Redesign** — anatomy or props changed
+- 🟣 **New** — file does not exist today
+
+> Read `docs/v3-design/design-system.md` and `docs/v3-design/CLAUDE.md` before starting any row.
+
+---
+
+## Phase 0 — Foundation (must land first, blocks all phases)
+
+- [x] **`src/index.css`** — 🟠 Replace tokens with `docs/v3-design/tokens.css`. Preserve any non-design tokens (e.g. capacitor inset vars). DoD: `:root` exposes every var listed in `design-system.md §3`.
+- [ ] **`src/components/icons.tsx`** — 🔵 Add: `bookmark`, `bookmarkF`, `close`, `chev-right`, `chev-down`, `expand`, `play-fill`, `sparkle`. All 1.8 stroke, 24×24 viewbox.
+- [ ] **`src/components/SectionHead.tsx`** *(new)* — 🟣 Props: `kicker?: string`, `title: string`, `standfirst?: string`, `right?: ReactNode`. Used by every row.
+- [ ] **`src/components/Kicker.tsx`** *(new)* — 🟣 Tiny wrapper for kicker text style (tracked uppercase orange).
+
+## Phase 1 — Card primitives
+
+- [ ] **`src/components/ContentCard.tsx`** — 🟠 New anatomy: bookmark TR (28×28, blur), rating pill BL only, no plan pill, no "new" ribbon. Variants: `default | wide | lead | mosaic`. Title and meta below. DoD: matches anatomy in `design-system.md §4`.
+- [ ] **`src/components/BrowseCard.tsx`** — 🔵 Adopts new ContentCard primitive in grid form. Maintain same hooks.
+- [ ] **`src/components/ServiceBadge.tsx`** — 🔵 24×24 squares; ServiceStack overlaps -8px; cap at 4 + `+N`.
+- [ ] **`src/components/ComingSoonCard.tsx`** — 🔵 Adopts CalendarStrip styling (date pill in primary, title under).
+
+## Phase 2 — App chrome
+
+- [ ] **`src/components/BottomNav.tsx`** — 🔵 Restyle to blurred surface + new icons. No API change. Watchlist dot for unread.
+- [ ] **`src/App.tsx`** — 🔵 Audit for hard-coded colours / fonts; replace with tokens. No structural change.
+- [ ] **`src/components/ThemeContext.tsx`** — 🔵 Default `dark`. Toggle writes `data-theme` on `<html>`. No more in-component theme branching.
+
+## Phase 3 — Reference screen (gold standard)
+
+- [ ] **Home** — 🟠 Land this before any other screen. Order: Magazine hero → Editor's Note → Recently added (mosaic) → Charts → Editorial spotlight → 3 per-service rows → Free tonight → Critics' Picks → Calendar strip. Wires:
+  - `useHomeContent` already returns most of this; add `editor_notes` table query.
+  - Editorial spotlight: editorial-curated single title, falls back to top-trending.
+  - Free tonight: `recommendations-v2/rows/home/freeTonightRow.ts` (existing).
+  - DoD: pixel parity with `Videx Portfolio.html` Home frame at 390 width.
+
+## Phase 4 — Screen-by-screen
+
+- [ ] **`ForYouPage`** — 🟠 New section order (`design-system.md §5`). Mood chip refiner sits **above** "In your mood" (not as a primary nav). Cover-Story mood room block (1 featured + 3 supporting).
+- [ ] **`DetailPage`** — 🟠 Editorial hero (full-bleed image + Fraunces title overlay). New "Where to watch" stack. Restyled chapter list.
+- [ ] **`WatchlistPage`** — 🔵 Want-to-Watch / Watched tabs as editorial chips. Empty state with editor's note tone.
+- [ ] **`BrowsePage`** — 🔵 New BrowseCard, restyled CategoryFilter (chip bar), search input adopts paper/ink surface.
+- [ ] **`ProfilePage`** — 🔵 Settings list-row style. Service connections as ServiceBadge stack with chevrons.
+- [ ] **`CalendarPage`** — 🔵 Date pills new chip style. Service filter row as chips.
+- [ ] **`SpendDashboard`** — 🔵 Headline number Fraunces 56 / 700. Per-service rows with bar visualisation.
+- [ ] **`MoodRoomPage`** — 🟠 Cover-story treatment lifted from For You. Big atmospheric hero; supporting grid below.
+- [ ] **`OnboardingFlow`** — 🔵 5-step state machine unchanged. Step screens adopt magazine layout (kicker + Fraunces title + body + primary CTA).
+- [ ] **`auth/*`** — 🔵 Reuse onboarding step layout for sign-in / sign-up.
+
+## Phase 5 — Atomic content components
+
+- [ ] **`FeaturedHero`** — 🟠 Replace card-style auto-rotator with editorial magazine hero. No auto-rotate; user swipes.
+- [ ] **`MoodRoomsRow` / `MoodRoomCard`** — 🟠 New tile design (square-ish, room-accent gradient, Fraunces label).
+- [ ] **`ContentRow`** — 🔵 Wraps SectionHead. Card variants `default | wide | lead`.
+- [ ] **`LazyGenreSection`** — 🔵 Wrap with SectionHead. Inner row stays.
+- [ ] **`CategoryFilter`** — 🔵 Editorial chip bar with kicker.
+- [ ] **`SliderTray`** — 🔵 Restyle handles, tick labels in DM Sans 11 tracked.
+- [ ] **`FilterSheet` / `ReportSheet`** — 🔵 Sheet shell uses `--shadow-sheet` + grabber pill.
+- [ ] **`AnchorMoodRoomCard`** — 🟠 Lifts cover-story treatment.
+- [ ] **`EditorsNote`** *(new)* — 🟣 Collapsed strip + modal. Reads from `editor_notes` table.
+- [ ] **`MagazineHero`** *(new)* — 🟣 New primitive used by Home + ForYou + MoodRoom.
+- [ ] **`CalendarStrip`** *(new)* — 🟣 Horizontal scroll of upcoming dates with service marks.
+
+## Phase 6 — Data / infra
+
+- [ ] **`editor_notes` table** — 🟣 Supabase migration. Columns: `id, body, kicker, published_at, expires_at`. Read once-per-day cached.
+- [ ] **`recommendations-v2/rows/home/perServiceChart.ts`** — 🟢 Existing logic, no change. Just verify Home wires it.
+
+---
+
+## How to ship a row
+
+1. Create branch `redesign/<row-name>`.
+2. Read `design-system.md` anatomy for the affected component(s).
+3. Implement against real data (no demo state in committed code).
+4. Verify at 390 × 844 in dark theme; spot-check light theme.
+5. In the PR description, link the matrix row and embed a screenshot of the result next to the visual reference (`Videx Portfolio.html` capture).
+6. Tick the row in this file as part of the PR.
+
+## Definition of done (every row)
+
+- All colours/fonts/radii/shadows come from tokens.
+- No hard-coded hex, no inline `font-family`, no magic numbers for spacing.
+- Component renders correctly in both `data-theme="dark"` and `data-theme="light"`.
+- TypeScript clean, lints pass.
+- Visual matches the reference at 390 width.

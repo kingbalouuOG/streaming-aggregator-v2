@@ -1,0 +1,139 @@
+/* ─────────────────────────────────────────────────────────────
+ * Videx — Design tokens
+ * Drop into src/index.css (replacing the existing :root + [data-theme]
+ * blocks). Tokens are the single source of truth — every component reads
+ * from these via var(--name). Do not hard-code hex anywhere else.
+ * ───────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..800;1,9..40,300..800&family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&display=swap');
+
+:root {
+  /* Surfaces — light (paper) */
+  --paper:        #f5f1e8;          /* page bg */
+  --paper-card:   #ffffff;          /* raised card */
+  --paper-line:   rgba(20,20,28,0.10); /* hairline */
+  --paper-tint:   rgba(20,20,28,0.04); /* tint surfaces */
+
+  /* Surfaces — dark (default) */
+  --bg:           #0a0a0f;
+  --bg-elev:      #14141c;
+  --bg-tint:      rgba(245,241,232,0.05);
+  --line:         rgba(245,241,232,0.10);
+
+  /* Ink — light */
+  --ink:          #14141c;
+  --ink-soft:     rgba(20,20,28,0.62);
+  --ink-faint:    rgba(20,20,28,0.40);
+
+  /* Cream — dark mode foreground */
+  --cream:        #f5f1e8;
+  --cream-soft:   rgba(245,241,232,0.62);
+  --cream-faint:  rgba(245,241,232,0.40);
+
+  /* Brand */
+  --primary:      #e85d25;          /* Videx orange */
+  --primary-soft: rgba(232,93,37,0.10);
+  --primary-edge: rgba(232,93,37,0.30);
+
+  /* Atmosphere accents (6) */
+  --atm-amber:    #d97706;
+  --atm-rose:     #be185d;
+  --atm-teal:     #0d9488;
+  --atm-violet:   #7c3aed;
+  --atm-forest:   #166534;
+  --atm-slate:    #475569;
+
+  /* Service tints (10) — for ServiceBadge backgrounds & per-service kickers */
+  --svc-netflix:  #e50914;
+  --svc-prime:    #00a8e1;
+  --svc-disney:   #113ccf;
+  --svc-apple:    #1d1d1f;
+  --svc-now:      #0072ec;
+  --svc-paramount:#0064ff;
+  --svc-skygo:    #0072ec;
+  --svc-bbc:      #f54b3a;
+  --svc-itvx:     #2470ff;
+  --svc-c4:       #ff206e;
+
+  /* Type */
+  --font-display: "Fraunces", Georgia, serif;
+  --font-ui:      "DM Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+  /* Type ramp (use opsz axis at the value shown) */
+  --t-display-1:  64px;     /* opsz 144, weight 800 */
+  --t-display-2:  44px;     /* opsz 96,  weight 700 */
+  --t-headline:   28px;     /* opsz 48,  weight 600 */
+  --t-title:      22px;     /* opsz 36,  weight 700 */
+  --t-section:    18px;     /* opsz 24,  weight 600 */
+  --t-body:       15px;     /* DM Sans 400 */
+  --t-meta:       13px;     /* DM Sans 500 */
+  --t-kicker:     11px;     /* DM Sans 700 uppercase, tracked 1.6px */
+
+  /* Spacing */
+  --s-1: 4px; --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-7: 32px; --s-8: 40px;
+  --s-9: 56px; --s-10: 80px;
+
+  /* Radii */
+  --r-xs: 4px; --r-sm: 6px; --r-md: 10px; --r-lg: 14px;
+  --r-xl: 20px; --r-card: 12px; --r-pill: 9999px;
+
+  /* Shadows */
+  --shadow-card:    0 1px 2px rgba(0,0,0,0.04), 0 6px 18px rgba(0,0,0,0.06);
+  --shadow-hero:    0 20px 50px rgba(0,0,0,0.45);
+  --shadow-sheet:   0 -2px 24px rgba(0,0,0,0.18);
+
+  /* Motion */
+  --ease-out:    cubic-bezier(0.16, 1, 0.30, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --d-fast:   140ms;
+  --d-base:   220ms;
+  --d-slow:   360ms;
+}
+
+/* Default (dark) — site already runs dark; light is opt-in via [data-theme="light"] */
+:root,
+[data-theme="dark"] {
+  --surface:      var(--bg);
+  --surface-elev: var(--bg-elev);
+  --surface-tint: var(--bg-tint);
+  --hairline:     var(--line);
+  --fg:           var(--cream);
+  --fg-soft:      var(--cream-soft);
+  --fg-faint:     var(--cream-faint);
+}
+
+[data-theme="light"] {
+  --surface:      var(--paper);
+  --surface-elev: var(--paper-card);
+  --surface-tint: var(--paper-tint);
+  --hairline:     var(--paper-line);
+  --fg:           var(--ink);
+  --fg-soft:      var(--ink-soft);
+  --fg-faint:     var(--ink-faint);
+}
+
+body {
+  background: var(--surface);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Fraunces helpers */
+.t-display { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.02em; font-variation-settings: "opsz" 96; }
+.t-headline { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em; font-variation-settings: "opsz" 48; }
+.t-section { font-family: var(--font-display); font-weight: 600; font-variation-settings: "opsz" 24; }
+
+/* Kicker — DM Sans uppercase tracked */
+.t-kicker {
+  font-family: var(--font-ui); font-size: var(--t-kicker);
+  font-weight: 700; text-transform: uppercase; letter-spacing: 1.6px;
+  color: var(--primary);
+}
+
+/* Hairline divider */
+.hairline { border-top: 0.5px solid var(--hairline); }
+
+/* Editorial container — every screen wraps in this */
+.editorial { max-width: 480px; margin: 0 auto; padding: 0 18px; }
