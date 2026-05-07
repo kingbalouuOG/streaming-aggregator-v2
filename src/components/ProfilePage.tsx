@@ -24,7 +24,9 @@ import { toast } from "sonner";
 
 import { OnboardingData } from "./OnboardingFlow";
 import { useTheme } from "./ThemeContext";
-import { PLATFORMS } from "./platformLogos";
+import { PLATFORMS, type ServiceId } from "./platformLogos";
+import { ServiceStack } from "./ServiceBadge";
+import { Kicker } from "./Kicker";
 import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste-v2/tasteClusters";
 import { getSliderState, saveSliderState } from "@/lib/taste-v2/tasteProfileV2";
 import { DEFAULT_SLIDERS, type SliderState } from "@/lib/taste-v2/types";
@@ -199,7 +201,22 @@ function ProfileLanding({
       <ActionRow icon={<User className="w-4 h-4" style={{ color: '#60a5fa' }} />} iconBgColor="rgba(96, 165, 250, 0.15)" title="Account Details" subtitle={displayEmail} onClick={() => onNavigate('account')} />
 
       <SectionLabel label="SUBSCRIPTIONS" />
-      <ActionRow icon={<Tv2 className="w-4 h-4" style={{ color: '#a78bfa' }} />} iconBgColor="rgba(167, 139, 250, 0.15)" title="Streaming Services" subtitle={`${connectedCount} services connected`} onClick={() => onNavigate('services')} />
+      <ActionRow
+        icon={<Tv2 className="w-4 h-4" style={{ color: '#a78bfa' }} />}
+        iconBgColor="rgba(167, 139, 250, 0.15)"
+        title="Streaming Services"
+        subtitle={connectedCount === 0 ? "None connected" : undefined}
+        trailing={
+          connectedCount > 0 ? (
+            <ServiceStack
+              services={(userProfile?.services ?? []) as ServiceId[]}
+              size="sm"
+              max={4}
+            />
+          ) : undefined
+        }
+        onClick={() => onNavigate('services')}
+      />
 
       <SectionLabel label="INSIGHTS" />
       <ActionRow icon={<Wallet className="w-4 h-4" style={{ color: '#34d399' }} />} iconBgColor="rgba(52, 211, 153, 0.15)" title="Monthly Spend" subtitle={`£${connectedCount > 0 ? '—' : '0'}/month`} onClick={() => onNavigate('spend')} />
@@ -919,39 +936,74 @@ function SubPageShell({ title, onBack, children }: { title: string; onBack: () =
   );
 }
 
-function ActionRow({ icon, iconBg, iconBgColor, title, subtitle, onClick }: {
+/**
+ * Editorial settings list row — hairline-bordered, no rounded chip
+ * background. Optional `trailing` slot lets specific rows surface
+ * richer visuals (e.g. a ServiceStack on the Streaming Services row)
+ * in place of the default subtitle text.
+ */
+function ActionRow({ icon, iconBg, iconBgColor, title, subtitle, trailing, onClick }: {
   icon: React.ReactNode;
   iconBg?: string;
   iconBgColor?: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
+  trailing?: React.ReactNode;
   onClick: () => void;
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-secondary/40 hover:bg-secondary/60 transition-colors mb-2"
+      className="w-full flex items-center gap-3 py-3.5 transition-colors"
+      style={{
+        borderBottom: "0.5px solid var(--hairline)",
+      }}
     >
       <div
-        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg || (iconBgColor ? '' : 'bg-secondary')}`}
-        style={iconBgColor ? { backgroundColor: iconBgColor } : undefined}
+        className={`w-9 h-9 flex items-center justify-center shrink-0 ${iconBg || (iconBgColor ? '' : 'bg-secondary')}`}
+        style={{
+          borderRadius: "var(--r-md)",
+          ...(iconBgColor ? { backgroundColor: iconBgColor } : {}),
+        }}
       >
         {icon}
       </div>
       <div className="flex-1 text-left min-w-0">
-        <p className="text-foreground text-[14px]" style={{ fontWeight: 600 }}>{title}</p>
-        {subtitle && <p className="text-muted-foreground text-[12px] truncate">{subtitle}</p>}
+        <p style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: 14,
+          fontWeight: 600,
+          color: "var(--fg)",
+          lineHeight: 1.3,
+        }}>{title}</p>
+        {subtitle && (
+          <p
+            className="truncate"
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 12,
+              color: "var(--fg-soft)",
+              marginTop: 2,
+            }}
+          >
+            {subtitle}
+          </p>
+        )}
       </div>
-      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+      {trailing && <div className="shrink-0 flex items-center">{trailing}</div>}
+      <ChevronRight className="w-4 h-4 shrink-0" style={{ color: "var(--fg-faint)" }} />
     </button>
   );
 }
 
+/** Editorial section divider — uses the canonical Kicker primitive
+ *  in place of the previous bespoke "tracking-widest uppercase" span. */
 function SectionLabel({ label }: { label: string }) {
   return (
-    <p className="text-muted-foreground text-[11px] tracking-widest uppercase mt-4 mb-2 px-1" style={{ fontWeight: 600 }}>
-      {label}
-    </p>
+    <div className="mt-6 mb-2 px-0">
+      <Kicker>{label}</Kicker>
+    </div>
   );
 }
 
