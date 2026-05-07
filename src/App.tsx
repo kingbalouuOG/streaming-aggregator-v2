@@ -781,7 +781,6 @@ function AppContent() {
                         <MagazineHero
                           item={heroItem}
                           kicker="TODAY'S PICK"
-                          standfirst={`${heroItem.year ? heroItem.year + " · " : ""}${heroItem.genre ?? ""}`.trim() || undefined}
                           userServices={connectedServiceIds}
                           onSelect={handleItemSelect}
                         />
@@ -926,6 +925,37 @@ function AppContent() {
                         />
                       )}
 
+                      {/* Genre Spotlights (Phase 4 — lazy chain).
+                          Sit BEFORE the CalendarStrip so the calendar
+                          remains the foot of the page per design-system §5.
+                          Primary spotlight loads with the rest of Home;
+                          further clusters mount as the user scrolls past
+                          the previous one's sentinel. */}
+                      {home.genreSpotlights.map((spotlight, idx) =>
+                        spotlight.items.length > 0 ? (
+                          <ContentRow
+                            key={`genre-spotlight-${idx}`}
+                            kicker="GENRE"
+                            title={`${spotlight.clusterName}.`}
+                            sectionKey={`genre-spotlight-${idx}`}
+                            sourceSurface="home"
+                            items={filterLanguage(filterWatched(spotlight.items))}
+                            onItemSelect={handleItemSelect}
+                            bookmarkedIds={wl.bookmarkedIds}
+                            onToggleBookmark={handleToggleBookmark}
+                            userServices={connectedServiceIds}
+                            watchedIds={watchedIds}
+                          />
+                        ) : null,
+                      )}
+                      {home.canLoadMoreGenreSpotlights && (
+                        <GenreSpotlightSentinel
+                          key={`spotlight-sentinel-${home.genreSpotlights.length}`}
+                          onVisible={home.loadMoreGenreSpotlights}
+                          loading={home.spotlightsLoading}
+                        />
+                      )}
+
                       {/* §5.7 — Calendar strip at the foot */}
                       {reorderedUpcoming.length > 0 && (
                         <CalendarStrip
@@ -949,34 +979,6 @@ function AppContent() {
                               services: u.services, rating: u.rating, type: u.type,
                             })
                           }
-                        />
-                      )}
-
-                      {/* Genre Spotlights (Phase 4 — lazy chain).
-                          Primary spotlight loads with the rest of Home; further
-                          clusters mount as the user scrolls past the previous
-                          one's sentinel. Cycle length = 16 (one per cluster). */}
-                      {home.genreSpotlights.map((spotlight, idx) =>
-                        spotlight.items.length > 0 ? (
-                          <ContentRow
-                            key={`genre-spotlight-${idx}`}
-                            title={spotlight.clusterName}
-                            sectionKey={`genre-spotlight-${idx}`}
-                            sourceSurface="home"
-                            items={filterLanguage(filterWatched(spotlight.items))}
-                            onItemSelect={handleItemSelect}
-                            bookmarkedIds={wl.bookmarkedIds}
-                            onToggleBookmark={handleToggleBookmark}
-                            userServices={connectedServiceIds}
-                            watchedIds={watchedIds}
-                          />
-                        ) : null,
-                      )}
-                      {home.canLoadMoreGenreSpotlights && (
-                        <GenreSpotlightSentinel
-                          key={`spotlight-sentinel-${home.genreSpotlights.length}`}
-                          onVisible={home.loadMoreGenreSpotlights}
-                          loading={home.spotlightsLoading}
                         />
                       )}
 

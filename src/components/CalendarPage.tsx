@@ -103,10 +103,30 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div>
-              <h1 className="text-foreground text-[18px]" style={{ fontWeight: 700 }}>
-                Coming Soon
+              <span className="t-kicker">ON THE CALENDAR</span>
+              <h1
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "var(--t-title)",
+                  fontWeight: 700,
+                  fontVariationSettings: '"opsz" 36',
+                  letterSpacing: "-0.01em",
+                  color: "var(--fg)",
+                  lineHeight: 1.15,
+                  margin: 0,
+                  marginTop: 2,
+                }}
+              >
+                Coming up.
               </h1>
-              <p className="text-muted-foreground text-[12px]">
+              <p
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 12,
+                  color: "var(--fg-soft)",
+                  marginTop: 2,
+                }}
+              >
                 {filtered.length} upcoming title{filtered.length !== 1 ? "s" : ""}
               </p>
             </div>

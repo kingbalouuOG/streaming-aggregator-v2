@@ -39,7 +39,10 @@ export function CategoryFilter({
         <span className="t-kicker">{kicker}</span>
       </div>
       <div className="flex items-center gap-2 px-5 py-2">
-        <div className="flex items-center gap-2 flex-1 overflow-x-auto no-scrollbar">
+        <div
+          className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto no-scrollbar"
+          style={{ scrollbarWidth: "none" }}
+        >
           {categories.map((category) => {
             const isActive = category === activeCategory;
             return (
@@ -47,11 +50,12 @@ export function CategoryFilter({
                 key={category}
                 type="button"
                 onClick={() => onCategoryChange(category)}
-                className="shrink-0 px-3 py-1.5 whitespace-nowrap"
+                className="shrink-0 whitespace-nowrap"
                 style={{
                   background: isActive ? "var(--primary)" : "var(--surface-tint)",
                   color: isActive ? "#fff" : "var(--fg-soft)",
                   borderRadius: "var(--r-pill)",
+                  padding: "6px 12px",
                   fontFamily: "var(--font-ui)",
                   fontSize: 13,
                   fontWeight: isActive ? 600 : 500,

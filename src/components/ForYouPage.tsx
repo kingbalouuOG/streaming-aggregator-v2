@@ -286,9 +286,6 @@ export function ForYouPage({
             <MagazineHero
               item={topPick}
               kicker={`${getGreeting()} · YOUR PICK FOR TONIGHT`}
-              standfirst={
-                [topPick.year, topPick.genre].filter(Boolean).join(' · ') || undefined
-              }
               userServices={connectedServiceIds}
               onSelect={onItemSelect}
             />

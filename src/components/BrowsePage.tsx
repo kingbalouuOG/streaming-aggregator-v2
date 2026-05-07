@@ -210,15 +210,38 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
 
       {/* Content area */}
       <div className="px-5">
-        {/* Empty default state — no query */}
+        {/* Empty default state — editor's-note tone */}
         {!hasQuery && !isLoading && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <Search className="w-12 h-12 text-muted-foreground/30 mb-3" />
-            <p className="text-foreground text-[15px]" style={{ fontWeight: 600 }}>
-              Search movies and TV shows
-            </p>
-            <p className="text-muted-foreground/60 text-[13px] mt-1">
-              Find where to watch across all streaming services
+          <div className="flex flex-col items-start py-16">
+            <span className="t-kicker" style={{ marginBottom: 12 }}>
+              EDITOR'S NOTE · BROWSE
+            </span>
+            <h2
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: "var(--t-headline)",
+                fontWeight: 600,
+                fontVariationSettings: '"opsz" 48',
+                letterSpacing: "-0.01em",
+                color: "var(--fg)",
+                lineHeight: 1.15,
+                margin: 0,
+                marginBottom: 12,
+              }}
+            >
+              What are you in the mood for?
+            </h2>
+            <p
+              style={{
+                fontFamily: "var(--font-display)",
+                fontStyle: "italic",
+                fontSize: "var(--t-body)",
+                color: "var(--fg-soft)",
+                lineHeight: 1.45,
+                margin: 0,
+              }}
+            >
+              Search movies and TV shows — we'll show you where they're available across your stack.
             </p>
           </div>
         )}

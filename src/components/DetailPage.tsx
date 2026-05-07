@@ -627,14 +627,18 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
   if (!hasAny && detail.allServices.length === 0 && detail.rentalOptions.length === 0) {
     return (
       <div className="mb-6">
-        <h3 className="text-foreground text-[15px] mb-2.5" style={{ fontWeight: 600 }}>
-          Where to Watch
-        </h3>
-        <p className="text-muted-foreground text-[13px]">
-          Not currently available to stream in the UK.
-        </p>
-        <p className="text-muted-foreground/60 text-[12px] mt-1">
-          Check back later — availability changes frequently.
+        <SectionHead kicker="WHERE TO WATCH" title="Not on your stack." />
+        <p
+          style={{
+            fontFamily: "var(--font-display)",
+            fontStyle: "italic",
+            fontSize: "var(--t-body)",
+            color: "var(--fg-soft)",
+            lineHeight: 1.4,
+            margin: 0,
+          }}
+        >
+          Not currently available to stream in the UK — check back later, availability changes frequently.
         </p>
       </div>
     );
@@ -878,11 +882,10 @@ function SimilarCard({ item, index, onSelect, bookmarked, onToggleBookmark, user
       <ImageSkeleton src={item.image} alt={item.title} className="absolute inset-0 w-full h-full object-cover" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/10" />
 
-      {item.matchPercentage != null && item.matchPercentage > 0 && (
-        <div className="absolute top-2.5 left-2.5 bg-emerald-600 text-white text-[12px] px-3 py-1 rounded-full shadow-lg" style={{ fontWeight: 700 }}>
-          {item.matchPercentage}% Match
-        </div>
-      )}
+      {/* Match % pill removed in Phase 4 PR-N follow-up — the v3
+          ContentCard anatomy (§4) is one rating, one bookmark, no
+          competing badges. The matchPercentage prop stays on
+          ContentItem for future use. */}
 
       {watched ? (
         <div className="absolute top-2.5 right-2.5 w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center">

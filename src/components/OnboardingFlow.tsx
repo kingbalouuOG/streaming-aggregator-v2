@@ -364,7 +364,7 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
   const getCtaText = () => {
     if (step === 0) return 'Continue'; // Step 1 has its own CTA inside StepAccount
     if (step === 2 && watchedRound < TOTAL_ROUNDS - 1) return `Next round (${watchedRound + 1}/${TOTAL_ROUNDS})`;
-    if (step === TOTAL_STEPS - 1) return 'Start exploring VIDEX';
+    if (step === TOTAL_STEPS - 1) return 'Start exploring Videx';
     return 'Continue';
   };
 
@@ -605,6 +605,7 @@ function StepAccount({
         >
           <Popcorn className="text-white" style={{ width: 30, height: 30 }} />
         </motion.div>
+        <span className="t-kicker" style={{ marginBottom: 8 }}>STEP 1 OF 5 · ACCOUNT</span>
         <h2 style={{
           fontFamily: "var(--font-display)",
           fontSize: "var(--t-headline)",
@@ -614,9 +615,17 @@ function StepAccount({
           color: "var(--fg)",
           lineHeight: 1.15,
           margin: 0,
-          marginBottom: 4,
+          marginBottom: 8,
         }}>Join Videx.</h2>
-        <p className="text-muted-foreground text-[13px]">Start discovering what to watch tonight</p>
+        <p style={{
+          fontFamily: "var(--font-display)",
+          fontStyle: "italic",
+          fontSize: "var(--t-body)",
+          color: "var(--fg-soft)",
+          lineHeight: 1.4,
+          margin: 0,
+          textAlign: "center",
+        }}>A unified streaming companion across your stack.</p>
       </div>
 
       {/* Form fields */}
@@ -675,10 +684,10 @@ function StepAccount({
 
       {/* A little about you — Optional */}
       <div className="mb-4">
-        <h3 className="text-foreground text-[14px] mb-1" style={{ fontWeight: 600 }}>A little about you</h3>
-        <p className="text-muted-foreground text-[12px] mb-3">Optional — helps us recommend the right content from day one.</p>
+        <span className="t-kicker">A LITTLE ABOUT YOU</span>
+        <p className="text-muted-foreground text-[12px] mt-1.5 mb-3">Optional — helps us recommend the right content from day one.</p>
 
-        <p className="text-muted-foreground text-[12px] mb-1.5" style={{ fontWeight: 500 }}>Age range</p>
+        <span className="t-kicker" style={{ display: "block", marginBottom: 8 }}>AGE RANGE</span>
         <div className="flex flex-wrap gap-2 mb-3">
           {AGE_RANGES.map(age => (
             <button key={age} onClick={() => setAgeRange(ageRange === age ? null : age)}
@@ -694,7 +703,7 @@ function StepAccount({
           ))}
         </div>
 
-        <p className="text-muted-foreground text-[12px] mb-1.5" style={{ fontWeight: 500 }}>How do you usually watch?</p>
+        <span className="t-kicker" style={{ display: "block", marginTop: 8, marginBottom: 8 }}>HOW DO YOU USUALLY WATCH?</span>
         <div className="flex flex-wrap gap-2">
           {VIEWING_CONTEXTS.map(ctx => (
             <button key={ctx.id} onClick={() => setViewingCtx(viewingCtx === ctx.id ? null : ctx.id)}
@@ -1166,7 +1175,18 @@ function StepTasteSummary({
           <div className="space-y-5">
             {sliderConfig.map(({ key, left, right }) => (
               <div key={key}>
-                <div className="flex justify-between text-[11px] text-muted-foreground mb-1.5">
+                <div
+                  className="flex justify-between"
+                  style={{
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 11,
+                    fontWeight: 500,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    color: "var(--fg-faint)",
+                    marginBottom: 8,
+                  }}
+                >
                   <span>{left}</span>
                   <span>{right}</span>
                 </div>
@@ -1179,7 +1199,17 @@ function StepTasteSummary({
                   className="videx-slider"
                   style={{ ['--slider-fill' as any]: `${Math.round(sliders[key] * 100)}%` }}
                 />
-                <p className="text-center text-[11px] text-primary mt-0.5" style={{ fontWeight: 500 }}>
+                <p
+                  className="text-center"
+                  style={{
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: "0.04em",
+                    color: "var(--primary)",
+                    marginTop: 6,
+                  }}
+                >
                   {getSliderLabel(key, sliders[key])}
                 </p>
               </div>

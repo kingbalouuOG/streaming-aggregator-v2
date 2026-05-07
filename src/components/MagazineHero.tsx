@@ -1,6 +1,5 @@
 import React from "react";
 import { ImageSkeleton } from "./ImageSkeleton";
-import { Kicker } from "./Kicker";
 import { ServiceStack } from "./ServiceBadge";
 import type { ContentItem } from "./ContentCard";
 import type { ServiceId } from "./platformLogos";
@@ -71,9 +70,25 @@ export function MagazineHero({
         }}
       />
 
-      {/* Title block — bottom-aligned */}
-      <div className="absolute left-0 right-0 bottom-0 p-5 flex flex-col gap-2">
-        <Kicker color={kickerColor}>{kicker}</Kicker>
+      {/* Title block — bottom-aligned. Inline kicker (rather than the
+          shared <Kicker> primitive) so we can layer a text-shadow for
+          legibility against any backdrop image, and brighten an
+          atmosphere-tinted color via color-mix so the mid-tone tints
+          (slate, forest…) read clearly on the dark gradient. */}
+      <div
+        className="absolute left-0 right-0 bottom-0 p-5 flex flex-col gap-2"
+        style={{ textShadow: "0 1px 4px rgba(0,0,0,0.45)" }}
+      >
+        <span
+          className="t-kicker"
+          style={
+            kickerColor
+              ? { color: `color-mix(in srgb, ${kickerColor} 60%, white)` }
+              : undefined
+          }
+        >
+          {kicker}
+        </span>
         <h1
           className="line-clamp-3"
           style={{
