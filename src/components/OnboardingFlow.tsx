@@ -158,51 +158,54 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
     void logOnboardingEvent(ONBOARDING_EVENTS.ONBOARDING_STARTED, {});
   }, []);
 
-  // Fetch watched grid candidates — uses popular titles from user's services
+  // Fetch watched grid candidates — canonical, globally popular titles regardless
+  // of service. The grid is a taste signal ("have you seen this?"), so service
+  // availability is irrelevant — users may have seen titles in cinemas, at a
+  // friend's, or in the past.
+  //
+  // Dual-query design (validated 2026-05-08, see scripts/simulate-quiz.ts):
+  //   Movies: vote_count ≥ 5000 → ~1,150 candidates
+  //   TV:     vote_count ≥ 1,500 + popularity ≥ 20 → ~280 candidates
+  // Both ordered by vote_count DESC (canon over trending). Single popularity
+  // ordering surfaces US procedurals at the top because TV popularity scores
+  // dominate movie scores; per-bucket vote_count ordering gives the canonical
+  // recognition list (GoT, Stranger Things, Breaking Bad / Interstellar,
+  // Inception, Avengers, Dark Knight…).
   const fetchWatchedGridCandidates = useCallback(async () => {
-    if (selectedServices.length === 0) return;
     setWatchedLoading(true);
 
     try {
-      // Skip the centroid RPC entirely — just query popular titles on user's services directly.
-      // This is faster (2 parallel queries vs 4 sequential) and gives better-known titles.
-      const [titleRes, availRes] = await Promise.all([
+      const [movieRes, tvRes] = await Promise.all([
         supabase.from('titles' as any)
-          .select('tmdb_id, media_type, title, poster_path, release_year, popularity')
-          .gte('popularity', 30)
-          .gte('vote_count', 200)
+          .select('tmdb_id, media_type, title, poster_path, release_year, vote_count')
+          .eq('media_type', 'movie')
+          .gte('vote_count', 5000)
           .not('poster_path', 'is', null)
           .not('embedding', 'is', null)
-          .order('popularity', { ascending: false })
-          .limit(500),
-        // Migration 035: RPC returns a JSONB array of IDs in a single
-        // row, not a paginated table.
-        supabase.rpc('get_available_tmdb_ids', { service_ids: selectedServices }),
+          .order('vote_count', { ascending: false })
+          .limit(36),
+        supabase.from('titles' as any)
+          .select('tmdb_id, media_type, title, poster_path, release_year, vote_count')
+          .eq('media_type', 'tv')
+          .gte('vote_count', 1500)
+          .gte('popularity', 20)
+          .not('poster_path', 'is', null)
+          .not('embedding', 'is', null)
+          .order('vote_count', { ascending: false })
+          .limit(36),
       ]);
 
-      const availSet = new Set<number>(
-        Array.isArray(availRes.data) ? (availRes.data as unknown as number[]) : []
-      );
+      const toGridTitle = (t: any): WatchedGridTitle => ({
+        tmdbId: t.tmdb_id,
+        mediaType: t.media_type,
+        title: t.title,
+        posterPath: t.poster_path,
+        year: t.release_year,
+      });
+      const movies = ((movieRes.data as any[]) || []).map(toGridTitle);
+      const tvShows = ((tvRes.data as any[]) || []).map(toGridTitle);
 
-      const seenIds = new Set<number>();
-      const movies: WatchedGridTitle[] = [];
-      const tvShows: WatchedGridTitle[] = [];
-
-      for (const t of ((titleRes.data as any[]) || [])) {
-        if (seenIds.has(t.tmdb_id) || !availSet.has(t.tmdb_id)) continue;
-        seenIds.add(t.tmdb_id);
-        const item: WatchedGridTitle = {
-          tmdbId: t.tmdb_id,
-          mediaType: t.media_type,
-          title: t.title,
-          posterPath: t.poster_path,
-          year: t.release_year,
-        };
-        if (t.media_type === 'movie') movies.push(item);
-        else tvShows.push(item);
-      }
-
-      // Interleave movies and TV for balance, then shuffle within groups
+      // Interleave movies and TV 1:1 so each round shows a mix of both media.
       const balanced: WatchedGridTitle[] = [];
       const maxLen = Math.max(movies.length, tvShows.length);
       for (let i = 0; i < maxLen; i++) {
@@ -210,7 +213,8 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
         if (i < tvShows.length) balanced.push(tvShows[i]);
       }
 
-      // Light shuffle (within groups of 6 for round variety, not full random)
+      // Light shuffle within each round of 6 — preserves canon-first ordering
+      // across rounds while breaking the deterministic interleave inside one.
       for (let g = 0; g < balanced.length; g += TITLES_PER_ROUND) {
         const end = Math.min(g + TITLES_PER_ROUND, balanced.length);
         for (let i = end - 1; i > g; i--) {
@@ -227,7 +231,7 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
     } finally {
       setWatchedLoading(false);
     }
-  }, [selectedServices]);
+  }, []);
 
   // Pre-fetch watched grid as soon as first service is selected (background)
   const prefetchTriggeredRef = useRef(false);
