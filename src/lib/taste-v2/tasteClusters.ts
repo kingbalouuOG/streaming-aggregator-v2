@@ -25,7 +25,7 @@ export const MIN_CLUSTERS = 3;
 export const MAX_CLUSTERS = 5;
 
 /**
- * All 14 taste clusters, ordered for display (most universally appealing first).
+ * All 16 taste clusters, ordered for display (most universally appealing first).
  *
  * IMPORTANT: Only include a dimension if it carries meaningful signal.
  * - Omitting a dimension = "no opinion" (excluded from averaging)
@@ -49,6 +49,11 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
       { tmdbId: 8363, mediaType: 'movie' },  // Superbad
       { tmdbId: 10625, mediaType: 'movie' }, // Mean Girls
       { tmdbId: 55721, mediaType: 'movie' }, // Bridesmaids
+      { tmdbId: 2316, mediaType: 'tv' },     // The Office
+      { tmdbId: 48891, mediaType: 'tv' },    // Brooklyn Nine-Nine
+      { tmdbId: 97546, mediaType: 'tv' },    // Ted Lasso
+      { tmdbId: 66573, mediaType: 'tv' },    // The Good Place
+      { tmdbId: 1421, mediaType: 'tv' },     // Modern Family
     ],
   },
   // 2. Action & Adrenaline
@@ -61,9 +66,12 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     mood: 'high-stakes action and adrenaline',
     tmdbGenreIds: [28, 12, 53],
     representativeTmdbIds: [
-      { tmdbId: 562, mediaType: 'movie' },   // Die Hard
-      { tmdbId: 680, mediaType: 'movie' },   // Pulp Fiction
-      { tmdbId: 857, mediaType: 'movie' },   // Saving Private Ryan
+      // Pulp Fiction → cult-indie only; Saving Private Ryan → history-war only
+      // (deduplicated to avoid centroid blur across overlapping clusters)
+      { tmdbId: 562, mediaType: 'movie' },    // Die Hard
+      { tmdbId: 353081, mediaType: 'movie' }, // Mission: Impossible - Fallout
+      { tmdbId: 155, mediaType: 'movie' },    // The Dark Knight
+      { tmdbId: 49026, mediaType: 'movie' },  // The Dark Knight Rises
     ],
   },
   // 3. Dark Thrillers
@@ -92,10 +100,10 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     mood: 'sweeping romances and charming comedy',
     tmdbGenreIds: [10749, 35, 18],
     representativeTmdbIds: [
+      // Forrest Gump → heartfelt-drama only (deduplicated)
       { tmdbId: 11036, mediaType: 'movie' }, // The Notebook
       { tmdbId: 455207, mediaType: 'movie' }, // Crazy Rich Asians
       { tmdbId: 4348, mediaType: 'movie' },  // Pride & Prejudice
-      { tmdbId: 13, mediaType: 'movie' },    // Forrest Gump
     ],
   },
   // 5. Epic Sci-Fi & Fantasy
@@ -154,6 +162,7 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     mood: 'slow-burn character dramas and emotional depth',
     tmdbGenreIds: [18, 10749],
     representativeTmdbIds: [
+      // Shawshank stays here only (removed from prestige to dedupe)
       { tmdbId: 278, mediaType: 'movie' },    // The Shawshank Redemption
       { tmdbId: 238, mediaType: 'movie' },    // The Godfather
       { tmdbId: 13, mediaType: 'movie' },     // Forrest Gump
@@ -183,10 +192,15 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     mood: 'animated worlds and visual storytelling',
     tmdbGenreIds: [16, 28, 14],
     representativeTmdbIds: [
+      // Toy Story → family-kids only (deduplicated)
       { tmdbId: 324857, mediaType: 'movie' }, // Spider-Man: Into the Spider-Verse
       { tmdbId: 129, mediaType: 'movie' },    // Spirited Away
-      { tmdbId: 862, mediaType: 'movie' },    // Toy Story
       { tmdbId: 150540, mediaType: 'movie' }, // Inside Out
+      { tmdbId: 31910, mediaType: 'tv' },     // Naruto Shippūden
+      { tmdbId: 85937, mediaType: 'tv' },     // Demon Slayer: Kimetsu no Yaiba
+      { tmdbId: 95479, mediaType: 'tv' },     // JUJUTSU KAISEN
+      { tmdbId: 120089, mediaType: 'tv' },    // SPY x FAMILY
+      { tmdbId: 209867, mediaType: 'tv' },    // Frieren: Beyond Journey's End
     ],
   },
   // 11. Prestige & Award-Winners
@@ -199,8 +213,11 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     mood: 'critically praised cinema and prestige storytelling',
     tmdbGenreIds: [18, 36, 99],
     representativeTmdbIds: [
+      // Shawshank → heartfelt-drama only (deduplicated)
       { tmdbId: 581734, mediaType: 'movie' }, // Nomadland
-      { tmdbId: 278, mediaType: 'movie' },    // The Shawshank Redemption
+      { tmdbId: 426426, mediaType: 'movie' }, // Roma
+      { tmdbId: 68734, mediaType: 'movie' },  // Argo
+      { tmdbId: 399055, mediaType: 'movie' }, // The Shape of Water
     ],
   },
   // 12. History & War
@@ -229,6 +246,8 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     tmdbGenreIds: [10764, 35],
     representativeTmdbIds: [
       { tmdbId: 37678, mediaType: 'tv' },  // The Voice
+      { tmdbId: 2370, mediaType: 'tv' },   // Hell's Kitchen
+      { tmdbId: 40290, mediaType: 'tv' },  // MasterChef
     ],
   },
   // 14. Cult & Indie
@@ -241,6 +260,7 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     mood: 'cult favourites and indie discoveries',
     tmdbGenreIds: [18, 35],
     representativeTmdbIds: [
+      // Pulp Fiction stays here only (removed from action-adrenaline)
       { tmdbId: 550, mediaType: 'movie' },  // Fight Club
       { tmdbId: 680, mediaType: 'movie' },  // Pulp Fiction
     ],
@@ -255,10 +275,16 @@ export const TASTE_CLUSTERS: TasteCluster[] = [
     mood: 'fun adventures for all ages',
     tmdbGenreIds: [10751, 16, 35, 12],
     representativeTmdbIds: [
+      // Toy Story stays here only (removed from anime-animation)
       { tmdbId: 12, mediaType: 'movie' },     // Finding Nemo
       { tmdbId: 8587, mediaType: 'movie' },   // The Lion King
       { tmdbId: 277834, mediaType: 'movie' }, // Moana
       { tmdbId: 862, mediaType: 'movie' },    // Toy Story
+      { tmdbId: 246, mediaType: 'tv' },       // Avatar: The Last Airbender
+      { tmdbId: 40075, mediaType: 'tv' },     // Gravity Falls
+      { tmdbId: 82728, mediaType: 'tv' },     // Bluey
+      { tmdbId: 387, mediaType: 'tv' },       // SpongeBob SquarePants
+      { tmdbId: 15260, mediaType: 'tv' },     // Adventure Time
     ],
   },
   // 16. Westerns & Frontier
