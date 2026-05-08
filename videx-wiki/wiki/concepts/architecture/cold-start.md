@@ -3,7 +3,7 @@ title: Cold-start strategy
 type: concept
 tags: [cold-start, onboarding, bootstrap, service-fingerprints]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-05-08
 sources:
   - raw/concepts/cold-start-strategy.md
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
@@ -24,18 +24,29 @@ A new user has no interaction history. v2 resolves this without showing empty ro
 2. **Watched-grid signals** — onboarding Step 3 captures up to 18 titles (3 rounds × 6) the user has watched. Each contributes its embedding directly. Skippable per round.
 3. **Genre/cluster preferences** — Step 4 selects ≥3 of 16 taste clusters. Each cluster maps to an aggregate embedding signal.
 
-## Bootstrap formula (Phase 3 dynamic 4-band)
+## Bootstrap formula (cluster-dominant, 2026-05-08)
 
-Initial taste vector = weighted blend by watched-grid selection count:
+Initial taste vector = weighted blend by watched-grid selection count, with the cluster signal carrying 75% across every tier:
 
-| Selections | Service fingerprints | Watched grid | Genre selections |
+| Selections | Service fingerprints | Watched grid | Cluster (genre) |
 |---|---|---|---|
-| 0 | 0.55 | 0.00 | 0.45 |
-| 1-4 | 0.40 | 0.40 | 0.20 |
-| 5-12 | 0.30 | 0.55 | 0.15 |
-| 13+ | 0.20 | 0.70 | 0.10 |
+| 0 | 0.25 | 0.00 | 0.75 |
+| 1-4 | 0.13 | 0.12 | 0.75 |
+| 5-12 | 0.09 | 0.16 | 0.75 |
+| 13+ | 0.05 | 0.20 | 0.75 |
 
-Strategy v1.5 specified static 0.40/0.40/0.20. Phase 3 shipped dynamic 4-band weights. Strategy v1.6.3 §5.2 acknowledges the change.
+Strategy v1.5 specified static 0.40/0.40/0.20. Phase 3 shipped dynamic watched-grid-dominant 4-band. 2026-05-08 re-tuned to cluster-dominant after a 2,280-trial simulation sweep validated CAF +15% / Persona-Distinctness +760%. See [ADR-013](../decisions/adr-013-cluster-dominant-bootstrap-weights.md).
+
+### Cluster representative pool
+
+Cluster representatives drive the genre signal. Two changes shipped 2026-05-08 in `tasteClusters.ts`:
+
+- **Dedup**: each title appears in exactly one cluster (previously Pulp Fiction, Forrest Gump, Shawshank, Toy Story, and Saving Private Ryan each appeared in two). Dedup increases centroid orthogonality across clusters.
+- **TV reps added** to clusters that were movie-only:
+  - `feel-good-funny`: The Office, Brooklyn Nine-Nine, Ted Lasso, The Good Place, Modern Family.
+  - `anime-animation`: Naruto Shippuden, Demon Slayer, JJK, Spy x Family, Frieren.
+  - `family-kids`: Avatar: The Last Airbender, Gravity Falls, Bluey, SpongeBob SquarePants, Adventure Time.
+  - `reality-entertainment`: Hell's Kitchen, MasterChef.
 
 ## Confidence floor
 

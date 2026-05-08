@@ -3,7 +3,7 @@ title: User taste vector v2
 type: concept
 tags: [taste-vector, embeddings, bootstrap, decay]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-05-08
 sources:
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
   - raw/v2-strategy/Videx_v2_Detail_Page_Signal_Capture_Spec_v0.3.2.md
@@ -68,14 +68,20 @@ Initial taste vector = weighted blend of:
 - Watched-grid signals from onboarding Step 3.
 - Genre selections from Step 4.
 
-Phase 3 ships **dynamic 4-band weights** by watched-grid selection count (deviates from strategy's static 0.40/0.40/0.20):
+Phase 3 shipped **dynamic 4-band watched-grid-dominant weights**. Re-tuned 2026-05-08 to **cluster-dominant** after a 2,280-trial simulation sweep — see [ADR-013](../decisions/adr-013-cluster-dominant-bootstrap-weights.md).
 
-| Watched-grid selections | Service fingerprints | Watched grid | Genre selections |
+Active weights (cluster-dominant, `bootstrap.ts:77`):
+
+| Watched-grid selections | Service fingerprints | Watched grid | Cluster (genre) |
 |---|---|---|---|
-| 0 | 0.55 | 0.00 | 0.45 |
-| 1-4 | 0.40 | 0.40 | 0.20 |
-| 5-12 | 0.30 | 0.55 | 0.15 |
-| 13+ | 0.20 | 0.70 | 0.10 |
+| 0 | 0.25 | 0.00 | 0.75 |
+| 1-4 | 0.13 | 0.12 | 0.75 |
+| 5-12 | 0.09 | 0.16 | 0.75 |
+| 13+ | 0.05 | 0.20 | 0.75 |
+
+Rationale: in simulation the previous watched-grid-dominant weights produced profiles that drifted toward whichever canonical anchor titles a user happened to tap (everyone landed near Marvel / Avengers regardless of declared cluster preferences). Cluster-Alignment Fidelity (CAF) lifted from 1.06 → 1.22 (+15%); Persona-Distinctness from 0.022 → 0.190 (+760%). Tap-count sensitivity tested at light (4) / normal (7) / heavy (10) — all produce equivalent profiles, confirming robustness to disengaged users. Profile variance N=30 ≤ 0.0008.
+
+Genre-weight fallback: if the user selects no clusters at Step 4 the cluster weight is redistributed to service fingerprints (`bootstrap.ts:101`).
 
 ## Schema (post Phase 3)
 
@@ -84,4 +90,5 @@ Phase 3 ships **dynamic 4-band weights** by watched-grid selection count (deviat
 ## Conflict resolution applied
 
 - Strategy says "weighted blend ... 0.40/0.40/0.20" as a baseline. Phase 3 ships dynamic 4-band weights. Phase summary records this; strategy §5.2 updated.
+- Phase 3 shipped watched-grid-dominant 4-band; 2026-05-08 re-tuned to cluster-dominant after simulation sweep. ADR-013 supersedes the Phase 3 weight choice. Existing user profiles will need re-bootstrap on next interaction or 24h recompute cycle.
 - Older docs treat detail view as weak positive. v2 corrects this to NOT positive (anchor only).
