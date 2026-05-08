@@ -3,7 +3,7 @@ title: Source — Architecture Decision Records (Combined)
 type: source
 tags: [adrs, decisions]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-05-08
 sources:
   - raw/adrs/adrs-combined.md
 related:
@@ -19,11 +19,12 @@ related:
   - wiki/concepts/decisions/adr-010-pg-partman-card-impressions.md
   - wiki/concepts/decisions/adr-011-edge-function-shared-modules.md
   - wiki/concepts/decisions/adr-012-server-side-foryou-render.md
+  - wiki/concepts/decisions/adr-013-cluster-dominant-bootstrap-weights.md
 ---
 
 # Source: ADRs Combined
 
-Twelve ADRs extracted from `raw/adrs/adrs-combined.md`, split into individual `wiki/concepts/decisions/adr-*.md` pages so each decision is queryable on its own.
+Thirteen ADRs extracted from `raw/adrs/adrs-combined.md` and the post-Phase-5 retune, split into individual `wiki/concepts/decisions/adr-*.md` pages so each decision is queryable on its own.
 
 | ADR | Title | Status |
 |---|---|---|
@@ -39,6 +40,7 @@ Twelve ADRs extracted from `raw/adrs/adrs-combined.md`, split into individual `w
 | 010 | pg_partman + monthly partitions for `card_impressions` | locked, applied Phase 0 |
 | 011 | Edge Function shared modules duplicated into `_shared/` | locked |
 | 012 | Server-side For You first paint via Edge Function | locked, applied IN-466 |
+| 013 | Cluster-dominant bootstrap weights | locked, applied 2026-05-08 |
 
 Decision: split per-ADR rather than keep combined, because individual decisions get linked from many entity and concept pages and the combined page would force readers to scan past unrelated context. The combined source page above acts as the index.
 
