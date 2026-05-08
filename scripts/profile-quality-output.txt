@@ -1,0 +1,275 @@
+Fetching pool…
+Computing cluster similarities + centroids…
+Fetching availability per persona…
+
+========================================
+Profile Quality Simulation (10 trials per cell)
+========================================
+
+
+─── Variant D | P1 22yo · Solo · Netflix+Prime ───
+  Avg taps per session: 7.8
+  Top cluster alignments:
+    ★ mind-bending-mysteries       79.6%
+    ★ dark-thrillers               78.3%
+      epic-scifi-fantasy           77.7%
+      horror-supernatural          74.0%
+  Top 10 recommendations from profile:
+    M The Avengers (0) [0%]
+    M Interstellar (0) [0%]
+    M Avengers: Infinity War (0) [0%]
+    M Black Panther (0) [0%]
+    M One Battle After Another (0) [0%]
+    M Avengers: Endgame (0) [0%]
+    M Acts of Violence (0) [0%]
+    M The Predator (0) [0%]
+    M Black Widow (0) [0%]
+    M Thunderbolts* (0) [0%]
+
+─── Variant D | P2 35yo · Partner · 4 services ───
+  Avg taps per session: 9.0
+  Top cluster alignments:
+      mind-bending-mysteries       78.3%
+      epic-scifi-fantasy           77.7%
+    ★ history-war                  76.6%
+      dark-thrillers               76.2%
+  Top 10 recommendations from profile:
+    M Interstellar (0) [0%]
+    M Inglourious Basterds (0) [0%]
+    M One Battle After Another (0) [0%]
+    M The Watch (0) [0%]
+    M The A-Team (0) [0%]
+    M The Avengers (0) [0%]
+    M Here (0) [0%]
+    M Fury (0) [0%]
+    M IO (0) [0%]
+    M In Time (0) [0%]
+
+─── Variant D | P3 55yo · Mix · UK heavy ───
+  Avg taps per session: 6.4
+  Top cluster alignments:
+      dark-thrillers               80.1%
+      mind-bending-mysteries       79.7%
+      heartfelt-drama              77.6%
+      epic-scifi-fantasy           76.2%
+  Top 10 recommendations from profile:
+    M Interstellar (0) [0%]
+    M The Discovery (0) [0%]
+    M The Watch (0) [0%]
+    M IO (0) [0%]
+    M Something (0) [0%]
+    M In the Shadow of the Moon (0) [0%]
+    T Hollywood (0) [0%]
+    M Nightcrawler (0) [0%]
+    M The Resident (0) [0%]
+    M Code 8 (0) [0%]
+
+─── Variant D | P4 28yo · Family · Disney+Netflix ───
+  Avg taps per session: 9.1
+  Top cluster alignments:
+      epic-scifi-fantasy           76.8%
+    ★ anime-animation              76.6%
+      mind-bending-mysteries       73.9%
+    ★ family-kids                  72.9%
+  Top 10 recommendations from profile:
+    M The Avengers (0) [0%]
+    M Guardians of the Galaxy (0) [0%]
+    M Avengers: Endgame (0) [0%]
+    M Avengers: Infinity War (0) [0%]
+    M Captain America: Civil War (0) [0%]
+    M Avengers: Age of Ultron (0) [0%]
+    M Interstellar (0) [0%]
+    M Thunderbolts* (0) [0%]
+    T WandaVision (0) [0%]
+    M Guardians of the Galaxy Vol. 2 (0) [0%]
+
+─── Variant D | P5 18yo · Solo · Netflix only ───
+  Avg taps per session: 6.4
+  Top cluster alignments:
+      epic-scifi-fantasy           78.9%
+    ★ anime-animation              76.1%
+      mind-bending-mysteries       76.0%
+    ★ horror-supernatural          75.8%
+  Top 10 recommendations from profile:
+    M The Avengers (0) [0%]
+    M Interstellar (0) [0%]
+    M Avengers: Infinity War (0) [0%]
+    M Avengers: Endgame (0) [0%]
+    M Captain America: Civil War (0) [0%]
+    M Avengers: Age of Ultron (0) [0%]
+    M Captain America: The Winter Soldier (0) [0%]
+    M Thunderbolts* (0) [0%]
+    M Guardians of the Galaxy (0) [0%]
+    M IO (0) [0%]
+
+─── Variant D | P6 No optional data · Netflix+iPlayer ───
+  Avg taps per session: 5.8
+  Top cluster alignments:
+    ★ mind-bending-mysteries       81.0%
+      epic-scifi-fantasy           78.1%
+      dark-thrillers               77.0%
+    ★ feel-good-funny              74.8%
+  Top 10 recommendations from profile:
+    M Interstellar (0) [0%]
+    M The Avengers (0) [0%]
+    M Black Panther (0) [0%]
+    M Avengers: Infinity War (0) [0%]
+    M Avengers: Endgame (0) [0%]
+    M Black Widow (0) [0%]
+    M Thunderbolts* (0) [0%]
+    M Avengers: Age of Ultron (0) [0%]
+    M IO (0) [0%]
+    M Prometheus (0) [0%]
+
+─── Variant E | P1 22yo · Solo · Netflix+Prime ───
+  Avg taps per session: 7.8
+  Top cluster alignments:
+    ★ mind-bending-mysteries       79.4%
+    ★ dark-thrillers               78.1%
+      epic-scifi-fantasy           78.1%
+      horror-supernatural          74.1%
+  Top 10 recommendations from profile:
+    M The Avengers (0) [0%]
+    M Deadpool (0) [0%]
+    M Interstellar (0) [0%]
+    M Black Panther (0) [0%]
+    M Avengers: Infinity War (0) [0%]
+    M Black Widow (0) [0%]
+    M Avengers: Endgame (0) [0%]
+    M Thunderbolts* (0) [0%]
+    M Fast Color (0) [0%]
+    M Code 8 (0) [0%]
+
+─── Variant E | P2 35yo · Partner · 4 services ───
+  Avg taps per session: 8.9
+  Top cluster alignments:
+      epic-scifi-fantasy           77.2%
+      mind-bending-mysteries       76.8%
+      dark-thrillers               74.7%
+    ★ history-war                  74.0%
+  Top 10 recommendations from profile:
+    M Interstellar (0) [0%]
+    M The Avengers (0) [0%]
+    M Avengers: Endgame (0) [0%]
+    M The Watch (0) [0%]
+    M Star Trek Into Darkness (0) [0%]
+    M Avengers: Infinity War (0) [0%]
+    M IO (0) [0%]
+    M Deadpool (0) [0%]
+    M Thunder Force (0) [0%]
+    T Travelers (0) [0%]
+
+─── Variant E | P3 55yo · Mix · UK heavy ───
+  Avg taps per session: 5.9
+  Top cluster alignments:
+      dark-thrillers               78.4%
+      mind-bending-mysteries       78.2%
+      heartfelt-drama              78.2%
+      epic-scifi-fantasy           77.5%
+  Top 10 recommendations from profile:
+    M Interstellar (0) [0%]
+    M Here (0) [0%]
+    M The Shawshank Redemption (0) [0%]
+    M Forrest Gump (0) [0%]
+    M Nightcrawler (0) [0%]
+    M Prisoners (0) [0%]
+    M One Battle After Another (0) [0%]
+    M Infinite (0) [0%]
+    M The Watch (0) [0%]
+    M The A-Team (0) [0%]
+
+─── Variant E | P4 28yo · Family · Disney+Netflix ───
+  Avg taps per session: 9.2
+  Top cluster alignments:
+      epic-scifi-fantasy           77.6%
+    ★ anime-animation              77.1%
+    ★ family-kids                  73.6%
+      mind-bending-mysteries       73.1%
+  Top 10 recommendations from profile:
+    M The Avengers (0) [0%]
+    M Avengers: Age of Ultron (0) [0%]
+    M Avengers: Endgame (0) [0%]
+    M Avengers: Infinity War (0) [0%]
+    M Interstellar (0) [0%]
+    M Deadpool (0) [0%]
+    M Thunderbolts* (0) [0%]
+    M Ant-Man (0) [0%]
+    M Thor: The Dark World (0) [0%]
+    M Black Widow (0) [0%]
+
+─── Variant E | P5 18yo · Solo · Netflix only ───
+  Avg taps per session: 6.2
+  Top cluster alignments:
+      epic-scifi-fantasy           79.4%
+    ★ horror-supernatural          76.2%
+    ★ anime-animation              76.2%
+      mind-bending-mysteries       75.3%
+  Top 10 recommendations from profile:
+    M Interstellar (0) [0%]
+    T Them (0) [0%]
+    T Hollywood (0) [0%]
+    M IO (0) [0%]
+    T Dark Matter (0) [0%]
+    T Lost in Space (0) [0%]
+    T Travelers (0) [0%]
+    M The Watch (0) [0%]
+    M The Avengers (0) [0%]
+    M Code 8 (0) [0%]
+
+─── Variant E | P6 No optional data · Netflix+iPlayer ───
+  Avg taps per session: 5.5
+  Top cluster alignments:
+    ★ mind-bending-mysteries       81.1%
+      epic-scifi-fantasy           78.4%
+      dark-thrillers               77.6%
+    ★ feel-good-funny              74.8%
+  Top 10 recommendations from profile:
+    M Interstellar (0) [0%]
+    M The Avengers (0) [0%]
+    M Guardians of the Galaxy (0) [0%]
+    M Guardians of the Galaxy Vol. 2 (0) [0%]
+    M Avengers: Endgame (0) [0%]
+    M Avengers: Infinity War (0) [0%]
+    M The Watch (0) [0%]
+    M Avengers: Age of Ultron (0) [0%]
+    M Prometheus (0) [0%]
+    M Star Trek Into Darkness (0) [0%]
+
+
+========================================
+Cross-Variant Comparison Metrics
+========================================
+
+1. Persona-distinctness (avg pairwise cosine distance between personas)
+   Higher = better — different personas produce different profiles
+
+   Variant D: avg pairwise distance = 0.0217
+   Variant E: avg pairwise distance = 0.0240
+
+2. Same-persona profile stability across variants
+   Cosine similarity between D-profile and E-profile for each persona
+   Higher = variant choice has little effect on profile
+
+   P1: 99.76%
+   P2: 99.55%
+   P3: 99.38%
+   P4: 99.49%
+   P5: 99.66%
+   P6: 99.48%
+
+3. Cluster-alignment fidelity (does profile point at the persona's declared clusters?)
+   Score = avg alignment of top-3 declared clusters vs avg of all 16
+   Higher = profile is well-aligned with what the persona said they like
+
+   Variant D: avg declared/overall ratio = 1.061
+   Variant E: avg declared/overall ratio = 1.062
+
+4. Recommendation overlap (Jaccard) — do D and E produce similar top-15 recs?
+   1.0 = identical, 0.0 = no overlap
+
+   P1: 58% overlap (11/19)
+   P2: 15% overlap (4/26)
+   P3: 15% overlap (4/26)
+   P4: 43% overlap (9/21)
+   P5: 15% overlap (4/26)
+   P6: 67% overlap (12/18)

@@ -1,0 +1,143 @@
+========================================
+Phase 1: Weight ceiling (W4-W7 at C2_deduped, normal taps, N=20)
+========================================
+
+  W4_aggressive        (cluster=0.50)  CAF=1.134  PD=0.0818  taps=7.3
+  W5_dominant          (cluster=0.65)  CAF=1.171  PD=0.1247  taps=7.3
+  W6_extreme           (cluster=0.75)  CAF=1.195  PD=0.1564  taps=7.3
+  W7_almost_pure       (cluster=0.85)  CAF=1.218  PD=0.1895  taps=7.3
+
+Best weight (CAF×0.6 + PD×4): W7_almost_pure (cluster=0.85)
+
+========================================
+Phase 2: Tap-count sensitivity at W7_almost_pure × C2_deduped (N=20 each)
+========================================
+
+  light    (mult=0.6, Disengaged user (~3-4 taps) ) CAF=1.221 PD=0.1944 avgTaps=4.2
+  normal   (mult=1.0, Typical user (~7-8 taps)    ) CAF=1.218 PD=0.1895 avgTaps=7.3
+  heavy    (mult=1.4, Engaged user (~12-13 taps)  ) CAF=1.214 PD=0.1844 avgTaps=10.0
+
+========================================
+Phase 3: N=30 stability check at W7_almost_pure × C2_deduped
+========================================
+
+
+[P1] 22yo Solo Netflix+Prime
+  Variance: 0.00057 | Taps: 7.5±1.9
+  Top clusters: ★mind-bending-myste=93% ★dark-thrillers=91%  westerns-frontier=74%  epic-scifi-fantasy=74%
+
+[P2] 35yo Partner 4 services
+  Variance: 0.00049 | Taps: 8.8±2.1
+  Top clusters: ★history-war=88% ★heartfelt-drama=87%  westerns-frontier=78%  epic-scifi-fantasy=72%
+
+[P3] 55yo Mix UK heavy
+  Variance: 0.00071 | Taps: 6.1±1.7
+  Top clusters: ★history-war=89% ★true-crime-real-st=77%  westerns-frontier=75%  dark-thrillers=73%
+
+[P4] 28yo Family Disney+Netflix
+  Variance: 0.00063 | Taps: 9.3±2.0
+  Top clusters: ★family-kids=92% ★feel-good-funny=88% ★anime-animation=87%  epic-scifi-fantasy=65%
+
+[P5] 18yo Solo Netflix only
+  Variance: 0.00082 | Taps: 6.5±1.9
+  Top clusters: ★anime-animation=94% ★horror-supernatura=78%  family-kids=78%  epic-scifi-fantasy=72%
+
+[P6] No optional data
+  Variance: 0.00089 | Taps: 5.6±1.8
+  Top clusters: ★feel-good-funny=92% ★mind-bending-myste=81% ★heartfelt-drama=77%  dark-thrillers=76%
+
+
+========================================
+Top 12 recommendations per persona (final winning config)
+========================================
+
+
+[P1] 22yo Solo Netflix+Prime
+  Declared clusters: action-adrenaline, dark-thrillers, mind-bending-mysteries
+    M Memento (?)
+    M Prisoners (?)
+    M Inception (?)
+    M Shutter Island (?)
+    M Gone Girl (?)
+    M Se7en (?)
+    M Unknown (?)
+    M 13 (?)
+    M Taken (?)
+    M Wanted (?)
+    M Don't Say a Word (?)
+    M Nocturnal Animals (?)
+
+[P2] 35yo Partner 4 services
+  Declared clusters: heartfelt-drama, prestige-award-winners, history-war
+    M Saving Private Ryan (?)
+    M Dunkirk (?)
+    M Forrest Gump (?)
+    M The Shawshank Redemption (?)
+    M Here (?)
+    M Inglourious Basterds (?)
+    M The Irishman (?)
+    M Legends of the Fall (?)
+    M Behind the Line: Escape to Dunkirk (?)
+    M Fury (?)
+    M Nomadland (?)
+    M Road to Perdition (?)
+
+[P3] 55yo Mix UK heavy
+  Declared clusters: true-crime-real-stories, prestige-award-winners, history-war
+    M Dunkirk (?)
+    M Saving Private Ryan (?)
+    M Inglourious Basterds (?)
+    M Behind the Line: Escape to Dunkirk (?)
+    M Bowling for Columbine (?)
+    M Frontier(s) (?)
+    M Nomadland (?)
+    M Murder Company (?)
+    M Here (?)
+    M Fury (?)
+    M Wunderland (?)
+    M One Battle After Another (?)
+
+[P4] 28yo Family Disney+Netflix
+  Declared clusters: family-kids, anime-animation, feel-good-funny
+    M Trouble (?)
+    T Gravity Falls (?)
+    T Adventure Time (?)
+    M Inside Out (?)
+    M Next Gen (?)
+    T Amphibia (?)
+    T The Great North (?)
+    M IF (?)
+    T The Hollow (?)
+    M Dreambuilders (?)
+    M Elemental (?)
+    M Elio (?)
+
+[P5] 18yo Solo Netflix only
+  Declared clusters: horror-supernatural, action-adrenaline, anime-animation
+    M Stray (?)
+    M My Oni Girl (?)
+    M Spirited Away (?)
+    M Next Gen (?)
+    M Us (?)
+    M BLAME! (?)
+    M Fast Color (?)
+    T House of Ninjas (?)
+    M Bubble (?)
+    M Checkered Ninja (?)
+    M Get Out (?)
+    M Everything Everywhere All at Once (?)
+
+[P6] No optional data
+  Declared clusters: heartfelt-drama, mind-bending-mysteries, feel-good-funny
+    M The Town (?)
+    M Date Night (?)
+    M The Hangover (?)
+    M Friendship (?)
+    M Let's Be Cops (?)
+    M Inception (?)
+    M The Watch (?)
+    M Post Grad (?)
+    M Seven Psychopaths (?)
+    M Memento (?)
+    M Role Models (?)
+    M Nightcrawler (?)

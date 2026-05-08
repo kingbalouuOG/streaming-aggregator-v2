@@ -1,0 +1,307 @@
+Fetching 72-title canonical pool…
+  Movies: 36, TV: 36
+Fetching recency pool (last 24mo, pop≥80, votes≥500)…
+  Recency Movies: 5, Recency TV: 1
+  Recency titles: War Machine (2026), Zootopia 2 (2025), The Wrecking Crew (2026), War of the Worlds (2025), Predator: Badlands (2025), The Pitt (2025)
+
+Computing cluster similarities via pgvector…
+Fetching availability per persona…
+
+========================================
+Phase 1: Single-seed grids — all variants
+========================================
+
+━━━ Variant A: Genres after, 12 anchors ━━━
+
+[P1] 22yo · Solo · Netflix+Prime
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Avatar (2009) | T Squid Game (2021) | M Deadpool (2016) | T Lucifer (2016)
+  Round 3: M War of the Worlds (2025) | T Elite (2018) | M The Wrecking Crew (2026) | T The Witcher (2019) | M Black Panther (2018) | T The Umbrella Academy (2019)
+
+[P2] 35yo · Partner · 4 services
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Avatar (2009) | T Squid Game (2021) | M Deadpool (2016) | T Lucifer (2016)
+  Round 3: M Inglourious Basterds (2009) | T House (2004) | M Fight Club (1999) | T The Big Bang Theory (2007) | M Captain America: The First Avenger (2011) | T Sherlock (2010)
+
+[P3] 55yo · Mix · UK heavy
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Avatar (2009) | T Squid Game (2021) | M Deadpool (2016) | T Lucifer (2016)
+  Round 3: M The Shawshank Redemption (1994) | T The Simpsons (1989) | M The Godfather (1972) | T House (2004) | M Se7en (1995) | T Rick and Morty (2013)
+
+[P4] 28yo · Family · Disney+Netflix
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Avatar (2009) | T Squid Game (2021) | M Deadpool (2016) | T Lucifer (2016)
+  Round 3: M Inside Out (2015) | T Rick and Morty (2013) | M Inglourious Basterds (2009) | T The Mandalorian (2019) | M Captain America: Civil War (2016) | T Elite (2018)
+
+[P5] 18yo · Solo · Netflix only
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Avatar (2009) | T Squid Game (2021) | M Deadpool (2016) | T Lucifer (2016)
+  Round 3: M War Machine (2026) | T The Pitt (2025) | M Zootopia 2 (2025) | T Elite (2018) | M War of the Worlds (2025) | T The Witcher (2019)
+
+[P6] No optional data · Netflix+iPlayer
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Avatar (2009) | T Squid Game (2021) | M Deadpool (2016) | T Lucifer (2016)
+  Round 3: M The Godfather (1972) | T House (2004) | M The Wolf of Wall Street (2013) | T Rick and Morty (2013) | M Inglourious Basterds (2009) | T Elite (2018)
+
+━━━ Variant B: Genres before, 9 anchors ━━━
+
+[P1] 22yo · Solo · Netflix+Prime
+  Clusters: action-adrenaline, dark-thrillers, mind-bending-mysteries
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M War Machine (2026) | T Cobra Kai (2018) | M War of the Worlds (2025) | T The Boys (2019)
+  Round 3: M The Wrecking Crew (2026) | T The Umbrella Academy (2019) | M Black Panther (2018) | T Wednesday (2022) | M Avengers: Endgame (2019) | T Sex Education (2019)
+
+[P2] 35yo · Partner · 4 services
+  Clusters: heartfelt-drama, prestige-award-winners, history-war
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Iron Man (2008) | T The Vampire Diaries (2009) | M Fight Club (1999) | T Sherlock (2010)
+  Round 3: M The Lord of the Rings: The Two Towers (2002) | T House (2004) | M Avatar (2009) | T The Big Bang Theory (2007) | M Inglourious Basterds (2009) | T Grey's Anatomy (2005)
+
+[P3] 55yo · Mix · UK heavy
+  Clusters: true-crime-real-stories, prestige-award-winners, history-war
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M The Shawshank Redemption (1994) | T The Simpsons (1989) | M Se7en (1995) | T Better Call Saul (2015)
+  Round 3: M The Lord of the Rings: The Two Towers (2002) | T The Vampire Diaries (2009) | M Forrest Gump (1994) | T Cobra Kai (2018) | M Pulp Fiction (1994) | T The Flash (2014)
+
+[P4] 28yo · Family · Disney+Netflix
+  Clusters: family-kids, anime-animation, feel-good-funny
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Avengers: Endgame (2019) | T Better Call Saul (2015) | M Inside Out (2015) | T The Vampire Diaries (2009)
+  Round 3: M Avengers: Age of Ultron (2015) | T Cobra Kai (2018) | M Avengers: Infinity War (2018) | T The Umbrella Academy (2019) | M Avatar (2009) | T WandaVision (2021)
+
+[P5] 18yo · Solo · Netflix only
+  Clusters: horror-supernatural, action-adrenaline, anime-animation
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M War Machine (2026) | T Cobra Kai (2018) | M Zootopia 2 (2025) | T The Umbrella Academy (2019)
+  Round 3: M War of the Worlds (2025) | T Wednesday (2022) | M The Wrecking Crew (2026) | T The Last of Us (2023) | M Se7en (1995) | T The Pitt (2025)
+
+[P6] No optional data · Netflix+iPlayer
+  Clusters: heartfelt-drama, mind-bending-mysteries, feel-good-funny
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M The Lord of the Rings: The Two Towers (2002) | T Better Call Saul (2015) | M Se7en (1995) | T The Vampire Diaries (2009)
+  Round 3: M War Machine (2026) | T Cobra Kai (2018) | M The Wolf of Wall Street (2013) | T Sherlock (2010) | M The Godfather (1972) | T The Umbrella Academy (2019)
+
+━━━ Variant C: Genres before, 12 anchors ━━━
+
+[P1] 22yo · Solo · Netflix+Prime
+  Clusters: action-adrenaline, dark-thrillers, mind-bending-mysteries
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Avatar (2009) | T Squid Game (2021) | M Deadpool (2016) | T Lucifer (2016)
+  Round 3: M War of the Worlds (2025) | T Elite (2018) | M The Wrecking Crew (2026) | T The Witcher (2019) | M Black Panther (2018) | T The Umbrella Academy (2019)
+
+[P2] 35yo · Partner · 4 services
+  Clusters: heartfelt-drama, prestige-award-winners, history-war
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Avatar (2009) | T Squid Game (2021) | M Deadpool (2016) | T Lucifer (2016)
+  Round 3: M Inglourious Basterds (2009) | T House (2004) | M Fight Club (1999) | T The Big Bang Theory (2007) | M Captain America: The First Avenger (2011) | T Sherlock (2010)
+
+[P3] 55yo · Mix · UK heavy
+  Clusters: true-crime-real-stories, prestige-award-winners, history-war
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Avatar (2009) | T Squid Game (2021) | M Deadpool (2016) | T Lucifer (2016)
+  Round 3: M The Shawshank Redemption (1994) | T The Simpsons (1989) | M Inglourious Basterds (2009) | T House (2004) | M The Godfather (1972) | T Rick and Morty (2013)
+
+[P4] 28yo · Family · Disney+Netflix
+  Clusters: family-kids, anime-animation, feel-good-funny
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Avatar (2009) | T Squid Game (2021) | M Deadpool (2016) | T Lucifer (2016)
+  Round 3: M Inside Out (2015) | T Rick and Morty (2013) | M Inglourious Basterds (2009) | T The Mandalorian (2019) | M Captain America: Civil War (2016) | T Elite (2018)
+
+[P5] 18yo · Solo · Netflix only
+  Clusters: horror-supernatural, action-adrenaline, anime-animation
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Avatar (2009) | T Squid Game (2021) | M Deadpool (2016) | T Lucifer (2016)
+  Round 3: M War Machine (2026) | T The Pitt (2025) | M Zootopia 2 (2025) | T Elite (2018) | M War of the Worlds (2025) | T The Witcher (2019)
+
+[P6] No optional data · Netflix+iPlayer
+  Clusters: heartfelt-drama, mind-bending-mysteries, feel-good-funny
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Avatar (2009) | T Squid Game (2021) | M Deadpool (2016) | T Lucifer (2016)
+  Round 3: M The Godfather (1972) | T House (2004) | M The Wolf of Wall Street (2013) | T Rick and Morty (2013) | M Inglourious Basterds (2009) | T Elite (2018)
+
+━━━ Variant D: Genres after, 9 anchors ━━━
+
+[P1] 22yo · Solo · Netflix+Prime
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M War Machine (2026) | T Cobra Kai (2018) | M War of the Worlds (2025) | T The Boys (2019)
+  Round 3: M The Wrecking Crew (2026) | T The Umbrella Academy (2019) | M Black Panther (2018) | T Wednesday (2022) | M Avengers: Endgame (2019) | T Sex Education (2019)
+
+[P2] 35yo · Partner · 4 services
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Iron Man (2008) | T The Vampire Diaries (2009) | M Fight Club (1999) | T Sherlock (2010)
+  Round 3: M The Lord of the Rings: The Two Towers (2002) | T House (2004) | M Avatar (2009) | T The Big Bang Theory (2007) | M Captain America: The First Avenger (2011) | T Grey's Anatomy (2005)
+
+[P3] 55yo · Mix · UK heavy
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Se7en (1995) | T The Simpsons (1989) | M The Shawshank Redemption (1994) | T Better Call Saul (2015)
+  Round 3: M The Lord of the Rings: The Two Towers (2002) | T The Vampire Diaries (2009) | M Forrest Gump (1994) | T Cobra Kai (2018) | M Pulp Fiction (1994) | T The Flash (2014)
+
+[P4] 28yo · Family · Disney+Netflix
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M Avengers: Endgame (2019) | T Better Call Saul (2015) | M Avengers: Age of Ultron (2015) | T The Vampire Diaries (2009)
+  Round 3: M Avengers: Infinity War (2018) | T Cobra Kai (2018) | M Avatar (2009) | T The Umbrella Academy (2019) | M Inside Out (2015) | T WandaVision (2021)
+
+[P5] 18yo · Solo · Netflix only
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M War Machine (2026) | T Cobra Kai (2018) | M Zootopia 2 (2025) | T The Umbrella Academy (2019)
+  Round 3: M War of the Worlds (2025) | T Wednesday (2022) | M The Wrecking Crew (2026) | T The Last of Us (2023) | M Se7en (1995) | T The Pitt (2025)
+
+[P6] No optional data · Netflix+iPlayer
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M The Dark Knight (2008) | T Breaking Bad (2008) | M The Lord of the Rings: The Two Towers (2002) | T Better Call Saul (2015) | M Se7en (1995) | T The Vampire Diaries (2009)
+  Round 3: M War Machine (2026) | T Cobra Kai (2018) | M The Wolf of Wall Street (2013) | T Sherlock (2010) | M The Hunger Games (2012) | T The Umbrella Academy (2019)
+
+━━━ Variant E: Genres after, 6 anchors ━━━
+
+[P1] 22yo · Solo · Netflix+Prime
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M War Machine (2026) | T The Witcher (2019) | M Black Panther (2018) | T Wednesday (2022) | M The Wrecking Crew (2026) | T Cobra Kai (2018)
+  Round 3: M War of the Worlds (2025) | T Squid Game (2021) | M Avengers: Endgame (2019) | T The Boys (2019) | M Zootopia 2 (2025) | T Elite (2018)
+
+[P2] 35yo · Partner · 4 services
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M Captain America: The First Avenger (2011) | T The Vampire Diaries (2009) | M Fight Club (1999) | T The Big Bang Theory (2007) | M Iron Man (2008) | T House (2004)
+  Round 3: M Inglourious Basterds (2009) | T Breaking Bad (2008) | M Avatar (2009) | T Grey's Anatomy (2005) | M The Lord of the Rings: The Two Towers (2002) | T Sherlock (2010)
+
+[P3] 55yo · Mix · UK heavy
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M Se7en (1995) | T The Simpsons (1989) | M The Shawshank Redemption (1994) | T The Vampire Diaries (2009) | M Forrest Gump (1994) | T The Witcher (2019)
+  Round 3: M War Machine (2026) | T Wednesday (2022) | M The Wolf of Wall Street (2013) | T Dark (2017) | M The Godfather (1972) | T Cobra Kai (2018)
+
+[P4] 28yo · Family · Disney+Netflix
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M Deadpool (2016) | T The Vampire Diaries (2009) | M Captain America: The First Avenger (2011) | T The Witcher (2019) | M Captain America: Civil War (2016) | T Dark (2017)
+  Round 3: M Avengers: Endgame (2019) | T Loki (2021) | M Guardians of the Galaxy (2014) | T Cobra Kai (2018) | M Avengers: Age of Ultron (2015) | T Better Call Saul (2015)
+
+[P5] 18yo · Solo · Netflix only
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M War Machine (2026) | T The Witcher (2019) | M The Wrecking Crew (2026) | T Wednesday (2022) | M Zootopia 2 (2025) | T Cobra Kai (2018)
+  Round 3: M Predator: Badlands (2025) | T Squid Game (2021) | M War of the Worlds (2025) | T Elite (2018) | M Se7en (1995) | T The Vampire Diaries (2009)
+
+[P6] No optional data · Netflix+iPlayer
+  Clusters: (not selected yet)
+  Round 1: M Interstellar (2014) | T Game of Thrones (2011) | M Inception (2010) | T Stranger Things (2016) | M The Avengers (2012) | T The Walking Dead (2010)
+  Round 2: M War Machine (2026) | T The Vampire Diaries (2009) | M Se7en (1995) | T The Witcher (2019) | M The Wolf of Wall Street (2013) | T Wednesday (2022)
+  Round 3: M Inglourious Basterds (2009) | T Dark (2017) | M The Hunger Games (2012) | T Cobra Kai (2018) | M The Godfather (1972) | T Better Call Saul (2015)
+
+
+========================================
+Phase 2: Stability check (N=20 seeds)
+========================================
+
+━━━ Stability check: Variant D (Genres after, 9 anchors), N=20 seeds ━━━
+
+[P1] 22yo · Solo · Netflix+Prime
+  Unique titles seen: 25 (max possible: 78)
+  Stable core (≥95% of sessions): 12
+  Variable mid (20–95%): 11
+  Rare tail (<20%): 2
+  Most frequent: Interstellar 100%, Game of Thrones 100%, Inception 100%, Stranger Things 100%, The Avengers 100%
+  Least frequent: Avengers: Endgame 5%, Predator: Badlands 10%, Avengers: Infinity War 25%, Iron Man 3 30%, Zootopia 2 30%
+
+[P2] 35yo · Partner · 4 services
+  Unique titles seen: 19 (max possible: 78)
+  Stable core (≥95% of sessions): 14
+  Variable mid (20–95%): 5
+  Rare tail (<20%): 0
+  Most frequent: Interstellar 100%, Game of Thrones 100%, Inception 100%, Stranger Things 100%, The Avengers 100%
+  Least frequent: The Lord of the Rings: The Two Towers 75%, Iron Man 75%, Inglourious Basterds 80%, Captain America: The First Avenger 85%, Fight Club 90%
+
+[P3] 55yo · Mix · UK heavy
+  Unique titles seen: 36 (max possible: 78)
+  Stable core (≥95% of sessions): 11
+  Variable mid (20–95%): 20
+  Rare tail (<20%): 5
+  Most frequent: Interstellar 100%, Game of Thrones 100%, Inception 100%, Stranger Things 100%, The Avengers 100%
+  Least frequent: The Good Doctor 10%, Lucifer 10%, The Flash 10%, Better Call Saul 15%, Sherlock 15%
+
+[P4] 28yo · Family · Disney+Netflix
+  Unique titles seen: 40 (max possible: 78)
+  Stable core (≥95% of sessions): 8
+  Variable mid (20–95%): 28
+  Rare tail (<20%): 4
+  Most frequent: Interstellar 100%, Game of Thrones 100%, Inception 100%, Stranger Things 100%, The Avengers 100%
+  Least frequent: Elite 10%, Avengers: Endgame 15%, Better Call Saul 15%, Rick and Morty 15%, Deadpool 20%
+
+[P5] 18yo · Solo · Netflix only
+  Unique titles seen: 25 (max possible: 78)
+  Stable core (≥95% of sessions): 12
+  Variable mid (20–95%): 10
+  Rare tail (<20%): 3
+  Most frequent: Interstellar 100%, Game of Thrones 100%, Inception 100%, Stranger Things 100%, The Avengers 100%
+  Least frequent: Inglourious Basterds 5%, Vikings 5%, Se7en 15%, The Witcher 40%, Wednesday 50%
+
+[P6] No optional data · Netflix+iPlayer
+  Unique titles seen: 33 (max possible: 78)
+  Stable core (≥95% of sessions): 8
+  Variable mid (20–95%): 22
+  Rare tail (<20%): 3
+  Most frequent: Interstellar 100%, Game of Thrones 100%, Inception 100%, Stranger Things 100%, The Avengers 100%
+  Least frequent: Elite 10%, Better Call Saul 15%, The Good Doctor 15%, Riverdale 20%, Lucifer 20%
+
+━━━ Stability check: Variant E (Genres after, 6 anchors), N=20 seeds ━━━
+
+[P1] 22yo · Solo · Netflix+Prime
+  Unique titles seen: 24 (max possible: 78)
+  Stable core (≥95% of sessions): 10
+  Variable mid (20–95%): 13
+  Rare tail (<20%): 1
+  Most frequent: Interstellar 100%, Game of Thrones 100%, Inception 100%, Stranger Things 100%, The Avengers 100%
+  Least frequent: Inglourious Basterds 5%, Iron Man 3 30%, Avengers: Infinity War 30%, Predator: Badlands 40%, Avengers: Endgame 40%
+
+[P2] 35yo · Partner · 4 services
+  Unique titles seen: 18 (max possible: 78)
+  Stable core (≥95% of sessions): 18
+  Variable mid (20–95%): 0
+  Rare tail (<20%): 0
+  Most frequent: Interstellar 100%, Game of Thrones 100%, Inception 100%, Stranger Things 100%, The Avengers 100%
+  Least frequent: Breaking Bad 100%, Avatar 100%, The Vampire Diaries 100%, Captain America: The First Avenger 100%, The Big Bang Theory 100%
+
+[P3] 55yo · Mix · UK heavy
+  Unique titles seen: 37 (max possible: 78)
+  Stable core (≥95% of sessions): 9
+  Variable mid (20–95%): 21
+  Rare tail (<20%): 7
+  Most frequent: Interstellar 100%, Game of Thrones 100%, Inception 100%, Stranger Things 100%, The Avengers 100%
+  Least frequent: The Witcher 10%, The Good Doctor 10%, The Umbrella Academy 10%, Cobra Kai 10%, Better Call Saul 10%
+
+[P4] 28yo · Family · Disney+Netflix
+  Unique titles seen: 38 (max possible: 78)
+  Stable core (≥95% of sessions): 6
+  Variable mid (20–95%): 28
+  Rare tail (<20%): 4
+  Most frequent: Interstellar 100%, Game of Thrones 100%, Inception 100%, Stranger Things 100%, The Avengers 100%
+  Least frequent: The Witcher 15%, The Good Doctor 15%, The Umbrella Academy 15%, Loki 15%, The Vampire Diaries 20%
+
+[P5] 18yo · Solo · Netflix only
+  Unique titles seen: 29 (max possible: 78)
+  Stable core (≥95% of sessions): 11
+  Variable mid (20–95%): 11
+  Rare tail (<20%): 7
+  Most frequent: Interstellar 100%, Game of Thrones 100%, Inception 100%, Stranger Things 100%, The Avengers 100%
+  Least frequent: Peaky Blinders 5%, Vikings 5%, Lucifer 5%, Avengers: Endgame 10%, Avengers: Infinity War 10%
+
+[P6] No optional data · Netflix+iPlayer
+  Unique titles seen: 32 (max possible: 78)
+  Stable core (≥95% of sessions): 6
+  Variable mid (20–95%): 21
+  Rare tail (<20%): 5
+  Most frequent: Interstellar 100%, Game of Thrones 100%, Inception 100%, Stranger Things 100%, The Avengers 100%
+  Least frequent: The Good Doctor 10%, The Witcher 15%, The Vampire Diaries 15%, Lucifer 15%, Better Call Saul 15%
