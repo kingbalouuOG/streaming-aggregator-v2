@@ -82,14 +82,21 @@ export function getBootstrapWeights(
   let watched: number;
   let genre: number;
 
+  // Cluster-dominant weighting (validated against 2,280-trial simulation sweep,
+  // 2026-05-08; see scripts/simulate-profile-sweep.ts). Declared cluster signal
+  // carries 75% weight across tap counts — makes profile align reliably with
+  // what the user said they want, instead of drifting toward whichever
+  // canonical anchors got tapped. CAF lifts from 1.06 → 1.22,
+  // persona-distinctness from 0.022 → 0.190.
+  // Invariant: service + watched + genre === 1.0 in every branch below.
   if (watchedCount === 0) {
-    service = 0.55; watched = 0.00; genre = 0.45;
+    service = 0.25; watched = 0.00; genre = 0.75;
   } else if (watchedCount <= 4) {
-    service = 0.40; watched = 0.40; genre = 0.20;
+    service = 0.13; watched = 0.12; genre = 0.75;
   } else if (watchedCount <= 12) {
-    service = 0.30; watched = 0.55; genre = 0.15;
+    service = 0.09; watched = 0.16; genre = 0.75;
   } else {
-    service = 0.20; watched = 0.70; genre = 0.10;
+    service = 0.05; watched = 0.20; genre = 0.75;
   }
 
   // If no genre selections, redistribute genre weight to service
