@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { BookmarkIcon, BookmarkFilledIcon, TickIcon } from "./icons";
 import { ImageSkeleton } from "./ImageSkeleton";
+import { ServiceStack } from "./ServiceBadge";
 import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 import type { ServiceId } from "./platformLogos";
@@ -44,12 +45,9 @@ interface ContentCardProps {
   bookmarked?: boolean;
   onToggleBookmark?: (item: ContentItem) => void;
   /**
-   * When set, services not in this list are filtered out of the
-   * service-filtering logic. The card itself does not render a
-   * ServiceBadge stack (per design-system §4 "platform stack on
-   * the title row beneath only when it's a per-service section");
-   * keep the prop so per-service rows can apply it consistently
-   * once they're built.
+   * When set, the rendered ServiceStack is filtered to only the user's
+   * connected services — so the card surfaces "where to watch on YOUR
+   * stack." If undefined, all the title's services render.
    */
   userServices?: ServiceId[];
   watched?: boolean;
@@ -65,20 +63,22 @@ export function ContentCard({
   watched = false,
 }: ContentCardProps) {
   const [justToggled, setJustToggled] = useState(false);
-  const [, setAllServices] = useState<ServiceId[]>(item.services);
+  const [allServices, setAllServices] = useState<ServiceId[]>(item.services);
 
-  // Keep the service-resolution effect even though the card no longer
-  // renders ServiceBadges itself; downstream filtering and per-service
-  // section rendering still rely on the cached service set.
+  // Lazy-load services if the parent didn't pre-resolve them. Discover
+  // endpoints often return items with empty services arrays; the
+  // cached lookup fills them in.
   useEffect(() => {
-    if (item.services.length > 0) return;
+    if (item.services.length > 0) { setAllServices(item.services); return; }
     const { tmdbId, mediaType } = parseContentItemId(item.id);
     getCachedServices(String(tmdbId), mediaType).then(setAllServices);
   }, [item.id, item.services]);
 
-  // userServices is intentionally accepted but unused here — see
-  // ContentCardProps comment.
-  void userServices;
+  // Visible service stack — filtered to the user's connected services
+  // when provided so callers can surface "on your stack" cleanly.
+  const visibleServices = userServices?.length
+    ? allServices.filter((s) => userServices.includes(s))
+    : allServices;
 
   const handleBookmark = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -190,9 +190,9 @@ export function ContentCard({
         >
           {item.title}
         </h3>
-        {(item.year || item.genre) && (
-          <p
-            className="mt-0.5"
+        {(item.year || item.genre || visibleServices.length > 0) && (
+          <div
+            className="mt-1 flex items-center gap-2"
             style={{
               fontFamily: "var(--font-ui)",
               fontSize: "12px",
@@ -200,8 +200,15 @@ export function ContentCard({
               lineHeight: 1.3,
             }}
           >
-            {[item.year, item.genre].filter(Boolean).join(" · ")}
-          </p>
+            {visibleServices.length > 0 && (
+              <ServiceStack services={visibleServices} size="sm" max={3} />
+            )}
+            {(item.year || item.genre) && (
+              <span className="truncate">
+                {[item.year, item.genre].filter(Boolean).join(" · ")}
+              </span>
+            )}
+          </div>
         )}
       </div>
     </div>
