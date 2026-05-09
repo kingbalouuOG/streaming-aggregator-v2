@@ -36,6 +36,7 @@ Tokens live in `src/index.css`. Full file: `tokens.css` (drop-in). Summary:
 | Soft fg | `--fg-soft` | 62% ink | 62% cream |
 | Faint fg | `--fg-faint` | 40% ink | 40% cream |
 | Brand | `--primary` | `#e85d25` | same |
+| Brand foreground | `--primary-foreground` | `#ffffff` | `#ffffff` |
 
 **Atmosphere accents** (6, used on mood rooms / atmospheric overlays only): amber `#d97706`, rose `#be185d`, teal `#0d9488`, violet `#7c3aed`, forest `#166534`, slate `#475569`.
 
@@ -52,7 +53,7 @@ Variable-font `opsz` axis is part of the contract. Set `font-variation-settings:
 | `--t-headline` | 28 | Fraunces 600 | 48 |
 | `--t-title` | 22 | Fraunces 700 | 36 |
 | `--t-section` | 18 | Fraunces 600 | 24 |
-| `--t-body` | 15 | DM Sans 400 | — |
+| `--t-body` | 13 | DM Sans 400 | — |
 | `--t-meta` | 13 | DM Sans 500 | — |
 | `--t-kicker` | 11 | DM Sans 700 / 1.6px tracked / uppercase | — |
 
@@ -93,10 +94,12 @@ Single 24×24 square with the service's logo (assets in `src/assets/*.png`). Sta
 
 ### `<SectionHead>`
 ```
-THE CHARTS                     ← kicker (orange, tracked)
+THE CHARTS                     ← kicker (orange, tracked)        [See all →]
 Trending across your stack.    ← Fraunces 22 / 700 / opsz 36
 What everyone's queueing →     ← optional standfirst, italic
 ```
+
+Four-property contract: `kicker?`, `title`, `standfirst?`, `right?`. The `right` slot is a trailing affordance — typically a "See all →" link, filter chip, or count — sized so it sits opposite the kicker on the same row. Optional, but every horizontal row in §5 carries one in practice.
 
 ### `<MoodChip>`
 Pill, 32 high, paper or ink-tinted background, 12 horizontal padding. Active state: filled with `--primary`, white text. Used on For You as a refiner above "In your mood".

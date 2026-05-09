@@ -251,11 +251,12 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
                         if (lastToggledService === svc.id) setLastToggledService(null);
                       }}
                       whileTap={{ scale: 0.9 }}
-                      className={`w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center transition-all duration-200 border-2 ${
-                        selected
-                          ? `${svc.selectedBorder} shadow-lg ring-1 ring-primary/30`
-                          : "border-transparent opacity-50 hover:opacity-100"
-                      }`}
+                      className="w-12 h-12 overflow-hidden flex items-center justify-center transition-all duration-200"
+                      style={{
+                        borderRadius: "var(--r-md)",
+                        border: selected ? "2px solid var(--primary)" : "2px solid transparent",
+                        opacity: selected ? 1 : 0.5,
+                      }}
                     >
                       <img src={svc.logo} alt={svc.name} className="w-full h-full object-cover" />
                     </motion.button>
@@ -275,8 +276,11 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
                       onClick={() => setLocal((p) => ({ ...p, contentType: type }))}
                       className="px-3 py-1.5 transition-all"
                       style={{
-                        background: active ? "var(--primary)" : "var(--surface-tint)",
-                        color: active ? "#fff" : "var(--fg-soft)",
+                        background: active ? "var(--primary-soft)" : "transparent",
+                        color: active ? "var(--primary)" : "var(--fg-soft)",
+                        border: active
+                          ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                          : "1px solid var(--hairline)",
                         borderRadius: "var(--r-pill)",
                         fontFamily: "var(--font-ui)",
                         fontSize: 13,
@@ -302,8 +306,11 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
                       onClick={() => setLocal((p) => ({ ...p, cost: opt }))}
                       className="flex-1 py-2 transition-all"
                       style={{
-                        background: active ? "var(--primary)" : "var(--surface-tint)",
-                        color: active ? "#fff" : "var(--fg-soft)",
+                        background: active ? "var(--primary-soft)" : "transparent",
+                        color: active ? "var(--primary)" : "var(--fg-soft)",
+                        border: active
+                          ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                          : "1px solid var(--hairline)",
                         borderRadius: "var(--r-pill)",
                         fontFamily: "var(--font-ui)",
                         fontSize: 13,
@@ -340,8 +347,11 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
                       whileTap={{ scale: 0.93 }}
                       className="px-3 py-1.5 transition-colors"
                       style={{
-                        background: selected ? "var(--primary)" : "var(--surface-tint)",
-                        color: selected ? "#fff" : "var(--fg-soft)",
+                        background: selected ? "var(--primary-soft)" : "transparent",
+                        color: selected ? "var(--primary)" : "var(--fg-soft)",
+                        border: selected
+                          ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                          : "1px solid var(--hairline)",
                         borderRadius: "var(--r-pill)",
                         fontFamily: "var(--font-ui)",
                         fontSize: 13,
@@ -358,7 +368,17 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
               {/* MINIMUM RATING */}
               <SectionLabel>MINIMUM RATING</SectionLabel>
               <div className="mb-2">
-                <span className="text-primary text-[15px]" style={{ fontWeight: 600 }}>
+                <span
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: 28,
+                    fontWeight: 800,
+                    fontVariationSettings: '"opsz" 36',
+                    letterSpacing: "-0.02em",
+                    color: "var(--primary)",
+                    lineHeight: 1,
+                  }}
+                >
                   {local.minRating === 0 ? "Any" : local.minRating.toFixed(0)}
                 </span>
               </div>
@@ -392,25 +412,38 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
               <SectionLabel>SHOW WATCHED</SectionLabel>
               <button
                 onClick={() => setLocal((p) => ({ ...p, showWatched: !p.showWatched }))}
-                className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl mb-4 transition-all duration-200 border ${
-                  local.showWatched
-                    ? "bg-primary/10 border-primary/30 text-primary"
-                    : "bg-secondary border-transparent text-muted-foreground"
-                }`}
+                className="flex items-center gap-3 w-full px-4 py-3 mb-4 transition-all duration-200"
+                style={{
+                  background: local.showWatched
+                    ? "color-mix(in srgb, var(--primary) 14%, transparent)"
+                    : "var(--surface-tint)",
+                  border: local.showWatched
+                    ? "1px solid color-mix(in srgb, var(--primary) 45%, transparent)"
+                    : "0.5px solid transparent",
+                  borderRadius: "var(--r-md)",
+                  color: local.showWatched ? "var(--primary)" : "var(--fg-soft)",
+                }}
               >
                 {local.showWatched ? (
                   <EyeIcon className="w-5 h-5 shrink-0" />
                 ) : (
                   <EyeOffIcon className="w-5 h-5 shrink-0" />
                 )}
-                <span className="text-[13px]" style={{ fontWeight: 600 }}>
+                <span style={{ fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 600 }}>
                   {local.showWatched ? "Visible" : "Hidden"}
                 </span>
               </button>
 
               {/* LANGUAGE */}
               <SectionLabel>LANGUAGE</SectionLabel>
-              <p className="text-muted-foreground/60 text-[11px] -mt-1.5 mb-3">
+              <p
+                className="-mt-1.5 mb-3"
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 11,
+                  color: "var(--fg-faint)",
+                }}
+              >
                 Select languages you want to see. None selected = show all.
               </p>
               <div className="flex flex-wrap gap-2 mb-6">
@@ -423,8 +456,11 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
                       onClick={() => toggleLanguage(lang)}
                       className="px-3 py-1.5 transition-colors"
                       style={{
-                        background: selected ? "var(--primary)" : "var(--surface-tint)",
-                        color: selected ? "#fff" : "var(--fg-soft)",
+                        background: selected ? "var(--primary-soft)" : "transparent",
+                        color: selected ? "var(--primary)" : "var(--fg-soft)",
+                        border: selected
+                          ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                          : "1px solid var(--hairline)",
                         borderRadius: "var(--r-pill)",
                         fontFamily: "var(--font-ui)",
                         fontSize: 13,
@@ -464,7 +500,7 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
                 className="flex-1 py-3 transition-colors"
                 style={{
                   background: "var(--primary)",
-                  color: "#fff",
+                  color: "var(--primary-foreground)",
                   borderRadius: "var(--r-pill)",
                   fontFamily: "var(--font-ui)",
                   fontSize: 14,
@@ -475,11 +511,6 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
               </button>
             </div>
           </motion.div>
-
-          <style>{`
-            .no-scrollbar::-webkit-scrollbar { display: none; }
-            .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-          `}</style>
         </div>
       )}
     </AnimatePresence>

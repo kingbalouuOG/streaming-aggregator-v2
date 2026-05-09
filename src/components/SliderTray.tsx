@@ -171,11 +171,11 @@ export function SliderTray({ isOpen, onClose, onSlidersChange, initialSliders }:
               <p
                 className="mb-5"
                 style={{
-                  fontFamily: "var(--font-display)",
-                  fontStyle: "italic",
+                  fontFamily: "var(--font-ui)",
                   fontSize: "var(--t-body)",
+                  fontWeight: 400,
                   color: "var(--fg-soft)",
-                  lineHeight: 1.4,
+                  lineHeight: 1.45,
                 }}
               >
                 Changes take effect immediately.

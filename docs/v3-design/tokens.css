@@ -65,7 +65,7 @@
   --t-headline:   28px;     /* opsz 48,  weight 600 */
   --t-title:      22px;     /* opsz 36,  weight 700 */
   --t-section:    18px;     /* opsz 24,  weight 600 */
-  --t-body:       15px;     /* DM Sans 400 */
+  --t-body:       13px;     /* DM Sans 400 */
   --t-meta:       13px;     /* DM Sans 500 */
   --t-kicker:     11px;     /* DM Sans 700 uppercase, tracked 1.6px */
 
@@ -121,7 +121,7 @@ body {
 }
 
 /* Fraunces helpers */
-.t-display { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.02em; font-variation-settings: "opsz" 96; }
+.t-display { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em; font-variation-settings: "opsz" 144; }
 .t-headline { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em; font-variation-settings: "opsz" 48; }
 .t-section { font-family: var(--font-display); font-weight: 600; font-variation-settings: "opsz" 24; }
 

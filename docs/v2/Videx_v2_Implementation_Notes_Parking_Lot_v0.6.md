@@ -1420,6 +1420,65 @@ Wiring requires cascading delete across: `profiles`, `user_interactions`, `card_
 
 **Status:** ✅ Incorporated (Phase 5). New shared helper `supabase/functions/_shared/cors.ts` exports `corsHeaders(origin)` that echoes the Origin header only when allow-listed. Allow-list: `capacitor://localhost`, `https://localhost`, regex `^http://localhost(:port)?$`, plus a `VIDEX_ALLOWED_DEV_ORIGINS` env hook for live-reload over LAN IP. Applied to both browser-callable Edge Functions (`render-foryou-rows`, `label-anchor-room`); the four cron-only functions don't face a browser. Verified post-deploy: allow-listed origin gets `Access-Control-Allow-Origin: capacitor://localhost` echoed back; unknown origin gets no `Access-Control-Allow-Origin` header (browser treats as rejected).
 
+### IN-V3-001: Long Read editorial-spotlight data layer
+
+**Source:** v3 redesign Phase 4 review pass (2026-05-08), reference design "Home — capture" page 2.
+
+**Detail:** Home includes a "THE LONG READ · EDITOR'S TAKE" section: full-width image card with a big italic Fraunces pull-quote (e.g. "The most quietly devastating thing on television this year."), a standfirst tying it to a specific title ("On Slow Light — the season's most pressing must-watch."), and a service-tinted CTA ("Open in iPlayer"). Distinct from the per-row EditorsNote which is a general weekly note: Long Read is title-specific editorial copy.
+
+Implementation v3.0 (shipped) renders this section with **hardcoded sample copy** behind a `TODO(IN-V3-001)` comment in `App.tsx`. To make it editor-curated weekly content the data layer needs:
+
+- Either extend `editor_notes` (migration 040) with optional `tied_to_tmdb_id`, `pull_quote`, `cta_label`, `cta_service` columns — one of: pull quote XOR essay-style note. Read-side picks whichever is present.
+- Or a new `editor_long_reads` table (id, tmdb_id, media_type, pull_quote, standfirst, cta_label, published_at, expires_at).
+
+`useHomeContent` would surface a `longRead?: { item, quote, standfirst, cta }` field, hook reads at most one row per request (latest within publish window), 24h sessionStorage cache same as `editor_notes`.
+
+**Phase target:** Phase 6.5 / 7 — paired with editorial workflow definition (who writes these, how often, what tooling). Not pre-launch blocking — the hardcoded copy reads as a static editorial sample until the curation pipeline exists.
+
+**Status:** ⏳ Not yet incorporated
+
+### IN-V3-002: Taste-v2 surface for hero match% / mood / IN YOUR PLAN signals
+
+**Source:** v3 redesign Phase 4 review pass (2026-05-08), reference design "For You — capture" page 1.
+
+**Detail:** The For You MagazineHero references three new per-title signals not present in the data layer today:
+
+1. **Match %** (e.g. "96% match") — affinity between the user's taste vector and this title's embedding. Derivable from existing taste-v2 + per-title embedding via cosine similarity, but no client surface exposes this yet. A hook helper `getTitleMatch(item, tasteVector): number` would close the gap.
+
+2. **Mood label** (e.g. "Mood: contemplative") — a per-title mood tag drawn from the title's embedding cluster or LLM-derived. No mood taxonomy exists yet for individual titles; mood rooms (Phase 4.5 Anchored) emit room-level labels but not title-level. Likely needs a new `title_moods` table with (tmdb_id, primary_mood, mood_strength) or a deterministic mapping from the closest mood-room cluster.
+
+3. **IN YOUR PLAN pill** — derivable client-side today: any `item.services ∩ userServices` ⇒ "IN YOUR PLAN". v3.0 implementation **wires this signal directly** since it's free; the other two are stubbed.
+
+Implementation v3.0 (shipped) hardcodes mood as `Mood: contemplative` and only renders match% when `item.matchPercentage > 0` — both behind `TODO(IN-V3-002)` comments in `MagazineHero.tsx` / `ForYouPage.tsx`.
+
+**Phase target:** Phase 6 — same window as taste-v2 surface API extensions (`getTitleMatch`, mood tagging). Match% can land standalone in Phase 5.5 if a client-side cosine helper is acceptable; mood needs a small data design.
+
+**Status:** ⏳ Not yet incorporated (IN YOUR PLAN client-side signal: ✅ Incorporated v3.0; match% + mood: ⏳ stubbed pending data layer)
+
+---
+
+### IN-V3-003: Wire "Refine by feeling" mood refiner to taste-v2
+
+**Source:** v3 redesign Phase 4 review (2026-05-08), reference design "For You — Refine by feeling" component. UI shipped under a `false &&` guard in `ForYouPage.tsx` pending the data layer; remove the guard to re-enable once this work lands.
+
+**Detail:** The For You page has a finished "Refine by feeling" UI — six mood pills (Wind down / Pulse-up / Cosy night / Cerebral / Funny / Romance) with emerald-outlined active states. Tapping a pill currently only re-titles the row beneath it; it does **not** filter or re-rank `recommendedForYou` and does **not** reorder the mood rooms. The aspirational standfirst "Mood Rooms reorder to match." was already removed alongside the hide.
+
+The reason is structural: `useForYouContent` returns a single `recommendedForYou` list bound to slider state, and the upstream `render-foryou-rows` Edge Function has no `mood` parameter. Three changes are needed to make the buttons real:
+
+1. **Per-title mood tagging** — same data design as IN-V3-002's "Mood label" point. A per-title primary mood drawn from the embedding cluster (or an LLM mood taxonomy) so we can filter by mood. Likely a `title_moods` table with `(tmdb_id, primary_mood enum, mood_strength numeric)` or a deterministic projection from the closest anchor-room cluster's label.
+
+2. **Edge Function `mood` param** — `render-foryou-rows` accepts an optional `mood`; when set, the For-You candidate pool re-scores by mood-vector projection on the 24D taste profile (boost titles whose primary mood matches; small penalty otherwise) and the anchor-room ordering re-sorts so rooms whose label matches the mood surface first. Falls back to current behaviour when `mood` is null.
+
+3. **Hook + UI re-wire** — `useForYouContent` exposes `setMood(mood: Mood | null)` → re-fetch with the new param. ForYouPage already holds `activeMood` state; just pipe it through. Remove the `false &&` guard around the refiner block.
+
+The mood enum should match the six UI labels' semantic intent rather than the labels themselves: `slow_burn | pulse_up | comfort | cerebral | funny | romance` — labels are display-only, the enum drives the rec engine.
+
+**Cost honesty:** This is a multi-day piece of work, not a Phase 6 polish task. Mood tagging alone needs a data design + backfill (or LLM tagging job + cost estimate); the Edge Function changes need re-scoring math + tests; the hook surface change is small but cascades through `render-foryou-rows` callers. Best handled in its own phase once we've proven the rest of the v3 redesign is right.
+
+**Phase target:** Post-v3-redesign, in the same window as IN-V3-002's mood-tagging work — they share the data layer.
+
+**Status:** ⏳ UI complete and hidden behind `false &&` guard in `ForYouPage.tsx`. Data layer + Edge Function changes pending.
+
 ---
 
 ## Phase 5.5 follow-ups (filed 2026-05-07 from Phase 5 review pass)
@@ -1651,6 +1710,52 @@ That's the entire implementation. No actual data export happens. The toast is mi
 **Phase target:** Phase 5.5 (legal-disclosures cluster with IN-XPS-006 + IN-PX-34).
 
 **Status:** ⏳ Filed.
+
+---
+
+## ADR-013 follow-ups (filed 2026-05-08 from cluster-dominant bootstrap PR)
+
+Out of the best-practices research run during the cluster-dominant bootstrap retune (ADR-013). Each is a known industry pattern that improves recsys quality but was deliberately deferred from the launch-blocking PR. None are pre-launch blockers — post-launch optimisations that tighten the system once we have real behavioural data to validate against.
+
+### IN-PX-36: Programmatic similarity-threshold dedupe on cluster representatives
+
+**Source:** ADR-013 best-practices research (2026-05-08).
+
+**Detail:** Manual dedup ran in ADR-013 (each title now in exactly one cluster). Industry SemDeDup (NVIDIA NeMo, arXiv 2502.09667) prescribes a stricter pass: drop any cluster rep whose embedding has cosine ≥ ~0.9 to another rep in the same cluster, *or* to any rep in another cluster. Catches sequels (Toy Story 1/2/3 sit so close in embedding space that all three contributing dilutes the centroid even though they're distinct TMDb IDs) and franchises (Avengers films) that the manual pass missed.
+
+**Fix:** SQL function or build-time check that loads all `representativeTmdbIds` embeddings, computes pairwise cosine, flags any pair > 0.9. Either auto-prune (keep the one closest to the cluster centroid, NeMo's approach) or surface as a CI lint failure for manual review on the next cluster edit.
+
+**Phase target:** Phase 6 (post-launch optimisation cluster). Re-run `scripts/simulate-validate-winner.ts` after applying to confirm CAF / persona-distinctness lift.
+
+**Status:** ⏳ Filed.
+
+### IN-PX-37: Popularity de-bias on recommendation ranking
+
+**Source:** ADR-013 best-practices research; Steck et al., Netflix Research (arXiv 2403.05440); arXiv 2404.12008 spectral analysis of popularity-bias amplification.
+
+**Detail:** Cosine on content embeddings has a documented popularity bias — popular titles have richer Wikipedia / IMDB text feeding their embedding, producing denser, more "central" representations that cosine-rank inflates. We saw the empirical version pre-ADR-013: every persona's top recs were Marvel/Avengers because those titles sit at the centre of the embedding space and pull toward any L2-normalised user vector.
+
+ADR-013 mitigated this on the *bootstrap* side (cluster-dominant weights pull profiles away from the central blob). The *ranking* side still has the bias.
+
+**Fix:** Either (a) inverse-popularity downweight on the final score: `score' = score - λ · log(vote_count)`, or (b) MMR re-rank at candidate generation extended with a popularity penalty term. We already implemented MMR for genre diversity in Phase 5 (`src/lib/recommendations-v2/diversity.ts`); extending it is incremental.
+
+**Phase target:** Phase 6 (post-launch). Tune λ from telemetry (CTR by popularity quartile).
+
+**Status:** ⏳ Filed.
+
+### IN-PX-38: Phase 2 — two-tower neural recommender
+
+**Source:** ADR-013 best-practices research. NVIDIA Merlin two-tower for cold start, Allegro 2025 (arXiv 2508.03702), Spotify Research Sept 2025 generalised user representations, Google Cloud retrieval reference architecture.
+
+**Detail:** The current architecture (weighted centroid of service / watched / cluster vectors → cosine retrieval) is the textbook content-based cold-start baseline. The industrial upgrade path consensus is a two-tower model: an item tower over content features (we already have OpenAI title embeddings — the harder piece is done), a user tower over context + onboarding signals + early implicit behaviour, trained jointly with a contrastive loss, served via ANN. Generalises the centroid trick (a frozen centroid is just an untrained user tower) and learns the explicit-vs-implicit signal weighting from data instead of hand-setting it (which is what ADR-013 had to do empirically via simulation).
+
+**Fix:** R&D project. Initial scope: PyTorch two-tower over the existing 1536D item embeddings + a user tower with learned embeddings for service IDs / cluster IDs / age range / viewing context / onboarding tap history / early implicit interactions. Train on `user_interactions` data once we have ≥10k interactions per active cohort. Serve via existing `match_titles_by_vector` RPC (just replace the user-side input).
+
+**Why this isn't urgent:** the centroid baseline is sufficient for the prototype-user phase. The two-tower upgrade pays off once we have enough behavioural data to train it. Pre-launch we don't.
+
+**Phase target:** Phase 7+ (post-Phase-6 launch, after behavioural data accumulates). Major effort, separate roadmap entry.
+
+**Status:** ⏳ Filed for future planning.
 
 ---
 

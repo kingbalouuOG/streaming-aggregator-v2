@@ -180,14 +180,20 @@
       "daily-notes:Open today's daily note": false,
       "templates:Insert template": false,
       "command-palette:Open command palette": false,
-      "bases:Create new base": false
+      "bases:Create new base": false,
+      "audio-recorder:Start/stop recording": false
     }
   },
-  "active": "6943266bc3f00758",
+  "active": "3b2084a4d4f4edc6",
   "lastOpenFiles": [
+    "wiki/concepts/operations/phase-5.md",
+    "raw/Clippings/Why SaaS freemium playbooks don’t work in AI, and what to do instead.md",
+    "raw/Clippings",
+    "wiki/concepts/decisions/adr-013-cluster-dominant-bootstrap-weights.md",
+    "index.md.tmp.17040.1778145056270",
+    "wiki/entities/codebase/components.md",
     "wiki/concepts/operations/solutions/react-numeric-falsy-renders-zero.md",
     "wiki/entities/codebase/module-map.md",
-    "wiki/entities/codebase/components.md",
     "wiki/registers/next-steps.md",
     "wiki/registers/parking-lot.md",
     "wiki/registers/pre-launch-blockers.md",
@@ -208,18 +214,12 @@
     "wiki/concepts/forward-planning/monetisation-strategy.md",
     "wiki/sources/forward-planning.md",
     "wiki/concepts/product/tone-and-voice-guide.md",
-    "wiki/concepts/product/privacy-and-gdpr.md",
-    "wiki/concepts/product/user-personas.md",
-    "wiki/concepts/product/mission-and-pitch.md",
-    "wiki/sources/product.md",
     "wiki/concepts/operations/solutions",
     "sources",
     "wiki/concepts/forward-planning",
     "wiki/concepts/product",
     "wiki/concepts/evaluations",
     "wiki/concepts/decisions",
-    "wiki/concepts/operations",
-    "wiki/concepts/domain",
-    "wiki/concepts/techniques"
+    "wiki/concepts/operations"
   ]
 }

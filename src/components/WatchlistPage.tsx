@@ -64,6 +64,9 @@ interface WatchlistPageProps {
   onRate?: (id: string, rating: 'up' | 'down' | null) => void;
   activeSubTab?: "want" | "watched";
   onSubTabChange?: (tab: "want" | "watched") => void;
+  /** User's connected services — used to render the IN YOUR PLAN
+   *  badge on list rows when a title overlaps the user's stack. */
+  userServices?: ServiceId[];
 }
 
 export function WatchlistPage({
@@ -78,10 +81,11 @@ export function WatchlistPage({
   onRate,
   activeSubTab,
   onSubTabChange,
+  userServices,
 }: WatchlistPageProps) {
   const [localTab, setLocalTab] = useState<WatchlistTab>("want");
   const activeTab = activeSubTab ?? localTab;
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [activeCategory, setActiveCategory] = useState<Category>("all");
   const [activeSort, setActiveSort] = useState<SortOption>("added");
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -115,19 +119,22 @@ export function WatchlistPage({
                 onClick={() => handleTabChange(t)}
                 className="inline-flex items-center gap-2 px-3 py-1.5"
                 style={{
-                  background: active ? "var(--primary)" : "var(--surface-tint)",
-                  color: active ? "#fff" : "var(--fg-soft)",
+                  background: active ? "var(--primary-soft)" : "transparent",
+                  color: active ? "var(--primary)" : "var(--fg-soft)",
+                  border: active
+                    ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                    : "1px solid var(--hairline)",
                   borderRadius: "var(--r-pill)",
                   fontFamily: "var(--font-ui)",
                   fontSize: 13,
                   fontWeight: active ? 600 : 500,
                   letterSpacing: "0.01em",
-                  transition: "background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out)",
+                  transition: "background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out), border-color var(--d-fast) var(--ease-out)",
                 }}
               >
                 {t === "want" ? <Bookmark className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                 <span>{label}</span>
-                <span style={{ opacity: active ? 0.85 : 0.6 }}>{count}</span>
+                <span style={{ opacity: active ? 0.7 : 0.6 }}>{count}</span>
               </button>
             );
           })}
@@ -145,13 +152,20 @@ export function WatchlistPage({
             return (
               <button
                 key={cat}
+                type="button"
                 onClick={() => setActiveCategory(cat)}
-                className={`shrink-0 px-3 py-1.5 rounded-lg text-[12px] border transition-all duration-200 ${
-                  isActive
-                    ? "bg-primary/15 text-primary border-primary/30"
-                    : "bg-secondary/50 text-muted-foreground border-transparent"
-                }`}
-                style={{ fontWeight: isActive ? 600 : 500 }}
+                className="shrink-0 px-3 py-1.5 text-[12px] transition-all duration-200"
+                style={{
+                  background: isActive ? "var(--primary-soft)" : "transparent",
+                  color: isActive ? "var(--primary)" : "var(--fg-soft)",
+                  border: isActive
+                    ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                    : "1px solid var(--hairline)",
+                  borderRadius: "var(--r-pill)",
+                  fontFamily: "var(--font-ui)",
+                  fontWeight: isActive ? 600 : 500,
+                  letterSpacing: "0.01em",
+                }}
               >
                 {label} ({count})
               </button>
@@ -249,7 +263,7 @@ export function WatchlistPage({
       {/* Swipe hint - only in list view with items */}
       {items.length > 0 && viewMode === "list" && (
         <div className="px-5 mb-2">
-          <p className="text-muted-foreground/50 text-[11px] text-center italic">
+          <p className="text-muted-foreground/50 text-[11px] text-center">
             Swipe left on a title for quick actions
           </p>
         </div>
@@ -328,6 +342,7 @@ export function WatchlistPage({
                     onMoveToWantToWatch={() => onMoveToWantToWatch(item.id)}
                     rating={ratings?.[item.id]}
                     onRate={onRate ? (r) => onRate(item.id, r) : undefined}
+                    userServices={userServices}
                   />
                 ))}
               </AnimatePresence>
@@ -365,6 +380,7 @@ interface CardProps {
   onMoveToWantToWatch: () => void;
   rating?: 'up' | 'down';
   onRate?: (rating: 'up' | 'down' | null) => void;
+  userServices?: ServiceId[];
 }
 
 function GridCard({
@@ -396,89 +412,153 @@ function GridCard({
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.2 } }}
       transition={{ type: "spring", damping: 25, stiffness: 350 }}
-      className="relative group rounded-xl overflow-hidden cursor-pointer aspect-[3/4]"
+      className="relative group cursor-pointer"
       onClick={onSelect}
       onContextMenu={(e) => {
         e.preventDefault();
         setShowActions(true);
       }}
     >
-      {/* Poster */}
-      <ImageSkeleton
-        src={item.image}
-        alt={item.title}
-        className="w-full h-full object-cover"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+      {/* Poster — matches ContentCard anatomy: services TL glass chip,
+          bookmark/tick TR, ★ rating BL, title + meta beneath the
+          poster (not overlaid). */}
+      <div
+        className="relative w-full aspect-[5/7] overflow-hidden"
+        style={{ borderRadius: "var(--r-card)" }}
+      >
+        <ImageSkeleton
+          src={item.image}
+          alt={item.title}
+          className="w-full h-full object-cover"
+        />
 
-      {/* Service badges - top left */}
-      <div className="absolute top-2.5 left-2.5 flex items-center gap-1">
-        {services.slice(0, 3).map((service) => (
-          <ServiceBadge key={service} service={service} size="md" />
-        ))}
+        {services.length > 0 && (
+          <div
+            className="absolute top-2 left-2 inline-flex items-center gap-0.5"
+            style={{ filter: "var(--badge-glow)" }}
+          >
+            {services.slice(0, 2).map((service) => (
+              <ServiceBadge key={service} service={service} size="md" />
+            ))}
+          </div>
+        )}
+
+        {tab === "watched" ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onMoveToWantToWatch(); }}
+            className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center transition-transform active:scale-90"
+            style={{
+              borderRadius: "var(--r-md)",
+              background: "var(--primary)",
+              color: "var(--primary-foreground)",
+            }}
+            aria-label="Move to want to watch"
+          >
+            <TickIcon className="w-4 h-4" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center transition-transform active:scale-90"
+            style={{
+              borderRadius: "var(--r-md)",
+              background: "var(--primary)",
+              color: "var(--primary-foreground)",
+            }}
+            aria-label="Remove from watchlist"
+          >
+            <Bookmark className="w-4 h-4 fill-current" />
+          </button>
+        )}
+
+        {item.rating != null && item.rating > 0 && (
+          <div
+            className="absolute bottom-2 left-2 inline-flex items-center gap-1"
+            style={{
+              padding: "3px 7px",
+              background: "var(--scrim-glass-action)",
+              backdropFilter: "blur(8px) saturate(160%)",
+              WebkitBackdropFilter: "blur(8px) saturate(160%)",
+              boxShadow: "var(--scrim-glass-edge)",
+              borderRadius: "var(--r-pill)",
+              color: "#fff",
+              fontFamily: "var(--font-ui)",
+              fontSize: 11,
+              fontWeight: 600,
+              lineHeight: 1,
+            }}
+          >
+            <span style={{ color: "var(--star)" }}>★</span>
+            <span>{item.rating.toFixed(1)}</span>
+          </div>
+        )}
       </div>
 
-      {/* Bookmark/Watched indicator - top right */}
-      {tab === "watched" ? (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onMoveToWantToWatch();
-          }}
-          className="absolute top-2.5 right-2.5 w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center transition-transform active:scale-90"
-        >
-          <TickIcon className="w-4 h-4 text-white" />
-        </button>
-      ) : (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove();
-          }}
-          className="absolute top-2.5 right-2.5 w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center transition-transform active:scale-90"
-        >
-          <Bookmark className="w-4 h-4 fill-current" />
-        </button>
-      )}
-
-      {/* Title + rating at bottom */}
-      <div className="absolute bottom-0 left-0 right-0 p-3">
-        <div className="flex items-end justify-between gap-2">
+      {/* Title + meta + thumbs (watched) — beneath the poster */}
+      <div className="mt-2 px-0.5 flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
           <h3
-            className="text-white text-[14px] leading-tight flex-1 min-w-0"
-            style={{ fontWeight: 600 }}
+            className="line-clamp-2"
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 14,
+              fontWeight: 600,
+              color: "var(--fg)",
+              lineHeight: 1.25,
+            }}
           >
             {item.title}
           </h3>
-          {tab === "watched" && onRate && (
-            <div className="flex items-center gap-1 shrink-0">
-              <motion.button
-                onClick={(e) => { e.stopPropagation(); onRate(rating === 'up' ? null : 'up'); }}
-                whileTap={{ scale: 0.8 }}
-                animate={rating === 'up' ? { scale: [1, 1.2, 1] } : undefined}
-                className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
-                  rating === 'up'
-                    ? "bg-emerald-500 text-white"
-                    : "bg-black/50 backdrop-blur-sm text-white/60"
-                }`}
-              >
-                <ThumbsUp className={`w-3 h-3 ${rating === 'up' ? 'fill-current' : ''}`} />
-              </motion.button>
-              <motion.button
-                onClick={(e) => { e.stopPropagation(); onRate(rating === 'down' ? null : 'down'); }}
-                whileTap={{ scale: 0.8 }}
-                animate={rating === 'down' ? { scale: [1, 1.2, 1] } : undefined}
-                className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
-                  rating === 'down'
-                    ? "bg-red-500 text-white"
-                    : "bg-black/50 backdrop-blur-sm text-white/60"
-                }`}
-              >
-                <ThumbsDown className={`w-3 h-3 ${rating === 'down' ? 'fill-current' : ''}`} />
-              </motion.button>
-            </div>
+          {(item.year || item.genre) && (
+            <p
+              className="mt-1 truncate"
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                fontWeight: 500,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                color: "var(--fg-faint)",
+                lineHeight: 1.3,
+                margin: 0,
+              }}
+            >
+              {[item.genre, item.year].filter(Boolean).join(" · ")}
+            </p>
           )}
         </div>
+        {tab === "watched" && onRate && (
+          <div className="flex items-center gap-1 shrink-0 mt-0.5">
+            <motion.button
+              onClick={(e) => { e.stopPropagation(); onRate(rating === 'up' ? null : 'up'); }}
+              whileTap={{ scale: 0.8 }}
+              animate={rating === 'up' ? { scale: [1, 1.2, 1] } : undefined}
+              className="w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200"
+              style={{
+                background: rating === 'up' ? 'var(--success)' : 'var(--surface-tint)',
+                color: rating === 'up' ? '#fff' : 'var(--fg-faint)',
+              }}
+              aria-label="Thumbs up"
+            >
+              <ThumbsUp className={`w-3 h-3 ${rating === 'up' ? 'fill-current' : ''}`} />
+            </motion.button>
+            <motion.button
+              onClick={(e) => { e.stopPropagation(); onRate(rating === 'down' ? null : 'down'); }}
+              whileTap={{ scale: 0.8 }}
+              animate={rating === 'down' ? { scale: [1, 1.2, 1] } : undefined}
+              className="w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200"
+              style={{
+                background: rating === 'down' ? 'var(--danger)' : 'var(--surface-tint)',
+                color: rating === 'down' ? '#fff' : 'var(--fg-faint)',
+              }}
+              aria-label="Thumbs down"
+            >
+              <ThumbsDown className={`w-3 h-3 ${rating === 'down' ? 'fill-current' : ''}`} />
+            </motion.button>
+          </div>
+        )}
       </div>
 
       {/* Quick action overlay (on long-press / right-click) */}
@@ -543,6 +623,19 @@ function GridCard({
 const SWIPE_THRESHOLD = 70;
 const ACTION_WIDTH = 140;
 
+function relativeAdded(addedAt?: number): string | null {
+  if (!addedAt) return null;
+  const minutes = Math.max(1, Math.floor((Date.now() - addedAt) / 60_000));
+  if (minutes < 60) return `${minutes}M AGO`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}H AGO`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}D AGO`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}MO AGO`;
+  return `${Math.floor(months / 12)}Y AGO`;
+}
+
 function SwipeableListCard({
   item,
   tab,
@@ -552,6 +645,7 @@ function SwipeableListCard({
   onMoveToWantToWatch,
   rating,
   onRate,
+  userServices,
 }: CardProps) {
   const [offsetX, setOffsetX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
@@ -778,31 +872,62 @@ function SwipeableListCard({
         {/* Info */}
         <div className="flex-1 min-w-0">
           <h3
-            className="text-foreground text-[14px] truncate"
-            style={{ fontWeight: 600 }}
+            className="text-foreground truncate"
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: 16,
+              fontWeight: 700,
+              fontVariationSettings: '"opsz" 24',
+              letterSpacing: "-0.01em",
+              lineHeight: 1.2,
+            }}
           >
             {item.title}
           </h3>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            {services.slice(0, 3).map((s) => (
-              <ServiceBadge key={s} service={s} size="sm" />
-            ))}
-            {item.year && (
-              <span className="text-muted-foreground text-[11px] ml-1">
-                {item.year}
-              </span>
-            )}
-            {item.rating && (
-              <>
-                <span className="text-muted-foreground text-[11px] mx-0.5">
-                  ·
-                </span>
-                <span className="text-yellow-400 text-[11px]">&#9733;</span>
-                <span className="text-muted-foreground text-[11px]">
-                  {item.rating}
-                </span>
-              </>
-            )}
+          {(() => {
+            const inPlan =
+              !!userServices?.length &&
+              services.some((s) => userServices.includes(s));
+            const added = relativeAdded(item.addedAt);
+            return (
+              <div
+                className="flex items-center gap-2 mt-1 flex-wrap"
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 11,
+                  fontWeight: 500,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  color: "var(--fg-faint)",
+                }}
+              >
+                {services[0] && <ServiceBadge service={services[0]} size="sm" />}
+                {inPlan && (
+                  <span
+                    style={{
+                      background: "color-mix(in srgb, var(--primary) 18%, transparent)",
+                      color: "#fff",
+                      border: "0.5px solid color-mix(in srgb, var(--primary) 50%, transparent)",
+                      borderRadius: "var(--r-pill)",
+                      padding: "1px 6px",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: "0.12em",
+                    }}
+                  >
+                    IN YOUR PLAN
+                  </span>
+                )}
+                {added && <span>{added}</span>}
+                {item.rating != null && item.rating > 0 && (
+                  <span>
+                    <span style={{ color: "var(--star)" }}>★</span> {item.rating.toFixed(1)}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+          <div className="flex items-center gap-1.5 mt-1">
             {tab === "watched" && onRate && (
               <>
                 <span className="text-muted-foreground text-[11px] mx-0.5">·</span>
@@ -905,9 +1030,9 @@ function EmptyState({
       </h2>
       <p
         style={{
-          fontFamily: "var(--font-display)",
-          fontStyle: "italic",
+          fontFamily: "var(--font-ui)",
           fontSize: "var(--t-body)",
+          fontWeight: 400,
           color: "var(--fg-soft)",
           lineHeight: 1.45,
           margin: 0,

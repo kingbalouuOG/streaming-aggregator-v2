@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Kicker } from "./Kicker";
-import { CloseIcon } from "./icons";
+import { CloseIcon, ChevronRightIcon } from "./icons";
 
 interface EditorsNoteProps {
   /** Default "EDITOR'S NOTE". Pass a date or topic to override. */
@@ -69,34 +69,39 @@ export function EditorsNote({
           aria-hidden
           className="shrink-0 inline-flex items-center justify-center"
           style={{
-            width: 28,
-            height: 28,
-            borderRadius: "var(--r-pill)",
-            background: "var(--primary)",
-            color: "#fff",
+            width: 36,
+            height: 36,
+            borderRadius: "var(--r-sm)",
+            background: "var(--primary-soft)",
+            color: "var(--primary)",
             fontFamily: "var(--font-display)",
-            fontWeight: 800,
-            fontSize: 16,
+            fontWeight: 700,
+            fontSize: 22,
             fontVariationSettings: '"opsz" 36',
             letterSpacing: "-0.02em",
+            lineHeight: 1,
           }}
         >
           A
         </span>
-        <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+        <span className="flex-1 min-w-0 flex flex-col gap-1">
           <Kicker>{kicker}</Kicker>
           <span
             className="line-clamp-1"
             style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: "var(--t-body)",
-              color: "var(--fg-soft)",
+              fontFamily: "var(--font-display)",
+              fontSize: 15,
+              fontWeight: 500,
+              fontVariationSettings: '"opsz" 24',
+              letterSpacing: "-0.005em",
+              color: "var(--fg)",
               lineHeight: 1.35,
             }}
           >
             {teaser}
           </span>
         </span>
+        <ChevronRightIcon className="w-4 h-4 shrink-0" />
       </button>
 
       {/* Modal sheet */}

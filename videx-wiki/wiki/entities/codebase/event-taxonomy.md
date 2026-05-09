@@ -3,12 +3,14 @@ title: Event Taxonomy
 type: entity
 tags: [events, instrumentation, signals, analytics]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-05-07
 sources:
   - raw/codebase-snapshots/event-taxonomy.md
   - raw/v2-strategy/Videx_v2_Detail_Page_Signal_Capture_Spec_v0.3.2.md
+  - docs/v2/phase-summaries/phase-5-summary.md
 related:
   - wiki/entities/codebase/database-schema.md
+  - wiki/entities/codebase/migrations.md
   - wiki/concepts/architecture/signal-architecture.md
   - wiki/concepts/decisions/adr-006-card-impressions-dedicated-table.md
   - wiki/concepts/decisions/adr-009-not-interested-rename.md
@@ -47,9 +49,13 @@ Source: `lib/storage/interactions.ts`. Written to `user_interactions`. Always in
 | `thumbs_down` | Watched-tab rating tap (negative). | `{ rating: 'down' }` |
 | `watchlist_add` | "Want to Watch" tap. | `{ from_surface }` |
 | `watchlist_remove` | Removed from any list. | `{ from_list: 'want_to_watch' \| 'watched' }` |
-| `marked_watched` | Tap on "Mark as Watched". | `{}` |
+| `watched` | Tap on "Mark as Watched". | `{}` |
 | `not_interested` | Detail page button (renamed from `dismiss` in Phase 0). | `{}` |
 | `report_availability` | "Report incorrect availability" submission. | `{ reported_service, reason }` |
+
+> ⚠ **Phase 5 (migration 037) dropped `marked_watched` from the `user_interactions.event_type` CHECK constraint.** It was carried alongside `watched` for forward-compat in migration 013 but never emitted at runtime — `emitContentInteraction` only takes `'watched'`. The `marked_watched` token survives as a canonical `exit_reason` payload value inside `dwell_event` metadata (Detail Page Signal Capture Spec v0.3.2 line 237) — that stays.
+>
+> **Latent bug fix:** Phase 5 also renamed `INTERACTION_WEIGHTS['marked_watched']` → `INTERACTION_WEIGHTS['watched']` in `taste-v2/types.ts`. The map was keyed on the legacy name, but `emitContentInteraction` writes `'watched'` to the DB — so per-click incremental updates were silently no-op'ing on every "Mark as watched" click since Phase 3. Vectors rebase on the next 24h taste-recompute cycle (`recomputeFromInteractions` reads historical events).
 
 ### Silent (behaviour-derived)
 

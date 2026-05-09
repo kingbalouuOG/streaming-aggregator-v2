@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, EyeOff, Check, CheckCircle2, Undo2, AlertCircle, ChevronDown, ChevronUp, MessageSquare, ExternalLink } from "lucide-react";
-import { TickIcon } from "./icons";
 import { motion } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
 import { SectionHead } from "./SectionHead";
-import { ContentItem } from "./ContentCard";
+import { ContentCard, ContentItem } from "./ContentCard";
 import { ImageSkeleton } from "./ImageSkeleton";
 import type { ServiceId } from "./platformLogos";
 import { serviceLabels as platformServiceLabels } from "./platformLogos";
@@ -13,7 +12,6 @@ import type { DetailData, RentalOption, ServiceLink } from "@/lib/adapters/detai
 import { getDeepLink } from "@/lib/deepLinks";
 import { openDeepLink } from "@/lib/openDeepLink";
 import { classifyProviders } from "@/lib/utils/providerClassifier";
-import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 import { startDwell, exitDwell, setLastAction, getCurrentDwellSeconds } from "@/lib/instrumentation/dwellTimer";
 import { markNotInterested } from "@/lib/storage/interactions";
@@ -594,11 +592,11 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
               }
             />
             <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-5 px-5 pb-2">
-              {similar.map((rec, index) => (
-                <SimilarCard
+              {similar.map((rec) => (
+                <ContentCard
                   key={rec.id}
                   item={rec}
-                  index={index}
+                  variant="default"
                   onSelect={onItemSelect}
                   bookmarked={bookmarkedIds?.has(rec.id)}
                   onToggleBookmark={onToggleBookmarkItem}
@@ -630,11 +628,11 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
         <SectionHead kicker="WHERE TO WATCH" title="Not on your stack." />
         <p
           style={{
-            fontFamily: "var(--font-display)",
-            fontStyle: "italic",
+            fontFamily: "var(--font-ui)",
             fontSize: "var(--t-body)",
+            fontWeight: 400,
             color: "var(--fg-soft)",
-            lineHeight: 1.4,
+            lineHeight: 1.45,
             margin: 0,
           }}
         >
@@ -746,7 +744,6 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
               fontFamily: "var(--font-ui)",
               fontSize: 12,
               color: "var(--fg-faint)",
-              fontStyle: "italic",
             }}
           >
             Not connected to your account.
@@ -845,82 +842,3 @@ function RentBuyList({ options, title, year, serviceLinks, contentId, mediaType 
   );
 }
 
-// ── Similar Card with service lazy-loading ──────────────
-function SimilarCard({ item, index, onSelect, bookmarked, onToggleBookmark, userServices, watched }: {
-  item: ContentItem;
-  index: number;
-  onSelect?: (item: ContentItem) => void;
-  bookmarked?: boolean;
-  onToggleBookmark?: (item: ContentItem) => void;
-  userServices?: ServiceId[];
-  watched?: boolean;
-}) {
-  const [allServices, setAllServices] = useState<ServiceId[]>(item.services);
-
-  useEffect(() => {
-    if (item.services.length > 0) {
-      setAllServices(item.services);
-      return;
-    }
-    const { tmdbId, mediaType } = parseContentItemId(item.id);
-    getCachedServices(String(tmdbId), mediaType).then(setAllServices);
-  }, [item.id, item.services]);
-
-  const services = userServices?.length
-    ? allServices.filter((s) => userServices.includes(s))
-    : allServices;
-
-  return (
-    <motion.div
-      key={item.id}
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06, type: "spring", damping: 22, stiffness: 300 }}
-      className="relative group shrink-0 w-[165px] h-[240px] rounded-xl overflow-hidden cursor-pointer"
-      onClick={() => onSelect?.(item)}
-    >
-      <ImageSkeleton src={item.image} alt={item.title} className="absolute inset-0 w-full h-full object-cover" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/10" />
-
-      {/* Match % pill removed in Phase 4 PR-N follow-up — the v3
-          ContentCard anatomy (§4) is one rating, one bookmark, no
-          competing badges. The matchPercentage prop stays on
-          ContentItem for future use. */}
-
-      {watched ? (
-        <div className="absolute top-2.5 right-2.5 w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center">
-          <TickIcon className="w-3.5 h-3.5 text-white" />
-        </div>
-      ) : (
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggleBookmark?.(item); }}
-          className={`absolute top-2.5 right-2.5 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 ${
-            bookmarked
-              ? "bg-primary text-white"
-              : "bg-black/40 backdrop-blur-sm text-white/70 hover:text-white"
-          }`}
-        >
-          <Bookmark className={`w-3.5 h-3.5 ${bookmarked ? "fill-current" : ""}`} />
-        </button>
-      )}
-
-      <div className="absolute bottom-0 left-0 right-0 p-3">
-        <div className="flex items-center gap-1 mb-1">
-          {services.slice(0, 3).map((s) => (
-            <ServiceBadge key={s} service={s} size="sm" />
-          ))}
-        </div>
-        {item.rating && (
-          <div className="flex items-center gap-1 mb-0.5">
-            <span className="text-yellow-400 text-[11px]">&#9733;</span>
-            <span className="text-white/80 text-[11px]">{item.rating.toFixed(1)}</span>
-          </div>
-        )}
-        <h4 className="text-white text-[13px] leading-tight mb-0.5" style={{ fontWeight: 600 }}>
-          {item.title}
-        </h4>
-        {item.year && <span className="text-white/45 text-[11px]">{item.year}</span>}
-      </div>
-    </motion.div>
-  );
-}

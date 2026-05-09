@@ -26,8 +26,7 @@ import type { ServiceId } from "../components/platformLogos";
 import { BottomNav } from "../components/BottomNav";
 import { MagazineHero } from "../components/MagazineHero";
 import { EditorsNote } from "../components/EditorsNote";
-import { CalendarStrip } from "../components/CalendarStrip";
-import type { UpcomingRelease } from "../hooks/useUpcoming";
+import { WideCard, type WideCardItem } from "../components/WideCard";
 
 // Picsum gives a stable random poster per seed without auth/network policy
 // pain — good enough for the debug surface, never reaches production.
@@ -275,50 +274,6 @@ The case for credits: Slow Horses keeps tucking jokes into the typography. Watch
   );
 }
 
-export function CalendarStripDebug() {
-  const today = new Date();
-  const offsetDate = (days: number) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0, 10);
-  };
-  const items: UpcomingRelease[] = [
-    { id: "movie-cal-1", title: "Mickey 17", image: poster("cal1"), services: ["prime"], releaseDate: offsetDate(0), type: "movie", rating: 0, genre: "" } as UpcomingRelease,
-    { id: "tv-cal-2",    title: "Severance S2 Finale", image: poster("cal2"), services: ["apple"], releaseDate: offsetDate(2), type: "tv", rating: 0, genre: "" } as UpcomingRelease,
-    { id: "movie-cal-3", title: "The Studio", image: poster("cal3"), services: ["apple", "netflix"], releaseDate: offsetDate(5), type: "tv", rating: 0, genre: "" } as UpcomingRelease,
-    { id: "movie-cal-4", title: "Conclave", image: poster("cal4"), services: ["prime"], releaseDate: offsetDate(9), type: "movie", rating: 0, genre: "" } as UpcomingRelease,
-    { id: "movie-cal-5", title: "A Real Pain", image: poster("cal5"), services: ["disney"], releaseDate: offsetDate(14), type: "movie", rating: 0, genre: "" } as UpcomingRelease,
-  ];
-
-  return (
-    <div style={{ paddingTop: 40, paddingBottom: 80, color: "var(--fg)" }}>
-      <div className="editorial" style={{ marginBottom: 16 }}>
-        <h1
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: "var(--t-headline)",
-            fontWeight: 600,
-            fontVariationSettings: '"opsz" 48',
-          }}
-        >
-          CalendarStrip (Phase 5)
-        </h1>
-      </div>
-      <CalendarStrip
-        items={items}
-        kicker="ON THE CALENDAR"
-        title="Coming up."
-        standfirst="The next two weeks across your stack."
-        onSelect={() => {}}
-      />
-      <p className="editorial" style={{ marginTop: 24, fontSize: "var(--t-meta)", color: "var(--fg-faint)" }}>
-        Dev-only route. Tree-shaken from production builds via{" "}
-        <code>import.meta.env.DEV</code>.
-      </p>
-    </div>
-  );
-}
-
 export function BottomNavDebug() {
   const [tab, setTab] = React.useState("home");
   const Frame = ({ label, count }: { label: string; count: number }) => (
@@ -478,3 +433,85 @@ export function ContentCardDebug() {
     </div>
   );
 }
+
+/**
+ * WideCardDebug — visual approval surface for landscape (16:9) cards.
+ * Hits TMDb's public CDN directly so designers can compare backdrop
+ * art against the existing 5:7 portrait variants. Mount via
+ * `?debug=widecards`. Backdrops chosen to span dark / mid / light
+ * cinematography.
+ */
+// Real TMDb backdrop paths (fetched from /movie/{id} and /tv/{id} on
+// 2026-05-08). Renders the production CDN at the same size we'd use
+// in-app so the visual review matches reality.
+const tmdbBackdrop = (path: string) => `https://image.tmdb.org/t/p/w780${path}`;
+
+const WIDE_SAMPLES: WideCardItem[] = [
+  {
+    id: "movie-wide-1",
+    title: "Dune: Part Two",
+    image: poster("dune-poster"),
+    backdrop: tmdbBackdrop("/xOMo8BRK7PfcJv9JCnx7s5hj0PX.jpg"),
+    services: ["netflix", "prime"],
+    genre: "SCI-FI",
+    year: 2024,
+    rating: 8.2,
+  },
+  {
+    id: "tv-wide-1",
+    title: "The Bear",
+    image: poster("bear-poster"),
+    backdrop: tmdbBackdrop("/wHNwlE6ftEpgjVbdhLXOtv1hLs0.jpg"),
+    services: ["disney"],
+    genre: "DRAMA",
+    year: 2022,
+    rating: 8.7,
+  },
+  {
+    id: "movie-wide-2",
+    title: "Past Lives",
+    image: poster("pastlives-poster"),
+    backdrop: tmdbBackdrop("/7HR38hMBl23lf38MAN63y4pKsHz.jpg"),
+    services: ["bbc"],
+    genre: "ROMANCE",
+    year: 2023,
+    rating: 7.8,
+  },
+];
+
+export function WideCardDebug() {
+  return (
+    <div className="editorial mx-auto py-8 flex flex-col gap-10">
+      <SectionHead
+        kicker="DEBUG"
+        title="Wide cards — visual approval."
+        standfirst="Landscape (16:9) variant. Compare against the portrait 5:7 elsewhere on the screen."
+      />
+
+      <section className="flex flex-col gap-3">
+        <Kicker>DEFAULT (272PX)</Kicker>
+        <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2" style={{ scrollbarWidth: "none" }}>
+          {WIDE_SAMPLES.map((item) => (
+            <WideCard key={item.id} item={item} />
+          ))}
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <Kicker>LEAD (358PX, FULL-BLEED)</Kicker>
+        <div className="flex flex-col gap-4">
+          {WIDE_SAMPLES.map((item) => (
+            <WideCard key={item.id} item={item} size="lead" />
+          ))}
+        </div>
+      </section>
+
+      <p style={{ fontSize: "var(--t-meta)", color: "var(--fg-faint)" }}>
+        Backdrops fetched directly from <code>image.tmdb.org/t/p/w780/...</code>.
+        Threading <code>backdrop_path</code> through <code>contentAdapter</code> is
+        the next step once the visual is approved.
+      </p>
+    </div>
+  );
+}
+

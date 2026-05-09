@@ -17,6 +17,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { PLATFORMS, type PlatformDef } from "./platformLogos";
+import { GenreIconTile, CLUSTER_GLYPHS } from "./genreIcons";
 import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste-v2/tasteClusters";
 import { logOnboardingEvent } from "@/lib/analytics/logger";
 import { ONBOARDING_EVENTS } from "@/lib/analytics/events";
@@ -96,11 +97,11 @@ function StepHeader({
         <p
           className="mt-2"
           style={{
-            fontFamily: "var(--font-display)",
-            fontStyle: "italic",
+            fontFamily: "var(--font-ui)",
             fontSize: "var(--t-body)",
+            fontWeight: 400,
             color: "var(--fg-soft)",
-            lineHeight: 1.4,
+            lineHeight: 1.45,
             margin: 0,
           }}
         >
@@ -622,11 +623,11 @@ function StepAccount({
           marginBottom: 8,
         }}>Join Videx.</h2>
         <p style={{
-          fontFamily: "var(--font-display)",
-          fontStyle: "italic",
+          fontFamily: "var(--font-ui)",
           fontSize: "var(--t-body)",
+          fontWeight: 400,
           color: "var(--fg-soft)",
-          lineHeight: 1.4,
+          lineHeight: 1.45,
           margin: 0,
           textAlign: "center",
         }}>A unified streaming companion across your stack.</p>
@@ -790,8 +791,15 @@ function StepServices({
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center gap-3 mb-2"
         >
-          <div className="w-10 h-10 rounded-2xl bg-blue-500/15 flex items-center justify-center">
-            <Tv className="w-5 h-5 text-blue-400" />
+          <div
+            className="w-10 h-10 flex items-center justify-center"
+            style={{
+              borderRadius: "var(--r-md)",
+              background: "var(--surface-tint)",
+              color: "var(--fg-soft)",
+            }}
+          >
+            <Tv className="w-5 h-5" />
           </div>
           <div>
             <StepHeader
@@ -1029,8 +1037,8 @@ function StepClusters({
               }`}
               style={{ paddingLeft: '1rem', paddingRight: '2.5rem', borderColor: isSelected ? undefined : "var(--border-subtle)" }}
             >
-              <span className={`text-[22px] shrink-0 transition-transform duration-200 ${isSelected ? "scale-115" : ""}`}>
-                {cluster.emoji}
+              <span className={`shrink-0 transition-transform duration-200 ${isSelected ? "scale-115" : ""}`}>
+                <GenreIconTile glyph={CLUSTER_GLYPHS[cluster.id]} size={36} />
               </span>
               <div className="flex flex-col items-start min-w-0 flex-1">
                 <span

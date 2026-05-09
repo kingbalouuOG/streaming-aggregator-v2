@@ -34,14 +34,22 @@ export function ServiceBadge({ service, size = "md" }: ServiceBadgeProps) {
     );
   }
 
-  // Fallback: coloured letter badge
-  const bg = platform?.bg ?? "bg-gray-600";
+  // Fallback: lettered badge. Per-service tints map to var(--svc-*)
+  // so the background follows the design-system contract; if a service
+  // has no entry in PLATFORMS, fall back to surface-tint (theme-aware).
+  const bgVar = platform ? `var(--svc-${service})` : "var(--surface-tint)";
   const label = platform?.label ?? service.slice(0, 2).toUpperCase();
 
   return (
     <span
-      className={`inline-flex items-center justify-center ${bg} text-white ${dim.box} ${dim.font} shrink-0`}
-      style={{ ...radiusStyle, fontWeight: 700, letterSpacing: "-0.02em" }}
+      className={`inline-flex items-center justify-center ${dim.box} ${dim.font} shrink-0`}
+      style={{
+        ...radiusStyle,
+        background: bgVar,
+        color: platform ? "#fff" : "var(--fg-soft)",
+        fontWeight: 700,
+        letterSpacing: "-0.02em",
+      }}
     >
       {label}
     </span>
@@ -79,10 +87,6 @@ export function ServiceStack({ services, size = "md", max = 4 }: ServiceStackPro
             marginLeft: i === 0 ? 0 : -8,
             zIndex: visible.length - i,
             position: "relative",
-            // Hairline ring around each badge so overlapping logos
-            // read as discrete chips rather than smearing into one.
-            outline: "1px solid var(--surface)",
-            outlineOffset: "-1px",
             borderRadius: `${dim.radius}px`,
           }}
         >
@@ -101,8 +105,6 @@ export function ServiceStack({ services, size = "md", max = 4 }: ServiceStackPro
             color: "var(--fg-soft)",
             fontWeight: 700,
             letterSpacing: "-0.02em",
-            outline: "1px solid var(--surface)",
-            outlineOffset: "-1px",
           }}
           aria-label={`+${remaining} more`}
         >

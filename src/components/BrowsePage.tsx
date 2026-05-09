@@ -139,10 +139,12 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
             onClick={() => onShowFiltersChange(true)}
             className="relative w-11 h-11 flex items-center justify-center shrink-0 transition-all duration-200"
             style={{
-              background: activeFilterCount > 0 ? "var(--primary)" : "var(--surface-elev)",
-              border: activeFilterCount > 0 ? "none" : "0.5px solid var(--hairline)",
+              background: activeFilterCount > 0 ? "var(--primary-soft)" : "var(--surface-elev)",
+              border: activeFilterCount > 0
+                ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                : "0.5px solid var(--hairline)",
               borderRadius: "var(--r-card)",
-              color: activeFilterCount > 0 ? "#fff" : "var(--fg-soft)",
+              color: activeFilterCount > 0 ? "var(--primary)" : "var(--fg-soft)",
             }}
             aria-label="Filters"
           >
@@ -156,7 +158,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                   padding: "0 4px",
                   borderRadius: "var(--r-pill)",
                   background: "var(--primary)",
-                  color: "#fff",
+                  color: "var(--primary-foreground)",
                   fontFamily: "var(--font-ui)",
                   fontSize: 10,
                   fontWeight: 700,
@@ -188,14 +190,17 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                     onClick={() => search.setActiveCategory(category)}
                     className="px-3 py-1.5 whitespace-nowrap"
                     style={{
-                      background: isActive ? "var(--primary)" : "var(--surface-tint)",
-                      color: isActive ? "#fff" : "var(--fg-soft)",
+                      background: isActive ? "var(--primary-soft)" : "transparent",
+                      color: isActive ? "var(--primary)" : "var(--fg-soft)",
+                      border: isActive
+                        ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                        : "1px solid var(--hairline)",
                       borderRadius: "var(--r-pill)",
                       fontFamily: "var(--font-ui)",
                       fontSize: 13,
                       fontWeight: isActive ? 600 : 500,
                       letterSpacing: "0.01em",
-                      transition: "background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out)",
+                      transition: "background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out), border-color var(--d-fast) var(--ease-out)",
                     }}
                   >
                     {category}
@@ -233,9 +238,9 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
             </h2>
             <p
               style={{
-                fontFamily: "var(--font-display)",
-                fontStyle: "italic",
+                fontFamily: "var(--font-ui)",
                 fontSize: "var(--t-body)",
+                fontWeight: 400,
                 color: "var(--fg-soft)",
                 lineHeight: 1.45,
                 margin: 0,
@@ -243,6 +248,32 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
             >
               Search movies and TV shows — we'll show you where they're available across your stack.
             </p>
+
+            {/* Quick-start chips. Pre-populate the search with a
+                common-mood query so a tap kicks discovery off without
+                the user having to think of a term. */}
+            <span className="t-kicker mt-8 mb-3">TRY ONE OF THESE</span>
+            <div className="flex flex-wrap gap-2">
+              {["Slow burn", "Comedy", "Crime", "Sci-fi", "Romance", "Documentary"].map((seed) => (
+                <button
+                  key={seed}
+                  type="button"
+                  onClick={() => search.setQuery(seed)}
+                  className="px-3 py-1.5"
+                  style={{
+                    background: "var(--surface-tint)",
+                    color: "var(--fg)",
+                    borderRadius: "var(--r-pill)",
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    letterSpacing: "0.01em",
+                  }}
+                >
+                  {seed}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

@@ -52,16 +52,19 @@ export function CategoryFilter({
                 onClick={() => onCategoryChange(category)}
                 className="shrink-0 whitespace-nowrap"
                 style={{
-                  background: isActive ? "var(--primary)" : "var(--surface-tint)",
-                  color: isActive ? "#fff" : "var(--fg-soft)",
+                  background: isActive ? "var(--primary-soft)" : "transparent",
+                  color: isActive ? "var(--primary)" : "var(--fg-soft)",
+                  border: isActive
+                    ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                    : "1px solid var(--hairline)",
                   borderRadius: "var(--r-pill)",
-                  padding: "6px 12px",
+                  padding: "5px 12px",
                   fontFamily: "var(--font-ui)",
                   fontSize: 13,
                   fontWeight: isActive ? 600 : 500,
                   letterSpacing: "0.01em",
                   transition:
-                    "background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out)",
+                    "background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out), border-color var(--d-fast) var(--ease-out)",
                 }}
               >
                 {category}
@@ -75,8 +78,11 @@ export function CategoryFilter({
             onClick={onFilterPress}
             className="relative flex items-center justify-center w-9 h-9 shrink-0 transition-colors"
             style={{
-              background: hasActiveFilters ? "var(--primary)" : "var(--surface-tint)",
-              color: hasActiveFilters ? "#fff" : "var(--fg-soft)",
+              background: hasActiveFilters ? "var(--primary-soft)" : "transparent",
+              color: hasActiveFilters ? "var(--primary)" : "var(--fg-soft)",
+              border: hasActiveFilters
+                ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                : "1px solid var(--hairline)",
               borderRadius: "var(--r-md)",
             }}
             aria-label="Filters"

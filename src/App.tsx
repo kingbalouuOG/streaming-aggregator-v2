@@ -20,10 +20,15 @@ import { ProfilePage } from "./components/ProfilePage";
 import { OnboardingFlow, OnboardingData } from "./components/OnboardingFlow";
 import { CalendarPage } from "./components/CalendarPage";
 // ComingSoonCard — Home no longer mounts these directly; the
-// CalendarStrip primitive renders them internally.
+// CalendarList primitive renders them internally.
 import { MagazineHero } from "./components/MagazineHero";
+import { TopAppBar } from "./components/TopAppBar";
 import { EditorsNote } from "./components/EditorsNote";
-import { CalendarStrip } from "./components/CalendarStrip";
+import { CalendarList } from "./components/CalendarList";
+import { FreeTonight } from "./components/FreeTonight";
+import { NumberedChart } from "./components/NumberedChart";
+import { LongRead } from "./components/LongRead";
+import { WideCard } from "./components/WideCard";
 import { SectionHead } from "./components/SectionHead";
 import { ContentCard } from "./components/ContentCard";
 import { ThemeProvider, useTheme } from "./components/ThemeContext";
@@ -51,7 +56,7 @@ import { flushNow } from "./lib/instrumentation/impressionBatcher";
 import { parseContentItemId } from "./lib/adapters/contentAdapter";
 import { emitContentInteraction } from "./lib/storage/interactions";
 import { useIntersectionObserver } from "./hooks/useIntersectionObserver";
-import { IconsDebug, SectionHeadDebug, ContentCardDebug, ServiceStackDebug, BottomNavDebug, MagazineHeroDebug, EditorsNoteDebug, CalendarStripDebug } from "./dev/DesignSystemDebug";
+import { IconsDebug, SectionHeadDebug, ContentCardDebug, ServiceStackDebug, BottomNavDebug, MagazineHeroDebug, EditorsNoteDebug, WideCardDebug } from "./dev/DesignSystemDebug";
 
 const categories = ["All", "Movies", "TV Shows", "Docs", "Anime"];
 
@@ -93,7 +98,7 @@ export default function App() {
     if (debug === "bottomnav") return <BottomNavDebug />;
     if (debug === "magazinehero") return <MagazineHeroDebug />;
     if (debug === "editorsnote") return <EditorsNoteDebug />;
-    if (debug === "calendarstrip") return <CalendarStripDebug />;
+    if (debug === "widecards") return <WideCardDebug />;
   }
 
   return (
@@ -462,7 +467,7 @@ function AppContent() {
 
   // --- Scroll tracking for hero parallax ---
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [scrollY, setScrollY] = useState(0);
+  const [, setScrollY] = useState(0);
   const savedScrollPositions = useRef<Record<string, number>>({});
   const browseStateRef = useRef<BrowseStateSnapshot | null>(null);
 
@@ -654,9 +659,15 @@ function AppContent() {
     );
   }
 
+  const showTopAppBar = !selectedItem && !selectedAnchorRoom && !showCalendar;
+
   return (
     <div className="size-full bg-background text-foreground overflow-hidden flex justify-center">
       <div className="w-full max-w-md h-full flex flex-col relative">
+        {showTopAppBar && (
+          <TopAppBar onProfileTap={() => setActiveTab("profile")} />
+        )}
+
         {/* Pull-to-refresh indicator */}
         {(pullDistance > 0 || isRefreshing) && !selectedItem && activeTab === "home" && (
           <div
@@ -680,7 +691,7 @@ function AppContent() {
           onTouchStart={(e) => handlePullStart(e.touches[0].clientY)}
           onTouchMove={(e) => handlePullMove(e.touches[0].clientY)}
           onTouchEnd={handlePullEnd}
-          className="flex-1 overflow-y-auto pb-4 no-scrollbar safe-top"
+          className={`flex-1 overflow-y-auto pb-4 no-scrollbar${showTopAppBar ? "" : " safe-top"}`}
           style={{ overflowX: 'hidden', overscrollBehaviorX: 'none', transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined, transition: isPulling.current ? 'none' : 'transform 0.3s ease' }}
         >
           <AnimatePresence mode="wait">
@@ -781,8 +792,17 @@ function AppContent() {
                         <MagazineHero
                           item={heroItem}
                           kicker="TODAY'S PICK"
+                          standfirst={heroItem.overview}
                           userServices={connectedServiceIds}
                           onSelect={handleItemSelect}
+                          bookmarked={wl.bookmarkedIds.has(heroItem.id)}
+                          onToggleBookmark={handleToggleBookmark}
+                          onMoreInfo={handleItemSelect}
+                          runtime={heroItem.runtime}
+                          inYourPlan={
+                            connectedServiceIds.length > 0 &&
+                            heroItem.services.some((s) => connectedServiceIds.includes(s))
+                          }
                         />
                       </div>
                     ) : home.loading ? (
@@ -844,22 +864,32 @@ function AppContent() {
                         hasMore={home.recentlyAdded.hasMore}
                       />
 
-                      {/* §5.4 — The Charts */}
-                      <ContentRow
+                      {/* Free Tonight — green-framed row of items free
+                          on the user's connected free services (BBC /
+                          ITVX / Channel 4). Skipped when the user has
+                          none of those services. */}
+                      <FreeTonight
+                        items={filterLanguage(filterWatched(home.popular.items))}
+                        userServices={connectedServiceIds}
+                        onSelect={handleItemSelect}
+                        bookmarkedIds={wl.bookmarkedIds}
+                        onToggleBookmark={handleToggleBookmark}
+                        watchedIds={watchedIds}
+                      />
+
+                      {/* Long Read — hardcoded editorial spotlight.
+                          See TODO(IN-V3-001) inside LongRead.tsx for the
+                          parking-lot data-source follow-up. */}
+                      <LongRead onSelect={() => {}} />
+
+                      {/* §5.4 — The Charts (numbered editorial Top-5) */}
+                      <NumberedChart
                         kicker="THE CHARTS"
                         title="Trending across your stack."
                         standfirst="What everyone's queueing tonight."
-                        sectionKey="popular"
-                        sourceSurface="home"
                         items={filterLanguage(filterWatched(home.popular.items))}
-                        onItemSelect={handleItemSelect}
-                        bookmarkedIds={wl.bookmarkedIds}
-                        onToggleBookmark={handleToggleBookmark}
                         userServices={connectedServiceIds}
-                        watchedIds={watchedIds}
-                        onLoadMore={home.popular.loadMore}
-                        loadingMore={home.popular.loadingMore}
-                        hasMore={home.popular.hasMore}
+                        onSelect={handleItemSelect}
                       />
 
                       {/* §5.5 — Editorial spotlight (single full-bleed lead).
@@ -870,7 +900,7 @@ function AppContent() {
                           (it, i) => i > 0 && it.image && !watchedIds.has(it.id),
                         );
                         return spotlight ? (
-                          <div className="editorial mb-8">
+                          <div className="editorial mt-3 mb-9">
                             <SectionHead
                               kicker="EDITORIAL SPOTLIGHT"
                               title="One to watch tonight."
@@ -907,29 +937,37 @@ function AppContent() {
                         />
                       ))}
 
-                      {/* §5.7 — Critics' Picks */}
+                      {/* §5.7 — Critics' Picks (landscape WideCard row) */}
                       {home.criticallyAcclaimed.length > 0 && (
-                        <ContentRow
-                          kicker="CRITICS' PICKS"
-                          title="Decade-defining work."
-                          standfirst="High-rated cinema, surfaced from your stack."
-                          sectionKey="critically-acclaimed"
-                          sourceSurface="home"
-                          items={filterLanguage(filterWatched(home.criticallyAcclaimed))}
-                          variant="wide"
-                          onItemSelect={handleItemSelect}
-                          bookmarkedIds={wl.bookmarkedIds}
-                          onToggleBookmark={handleToggleBookmark}
-                          userServices={connectedServiceIds}
-                          watchedIds={watchedIds}
-                        />
+                        <section className="mb-8">
+                          <div className="editorial mb-3">
+                            <SectionHead
+                              kicker="CRITICS' PICKS"
+                              title="Decade-defining work."
+                              standfirst="High-rated cinema, surfaced from your stack."
+                            />
+                          </div>
+                          <div
+                            className="flex gap-4 overflow-x-auto no-scrollbar px-5 pb-1"
+                            style={{ scrollbarWidth: "none" }}
+                          >
+                            {filterLanguage(filterWatched(home.criticallyAcclaimed)).map((item) => (
+                              <WideCard
+                                key={item.id}
+                                item={item}
+                                userServices={connectedServiceIds}
+                                onSelect={handleItemSelect}
+                              />
+                            ))}
+                          </div>
+                        </section>
                       )}
 
                       {/* §5.7 — Calendar strip. Anchored ABOVE the lazy
                           genre chain so it stays put as the user scrolls;
                           the chain loads beneath it. */}
                       {reorderedUpcoming.length > 0 && (
-                        <CalendarStrip
+                        <CalendarList
                           items={reorderedUpcoming}
                           kicker="ON THE CALENDAR"
                           title="Coming up."
@@ -1038,6 +1076,7 @@ function AppContent() {
                   onRate={handleRate}
                   activeSubTab={watchlistSubTab}
                   onSubTabChange={setWatchlistSubTab}
+                  userServices={connectedServiceIds}
                 />
               )}
 

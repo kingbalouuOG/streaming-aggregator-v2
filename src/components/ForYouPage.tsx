@@ -23,12 +23,17 @@ import { useState, useCallback, useMemo } from 'react';
 import { Sliders, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { ContentRow } from './ContentRow';
+import { NumberedChart } from './NumberedChart';
 import { SectionHead } from './SectionHead';
 import { Kicker } from './Kicker';
+import { SparkleIcon } from './icons';
+import { GenreIconTile, MOOD_GLYPH_NAMES } from './genreIcons';
 import { MagazineHero } from './MagazineHero';
-import { CalendarStrip } from './CalendarStrip';
+import { CalendarList } from './CalendarList';
+import { WideCard } from './WideCard';
 import { SliderTray } from './SliderTray';
 import { MoodRoomCard, FeaturedMoodRoomCard } from './MoodRoomCard';
+import { useAuth } from './AuthContext';
 import { useForYouContent } from '@/hooks/useForYouContent';
 import { useAnchorMoodRooms, type AnchorRoomPreview } from '@/hooks/useAnchorMoodRooms';
 import type { FilterSets } from '@/lib/recommendations-v2/hardFilters';
@@ -48,7 +53,7 @@ interface ForYouPageProps {
   bookmarkedIds: Set<string>;
   onToggleBookmark: (item: ContentItem) => void;
   watchedIds: Set<string>;
-  /** Upcoming releases for the foot-of-page CalendarStrip. Optional. */
+  /** Upcoming releases for the foot-of-page CalendarList. Optional. */
   upcoming?: UpcomingRelease[];
   /** Callback when the user taps a calendar entry. */
   onSelectUpcoming?: (item: UpcomingRelease) => void;
@@ -56,11 +61,21 @@ interface ForYouPageProps {
 
 const MOOD_CHIPS = ['Slow burn', 'Comfort', 'Edge of seat', 'Cerebral', 'Funny', 'Romance'] as const;
 
-// Hardcoded fingerprint chips — placeholder until the taste-v2 surface
-// API exposes a "top dimensions" projection. Each label is a real
-// fingerprint axis from the taste-v2 docs; they'll come from a real
-// computation in the follow-up.
-const FINGERPRINT_CHIPS = ['Slow burn', 'Drama', '2010s', 'Critic-acclaimed'];
+/**
+ * Hide the "Refine by feeling" UI until the real taste-v2 wiring lands
+ * (parking-lot IN-V3-003). Flip to `true` once the data layer ships.
+ */
+const MOOD_REFINER_ENABLED = false;
+
+/** Display name + subtitle per mood. Glyph comes from `MOOD_GLYPH_NAMES`. */
+const MOOD_GLYPHS: Record<(typeof MOOD_CHIPS)[number], { title: string; subtitle: string }> = {
+  'Slow burn':    { title: 'Wind down',   subtitle: 'Calm & slow' },
+  'Comfort':      { title: 'Cosy night',  subtitle: 'Soft & easy' },
+  'Edge of seat': { title: 'Pulse-up',    subtitle: 'High energy' },
+  'Cerebral':     { title: 'Cerebral',    subtitle: 'Brain teaser' },
+  'Funny':        { title: 'Funny',       subtitle: 'Belly laugh' },
+  'Romance':      { title: 'Romance',     subtitle: 'Heart swell' },
+};
 
 function getGreeting(now = new Date()): string {
   const h = now.getHours();
@@ -70,37 +85,24 @@ function getGreeting(now = new Date()): string {
   return 'LATE NIGHT';
 }
 
-function ChipPill({
-  children,
-  active,
-  onClick,
-}: {
-  children: React.ReactNode;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  const interactive = Boolean(onClick);
-  const Tag = interactive ? 'button' : 'span';
-  return (
-    <Tag
-      type={interactive ? 'button' : undefined}
-      onClick={onClick}
-      className="shrink-0 px-3 py-1.5"
-      style={{
-        background: active ? 'var(--primary)' : 'var(--surface-tint)',
-        color: active ? '#fff' : 'var(--fg-soft)',
-        borderRadius: 'var(--r-pill)',
-        fontFamily: 'var(--font-ui)',
-        fontSize: 13,
-        fontWeight: 500,
-        letterSpacing: '0.01em',
-        transition: 'background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out)',
-        cursor: interactive ? 'pointer' : 'default',
-      }}
-    >
-      {children}
-    </Tag>
-  );
+/**
+ * Relative "saved X ago" label for a watchlist item — mirrors the
+ * WatchlistPage helper so the For You preview reads consistently.
+ */
+function savedAgo(addedAt?: number): string | undefined {
+  if (!addedAt) return undefined;
+  const minutes = Math.max(1, Math.floor((Date.now() - addedAt) / 60_000));
+  if (minutes < 60) return `Saved ${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Saved ${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'Saved yesterday';
+  if (days < 7) return `Saved ${days} days ago`;
+  if (days < 14) return 'Saved last week';
+  if (days < 30) return `Saved ${Math.floor(days / 7)} weeks ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `Saved ${months}mo ago`;
+  return `Saved ${Math.floor(months / 12)}y ago`;
 }
 
 /**
@@ -172,7 +174,7 @@ function CoverStoryMoodRoom({
         <>
           <div className="editorial mt-8 mb-3">
             <SectionHead
-              kicker={`${more.length === 1 ? "ONE" : more.length === 2 ? "TWO" : more.length === 3 ? "THREE" : more.length === 4 ? "FOUR" : "FIVE"} MORE ROOM${more.length === 1 ? "" : "S"}`}
+              kicker={`${more.length === 1 ? "ONE" : more.length === 2 ? "TWO" : more.length === 3 ? "THREE" : "FOUR"} MORE ROOM${more.length === 1 ? "" : "S"}`}
               title="Your other taste neighbourhoods."
               right={
                 <span
@@ -224,6 +226,7 @@ export function ForYouPage({
   upcoming,
   onSelectUpcoming,
 }: ForYouPageProps) {
+  const { username } = useAuth();
   const content = useForYouContent(providerIds, sharedFilters);
   const anchorRooms = useAnchorMoodRooms(
     providerIds,
@@ -309,31 +312,122 @@ export function ForYouPage({
   return (
     <div className="px-0 pt-2">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+        {/* B2 — Page header above the hero. The kicker carries the
+            greeting + day; the Fraunces title is the editorial standfirst
+            ("Edited for you."). Display name is hardcoded for now and
+            will be threaded from the auth profile in a follow-up. */}
+        <div className="editorial mb-4 mt-2">
+          <Kicker>{`FOR ${(username ?? 'YOU').toUpperCase()} · ${getGreeting()}`}</Kicker>
+          <h1
+            className="mt-1"
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 'var(--t-headline)',
+              fontWeight: 700,
+              fontVariationSettings: '"opsz" 48',
+              letterSpacing: '-0.015em',
+              color: 'var(--fg)',
+              lineHeight: 1.1,
+              margin: 0,
+            }}
+          >
+            Edited for you.
+          </h1>
+        </div>
+
         {/* §5.1 — Greeting + top pick */}
         {topPick && (
-          <div className="editorial mb-8 mt-2">
+          <div className="editorial mb-8">
             <MagazineHero
               item={topPick}
-              kicker={`${getGreeting()} · YOUR PICK FOR TONIGHT`}
+              kicker="TONIGHT'S PICK"
+              standfirst={topPick.overview}
               userServices={connectedServiceIds}
               onSelect={onItemSelect}
+              statusPill={
+                topPick.matchPercentage != null
+                  ? `✨ ${topPick.matchPercentage}% match`
+                  : undefined
+              }
+              bookmarked={bookmarkedIds.has(topPick.id)}
+              onToggleBookmark={onToggleBookmark}
+              onMoreInfo={onItemSelect}
+              runtime={topPick.runtime}
+              inYourPlan={
+                connectedServiceIds.length > 0 &&
+                topPick.services.some((s) => connectedServiceIds.includes(s))
+              }
             />
           </div>
         )}
 
-        {/* §5.2 — Taste fingerprint */}
-        <div className="editorial mb-8">
-          <div className="flex items-center justify-between mb-2">
-            <Kicker>YOUR TASTE</Kicker>
+        {/* §5.2 — Taste fingerprint card. Header (icon + title +
+            metadata + Tune) and a 2-column grid of sliders.
+            "327 ratings · updated this morning" is hardcoded — taste-v2
+            surface to provide the real signal in a follow-up. */}
+        <div
+          className="mx-5 mb-8 p-4"
+          style={{
+            background: 'var(--surface-elev)',
+            border: '0.5px solid var(--hairline)',
+            borderRadius: 'var(--r-card)',
+          }}
+        >
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="flex items-start gap-3 min-w-0">
+              <span
+                aria-hidden
+                className="shrink-0 inline-flex items-center justify-center"
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 'var(--r-md)',
+                  background: 'color-mix(in srgb, var(--primary) 20%, transparent)',
+                  color: 'var(--primary)',
+                }}
+              >
+                <SparkleIcon className="w-5 h-5" />
+              </span>
+              <div className="flex flex-col min-w-0">
+                <h2
+                  className="line-clamp-1"
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 18,
+                    fontWeight: 700,
+                    fontVariationSettings: '"opsz" 36',
+                    letterSpacing: '-0.01em',
+                    color: 'var(--fg)',
+                    lineHeight: 1.2,
+                    margin: 0,
+                  }}
+                >
+                  Your taste fingerprint
+                </h2>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-ui)',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: 'var(--fg-soft)',
+                    marginTop: 2,
+                  }}
+                >
+                  327 ratings · updated this morning
+                </span>
+              </div>
+            </div>
             {content.sliders && (
               <button
                 type="button"
                 onClick={() => setShowSliderTray(true)}
-                className="inline-flex items-center gap-1.5"
+                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5"
                 style={{
-                  color: 'var(--fg-soft)',
+                  background: 'var(--surface-tint)',
+                  color: 'var(--fg)',
+                  borderRadius: 'var(--r-pill)',
                   fontFamily: 'var(--font-ui)',
-                  fontSize: 'var(--t-meta)',
+                  fontSize: 13,
                   fontWeight: 500,
                 }}
               >
@@ -342,30 +436,178 @@ export function ForYouPage({
               </button>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {FINGERPRINT_CHIPS.map((chip) => (
-              <ChipPill key={chip}>{chip}</ChipPill>
-            ))}
+          <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+            {([
+              { key: 'catalogueAge', left: 'NEW',     right: 'CLASSIC',    label: 'Catalogue age' },
+              { key: 'comfortZone',  left: 'COSY',    right: 'SURPRISE',   label: 'Comfort zone' },
+              { key: 'contentMix',   left: 'TV',      right: 'FILM',       label: 'Content mix' },
+              { key: 'variety',      left: 'FOCUSED', right: 'VARIETY',    label: 'Focus' },
+            ] as const).map(({ key, left, right, label }) => {
+              const value = content.sliders?.[key] ?? 0.5;
+              return (
+                <div key={key} className="flex flex-col gap-1 min-w-0">
+                  <div
+                    className="flex items-center justify-between gap-2"
+                    style={{
+                      fontFamily: 'var(--font-ui)',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      color: 'var(--fg-faint)',
+                    }}
+                  >
+                    <span className="truncate">{left}</span>
+                    <span className="truncate">{right}</span>
+                  </div>
+                  <div
+                    className="relative w-full"
+                    style={{
+                      height: 2,
+                      background: 'var(--surface-tint)',
+                      borderRadius: 'var(--r-pill)',
+                      marginTop: 6,
+                    }}
+                  >
+                    <span
+                      aria-hidden
+                      className="absolute"
+                      style={{
+                        left: `calc(${value * 100}% - 7px)`,
+                        top: -6,
+                        width: 14,
+                        height: 14,
+                        borderRadius: '50%',
+                        background: 'var(--primary)',
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+                      }}
+                    />
+                  </div>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-ui)',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: 'var(--fg)',
+                      marginTop: 6,
+                    }}
+                  >
+                    {label}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* §5.3 — Mood chip refiner */}
-        <div className="mb-3">
-          <div className="editorial mb-2">
-            <Kicker>REFINE YOUR MOOD</Kicker>
+        {/* §5.3 — Mood refiner. Hidden until the real taste-v2 wiring
+            lands (see parking-lot IN-V3-003); the UI is finished but the
+            buttons currently only re-title the row beneath, which reads
+            as broken. Re-enable by flipping `MOOD_REFINER_ENABLED`. */}
+        {MOOD_REFINER_ENABLED && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-3 px-5">
+            <Kicker>REFINE BY FEELING</Kicker>
+            <button
+              type="button"
+              onClick={() => setActiveMood(null)}
+              disabled={!activeMood}
+              style={{
+                fontFamily: 'var(--font-ui)',
+                fontSize: 12,
+                fontWeight: 500,
+                color: activeMood ? 'var(--fg-soft)' : 'var(--fg-faint)',
+                cursor: activeMood ? 'pointer' : 'default',
+              }}
+            >
+              {`Clear · ${activeMood ? '1' : '0'} active`}
+            </button>
           </div>
-          <div className="flex gap-2 overflow-x-auto no-scrollbar px-5 pb-1">
-            {MOOD_CHIPS.map((chip) => (
-              <ChipPill
-                key={chip}
-                active={activeMood === chip}
-                onClick={() => setActiveMood(activeMood === chip ? null : chip)}
+          <div
+            className="flex gap-2 overflow-x-auto no-scrollbar px-5 pb-1"
+            style={{ scrollbarWidth: 'none' }}
+          >
+            {MOOD_CHIPS.map((chip) => {
+              const glyph = MOOD_GLYPHS[chip];
+              const active = activeMood === chip;
+              return (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => setActiveMood(active ? null : chip)}
+                  className="shrink-0 flex items-center gap-3 px-3 py-3 text-left"
+                  style={{
+                    width: 200,
+                    background: active
+                      ? 'color-mix(in srgb, #10b981 14%, var(--surface-elev))'
+                      : 'var(--surface-elev)',
+                    border: active
+                      ? '1px solid #10b981'
+                      : '0.5px solid var(--hairline)',
+                    borderRadius: 'var(--r-md)',
+                    color: 'var(--fg)',
+                    transition:
+                      'background var(--d-fast) var(--ease-out), border-color var(--d-fast) var(--ease-out)',
+                  }}
+                  aria-pressed={active ? 'true' : 'false'}
+                  aria-label={glyph.title}
+                >
+                  <GenreIconTile glyph={MOOD_GLYPH_NAMES[chip]} size={36} />
+                  <span className="flex flex-col min-w-0">
+                    <span
+                      className="line-clamp-1"
+                      style={{
+                        fontFamily: 'var(--font-display)',
+                        fontSize: 16,
+                        fontWeight: 700,
+                        fontVariationSettings: '"opsz" 24',
+                        letterSpacing: '-0.01em',
+                        lineHeight: 1.2,
+                        color: 'var(--fg)',
+                      }}
+                    >
+                      {glyph.title}
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-ui)',
+                        fontSize: 12,
+                        fontWeight: 500,
+                        color: 'var(--fg-soft)',
+                        marginTop: 2,
+                      }}
+                    >
+                      {glyph.subtitle}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {activeMood && (
+            <div className="mt-3 px-5">
+              <span
+                className="inline-flex items-center gap-2 px-3 py-1.5"
+                style={{
+                  background: 'color-mix(in srgb, var(--primary) 14%, transparent)',
+                  color: 'var(--primary)',
+                  border: '0.5px solid color-mix(in srgb, var(--primary) 45%, transparent)',
+                  borderRadius: 'var(--r-pill)',
+                  fontFamily: 'var(--font-ui)',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                }}
               >
-                {chip}
-              </ChipPill>
-            ))}
-          </div>
+                {MOOD_GLYPHS[activeMood as (typeof MOOD_CHIPS)[number]].title}
+                <span style={{ color: 'var(--fg-soft)' }}>·</span>
+                {`${inYourMood.length} IN YOUR STACK`}
+              </span>
+            </div>
+          )}
         </div>
+        )}
 
         {/* §5.4 — In your mood */}
         {inYourMood.length > 0 && (
@@ -417,38 +659,67 @@ export function ForYouPage({
           />
         )}
 
-        {/* §5.7 — Watchlist preview */}
-        {watchlistPreview.length > 0 && (
+        {/* Because you watched … — one row per watched anchor. The
+            kicker references the anchor; the title invites the lean-in. */}
+        {content.becauseYouWatched.map((row) => (
           <ContentRow
-            kicker="ON YOUR WATCHLIST"
-            title="From your list."
-            standfirst="Pick up where you left off."
-            sectionKey="foryou-watchlist"
+            key={`byw-${row.anchor.id}`}
+            kicker={`BECAUSE YOU WATCHED ${row.anchor.title.toUpperCase()}`}
+            title="More like this."
+            sectionKey={`foryou-byw-${row.anchor.id}`}
             sourceSurface="for_you"
-            items={watchlistPreview}
+            items={applyFilters(row.items)}
             onItemSelect={onItemSelect}
             bookmarkedIds={bookmarkedIds}
             onToggleBookmark={onToggleBookmark}
             userServices={connectedServiceIds}
             watchedIds={watchedIds}
+          />
+        ))}
+
+        {/* §5.7 — Watchlist preview. Reuses the chart-style row anatomy
+            (thumb + title + meta + Play tile) without rank numerals.
+            Renders only as many rows as the user has saved — `limit`
+            caps it at 5 but the section auto-shrinks for shorter lists.
+            Meta line shows service · "Saved X ago". */}
+        {watchlistPreview.length > 0 && (
+          <NumberedChart
+            kicker="YOUR SHELF"
+            title="From your watchlist"
+            standfirst="Saved for later — pick one back up."
+            items={watchlistPreview}
+            limit={5}
+            numbered={false}
+            userServices={connectedServiceIds}
+            onSelect={onItemSelect}
+            subtitleFor={(it) => savedAgo(it.addedAt)}
           />
         )}
 
         {/* §5.8 — Outside your usual */}
         {outsideUsual.length > 0 && (
-          <ContentRow
-            kicker="OUTSIDE YOUR USUAL"
-            title="A nudge sideways."
-            standfirst="Off-pattern picks the algorithm thinks you'll like anyway."
-            sectionKey="foryou-outside"
-            sourceSurface="for_you"
-            items={outsideUsual}
-            onItemSelect={onItemSelect}
-            bookmarkedIds={bookmarkedIds}
-            onToggleBookmark={onToggleBookmark}
-            userServices={connectedServiceIds}
-            watchedIds={watchedIds}
-          />
+          <section className="mb-8">
+            <div className="editorial mb-3">
+              <SectionHead
+                kicker="OUTSIDE YOUR USUAL"
+                title="A nudge sideways."
+                standfirst="Off-pattern picks the algorithm thinks you'll like anyway."
+              />
+            </div>
+            <div
+              className="flex gap-4 overflow-x-auto no-scrollbar px-5 pb-1"
+              style={{ scrollbarWidth: 'none' }}
+            >
+              {outsideUsual.map((item) => (
+                <WideCard
+                  key={item.id}
+                  item={item}
+                  userServices={connectedServiceIds}
+                  onSelect={onItemSelect}
+                />
+              ))}
+            </div>
+          </section>
         )}
 
         {/* §5.9 — Quick watch */}
@@ -467,9 +738,9 @@ export function ForYouPage({
           />
         )}
 
-        {/* §5.10 — Calendar strip */}
+        {/* §5.10 — Calendar list */}
         {upcoming && upcoming.length > 0 && onSelectUpcoming && (
-          <CalendarStrip
+          <CalendarList
             items={upcoming}
             kicker="ON THE CALENDAR"
             title="Coming up."

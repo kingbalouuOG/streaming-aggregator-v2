@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { PoundSterling, ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { getPlatform } from "./platformLogos";
 import { PLATFORM_PRICING, getDefaultTier, type PricingTier } from "@/lib/data/platformPricing";

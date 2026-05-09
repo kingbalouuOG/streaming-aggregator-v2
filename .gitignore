@@ -68,7 +68,18 @@ test-results/
 # Playwright
 playwright-report/
 playwright/.cache/
+.playwright-mcp/
 tmp/
+
+# Dev screenshots — Playwright walkthroughs etc. drop PNGs at the
+# repo root; keep them out of git. Subdirectory PNGs (assets, public)
+# are unaffected.
+/*.png
+/*.jpg
+/*.jpeg
+
+# VS Code Edge Tools per-workspace profile (auth state, history, etc.)
+.vscode/edge-profile/
 
 # Temporary / scratch files
 temp_*.json
@@ -79,6 +90,7 @@ temp_logs.json
 scripts/quiz-report-*.js
 scripts/*-results.json
 scripts/audit-results/*.json
+scripts/*-progress.txt
 p2-*.csv
 
 # Phase 0.5 enrichment backfill state (local only)

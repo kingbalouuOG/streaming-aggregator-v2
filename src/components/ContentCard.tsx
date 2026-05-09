@@ -11,6 +11,9 @@ export interface ContentItem {
   id: string;
   title: string;
   image: string;
+  /** TMDb backdrop URL (16:9). Optional — set by contentAdapter from
+   *  the upstream `backdrop_path`. Used by the WideCard variant. */
+  backdrop?: string;
   services: ServiceId[];
   rating?: number;
   year?: number;
@@ -19,6 +22,9 @@ export interface ContentItem {
   runtime?: number;
   addedAt?: number;
   genre?: string;
+  /** Plot synopsis from TMDb. Used as a stopgap standfirst on the
+   *  MagazineHero until editorial copy lands (IN-V3-001). */
+  overview?: string;
   language?: string;
   genreIds?: number[];
   originalLanguage?: string;
@@ -116,6 +122,18 @@ export function ContentCard({
           className="w-full h-full object-cover"
         />
 
+        {/* Service stack — top-left of poster, full-bleed (no chip)
+            with a soft halo so the marks read against any backdrop.
+            Cap at 2 to avoid crowding the corner. */}
+        {visibleServices.length > 0 && (
+          <div
+            className="absolute top-2 left-2 inline-flex"
+            style={{ filter: "var(--badge-glow)" }}
+          >
+            <ServiceStack services={visibleServices} size="md" max={2} />
+          </div>
+        )}
+
         {/* Bookmark / watched — top-right, 28×28 glass blur */}
         {watched ? (
           <div
@@ -141,9 +159,10 @@ export function ContentCard({
             className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center"
             style={{
               borderRadius: "var(--r-md)",
-              background: "rgba(20, 20, 28, 0.45)",
-              backdropFilter: "blur(8px) saturate(160%)",
-              WebkitBackdropFilter: "blur(8px) saturate(160%)",
+              background: "var(--scrim-glass-action)",
+              backdropFilter: "blur(10px) saturate(160%)",
+              WebkitBackdropFilter: "blur(10px) saturate(160%)",
+              boxShadow: "var(--scrim-glass-edge)",
               color: "#fff",
             }}
             aria-label={bookmarked ? "Remove bookmark" : "Add bookmark"}
@@ -155,28 +174,35 @@ export function ContentCard({
           </motion.button>
         )}
 
-        {/* Rating pill — bottom-left, single source of truth */}
+        {/* Rating — bottom-left, dark glass pill so the star + number
+            stay legible on bright posters where plain text on the
+            gradient washes out. */}
         {item.rating != null && item.rating > 0 && (
           <div
-            className="absolute bottom-2 left-2 inline-flex items-center gap-1 px-2 py-0.5"
+            className="absolute bottom-2 left-2 inline-flex items-center gap-1"
             style={{
-              borderRadius: "var(--r-pill)",
-              background: "rgba(20, 20, 28, 0.55)",
+              padding: "3px 7px",
+              background: "var(--scrim-glass-action)",
               backdropFilter: "blur(8px) saturate(160%)",
               WebkitBackdropFilter: "blur(8px) saturate(160%)",
+              boxShadow: "var(--scrim-glass-edge)",
+              borderRadius: "var(--r-pill)",
               color: "#fff",
-              fontSize: "11px",
+              fontFamily: "var(--font-ui)",
+              fontSize: 11,
               fontWeight: 600,
               lineHeight: 1,
             }}
           >
-            <span style={{ color: "#fbbf24" }}>★</span>
+            <span style={{ color: "var(--star)" }}>★</span>
             <span>{item.rating.toFixed(1)}</span>
           </div>
         )}
       </div>
 
-      {/* Title + meta — below the poster, not overlaid */}
+      {/* Title + meta — below the poster, not overlaid.
+          Service stack now lives on the poster (top-left); meta line
+          here is uppercase GENRE · YEAR per the editorial reference. */}
       <div className="mt-2 px-0.5">
         <h3
           className="line-clamp-2"
@@ -190,25 +216,22 @@ export function ContentCard({
         >
           {item.title}
         </h3>
-        {(item.year || item.genre || visibleServices.length > 0) && (
-          <div
-            className="mt-1 flex items-center gap-2"
+        {(item.year || item.genre) && (
+          <p
+            className="mt-1 truncate"
             style={{
               fontFamily: "var(--font-ui)",
-              fontSize: "12px",
+              fontSize: 11,
+              fontWeight: 500,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
               color: "var(--fg-faint)",
               lineHeight: 1.3,
+              margin: 0,
             }}
           >
-            {visibleServices.length > 0 && (
-              <ServiceStack services={visibleServices} size="sm" max={3} />
-            )}
-            {(item.year || item.genre) && (
-              <span className="truncate">
-                {[item.year, item.genre].filter(Boolean).join(" · ")}
-              </span>
-            )}
-          </div>
+            {[item.genre, item.year].filter(Boolean).join(" · ")}
+          </p>
         )}
       </div>
     </div>

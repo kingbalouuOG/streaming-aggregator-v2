@@ -103,11 +103,12 @@ const OUTLINE = {
   strokeLinejoin: "round" as const,
 };
 
-/** Bookmark — outline. Used top-right of ContentCard. */
+/** Bookmark — outline. Used top-right of ContentCard.
+ *  Bbox 4→20 = 16×16 to match the bottom-nav optical-weight contract. */
 export function BookmarkIcon({ className = "w-5 h-5" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className}>
-      <path d="M 5 3 L 19 3 L 19 21 L 12 17 L 5 21 Z" {...OUTLINE} />
+      <path d="M 4 4 L 20 4 L 20 20 L 12 16 L 4 20 Z" {...OUTLINE} />
     </svg>
   );
 }
@@ -116,7 +117,7 @@ export function BookmarkIcon({ className = "w-5 h-5" }: IconProps) {
 export function BookmarkFilledIcon({ className = "w-5 h-5" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className}>
-      <path d="M 5 3 L 19 3 L 19 21 L 12 17 L 5 21 Z" fill="currentColor" />
+      <path d="M 4 4 L 20 4 L 20 20 L 12 16 L 4 20 Z" fill="currentColor" />
     </svg>
   );
 }
@@ -166,11 +167,13 @@ export function PlayFillIcon({ className = "w-5 h-5" }: IconProps) {
   );
 }
 
-/** Sparkle — 4-point star. Editorial highlights, "for you" markers. */
+/** Sparkle — 4-point star. Editorial highlights, "for you" markers.
+ *  Outer points reach 4→20 to match the optical weight of the other
+ *  bottom-nav icons. Inner curve waypoints scale proportionally. */
 export function SparkleIcon({ className = "w-5 h-5" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className}>
-      <path d="M12 3l1.6 5.4L19 10l-5.4 1.6L12 17l-1.6-5.4L5 10l5.4-1.6z" fill="currentColor" />
+      <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" fill="currentColor" />
     </svg>
   );
 }
@@ -199,22 +202,24 @@ export function HomeFilledIcon({ className = "w-5 h-5" }: IconProps) {
   );
 }
 
-/** Search — outline magnifier. Bottom-nav Browse tab. */
+/** Search — outline magnifier. Bottom-nav Browse tab.
+ *  Bbox 4→20 = 16×16 to match the bottom-nav optical-weight contract. */
 export function SearchIcon({ className = "w-5 h-5" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className}>
-      <circle cx="11" cy="11" r="6" {...OUTLINE} />
-      <path d="M16 16 L20 20" {...OUTLINE} />
+      <circle cx="10" cy="10" r="6" {...OUTLINE} />
+      <path d="M15 15 L20 20" {...OUTLINE} />
     </svg>
   );
 }
 
-/** User — outline person. Bottom-nav Profile tab. */
+/** User — outline person. Bottom-nav Profile tab.
+ *  Bbox 4→20 = 16×16 to match the bottom-nav optical-weight contract. */
 export function UserIcon({ className = "w-5 h-5" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className}>
       <circle cx="12" cy="8" r="4" {...OUTLINE} />
-      <path d="M4 21 C 4 16 8 14 12 14 C 16 14 20 16 20 21" {...OUTLINE} />
+      <path d="M4 20 C 4 15 8 13 12 13 C 16 13 20 15 20 20" {...OUTLINE} />
     </svg>
   );
 }
@@ -224,7 +229,7 @@ export function UserFilledIcon({ className = "w-5 h-5" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className}>
       <circle cx="12" cy="8" r="4" fill="currentColor" />
-      <path d="M4 21 C 4 16 8 14 12 14 C 16 14 20 16 20 21 L 4 21 Z" fill="currentColor" />
+      <path d="M4 20 C 4 15 8 13 12 13 C 16 13 20 15 20 20 L 4 20 Z" fill="currentColor" />
     </svg>
   );
 }

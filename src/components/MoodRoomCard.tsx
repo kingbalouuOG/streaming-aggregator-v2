@@ -229,9 +229,9 @@ export function FeaturedMoodRoomCard({
           <p
             className="mt-2"
             style={{
-              fontFamily: "var(--font-display)",
-              fontStyle: "italic",
+              fontFamily: "var(--font-ui)",
               fontSize: "var(--t-body)",
+              fontWeight: 400,
               color: "var(--fg-soft)",
               lineHeight: 1.45,
               margin: 0,

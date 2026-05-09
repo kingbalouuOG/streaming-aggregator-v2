@@ -82,6 +82,31 @@
   --primary-soft: rgba(232,93,37,0.10);
   --primary-edge: rgba(232,93,37,0.30);
 
+  /* Glass scrim — dark blur surface used on top of imagery (hero
+   * pills, top-right service badges, bookmark/info chips). Lives on
+   * imagery, so doesn't theme — same value in both modes.
+   *
+   * Three weights:
+   *   - soft   (0.45): passive chips (service stack on poster TL)
+   *   - base   (0.55): label-bearing chips (status pill, badges)
+   *   - action (0.78): tappable affordances (hero bookmark/info,
+   *                    ContentCard bookmark TR). Slightly more solid
+   *                    so the affordance reads cleanly. */
+  --scrim-glass: rgba(20, 20, 28, 0.55);
+  --scrim-glass-soft: rgba(20, 20, 28, 0.45);
+  --scrim-glass-action: rgba(20, 20, 28, 0.78);
+  /* Subtle 0.5px hairline edge for action buttons over imagery. Used
+   * via box-shadow inset so it doesn't add to layout. */
+  --scrim-glass-edge: 0 0 0 0.5px rgba(255, 255, 255, 0.10) inset;
+
+  /* Service-badge halo — soft drop-shadow that lifts the logo away
+   * from the underlying poster. Doesn't theme; lives on imagery. */
+  --badge-glow: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+
+  /* Star colour — used wherever we render a ★ rating glyph (cards,
+   * meta lines, hero pill). Same value in both themes. */
+  --star: #fbbf24;
+
   /* Atmosphere accents (6) — mood rooms / atmospheric overlays only */
   --atm-amber:    #d97706;
   --atm-rose:     #be185d;
@@ -112,7 +137,7 @@
   --t-headline:   28px;     /* opsz 48,  weight 600 */
   --t-title:      22px;     /* opsz 36,  weight 700 */
   --t-section:    18px;     /* opsz 24,  weight 600 */
-  --t-body:       15px;
+  --t-body:       13px;
   --t-meta:       13px;
   --t-kicker:     11px;     /* DM Sans 700 uppercase, tracked 1.6px */
 
@@ -176,22 +201,16 @@
   --background:           var(--surface);          /* bg-background */
   --foreground:           var(--fg);               /* text-foreground */
   --card:                 var(--surface-elev);     /* bg-card */
-  --card-foreground:      var(--fg);
-  --popover:              var(--surface-elev);
-  --popover-foreground:   var(--fg);
   --secondary:            var(--surface-tint);     /* bg-secondary */
-  --secondary-foreground: var(--fg);
   --muted:                var(--surface-tint);     /* bg-muted */
   --muted-foreground:     var(--fg-soft);          /* text-muted-foreground */
-  --accent:               var(--surface-tint);
-  --accent-foreground:    var(--fg);
+  --accent:               var(--surface-tint);     /* bg-accent (hover only) */
   --border:               var(--hairline);         /* border-border */
   --surface-elevated:     var(--surface-elev);
   --primary-foreground:   #ffffff;     /* TODO: design-system has no
                                           canonical primary-foreground;
                                           add to tokens.css or drop. */
   --destructive:          #d4183d;
-  --destructive-foreground: #ffffff;
   --input:                transparent;
   --ring:                 oklch(0.708 0 0);
   --radius:               0.625rem;
@@ -203,13 +222,9 @@
   --input-background:     #1e1e2a;
   --switch-background:    #3a3a4a;
   --nav-bg:               rgba(13, 13, 20, 0.95);
-  --hero-gradient:        10, 10, 15;
   --border-subtle:        rgba(255, 255, 255, 0.06);
-  --border-subtle-2:      rgba(255, 255, 255, 0.04);
-  --overlay-subtle:       rgba(255, 255, 255, 0.06);
   --overlay-medium:       rgba(255, 255, 255, 0.10);
   --shimmer-color:        rgba(255, 255, 255, 0.04);
-  --drag-handle:          rgba(255, 255, 255, 0.2);
   --slider-track:         rgba(255, 255, 255, 0.10);
   --check-border:         rgba(255, 255, 255, 0.15);
   --check-border-2:       rgba(255, 255, 255, 0.10);
@@ -227,13 +242,9 @@
   --input-background:     #ebe8e3;
   --switch-background:    #c8c5be;
   --nav-bg:               rgba(255, 255, 255, 0.95);
-  --hero-gradient:        26, 26, 46;
   --border-subtle:        rgba(0, 0, 0, 0.07);
-  --border-subtle-2:      rgba(0, 0, 0, 0.05);
-  --overlay-subtle:       rgba(0, 0, 0, 0.04);
   --overlay-medium:       rgba(0, 0, 0, 0.07);
   --shimmer-color:        rgba(0, 0, 0, 0.05);
-  --drag-handle:          rgba(0, 0, 0, 0.15);
   --slider-track:         rgba(0, 0, 0, 0.10);
   --check-border:         rgba(0, 0, 0, 0.15);
   --check-border-2:       rgba(0, 0, 0, 0.10);
@@ -248,7 +259,7 @@
 }
 
 /* ── Editorial helper classes (from tokens.css) ──────────────── */
-.t-display { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.02em; font-variation-settings: "opsz" 96; }
+.t-display { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em; font-variation-settings: "opsz" 144; }
 .t-headline { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em; font-variation-settings: "opsz" 48; }
 .t-section { font-family: var(--font-display); font-weight: 600; font-variation-settings: "opsz" 24; }
 
@@ -258,9 +269,20 @@
   color: var(--primary);
 }
 
+/* Kicker contrast bump for light theme. The brand `--primary` orange
+ * (#e85d25) hits only 3.09:1 against paper (#f5f1e8) — below AA 4.5:1
+ * for body text. Darkened ~12% for the kicker only so the brand mark
+ * elsewhere keeps the original colour. */
+[data-theme="light"] .t-kicker { color: #b8451a; }
+
 .hairline { border-top: 0.5px solid var(--hairline); }
 
-.editorial { max-width: 480px; margin: 0 auto; padding: 0 18px; }
+/* Editorial container — clamps to magazine column width and centres
+ * horizontally. Uses `margin-left/right: auto` (not the `margin: 0 auto`
+ * shorthand) so per-element `mt-*` / `mb-*` Tailwind utilities are
+ * preserved instead of being reset by the shorthand's `0` vertical
+ * value. */
+.editorial { max-width: 480px; margin-left: auto; margin-right: auto; padding: 0 18px; }
 
 /* ── Base styles ─────────────────────────────────────────────── */
 html {
@@ -326,8 +348,8 @@ input[type="range"].videx-slider {
     to right,
     var(--primary) 0%,
     var(--primary) var(--slider-fill, 50%),
-    rgba(255, 255, 255, 0.12) var(--slider-fill, 50%),
-    rgba(255, 255, 255, 0.12) 100%
+    var(--slider-track) var(--slider-fill, 50%),
+    var(--slider-track) 100%
   );
   cursor: pointer;
   padding: 0;

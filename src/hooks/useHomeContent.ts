@@ -74,8 +74,12 @@ async function fetchEditorNote(): Promise<EditorNote | null> {
   // Read the most recent currently-published note. Migration 040
   // created the table, the index, and the publish-window RLS, so this
   // query is index-only and returns 0 or 1 row.
-  const { data, error } = await supabase
-    .from('editor_notes')
+  //
+  // The `as any` cast on `.from()` and the result row mirrors the
+  // workaround in `AuthContext.tsx` / `anchorRoomLabels.ts`: until
+  // `database.types.ts` is regenerated post-migration-040 (parking-lot
+  // IN-PX-21), the type system doesn't know `editor_notes` exists.
+  const { data, error } = await (supabase.from as any)('editor_notes')
     .select('id, kicker, teaser, body, published_at')
     .order('published_at', { ascending: false })
     .limit(1)
@@ -93,12 +97,19 @@ async function fetchEditorNote(): Promise<EditorNote | null> {
 
   if (!data) return null;
 
+  const row = data as {
+    id: string;
+    kicker: string;
+    teaser: string | null;
+    body: string;
+    published_at: string;
+  };
   return {
-    id: data.id as string,
-    kicker: data.kicker as string,
-    teaser: (data.teaser ?? data.body) as string,
-    body: data.body as string,
-    publishedAt: data.published_at as string,
+    id: row.id,
+    kicker: row.kicker,
+    teaser: row.teaser ?? row.body,
+    body: row.body,
+    publishedAt: row.published_at,
   };
 }
 
@@ -109,7 +120,7 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
   // Phase 4 Home rows
   const [perServiceCharts, setPerServiceCharts] = useState<PerServiceChartRow[]>([]);
   const [criticallyAcclaimed, setCriticallyAcclaimed] = useState<ContentItem[]>([]);
-  type GenreSpotlightRow = { clusterName: string; emoji: string; items: ContentItem[] };
+  type GenreSpotlightRow = { clusterName: string; items: ContentItem[] };
   const [genreSpotlights, setGenreSpotlights] = useState<GenreSpotlightRow[]>([]);
   const [spotlightsLoading, setSpotlightsLoading] = useState(false);
   // User's onboarding cluster picks. Drives spotlight ordering — picked

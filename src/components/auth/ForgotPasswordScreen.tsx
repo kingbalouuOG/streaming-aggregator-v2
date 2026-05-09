@@ -90,11 +90,11 @@ export default function ForgotPasswordScreen({ onBack }: ForgotPasswordScreenPro
               <p
                 className="text-center max-w-[280px]"
                 style={{
-                  fontFamily: "var(--font-display)",
-                  fontStyle: "italic",
+                  fontFamily: "var(--font-ui)",
                   fontSize: "var(--t-body)",
+                  fontWeight: 400,
                   color: "var(--fg-soft)",
-                  lineHeight: 1.4,
+                  lineHeight: 1.45,
                 }}
               >
                 Enter your email and we'll send a reset link.
@@ -205,11 +205,11 @@ export default function ForgotPasswordScreen({ onBack }: ForgotPasswordScreenPro
               <p
                 className="text-center max-w-[280px]"
                 style={{
-                  fontFamily: "var(--font-display)",
-                  fontStyle: "italic",
+                  fontFamily: "var(--font-ui)",
                   fontSize: "var(--t-body)",
+                  fontWeight: 400,
                   color: "var(--fg-soft)",
-                  lineHeight: 1.4,
+                  lineHeight: 1.45,
                 }}
               >
                 We've sent a password reset link to{' '}

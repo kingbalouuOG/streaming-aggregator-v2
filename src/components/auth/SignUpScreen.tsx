@@ -147,11 +147,11 @@ export default function SignUpScreen({ onGoToSignIn, onSignUpSuccess }: SignUpSc
           transition={{ delay: 0.35 }}
           className="text-center"
           style={{
-            fontFamily: "var(--font-display)",
-            fontStyle: "italic",
+            fontFamily: "var(--font-ui)",
             fontSize: "var(--t-body)",
+            fontWeight: 400,
             color: "var(--fg-soft)",
-            lineHeight: 1.4,
+            lineHeight: 1.45,
           }}
         >
           A unified streaming companion across your stack.

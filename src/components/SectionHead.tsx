@@ -8,7 +8,7 @@ interface SectionHeadProps {
   kickerColor?: string;
   /** Required. Fraunces 22 / 700 / opsz 36. */
   title: string;
-  /** Optional. Italic Fraunces, magazine-pull-quote tone. */
+  /** Optional. DM Sans body copy beneath the title. */
   standfirst?: string;
   /**
    * Optional trailing slot — typically a "See all →" link or a
@@ -49,11 +49,11 @@ export function SectionHead({ kicker, kickerColor, title, standfirst, right }: S
           <p
             className="mt-1"
             style={{
-              fontFamily: "var(--font-display)",
-              fontStyle: "italic",
+              fontFamily: "var(--font-ui)",
               fontSize: "var(--t-body)",
+              fontWeight: 400,
               color: "var(--fg-soft)",
-              lineHeight: 1.4,
+              lineHeight: 1.45,
             }}
           >
             {standfirst}

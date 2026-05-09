@@ -263,3 +263,31 @@ Notes:
 - Bug: `{item.rating && ...}` rendered "0" for titles with no IMDb rating because `&&` returns the falsy operand and React renders numeric 0 as text. DetailPage IMDb badge had no guard, rendered "0.0 IMDb" unconditionally.
 - Fix: explicit `> 0` guards in `ContentCard.tsx`, `BrowseCard.tsx`, `DetailPage.tsx`.
 - Prevention: never use `{value && ...}` for numerics; consider enabling `react/jsx-no-leaked-render`.
+
+## [2026-05-07] ingest | Phase 5 close-out (PR #4 merged + parking lot v0.6 + phase-5-summary)
+Wiki refreshed to align with Phase 5 reality (closed 2026-05-06).
+
+Updated pages:
+- `wiki/concepts/operations/phase-history.md` — added Phase 4.5 detail row + Phase 5 row + Phase 5.5 / 6 placeholder rows; refreshed conflict-resolution section to include Phase 4.5 anchored-rooms redirect, Phase 5 framing change on migration 039 ("Vault storage migration, not cryptographic rotation"), and the latent INTERACTION_WEIGHTS rename fix.
+- `wiki/entities/codebase/migrations.md` — added rows 033, 034, 035, 036, 037, 038, 039 + deferred 040; added cron source-of-truth caveat (`supabase/cron/*.sql` overlap with migration 039) and `delete_own_account` audit-gap note.
+- `wiki/entities/codebase/rpcs.md` — updated `get_available_tmdb_ids` return shape (TABLE → JSONB array, migration 035) + IN-458 follow-up; added `username_available` (migration 038); added `delete_own_account` with source-of-truth gap warning; added new "Edge Functions (RPC-shaped HTTP endpoints)" section covering `render-foryou-rows`, `label-anchor-room`, and the four cron-invoked functions (`embed-new-titles`, `enrich-new-titles`, `refresh-service-fingerprints`, `sync-incremental`).
+- `wiki/entities/codebase/event-taxonomy.md` — changed `marked_watched` → `watched` in event_type table; added Phase 5 migration 037 explanation + latent INTERACTION_WEIGHTS rename note (vectors rebase on next 24h taste-recompute cycle).
+- `wiki/concepts/architecture/recommendation-pipeline.md` — updated weights table caption ("Phase 5 shipped" column); added Phase 5 update section explaining three contextual sub-scorers (time-of-day 40% / viewing context 40% / device 20%), `PipelineContext` threading (client `pipelineContext.ts` + Edge `buildEdgePipelineContext`), MMR replacement with λ from `getMMRLambda(varietySlider)`, embedding fetch step, `BASE_WEIGHTS` 62.5/25/12.5 unchanged.
+- `wiki/concepts/operations/service-role-jwt-rotation.md` — updated status to "Vault migration shipped Phase 5, cryptographic rotation deferred to Phase 6+"; added "Vault migration ✅ shipped" section with verification queries (4 jobs active + count 0 inline JWTs + cron.job_run_details); added "Pause / resume cron without rotating" pattern via `cron.alter_job` (used today for daily-content-sync RapidAPI quota cap); added two unblock paths for cryptographic rotation.
+- `wiki/registers/parking-lot.md` — sources bumped to v0.6; flipped IN-XPS-002 ✅, IN-XPS-011 ✅, IN-XPS-012 ✅ (workflow + secrets pending), IN-XPS-013 ✅, IN-PX-02 ✅, Phase 4.5 IN-451..IN-456 + IN-463 + IN-466 ✅; marked IN-XPS-004 ⚠ Partial (Vault storage; cryptographic rotation deferred); IN-XPS-006 re-targeted to Phase 5.5 with audit-gap framing; IN-458 / IN-462 / IN-465 re-targeted to Phase 5.5; added IN-XPS-010 (Pro→Free downgrade risk); added new "Phase 5.5 follow-ups" section covering IN-PX-21..IN-PX-35 (15 entries — quality/hardening + GDPR/legal blockers); refreshed counts (78 total, 42 ✅, 27 ⏳, 3 ⚠, 1 🛑, 5 🅿).
+- `wiki/registers/pre-launch-blockers.md` — flipped items 1 (taste_profiles RLS ✅), 3 (username lookup ✅), 11 (Phase 5 contextual ✅), 21 (Phase 4.5 summary ✅); added new items 22 (verify_jwt + CI guard ✅), 23 (CORS allow-list ✅), 24 (username_available rate-limit ⏳), 25 (`extractUserIdFromJwt` defence-in-depth ⏳), 26 (Privacy Policy + Terms pages — store-rejection blocker ⏳), 27 (foryou-parity secrets ⏳), 28 (Phase 5 summary ✅); marked item 2 (JWT rotation) ⚠ Partial — Vault storage shipped, cryptographic rotation Phase 6+; refreshed item 5 (delete account) and item 6 (data export) per Phase 5.5 audit; refreshed item 9 (privacy disclosure) ⚠ Partial.
+- `wiki/concepts/operations/phase-5.md` — NEW page following the Phase 4 template, summarising six workstreams (contextual signals, MMR diversity, security 036–039 + verify_jwt + CORS, type-system cleanup with `<Database>` generic re-enabled, UX carry-overs deferred, quality sweep including latent INTERACTION_WEIGHTS bug fix), deviations from brief (D-after-A/B sequencing, narrower marked_watched scope, migration 039 reframed as Vault storage migration, TZ skew via decision 9, two net-new dependencies), and open items routed to Phase 5.5 / Phase 6 clusters.
+- `index.md` — added phase-5 page reference under operations.
+
+Source-of-truth pointers:
+- Phase 5 summary: `docs/v2/phase-summaries/phase-5-summary.md`.
+- Parking lot v0.6: `docs/v2/Videx_v2_Implementation_Notes_Parking_Lot_v0.6.md`.
+
+Conflict resolutions captured this pass:
+- Migration 039 was originally framed as cryptographic JWT rotation in plan + brief; reality during execution forced a Vault-storage-only migration because Supabase opaque `sb_secret_…` tokens fail `verify_jwt = true` on Edge Functions. Wiki now reflects "Vault storage migration shipped, cryptographic rotation deferred to Phase 6+".
+- `marked_watched` cleanup is narrower than its parking-lot framing suggested. Migration 037 drops only the `event_type` value. The `exit_reason` payload value documented in Detail Page Signal Capture Spec v0.3.2 line 237 stays — wiki event-taxonomy and recommendation-pipeline pages reflect the split.
+- INTERACTION_WEIGHTS map was keyed `'marked_watched'` while `emitContentInteraction` writes `'watched'` — silent no-op on every "Mark as watched" click since Phase 3. Renamed map key as part of Phase 5 latent-bug fix; vectors self-heal on next 24h taste-recompute cycle.
+- `delete_own_account` RPC exists in production but its definition is not in any version-controlled migration (only `027_function_search_path_pin.sql:28` references it). Re-targeted to Phase 5.5 migration 041 audit; wiki rpcs page flags as source-of-truth gap.
+- `supabase/cron/*.sql` files overlap with migration 039 (both manage same registrations). Phase 5.5 IN-PX-31 will resolve via deletion or "MANAGED BY MIGRATION 039" header.
+
+Page count delta: 118 → 119 (+1 phase-5.md).

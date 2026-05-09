@@ -76,11 +76,11 @@ export default function SignInScreen({ onForgotPassword, onGoToSignUp }: SignInS
           transition={{ delay: 0.35 }}
           className="text-center max-w-[280px]"
           style={{
-            fontFamily: "var(--font-display)",
-            fontStyle: "italic",
+            fontFamily: "var(--font-ui)",
             fontSize: "var(--t-body)",
+            fontWeight: 400,
             color: "var(--fg-soft)",
-            lineHeight: 1.4,
+            lineHeight: 1.45,
           }}
         >
           Sign in to pick up where you left off.
