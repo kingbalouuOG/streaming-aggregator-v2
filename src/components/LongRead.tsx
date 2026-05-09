@@ -27,7 +27,7 @@ const SAMPLE = {
 
 export function LongRead({ onSelect }: LongReadProps) {
   return (
-    <section className="editorial mt-3 mb-9">
+    <section className="mt-3 mb-9">
       <button
         type="button"
         onClick={onSelect}
@@ -38,7 +38,6 @@ export function LongRead({ onSelect }: LongReadProps) {
           className="relative w-full overflow-hidden"
           style={{
             aspectRatio: "16 / 10",
-            borderRadius: "var(--r-card)",
             background: "var(--surface-elev)",
           }}
         >
@@ -80,6 +79,7 @@ export function LongRead({ onSelect }: LongReadProps) {
           </div>
         </div>
         <p
+          className="px-5"
           style={{
             fontFamily: "var(--font-display)",
             fontSize: "var(--t-body)",
@@ -90,7 +90,7 @@ export function LongRead({ onSelect }: LongReadProps) {
         >
           {SAMPLE.excerpt}
         </p>
-        <div className="mt-2">
+        <div className="mt-2 px-5">
           <Kicker color="var(--fg-faint)">{SAMPLE.byline}</Kicker>
         </div>
       </button>

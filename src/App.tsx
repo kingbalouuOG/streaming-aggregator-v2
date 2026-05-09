@@ -465,16 +465,15 @@ function AppContent() {
     });
   }, [userPrefs.completeOnboarding, auth.username, auth.user, home.reload]);
 
-  // --- Scroll tracking for hero parallax ---
+  // --- Scroll tracking ---
   const scrollRef = useRef<HTMLDivElement>(null);
   const [, setScrollY] = useState(0);
   const savedScrollPositions = useRef<Record<string, number>>({});
   const browseStateRef = useRef<BrowseStateSnapshot | null>(null);
 
   const handleScroll = useCallback(() => {
-    if (scrollRef.current) {
-      setScrollY(scrollRef.current.scrollTop);
-    }
+    if (!scrollRef.current) return;
+    setScrollY(scrollRef.current.scrollTop);
   }, []);
 
   // Restore scroll position synchronously before paint
@@ -664,10 +663,6 @@ function AppContent() {
   return (
     <div className="size-full bg-background text-foreground overflow-hidden flex justify-center">
       <div className="w-full max-w-md h-full flex flex-col relative">
-        {showTopAppBar && (
-          <TopAppBar onProfileTap={() => setActiveTab("profile")} />
-        )}
-
         {/* Pull-to-refresh indicator */}
         {(pullDistance > 0 || isRefreshing) && !selectedItem && activeTab === "home" && (
           <div
@@ -684,7 +679,11 @@ function AppContent() {
           </div>
         )}
 
-        {/* Scrollable content */}
+        {/* Scrollable content. TopAppBar lives INSIDE the scroller so
+            it scrolls away with the rest of the page (no longer
+            sticky). When the bar isn't shown (detail / calendar /
+            mood-room overlays), the scroller adds its own safe-top so
+            content clears the notification bar. */}
         <div
           ref={scrollRef}
           onScroll={handleScroll}
@@ -694,6 +693,7 @@ function AppContent() {
           className={`flex-1 overflow-y-auto pb-4 no-scrollbar${showTopAppBar ? "" : " safe-top"}`}
           style={{ overflowX: 'hidden', overscrollBehaviorX: 'none', transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined, transition: isPulling.current ? 'none' : 'transform 0.3s ease' }}
         >
+          {showTopAppBar && <TopAppBar />}
           <AnimatePresence mode="wait">
           {showCalendar ? (
             <motion.div
@@ -788,7 +788,7 @@ function AppContent() {
                       (it) => it.image && !watchedIds.has(it.id),
                     );
                     return heroItem ? (
-                      <div className="editorial mb-8 mt-2">
+                      <div className="mb-8 mt-2">
                         <MagazineHero
                           item={heroItem}
                           kicker="TODAY'S PICK"
@@ -806,12 +806,11 @@ function AppContent() {
                         />
                       </div>
                     ) : home.loading ? (
-                      <div className="editorial mb-8 mt-2">
+                      <div className="mb-8 mt-2">
                         <div
                           className="w-full overflow-hidden"
                           style={{
                             aspectRatio: "4 / 5",
-                            borderRadius: "var(--r-card)",
                             background: "var(--surface-elev)",
                           }}
                         />
@@ -831,13 +830,13 @@ function AppContent() {
                     />
                   </div>
 
-                  {/* Category filters — restyle deferred to Phase 5 */}
+                  {/* Browse-by chips. Static (no sticky / no scroll-hide).
+                      The trailing filter button is omitted — Home doesn't
+                      need to surface filters at this level. */}
                   <CategoryFilter
                     categories={categories}
                     activeCategory={activeCategory}
                     onCategoryChange={setActiveCategory}
-                    onFilterPress={() => setShowFilters(true)}
-                    hasActiveFilters={activeFilterCount > 0}
                   />
 
                   {/* Content rows */}

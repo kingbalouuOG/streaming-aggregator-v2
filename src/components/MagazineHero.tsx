@@ -102,7 +102,6 @@ export function MagazineHero({
       onClick={() => onSelect?.(item)}
       style={{
         aspectRatio: "4 / 5",
-        borderRadius: "var(--r-card)",
         background: "var(--surface-elev)",
       }}
       role="button"

@@ -29,10 +29,9 @@ export function CategoryFilter({
 }: CategoryFilterProps) {
   return (
     <div
-      className="sticky top-0 z-20 backdrop-blur-xl"
       style={{
-        background: "color-mix(in srgb, var(--surface) 85%, transparent)",
-        paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))",
+        background: "var(--surface)",
+        paddingTop: 12,
       }}
     >
       <div className="px-5 pt-1">

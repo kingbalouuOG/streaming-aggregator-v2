@@ -1,23 +1,26 @@
-import { UserIcon } from "./icons";
-
-interface TopAppBarProps {
-  onProfileTap: () => void;
-}
-
 /**
- * TopAppBar — sticky chrome above the main scroll surface.
- * Anatomy: Fraunces "Videx" wordmark left, profile glyph right.
+ * TopAppBar — wordmark banner that lives at the top of Home and
+ * scrolls with the page (no longer sticky). The Profile affordance is
+ * the bottom-nav tab, so the bar carries the brand only.
+ *
  * Wordmark resolves through `var(--fg)` so it auto-themes (cream on
- * dark, ink on light) — matches the editorial vocabulary in §3.
+ * dark, ink on light). Padding-top combines the Android notification
+ * bar inset with extra breathing room — important to use a single
+ * `calc()` rather than mixing `safe-top` with Tailwind `pt-*`, since
+ * the second declaration wins and the env-inset gets clobbered.
  */
-export function TopAppBar({ onProfileTap }: TopAppBarProps) {
+export function TopAppBar() {
   return (
     <header
-      className="flex items-center justify-between px-4 safe-top"
+      className="flex items-center px-4"
       style={{
-        height: 52,
         background: "var(--surface)",
-        borderBottom: "0.5px solid var(--hairline)",
+        // Symmetric breathing room above + below the wordmark; the
+        // env-inset sits ABOVE the 20px gap so on a device with a
+        // notification bar the bar pushes the layout down without
+        // eating into the visible padding around "Videx".
+        paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)",
+        paddingBottom: 20,
       }}
     >
       <span
@@ -33,19 +36,6 @@ export function TopAppBar({ onProfileTap }: TopAppBarProps) {
       >
         Videx
       </span>
-      <button
-        type="button"
-        onClick={onProfileTap}
-        aria-label="Profile"
-        className="inline-flex items-center justify-center w-8 h-8"
-        style={{
-          background: "var(--surface-tint)",
-          borderRadius: "var(--r-pill)",
-          color: "var(--fg)",
-        }}
-      >
-        <UserIcon className="w-4 h-4" />
-      </button>
     </header>
   );
 }
