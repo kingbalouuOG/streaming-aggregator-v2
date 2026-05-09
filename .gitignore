@@ -78,6 +78,7 @@ temp_logs.json
 scripts/quiz-report-*.js
 scripts/*-results.json
 scripts/audit-results/*.json
+scripts/*-progress.txt
 p2-*.csv
 
 # Phase 0.5 enrichment backfill state (local only)
