@@ -3,7 +3,7 @@ title: Parking lot — all IN-XXX entries
 type: register
 tags: [register, parking-lot, in-xxx, status]
 created: 2026-04-26
-updated: 2026-05-07
+updated: 2026-05-09
 sources:
   - raw/v2-strategy/Videx_v2_Implementation_Notes_Parking_Lot_v0.3.4.md
   - docs/v2/Videx_v2_Implementation_Notes_Parking_Lot_v0.6.md
@@ -16,7 +16,7 @@ related:
 
 # Parking lot — all IN-XXX entries
 
-Status snapshot of every implementation note. Source of truth: `docs/v2/Videx_v2_Implementation_Notes_Parking_Lot_v0.6.md` (v0.6 published 2026-05-07 covering Phase 5 close-out). Re-snapshot when the parking lot version bumps.
+Status snapshot of every implementation note. Source of truth: `docs/v2/Videx_v2_Implementation_Notes_Parking_Lot_v0.6.md` (v0.6 published 2026-05-07, re-snapshotted 2026-05-09 with IN-PX-36..38 cluster-dominant follow-ups + IN-V3-001..003 v3-redesign follow-ups). Re-snapshot when the parking lot version bumps.
 
 Status legend: ✅ Incorporated · ⏳ Pending · ⚠ Partial · 🛑 Discharged (will not do) · 🅿 Parked (revisit on trigger).
 
@@ -176,11 +176,31 @@ Quality / hardening items (IN-PX-21..33) and pre-launch legal blockers (IN-PX-34
 | IN-PX-34 | Privacy Policy text + functional legal links | ⏳ Filed (**pre-launch blocker** — store-rejection risk) |
 | IN-PX-35 | Functional "Download my data" — GDPR Article 20 | ⏳ Filed (**pre-launch blocker** — currently a fake-success toast) |
 
+## Cluster-dominant follow-ups (filed 2026-05-08 alongside ADR-013)
+
+Filed when bootstrap weights flipped from watched-grid-dominant to cluster-dominant; see ADR-013 in `wiki/concepts/decisions/`.
+
+| ID | Subject | Status |
+|---|---|---|
+| IN-PX-36 | Existing prototype profiles need backfill (saved bootstrap is the anchor for `recomputeFromInteractions`) | ⏳ Filed |
+| IN-PX-37 | Cluster-rep dedup edge cases — verify each title appears in exactly one cluster after reconciliation | ⏳ Filed |
+| IN-PX-38 | Watched-grid candidate-pool restructure follow-up — service-availability filter restoration if the broader pool starves cold-start | ⏳ Filed |
+
+## v3 editorial-redesign follow-ups (filed 2026-05-09 from end-to-end review)
+
+Surfaced during the end-to-end visual review against the design reference. UI shipped; data layer pending.
+
+| ID | Subject | Status |
+|---|---|---|
+| IN-V3-001 | Long Read editorial-spotlight data layer (`long_reads` table parallel to `editor_notes`) — currently a hardcoded sample in `LongRead.tsx` | ⏳ Filed |
+| IN-V3-002 | Taste-v2 surface for hero match% + per-title mood signals — match% wires to ranker output when present, mood is hardcoded "contemplative" | ⏳ Filed (IN YOUR PLAN client-side signal: ✅ wired) |
+| IN-V3-003 | Wire "Refine by feeling" mood refiner to taste-v2 — UI complete and hidden behind `MOOD_REFINER_ENABLED=false` flag in `ForYouPage.tsx` pending the data-layer work | ⏳ Filed |
+
 ## Counts
 
-- Total entries: **78** (Pre-PRE 1 + P0 13 + P0.5 7 + P0/0.5 cross 6 + P1 5 + P2 3 + P3 3 + P4 4 + P4.5 16 + OB 6 + XPS 13 + PX-21..35 15).
+- Total entries: **84** (Pre-PRE 1 + P0 13 + P0.5 7 + P0/0.5 cross 6 + P1 5 + P2 3 + P3 3 + P4 4 + P4.5 16 + OB 6 + XPS 13 + PX-21..35 15 + PX-36..38 3 + V3-001..003 3).
 - ✅ Incorporated: **42**.
-- ⏳ Pending / Not yet incorporated: **27**.
+- ⏳ Pending / Not yet incorporated: **33** (IN-V3-002 IN YOUR PLAN portion ✅ shipped; the match%/mood portion remains pending).
 - ⚠ Partial: **3** (IN-104, IN-XPS-001, IN-XPS-004).
 - 🛑 Discharged: **1** (IN-260).
 - 🅿 Parked: **5** (IN-PX-06, IN-261, IN-XPS-008, IN-XPS-009, IN-OB-006).

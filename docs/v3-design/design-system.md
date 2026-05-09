@@ -42,6 +42,23 @@ Tokens live in `src/index.css`. Full file: `tokens.css` (drop-in). Summary:
 
 **Service tints** (10): see `tokens.css`. Used inside `ServiceBadge` and per-service row kickers — never as page surfaces.
 
+**Glass scrims** — dark-blur surfaces that sit on top of imagery (hero pills, top-right service badges, bookmark/info chips, ★ rating pills). Don't theme — same value in both modes.
+
+| Role | Token | Value |
+|---|---|---|
+| Soft chip | `--scrim-glass-soft` | `rgba(20, 20, 28, 0.45)` |
+| Label chip | `--scrim-glass` | `rgba(20, 20, 28, 0.55)` |
+| Action button | `--scrim-glass-action` | `rgba(20, 20, 28, 0.78)` |
+| Glass edge | `--scrim-glass-edge` | `0 0 0 0.5px rgba(255,255,255,0.10) inset` (`box-shadow`) |
+
+Action-weight scrim (`--scrim-glass-action` + `--scrim-glass-edge`) is used on the hero CTA bookmark/info, the ContentCard top-right bookmark, and the ContentCard ★ rating pill. The hairline edge ships as an inset box-shadow so it doesn't add to layout.
+
+**Service-badge halo** — `--badge-glow: drop-shadow(0 2px 6px rgba(0,0,0,0.45))`. Applied as a CSS `filter` on the wrapper around any `<ServiceBadge>` rendered over imagery (hero, ContentCard top-left, WideCard, WatchlistPage GridCard). Lifts the brand mark off the underlying poster without a chip background.
+
+**Star** — `--star: #fbbf24`. Used wherever a ★ glyph renders alongside a numeric rating.
+
+**Light-mode kicker override** — the brand `--primary` (`#e85d25`) hits 3.09:1 against the paper surface, below WCAG AA 4.5:1 for body text. The kicker (which is 11px tracked uppercase) carries a per-theme override `[data-theme="light"] .t-kicker { color: #b8451a; }` (~5.4:1 vs paper). The brand mark elsewhere keeps the original orange.
+
 ### Type
 
 Variable-font `opsz` axis is part of the contract. Set `font-variation-settings: "opsz" N` proportional to size:

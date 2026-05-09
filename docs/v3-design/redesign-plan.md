@@ -73,6 +73,65 @@ Per-component checklist. One row = one PR. Tick the box when done. Do not bundle
 - [x] **`editor_notes` table** — 🟣 Supabase migration. Columns: `id, body, kicker, published_at, expires_at`. Read once-per-day cached.
 - [x] **`recommendations-v2/rows/home/perServiceChart.ts`** — 🟢 Existing logic, no change. Just verify Home wires it.
 
+## Phase 6.5 — End-to-end review + on-device refinements (post-merge)
+
+Landed via PR #7 (squash-merge `2dfc685`) and follow-up commits on main. These came out of an end-to-end visual review against the design reference plus on-device testing on Android.
+
+### New components
+
+- [x] **`TopAppBar`** *(new)* — 🟣 Wordmark banner. Lives at top of Home, scrolls with the page (not sticky). `padding-top: calc(env(safe-area-inset-top, 0px) + 20px)` symmetric with `padding-bottom: 20px`. No profile glyph (Profile tab in BottomNav).
+- [x] **`LongRead`** *(new)* — 🟣 Editorial spotlight with cover image + Fraunces title overlay + DM Sans excerpt + byline kicker. Image is full-bleed; text below sits at the standard `px-5` gutter. Hardcoded sample copy pending IN-V3-001.
+- [x] **`NumberedChart`** *(new)* — 🟣 Top-N row anatomy (rank numeral · thumb · title · service+meta · play tile). Reusable unranked: `numbered={false}` + `subtitleFor` for the For You watchlist preview ("Saved 2 days ago").
+- [x] **`FreeTonight`** *(new)* — 🟣 Green-framed row of items free on the user's connected free services (BBC iPlayer / ITVX / Channel 4). Skipped when none are connected.
+- [x] **`WideCard`** *(new)* — 🟣 Landscape (16:9) variant. Real TMDb backdrops via `backdrop_path` threaded through `contentAdapter`. Used by Critics' Picks on Home + Outside Your Usual on For You.
+- [x] **`CalendarList`** *(new)* — 🟣 Date-grouped vertical list (TODAY / TOMORROW / WEEKDAY DD MMM). Replaces `CalendarStrip` on Home and For You. `CalendarStrip` deleted.
+- [x] **`genreIcons`** *(new)* — 🟣 Emoji glyph mapping for genre/cluster surfaces.
+
+### Anatomy refinements
+
+- [x] **MagazineHero** — Kicker top-left in cream (was orange) so it doesn't compete with the brand mark; standfirst switched from Fraunces italic → DM Sans regular at 85% opacity. Top-right service badge full-bleed (no chip wrapper) with `--badge-glow` halo. CTA fallback to first-listed service when `userServices` filter empties. Full-bleed on mobile (no `editorial` padding, no `borderRadius`).
+- [x] **ContentCard** — Service stack moved from chip to full-bleed badges with halo (TL). Bookmark TR uses `--scrim-glass-action` + `--scrim-glass-edge`. ★ rating BL is a dark glass pill (was plain text — washed out on bright posters).
+- [x] **EditorsNote** — Square "A" mark (was pill), `--primary-soft` background + `--primary` letter (inverted so the mark reads as a badge, not a button). Body in Fraunces (was DM Sans). Chevron-right disclosure on the collapsed strip.
+- [x] **WatchlistPage** — List view default. GridCard rebuilt to ContentCard anatomy (services TL halo, bookmark TR, rating pill BL, title beneath). List rows show service · IN YOUR PLAN chip · "saved X ago" · ★ rating · Play.
+- [x] **FilterSheet** — Chip-pill restyle (tint pattern: `--primary-soft` bg + `--primary` text + 50%-mix border for active; transparent + hairline for inactive). Fraunces 28px rating numeral. Drop the inline `<style>` no-scrollbar block.
+- [x] **ProfilePage** — Monochrome icon tiles (was saturated brand chiclets). Orange accent reserved for Your Taste row + Sign Out button. Delete row uses `--danger` token.
+- [x] **CategoryFilter** — Tint-pattern chips. On Home, mounted statically (no sticky / no scroll-hide); the trailing filter button is suppressed by omitting `onFilterPress`.
+- [x] **DetailPage** — Similar-row migrated to `<ContentCard variant="default">` (was a custom inline anatomy with white text overlaid on poster).
+- [x] **ServiceBadge** — Fallback uses `var(--svc-*)` brand tokens (was `bg-gray-600`). `ServiceStack` outline removed so Disney+ / Prime brand colours run edge-to-edge with no dark ring.
+
+### Tokens added
+
+- [x] **`--scrim-glass-soft / --scrim-glass / --scrim-glass-action / --scrim-glass-edge`** — three opacity weights of the glass-blur scrim used over imagery, plus a hairline edge inset.
+- [x] **`--badge-glow`** — service-mark halo (`drop-shadow`) used as a CSS `filter` on the wrapper around full-bleed `<ServiceBadge>`s.
+- [x] **`--star`** — `#fbbf24` for the ★ glyph (was hard-coded across 5+ files).
+- [x] **`--primary-foreground`** — already in tokens, now documented in §3.
+- [x] **`[data-theme="light"] .t-kicker { color: #b8451a; }`** — light-mode kicker contrast bump (~5.4:1 vs paper).
+- [x] **Type ramp** — `--t-body` 15 → 13px to match `--t-meta`'s tighter feel.
+- [x] **`.editorial`** — switched `margin: 0 auto` shorthand to `margin-left/right: auto` longhand so per-element `mt-*`/`mb-*` Tailwind utilities aren't reset by the shorthand.
+
+### Bottom-nav glyphs normalised
+
+- [x] All five bottom-nav icons share a 4→20 (16×16) bbox so they read as the same visual size:
+  - `HomeIcon` already 4→20 ✓
+  - `SparkleIcon` (For You): grew from 5→19 to 2→18 / 4→20
+  - `SearchIcon` (Browse): circle nudged to (10, 10) r=6, handle 15→20
+  - `BookmarkIcon` (Watchlist): tightened from 5→21 (taller) to 4→20
+  - `UserIcon` (Profile): body bottom from y=21 to y=20
+
+### Pre-merge cleanup
+
+- [x] Removed handover artifacts: `Videx A Long-form.html`, `Videx Portfolio.html`, `videx-design-system.html` (design now implemented).
+- [x] Removed unused brand SVG variants: `videx-lockup-{dark,light}.svg`, `videx-mark-mono-{cream,ink}.svg`, `videx-icon-maskable.svg`. Kept `videx-mark.svg` (favicon).
+- [x] Removed `src/index.css.bak-precompiled` (legacy backup).
+- [x] Deleted unused `CalendarStrip` component (superseded by `CalendarList`).
+- [x] Gitignore additions: `/.playwright-mcp/`, root `*.png`/`*.jpg`/`*.jpeg`.
+
+### Parking-lot follow-ups
+
+- **IN-V3-001** — Long Read editorial-spotlight data layer (`long_reads` table parallel to `editor_notes`).
+- **IN-V3-002** — Taste-v2 surface for hero match% + per-title mood signals (currently hardcoded "✨ 96% match · Mood: contemplative" placeholder).
+- **IN-V3-003** — Wire "Refine by feeling" mood refiner to taste-v2. UI is complete and hidden behind `MOOD_REFINER_ENABLED=false` flag in `ForYouPage.tsx`.
+
 ---
 
 ## How to ship a row
