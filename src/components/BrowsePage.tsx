@@ -96,63 +96,118 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     <div className="flex flex-col gap-0">
       {/* Sticky search + filter controls */}
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl pb-1" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))", backgroundColor: "var(--background)" }}>
-        {/* Search bar + Filter button */}
+        {/* Search bar + Filter button — editorial paper/ink surface. */}
         <div className="px-5 mb-3 flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted-foreground pointer-events-none" />
+            <Search
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] pointer-events-none"
+              style={{ color: "var(--fg-faint)" }}
+            />
             <input
               type="text"
-              placeholder="Search movies and TV shows..."
+              placeholder="Search movies and TV shows…"
               value={search.query}
               onChange={(e) => search.setQuery(e.target.value)}
-              className="w-full bg-secondary rounded-xl pl-10 pr-10 py-3 text-[14px] text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-primary/40 transition-all"
+              className="w-full pl-10 pr-10 py-3 outline-none transition-all"
+              style={{
+                background: "var(--surface-elev)",
+                border: "0.5px solid var(--hairline)",
+                borderRadius: "var(--r-card)",
+                color: "var(--fg)",
+                fontFamily: "var(--font-ui)",
+                fontSize: 14,
+              }}
             />
             {search.query && (
               <button
+                type="button"
                 onClick={() => search.clearSearch()}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                style={{ backgroundColor: "var(--overlay-medium)" }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center"
+                style={{
+                  borderRadius: "var(--r-pill)",
+                  background: "var(--surface-tint)",
+                  color: "var(--fg-soft)",
+                }}
+                aria-label="Clear search"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
           <button
+            type="button"
             onClick={() => onShowFiltersChange(true)}
-            className={`relative w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200 ${
-              activeFilterCount > 0
-                ? "bg-primary text-primary-foreground"
-                : "bg-secondary text-muted-foreground hover:text-foreground"
-            }`}
+            className="relative w-11 h-11 flex items-center justify-center shrink-0 transition-all duration-200"
+            style={{
+              background: activeFilterCount > 0 ? "var(--primary-soft)" : "var(--surface-elev)",
+              border: activeFilterCount > 0
+                ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                : "0.5px solid var(--hairline)",
+              borderRadius: "var(--r-card)",
+              color: activeFilterCount > 0 ? "var(--primary)" : "var(--fg-soft)",
+            }}
+            aria-label="Filters"
           >
             <SlidersHorizontal className="w-[18px] h-[18px]" />
             {activeFilterCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4.5 h-4.5 min-w-[18px] rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center border-2 border-background" style={{ fontWeight: 700 }}>
+              <span
+                className="absolute -top-1 -right-1 inline-flex items-center justify-center"
+                style={{
+                  minWidth: 18,
+                  height: 18,
+                  padding: "0 4px",
+                  borderRadius: "var(--r-pill)",
+                  background: "var(--primary)",
+                  color: "var(--primary-foreground)",
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  border: "2px solid var(--surface)",
+                }}
+              >
                 {activeFilterCount}
               </span>
             )}
           </button>
         </div>
 
-        {/* Category filter pills (shown during search) */}
+        {/* Category filter pills — editorial chip bar with kicker. */}
         {isSearching && (
-          <div className="flex items-center gap-2 px-5 mb-3">
-            {browseCategories.map((category) => {
-              const isActive = category === search.activeCategory;
-              return (
-                <button
-                  key={category}
-                  onClick={() => search.setActiveCategory(category)}
-                  className={`px-4 py-1.5 rounded-full text-[13px] whitespace-nowrap transition-all duration-200 ${
-                    isActive
-                      ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
-                      : "bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
-                  }`}
-                >
-                  {category}
-                </button>
-              );
-            })}
+          <div className="px-5 mb-3">
+            <div
+              className="t-kicker"
+              style={{ marginBottom: 8 }}
+            >
+              FILTER
+            </div>
+            <div className="flex items-center gap-2">
+              {browseCategories.map((category) => {
+                const isActive = category === search.activeCategory;
+                return (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => search.setActiveCategory(category)}
+                    className="px-3 py-1.5 whitespace-nowrap"
+                    style={{
+                      background: isActive ? "var(--primary-soft)" : "transparent",
+                      color: isActive ? "var(--primary)" : "var(--fg-soft)",
+                      border: isActive
+                        ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                        : "1px solid var(--hairline)",
+                      borderRadius: "var(--r-pill)",
+                      fontFamily: "var(--font-ui)",
+                      fontSize: 13,
+                      fontWeight: isActive ? 600 : 500,
+                      letterSpacing: "0.01em",
+                      transition: "background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out), border-color var(--d-fast) var(--ease-out)",
+                    }}
+                  >
+                    {category}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -160,16 +215,65 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
 
       {/* Content area */}
       <div className="px-5">
-        {/* Empty default state — no query */}
+        {/* Empty default state — editor's-note tone */}
         {!hasQuery && !isLoading && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <Search className="w-12 h-12 text-muted-foreground/30 mb-3" />
-            <p className="text-foreground text-[15px]" style={{ fontWeight: 600 }}>
-              Search movies and TV shows
+          <div className="flex flex-col items-start py-16">
+            <span className="t-kicker" style={{ marginBottom: 12 }}>
+              EDITOR'S NOTE · BROWSE
+            </span>
+            <h2
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: "var(--t-headline)",
+                fontWeight: 600,
+                fontVariationSettings: '"opsz" 48',
+                letterSpacing: "-0.01em",
+                color: "var(--fg)",
+                lineHeight: 1.15,
+                margin: 0,
+                marginBottom: 12,
+              }}
+            >
+              What are you in the mood for?
+            </h2>
+            <p
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: "var(--t-body)",
+                fontWeight: 400,
+                color: "var(--fg-soft)",
+                lineHeight: 1.45,
+                margin: 0,
+              }}
+            >
+              Search movies and TV shows — we'll show you where they're available across your stack.
             </p>
-            <p className="text-muted-foreground/60 text-[13px] mt-1">
-              Find where to watch across all streaming services
-            </p>
+
+            {/* Quick-start chips. Pre-populate the search with a
+                common-mood query so a tap kicks discovery off without
+                the user having to think of a term. */}
+            <span className="t-kicker mt-8 mb-3">TRY ONE OF THESE</span>
+            <div className="flex flex-wrap gap-2">
+              {["Slow burn", "Comedy", "Crime", "Sci-fi", "Romance", "Documentary"].map((seed) => (
+                <button
+                  key={seed}
+                  type="button"
+                  onClick={() => search.setQuery(seed)}
+                  className="px-3 py-1.5"
+                  style={{
+                    background: "var(--surface-tint)",
+                    color: "var(--fg)",
+                    borderRadius: "var(--r-pill)",
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    letterSpacing: "0.01em",
+                  }}
+                >
+                  {seed}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

@@ -176,23 +176,54 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="relative w-full max-w-md bg-surface-elevated rounded-t-3xl max-h-[90vh] flex flex-col"
+            className="relative w-full max-w-md max-h-[90vh] flex flex-col"
+            style={{
+              background: "var(--surface-elev)",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              boxShadow: "var(--shadow-sheet)",
+            }}
           >
-            {/* Drag handle */}
-            <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 rounded-full" style={{ background: "var(--drag-handle)" }} />
+            {/* Grabber pill — design-system §4 sheet anatomy */}
+            <div className="flex justify-center pt-2 pb-1">
+              <span
+                style={{
+                  width: 36,
+                  height: 4,
+                  borderRadius: "var(--r-pill)",
+                  background: "var(--hairline)",
+                }}
+              />
             </div>
 
             {/* Header */}
-            <div className="flex items-center justify-between px-5 pb-4 pt-1">
-              <h2 className="text-foreground text-[20px]" style={{ fontWeight: 700 }}>
-                Filters
-              </h2>
+            <div className="flex items-start justify-between px-5 pt-2 pb-4">
+              <div>
+                <span className="t-kicker">REFINE</span>
+                <h2
+                  className="mt-1"
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "var(--t-title)",
+                    fontWeight: 700,
+                    fontVariationSettings: '"opsz" 36',
+                    letterSpacing: "-0.01em",
+                    color: "var(--fg)",
+                    lineHeight: 1.15,
+                    margin: 0,
+                  }}
+                >
+                  Filters.
+                </h2>
+              </div>
               <button
+                type="button"
                 onClick={onClose}
-                className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                className="w-8 h-8 inline-flex items-center justify-center"
+                style={{ color: "var(--fg-soft)" }}
+                aria-label="Close"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -220,11 +251,12 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
                         if (lastToggledService === svc.id) setLastToggledService(null);
                       }}
                       whileTap={{ scale: 0.9 }}
-                      className={`w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center transition-all duration-200 border-2 ${
-                        selected
-                          ? `${svc.selectedBorder} shadow-lg ring-1 ring-primary/30`
-                          : "border-transparent opacity-50 hover:opacity-100"
-                      }`}
+                      className="w-12 h-12 overflow-hidden flex items-center justify-center transition-all duration-200"
+                      style={{
+                        borderRadius: "var(--r-md)",
+                        border: selected ? "2px solid var(--primary)" : "2px solid transparent",
+                        opacity: selected ? 1 : 0.5,
+                      }}
                     >
                       <img src={svc.logo} alt={svc.name} className="w-full h-full object-cover" />
                     </motion.button>
@@ -240,12 +272,21 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
                   return (
                     <button
                       key={type}
+                      type="button"
                       onClick={() => setLocal((p) => ({ ...p, contentType: type }))}
-                      className={`px-4 py-1.5 rounded-full text-[13px] transition-all duration-200 ${
-                        active
-                          ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
-                          : "bg-secondary text-muted-foreground hover:text-foreground"
-                      }`}
+                      className="px-3 py-1.5 transition-all"
+                      style={{
+                        background: active ? "var(--primary-soft)" : "transparent",
+                        color: active ? "var(--primary)" : "var(--fg-soft)",
+                        border: active
+                          ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                          : "1px solid var(--hairline)",
+                        borderRadius: "var(--r-pill)",
+                        fontFamily: "var(--font-ui)",
+                        fontSize: 13,
+                        fontWeight: active ? 600 : 500,
+                        letterSpacing: "0.01em",
+                      }}
                     >
                       {type}
                     </button>
@@ -255,18 +296,26 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
 
               {/* COST */}
               <SectionLabel>COST</SectionLabel>
-              <div className="flex bg-secondary rounded-xl p-1 mb-6">
+              <div className="flex gap-2 mb-6">
                 {costOptions.map((opt) => {
                   const active = local.cost === opt;
                   return (
                     <button
                       key={opt}
+                      type="button"
                       onClick={() => setLocal((p) => ({ ...p, cost: opt }))}
-                      className={`flex-1 py-2 rounded-lg text-[13px] transition-all duration-200 ${
-                        active
-                          ? "bg-primary text-primary-foreground shadow-md"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
+                      className="flex-1 py-2 transition-all"
+                      style={{
+                        background: active ? "var(--primary-soft)" : "transparent",
+                        color: active ? "var(--primary)" : "var(--fg-soft)",
+                        border: active
+                          ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                          : "1px solid var(--hairline)",
+                        borderRadius: "var(--r-pill)",
+                        fontFamily: "var(--font-ui)",
+                        fontSize: 13,
+                        fontWeight: active ? 600 : 500,
+                      }}
                     >
                       {opt}
                     </button>
@@ -296,12 +345,19 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
                         if (lastToggledGenre === genre) setLastToggledGenre(null);
                       }}
                       whileTap={{ scale: 0.93 }}
-                      className={`px-3.5 py-1.5 rounded-full text-[13px] transition-colors duration-200 border ${
-                        selected
-                          ? "bg-primary/15 border-primary text-primary"
-                          : "bg-transparent text-muted-foreground hover:text-foreground"
-                      }`}
-                      style={{ borderColor: selected ? undefined : "var(--check-border-2)" }}
+                      className="px-3 py-1.5 transition-colors"
+                      style={{
+                        background: selected ? "var(--primary-soft)" : "transparent",
+                        color: selected ? "var(--primary)" : "var(--fg-soft)",
+                        border: selected
+                          ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                          : "1px solid var(--hairline)",
+                        borderRadius: "var(--r-pill)",
+                        fontFamily: "var(--font-ui)",
+                        fontSize: 13,
+                        fontWeight: selected ? 600 : 500,
+                        letterSpacing: "0.01em",
+                      }}
                     >
                       {genre}
                     </motion.button>
@@ -312,7 +368,17 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
               {/* MINIMUM RATING */}
               <SectionLabel>MINIMUM RATING</SectionLabel>
               <div className="mb-2">
-                <span className="text-primary text-[15px]" style={{ fontWeight: 600 }}>
+                <span
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: 28,
+                    fontWeight: 800,
+                    fontVariationSettings: '"opsz" 36',
+                    letterSpacing: "-0.02em",
+                    color: "var(--primary)",
+                    lineHeight: 1,
+                  }}
+                >
                   {local.minRating === 0 ? "Any" : local.minRating.toFixed(0)}
                 </span>
               </div>
@@ -346,25 +412,38 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
               <SectionLabel>SHOW WATCHED</SectionLabel>
               <button
                 onClick={() => setLocal((p) => ({ ...p, showWatched: !p.showWatched }))}
-                className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl mb-4 transition-all duration-200 border ${
-                  local.showWatched
-                    ? "bg-primary/10 border-primary/30 text-primary"
-                    : "bg-secondary border-transparent text-muted-foreground"
-                }`}
+                className="flex items-center gap-3 w-full px-4 py-3 mb-4 transition-all duration-200"
+                style={{
+                  background: local.showWatched
+                    ? "color-mix(in srgb, var(--primary) 14%, transparent)"
+                    : "var(--surface-tint)",
+                  border: local.showWatched
+                    ? "1px solid color-mix(in srgb, var(--primary) 45%, transparent)"
+                    : "0.5px solid transparent",
+                  borderRadius: "var(--r-md)",
+                  color: local.showWatched ? "var(--primary)" : "var(--fg-soft)",
+                }}
               >
                 {local.showWatched ? (
                   <EyeIcon className="w-5 h-5 shrink-0" />
                 ) : (
                   <EyeOffIcon className="w-5 h-5 shrink-0" />
                 )}
-                <span className="text-[13px]" style={{ fontWeight: 600 }}>
+                <span style={{ fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 600 }}>
                   {local.showWatched ? "Visible" : "Hidden"}
                 </span>
               </button>
 
               {/* LANGUAGE */}
               <SectionLabel>LANGUAGE</SectionLabel>
-              <p className="text-muted-foreground/60 text-[11px] -mt-1.5 mb-3">
+              <p
+                className="-mt-1.5 mb-3"
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 11,
+                  color: "var(--fg-faint)",
+                }}
+              >
                 Select languages you want to see. None selected = show all.
               </p>
               <div className="flex flex-wrap gap-2 mb-6">
@@ -373,13 +452,20 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
                   return (
                     <button
                       key={lang}
+                      type="button"
                       onClick={() => toggleLanguage(lang)}
-                      className={`px-3.5 py-1.5 rounded-full text-[13px] transition-colors duration-200 border ${
-                        selected
-                          ? "bg-primary/15 border-primary text-primary"
-                          : "bg-transparent text-muted-foreground hover:text-foreground"
-                      }`}
-                      style={{ borderColor: selected ? undefined : "var(--check-border-2)" }}
+                      className="px-3 py-1.5 transition-colors"
+                      style={{
+                        background: selected ? "var(--primary-soft)" : "transparent",
+                        color: selected ? "var(--primary)" : "var(--fg-soft)",
+                        border: selected
+                          ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                          : "1px solid var(--hairline)",
+                        borderRadius: "var(--r-pill)",
+                        fontFamily: "var(--font-ui)",
+                        fontSize: 13,
+                        fontWeight: selected ? 600 : 500,
+                      }}
                     >
                       {lang}
                     </button>
@@ -389,28 +475,42 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
             </div>
 
             {/* Bottom bar */}
-            <div className="px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 flex gap-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+            <div
+              className="px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 flex gap-3"
+              style={{ borderTop: "0.5px solid var(--hairline)" }}
+            >
               <button
+                type="button"
                 onClick={handleClearAll}
-                className="flex-1 py-3 rounded-2xl bg-secondary text-foreground text-[14px] transition-colors hover:bg-accent"
-                style={{ fontWeight: 600 }}
+                className="flex-1 py-3 transition-colors"
+                style={{
+                  background: "var(--surface-tint)",
+                  color: "var(--fg)",
+                  borderRadius: "var(--r-pill)",
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 14,
+                  fontWeight: 600,
+                }}
               >
-                Clear All
+                Clear all
               </button>
               <button
+                type="button"
                 onClick={handleApply}
-                className="flex-1 py-3 rounded-2xl bg-primary text-primary-foreground text-[14px] shadow-lg shadow-primary/30 transition-colors hover:bg-primary/90"
-                style={{ fontWeight: 600 }}
+                className="flex-1 py-3 transition-colors"
+                style={{
+                  background: "var(--primary)",
+                  color: "var(--primary-foreground)",
+                  borderRadius: "var(--r-pill)",
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 14,
+                  fontWeight: 600,
+                }}
               >
-                Apply Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+                Apply{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
               </button>
             </div>
           </motion.div>
-
-          <style>{`
-            .no-scrollbar::-webkit-scrollbar { display: none; }
-            .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-          `}</style>
         </div>
       )}
     </AnimatePresence>
@@ -421,8 +521,7 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, connectedServic
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <p
-      className="text-muted-foreground text-[11px] tracking-widest mb-3"
-      style={{ fontWeight: 600 }}
+      className="t-kicker mb-3"
     >
       {children}
     </p>

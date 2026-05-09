@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { PoundSterling, ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { getPlatform } from "./platformLogos";
 import { PLATFORM_PRICING, getDefaultTier, type PricingTier } from "@/lib/data/platformPricing";
@@ -63,48 +63,84 @@ export function SpendDashboard({ connectedServices }: SpendDashboardProps) {
       <motion.button
         onClick={() => setIsExpanded(!isExpanded)}
         whileTap={{ scale: 0.985 }}
-        className="w-full rounded-2xl border bg-secondary/40 p-4 text-left transition-colors"
-        style={{ borderColor: "var(--border-subtle)" }}
+        className="w-full p-5 text-left transition-colors"
+        style={{
+          background: "var(--surface-elev)",
+          border: "0.5px solid var(--hairline)",
+          borderRadius: "var(--r-card)",
+        }}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
-              <PoundSterling className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <h3 className="text-foreground text-[14px]" style={{ fontWeight: 600 }}>
-                Monthly Spend
-              </h3>
-              <p className="text-muted-foreground text-[12px]">
-                {paidServices.length} paid · {freeServices.length} free
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-foreground text-[18px]" style={{ fontWeight: 700 }}>
-              £{totalMonthly.toFixed(2)}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <span
+              className="t-kicker"
+              style={{ display: "inline-block", marginBottom: 6 }}
+            >
+              MONTHLY SPEND
             </span>
-            {isExpanded ? (
-              <ChevronUp className="w-4 h-4 text-muted-foreground" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-muted-foreground" />
-            )}
+            <div className="flex items-baseline gap-1">
+              <span
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: 28,
+                  fontWeight: 700,
+                  fontVariationSettings: '"opsz" 48',
+                  color: "var(--fg-faint)",
+                  lineHeight: 1,
+                }}
+              >
+                £
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: 56,
+                  fontWeight: 700,
+                  fontVariationSettings: '"opsz" 96',
+                  letterSpacing: "-0.03em",
+                  color: "var(--fg)",
+                  lineHeight: 1,
+                }}
+              >
+                {totalMonthly.toFixed(2)}
+              </span>
+            </div>
+            <p
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 12,
+                color: "var(--fg-soft)",
+                marginTop: 8,
+              }}
+            >
+              {paidServices.length} paid · {freeServices.length} free
+            </p>
+          </div>
+          <div className="shrink-0 pt-1" style={{ color: "var(--fg-faint)" }}>
+            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </div>
         </div>
 
-        {/* Quick stats - always visible */}
+        {/* Quick stats — annual / daily breakdown */}
         {!isExpanded && (
-          <div className="flex items-center gap-4 mt-3 pt-3 border-t" style={{ borderColor: "var(--border-subtle)" }}>
-            <div className="flex-1 text-center">
-              <p className="text-muted-foreground text-[11px]">Annual</p>
-              <p className="text-foreground text-[13px]" style={{ fontWeight: 600 }}>
+          <div
+            className="flex items-center gap-4 mt-4 pt-3"
+            style={{ borderTop: "0.5px solid var(--hairline)" }}
+          >
+            <div className="flex-1">
+              <p style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--fg-faint)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                Annual
+              </p>
+              <p style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, fontVariationSettings: '"opsz" 36', color: "var(--fg)", marginTop: 2 }}>
                 £{totalAnnual.toFixed(0)}
               </p>
             </div>
-            <div className="w-px h-6 bg-border" />
-            <div className="flex-1 text-center">
-              <p className="text-muted-foreground text-[11px]">Daily</p>
-              <p className="text-foreground text-[13px]" style={{ fontWeight: 600 }}>
+            <div style={{ width: 1, height: 28, background: "var(--hairline)" }} />
+            <div className="flex-1">
+              <p style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--fg-faint)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                Daily
+              </p>
+              <p style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, fontVariationSettings: '"opsz" 36', color: "var(--fg)", marginTop: 2 }}>
                 £{dailyRate.toFixed(2)}
               </p>
             </div>
@@ -123,40 +159,77 @@ export function SpendDashboard({ connectedServices }: SpendDashboardProps) {
             className="overflow-hidden"
           >
             <div className="mt-2 rounded-2xl border bg-secondary/40 overflow-hidden" style={{ borderColor: "var(--border-subtle)" }}>
-              {/* Paid services */}
-              {paidServices.map((service) => (
+              {/* Paid services with bar visualisation */}
+              {paidServices.map((service) => {
+                const price = service.selectedTier?.price ?? 0;
+                const sharePct = totalMonthly > 0 ? (price / totalMonthly) * 100 : 0;
+                return (
                 <div key={service.serviceId}>
                   <div
-                    className="flex items-center gap-3 px-4 py-3 border-b"
-                    style={{ borderColor: "var(--border-subtle)" }}
+                    className="flex flex-col gap-2 px-4 py-3 border-b"
+                    style={{ borderColor: "var(--hairline)" }}
                   >
-                    <img
-                      src={service.logo}
-                      alt={service.name}
-                      className="w-8 h-8 rounded-lg object-cover shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-foreground text-[13px]" style={{ fontWeight: 600 }}>
-                        {service.name}
-                      </p>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingService(
-                            editingService === service.serviceId ? null : service.serviceId
-                          );
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={service.logo}
+                        alt={service.name}
+                        className="w-8 h-8 object-cover shrink-0"
+                        style={{ borderRadius: "var(--r-md)" }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>
+                          {service.name}
+                        </p>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingService(
+                              editingService === service.serviceId ? null : service.serviceId
+                            );
+                          }}
+                          className="transition-colors"
+                          style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--fg-soft)" }}
+                        >
+                          {service.selectedTier?.name || "Select tier"}
+                          {service.tiers.length > 1 && (
+                            <ChevronDown className="w-3 h-3 inline ml-0.5 -mt-0.5" />
+                          )}
+                        </button>
+                      </div>
+                      <span
+                        className="shrink-0"
+                        style={{
+                          fontFamily: "var(--font-display)",
+                          fontSize: 16,
+                          fontWeight: 700,
+                          fontVariationSettings: '"opsz" 24',
+                          color: "var(--fg)",
                         }}
-                        className="text-muted-foreground text-[11px] hover:text-foreground transition-colors"
                       >
-                        {service.selectedTier?.name || "Select tier"}
-                        {service.tiers.length > 1 && (
-                          <ChevronDown className="w-3 h-3 inline ml-0.5 -mt-0.5" />
-                        )}
-                      </button>
+                        £{price.toFixed(2)}
+                      </span>
                     </div>
-                    <span className="text-foreground text-[14px] shrink-0" style={{ fontWeight: 600 }}>
-                      £{(service.selectedTier?.price || 0).toFixed(2)}
-                    </span>
+                    {/* Per-service bar — share of monthly spend */}
+                    {totalMonthly > 0 && (
+                      <div
+                        className="relative w-full overflow-hidden"
+                        style={{
+                          height: 4,
+                          borderRadius: "var(--r-pill)",
+                          background: "var(--surface-tint)",
+                        }}
+                        aria-label={`${sharePct.toFixed(0)} percent of monthly spend`}
+                      >
+                        <div
+                          style={{
+                            width: `${sharePct}%`,
+                            height: "100%",
+                            background: "var(--primary)",
+                            transition: "width var(--d-base) var(--ease-out)",
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Tier selector */}
@@ -203,7 +276,8 @@ export function SpendDashboard({ connectedServices }: SpendDashboardProps) {
                     )}
                   </AnimatePresence>
                 </div>
-              ))}
+                );
+              })}
 
               {/* Free services divider */}
               {freeServices.length > 0 && (

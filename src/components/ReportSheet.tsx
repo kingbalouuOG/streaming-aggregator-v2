@@ -86,29 +86,54 @@ export function ReportSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="relative w-full max-w-md bg-surface-elevated rounded-t-3xl max-h-[90vh] flex flex-col"
+            className="relative w-full max-w-md max-h-[90vh] flex flex-col"
+            style={{
+              background: "var(--surface-elev)",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              boxShadow: "var(--shadow-sheet)",
+            }}
           >
-            {/* Drag handle */}
-            <div className="flex justify-center pt-3 pb-1">
-              <div
-                className="w-10 h-1 rounded-full"
-                style={{ background: "var(--drag-handle)" }}
+            {/* Grabber pill — design-system §4 sheet anatomy */}
+            <div className="flex justify-center pt-2 pb-1">
+              <span
+                style={{
+                  width: 36,
+                  height: 4,
+                  borderRadius: "var(--r-pill)",
+                  background: "var(--hairline)",
+                }}
               />
             </div>
 
             {/* Header */}
-            <div className="flex items-center justify-between px-5 pb-4 pt-1">
-              <h2
-                className="text-foreground text-[20px]"
-                style={{ fontWeight: 700 }}
-              >
-                Report a problem
-              </h2>
+            <div className="flex items-start justify-between px-5 pt-2 pb-4">
+              <div>
+                <span className="t-kicker">FEEDBACK</span>
+                <h2
+                  className="mt-1"
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "var(--t-title)",
+                    fontWeight: 700,
+                    fontVariationSettings: '"opsz" 36',
+                    letterSpacing: "-0.01em",
+                    color: "var(--fg)",
+                    lineHeight: 1.15,
+                    margin: 0,
+                  }}
+                >
+                  Report a problem.
+                </h2>
+              </div>
               <button
+                type="button"
                 onClick={handleClose}
-                className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                className="w-8 h-8 inline-flex items-center justify-center"
+                style={{ color: "var(--fg-soft)" }}
+                aria-label="Close"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 

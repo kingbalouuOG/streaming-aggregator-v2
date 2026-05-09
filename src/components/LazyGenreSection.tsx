@@ -30,18 +30,36 @@ interface LazyGenreSectionProps {
 }
 
 function SectionSkeleton({ genreId }: { genreId: number }) {
+  const name = GENRE_NAMES[genreId] || 'Loading…';
   return (
     <section className="mb-6">
-      <div className="flex items-center justify-between px-5 mb-3">
-        <h2 className="text-foreground text-[17px]" style={{ fontWeight: 700 }}>
-          {GENRE_NAMES[genreId] || 'Loading...'}
+      <div className="px-5 mb-3">
+        <span className="t-kicker">GENRE</span>
+        <h2
+          className="mt-1"
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 'var(--t-title)',
+            fontWeight: 700,
+            fontVariationSettings: '"opsz" 36',
+            letterSpacing: '-0.01em',
+            color: 'var(--fg)',
+            lineHeight: 1.15,
+            margin: 0,
+          }}
+        >
+          {name}.
         </h2>
       </div>
       <div className="flex gap-3 px-5">
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
-            className="w-[165px] h-[240px] rounded-xl bg-secondary animate-pulse shrink-0"
+            className="w-[160px] h-[268px] animate-pulse shrink-0"
+            style={{
+              borderRadius: 'var(--r-card)',
+              background: 'var(--surface-elev)',
+            }}
           />
         ))}
       </div>
@@ -115,7 +133,8 @@ export function LazyGenreSection({
             style={{ overflow: "hidden" }}
           >
             <ContentRow
-              title={genreName}
+              kicker="GENRE"
+              title={`${genreName}.`}
               sectionKey={`genre-${genreId}`}
               items={filteredItems}
               onItemSelect={onItemSelect}

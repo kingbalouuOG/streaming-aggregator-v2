@@ -17,6 +17,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { PLATFORMS, type PlatformDef } from "./platformLogos";
+import { GenreIconTile, CLUSTER_GLYPHS } from "./genreIcons";
 import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste-v2/tasteClusters";
 import { logOnboardingEvent } from "@/lib/analytics/logger";
 import { ONBOARDING_EVENTS } from "@/lib/analytics/events";
@@ -48,6 +49,68 @@ interface OnboardingFlowProps {
 }
 
 const TOTAL_STEPS = 5;
+
+/**
+ * Magazine-layout step heading per Phase 4 PR-U: kicker
+ * (uppercase tracked, --primary) → Fraunces title → italic Fraunces
+ * standfirst. Used by every step inside the flow.
+ */
+function StepHeader({
+  kicker,
+  title,
+  standfirst,
+}: {
+  kicker: string;
+  title: string;
+  standfirst?: string;
+}) {
+  return (
+    <div className="mb-2">
+      <span
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: 11,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "1.6px",
+          color: "var(--primary)",
+        }}
+      >
+        {kicker}
+      </span>
+      <h2
+        className="mt-2"
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--t-headline)",
+          fontWeight: 600,
+          fontVariationSettings: '"opsz" 48',
+          letterSpacing: "-0.01em",
+          color: "var(--fg)",
+          lineHeight: 1.15,
+          margin: 0,
+        }}
+      >
+        {title}
+      </h2>
+      {standfirst && (
+        <p
+          className="mt-2"
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--t-body)",
+            fontWeight: 400,
+            color: "var(--fg-soft)",
+            lineHeight: 1.45,
+            margin: 0,
+          }}
+        >
+          {standfirst}
+        </p>
+      )}
+    </div>
+  );
+}
 
 const slideVariants = {
   enter: (direction: number) => ({
@@ -306,7 +369,7 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
   const getCtaText = () => {
     if (step === 0) return 'Continue'; // Step 1 has its own CTA inside StepAccount
     if (step === 2 && watchedRound < TOTAL_ROUNDS - 1) return `Next round (${watchedRound + 1}/${TOTAL_ROUNDS})`;
-    if (step === TOTAL_STEPS - 1) return 'Start exploring VIDEX';
+    if (step === TOTAL_STEPS - 1) return 'Start exploring Videx';
     return 'Continue';
   };
 
@@ -428,18 +491,27 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
           )}
 
           <motion.button
+            type="button"
             onClick={goNext}
             disabled={!canContinue[step] && step < TOTAL_STEPS - 1}
             whileTap={canContinue[step] || step === TOTAL_STEPS - 1 ? { scale: 0.97 } : undefined}
-            className={`w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-[15px] transition-all duration-300 ${
-              canContinue[step] || step === TOTAL_STEPS - 1
-                ? "bg-primary text-white shadow-lg shadow-primary/25"
-                : "bg-secondary text-muted-foreground cursor-not-allowed"
-            }`}
-            style={{ fontWeight: 600 }}
+            className="w-full flex items-center justify-center gap-2 py-3.5 transition-all"
+            style={{
+              borderRadius: "var(--r-pill)",
+              background: canContinue[step] || step === TOTAL_STEPS - 1
+                ? "var(--primary)"
+                : "var(--surface-tint)",
+              color: canContinue[step] || step === TOTAL_STEPS - 1
+                ? "#fff"
+                : "var(--fg-faint)",
+              fontFamily: "var(--font-ui)",
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: canContinue[step] || step === TOTAL_STEPS - 1 ? "pointer" : "not-allowed",
+            }}
           >
-            {getCtaText()}
-            {step < TOTAL_STEPS - 1 && <ArrowRight className="w-4.5 h-4.5" />}
+            <span>{getCtaText()}</span>
+            {step < TOTAL_STEPS - 1 && <ArrowRight className="w-4 h-4" />}
           </motion.button>
         </div>
         )}
@@ -538,8 +610,27 @@ function StepAccount({
         >
           <Popcorn className="text-white" style={{ width: 30, height: 30 }} />
         </motion.div>
-        <h2 className="text-foreground text-[22px] mb-0.5" style={{ fontWeight: 700 }}>Join VIDEX</h2>
-        <p className="text-muted-foreground text-[13px]">Start discovering what to watch tonight</p>
+        <span className="t-kicker" style={{ marginBottom: 8 }}>STEP 1 OF 5 · ACCOUNT</span>
+        <h2 style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--t-headline)",
+          fontWeight: 600,
+          fontVariationSettings: '"opsz" 48',
+          letterSpacing: "-0.01em",
+          color: "var(--fg)",
+          lineHeight: 1.15,
+          margin: 0,
+          marginBottom: 8,
+        }}>Join Videx.</h2>
+        <p style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: "var(--t-body)",
+          fontWeight: 400,
+          color: "var(--fg-soft)",
+          lineHeight: 1.45,
+          margin: 0,
+          textAlign: "center",
+        }}>A unified streaming companion across your stack.</p>
       </div>
 
       {/* Form fields */}
@@ -598,10 +689,10 @@ function StepAccount({
 
       {/* A little about you — Optional */}
       <div className="mb-4">
-        <h3 className="text-foreground text-[14px] mb-1" style={{ fontWeight: 600 }}>A little about you</h3>
-        <p className="text-muted-foreground text-[12px] mb-3">Optional — helps us recommend the right content from day one.</p>
+        <span className="t-kicker">A LITTLE ABOUT YOU</span>
+        <p className="text-muted-foreground text-[12px] mt-1.5 mb-3">Optional — helps us recommend the right content from day one.</p>
 
-        <p className="text-muted-foreground text-[12px] mb-1.5" style={{ fontWeight: 500 }}>Age range</p>
+        <span className="t-kicker" style={{ display: "block", marginBottom: 8 }}>AGE RANGE</span>
         <div className="flex flex-wrap gap-2 mb-3">
           {AGE_RANGES.map(age => (
             <button key={age} onClick={() => setAgeRange(ageRange === age ? null : age)}
@@ -617,7 +708,7 @@ function StepAccount({
           ))}
         </div>
 
-        <p className="text-muted-foreground text-[12px] mb-1.5" style={{ fontWeight: 500 }}>How do you usually watch?</p>
+        <span className="t-kicker" style={{ display: "block", marginTop: 8, marginBottom: 8 }}>HOW DO YOU USUALLY WATCH?</span>
         <div className="flex flex-wrap gap-2">
           {VIEWING_CONTEXTS.map(ctx => (
             <button key={ctx.id} onClick={() => setViewingCtx(viewingCtx === ctx.id ? null : ctx.id)}
@@ -700,16 +791,22 @@ function StepServices({
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center gap-3 mb-2"
         >
-          <div className="w-10 h-10 rounded-2xl bg-blue-500/15 flex items-center justify-center">
-            <Tv className="w-5 h-5 text-blue-400" />
+          <div
+            className="w-10 h-10 flex items-center justify-center"
+            style={{
+              borderRadius: "var(--r-md)",
+              background: "var(--surface-tint)",
+              color: "var(--fg-soft)",
+            }}
+          >
+            <Tv className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-foreground text-[20px]" style={{ fontWeight: 700 }}>
-              Your streaming services
-            </h2>
-            <p className="text-muted-foreground text-[13px]">
-              Which platforms are you subscribed to?
-            </p>
+            <StepHeader
+              kicker="STEP 2 OF 5 · YOUR STACK"
+              title="Your streaming services."
+              standfirst="Which platforms are you subscribed to?"
+            />
           </div>
         </motion.div>
       </div>
@@ -801,15 +898,11 @@ function StepWatchedGrid({
     <div className="flex flex-col h-full px-6 overflow-y-auto no-scrollbar">
       <div className="pt-4 pb-4">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-          <p className="text-primary text-[12px] mb-1" style={{ fontWeight: 600 }}>
-            Round {round + 1} of {totalRounds}
-          </p>
-          <h2 className="text-foreground text-[20px] mb-1" style={{ fontWeight: 700 }}>
-            What have you watched?
-          </h2>
-          <p className="text-muted-foreground text-[13px]">
-            Tap titles you've watched and enjoyed
-          </p>
+          <StepHeader
+            kicker={`STEP 3 OF 5 · ROUND ${round + 1}/${totalRounds}`}
+            title="What have you seen?"
+            standfirst="Tap the titles you've watched and enjoyed."
+          />
         </motion.div>
       </div>
 
@@ -910,13 +1003,12 @@ function StepClusters({
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-foreground text-[20px]" style={{ fontWeight: 700 }}>
-                What do you love to watch?
-              </h2>
+              <StepHeader
+                kicker="STEP 4 OF 5 · YOUR TASTE"
+                title="What do you love?"
+                standfirst={`Pick at least ${MIN_CLUSTERS} that match your vibe.`}
+              />
             </div>
-            <p className="text-muted-foreground text-[13px]">
-              Pick at least {MIN_CLUSTERS} genres
-            </p>
           </div>
           <span
             className="bg-primary text-white text-[12px] px-2 py-0.5 rounded-full tabular-nums transition-opacity"
@@ -945,8 +1037,8 @@ function StepClusters({
               }`}
               style={{ paddingLeft: '1rem', paddingRight: '2.5rem', borderColor: isSelected ? undefined : "var(--border-subtle)" }}
             >
-              <span className={`text-[22px] shrink-0 transition-transform duration-200 ${isSelected ? "scale-115" : ""}`}>
-                {cluster.emoji}
+              <span className={`shrink-0 transition-transform duration-200 ${isSelected ? "scale-115" : ""}`}>
+                <GenreIconTile glyph={CLUSTER_GLYPHS[cluster.id]} size={36} />
               </span>
               <div className="flex flex-col items-start min-w-0 flex-1">
                 <span
@@ -1047,12 +1139,13 @@ function StepTasteSummary({
     <div className="flex flex-col h-full px-6 overflow-y-auto no-scrollbar">
       <div className="pt-4 pb-4">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-          <h2 className="text-foreground text-[22px] mb-1" style={{ fontWeight: 700 }}>
-            Almost there 🎉
-          </h2>
-          <p className="text-muted-foreground text-[13px] mb-4">
-            Tune how we serve your recommendations.
-          </p>
+          <div className="mb-4">
+            <StepHeader
+              kicker="STEP 5 OF 5 · TUNING"
+              title="Almost there."
+              standfirst="One more pass — tune how we serve your recommendations."
+            />
+          </div>
         </motion.div>
 
         {/* Taste summary card with stats */}
@@ -1094,7 +1187,18 @@ function StepTasteSummary({
           <div className="space-y-5">
             {sliderConfig.map(({ key, left, right }) => (
               <div key={key}>
-                <div className="flex justify-between text-[11px] text-muted-foreground mb-1.5">
+                <div
+                  className="flex justify-between"
+                  style={{
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 11,
+                    fontWeight: 500,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    color: "var(--fg-faint)",
+                    marginBottom: 8,
+                  }}
+                >
                   <span>{left}</span>
                   <span>{right}</span>
                 </div>
@@ -1107,7 +1211,17 @@ function StepTasteSummary({
                   className="videx-slider"
                   style={{ ['--slider-fill' as any]: `${Math.round(sliders[key] * 100)}%` }}
                 />
-                <p className="text-center text-[11px] text-primary mt-0.5" style={{ fontWeight: 500 }}>
+                <p
+                  className="text-center"
+                  style={{
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: "0.04em",
+                    color: "var(--primary)",
+                    marginTop: 6,
+                  }}
+                >
                   {getSliderLabel(key, sliders[key])}
                 </p>
               </div>

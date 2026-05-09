@@ -88,3 +88,148 @@ export function EyeOffIcon({ className = "w-5 h-5" }: IconProps) {
     </svg>
   );
 }
+
+/* ─────────────────────────────────────────────────────────────
+ * v3 editorial-redesign icon set (Phase 0).
+ * 24×24 viewbox, 1.8 stroke, currentColor, rounded line caps.
+ * Default size w-5 h-5; callers override via className.
+ * ───────────────────────────────────────────────────────────── */
+
+const OUTLINE = {
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.8,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
+
+/** Bookmark — outline. Used top-right of ContentCard.
+ *  Bbox 4→20 = 16×16 to match the bottom-nav optical-weight contract. */
+export function BookmarkIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M 4 4 L 20 4 L 20 20 L 12 16 L 4 20 Z" {...OUTLINE} />
+    </svg>
+  );
+}
+
+/** Bookmark — filled. Active state for ContentCard bookmark. */
+export function BookmarkFilledIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M 4 4 L 20 4 L 20 20 L 12 16 L 4 20 Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** Close — X. Sheets, modals, dismissable chips. */
+export function CloseIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M6 6L18 18M18 6L6 18" {...OUTLINE} />
+    </svg>
+  );
+}
+
+/** Chevron right — "See all" affordances, list-row disclosure. */
+export function ChevronRightIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M9 6l6 6-6 6" {...OUTLINE} />
+    </svg>
+  );
+}
+
+/** Chevron down — accordion, dropdown affordance. */
+export function ChevronDownIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M6 9l6 6 6-6" {...OUTLINE} />
+    </svg>
+  );
+}
+
+/** Expand — four corner brackets. EditorsNote → modal trigger. */
+export function ExpandIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" {...OUTLINE} />
+    </svg>
+  );
+}
+
+/** Play — filled triangle. Hero CTAs, watch-now buttons. */
+export function PlayFillIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M8 5v14l11-7z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** Sparkle — 4-point star. Editorial highlights, "for you" markers.
+ *  Outer points reach 4→20 to match the optical weight of the other
+ *  bottom-nav icons. Inner curve waypoints scale proportionally. */
+export function SparkleIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Bottom-nav icons (Phase 2). Same 24×24 / 1.8 outline contract
+ * as the v3 set above; filled variants where the tab gets an
+ * "active" visual.
+ * ───────────────────────────────────────────────────────────── */
+
+/** Home — outline house. Bottom-nav Home tab (inactive). */
+export function HomeIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M4 11 L12 4 L20 11 L20 20 L14 20 L14 14 L10 14 L10 20 L4 20 Z" {...OUTLINE} />
+    </svg>
+  );
+}
+
+/** Home — filled. Active state for Home tab. */
+export function HomeFilledIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M4 11 L12 4 L20 11 L20 20 L14 20 L14 14 L10 14 L10 20 L4 20 Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** Search — outline magnifier. Bottom-nav Browse tab.
+ *  Bbox 4→20 = 16×16 to match the bottom-nav optical-weight contract. */
+export function SearchIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <circle cx="10" cy="10" r="6" {...OUTLINE} />
+      <path d="M15 15 L20 20" {...OUTLINE} />
+    </svg>
+  );
+}
+
+/** User — outline person. Bottom-nav Profile tab.
+ *  Bbox 4→20 = 16×16 to match the bottom-nav optical-weight contract. */
+export function UserIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <circle cx="12" cy="8" r="4" {...OUTLINE} />
+      <path d="M4 20 C 4 15 8 13 12 13 C 16 13 20 15 20 20" {...OUTLINE} />
+    </svg>
+  );
+}
+
+/** User — filled. Active state for Profile tab. */
+export function UserFilledIcon({ className = "w-5 h-5" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <circle cx="12" cy="8" r="4" fill="currentColor" />
+      <path d="M4 20 C 4 15 8 13 12 13 C 16 13 20 15 20 20 L 4 20 Z" fill="currentColor" />
+    </svg>
+  );
+}

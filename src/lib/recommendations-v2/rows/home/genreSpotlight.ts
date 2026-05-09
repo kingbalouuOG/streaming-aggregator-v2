@@ -124,12 +124,12 @@ export async function fetchGenreSpotlight(
    * dedup failure ("The Goldbergs in two consecutive sections").
    */
   excludeIds: Set<string> = new Set(),
-): Promise<{ clusterName: string; emoji: string; items: ContentItem[] }> {
+): Promise<{ clusterName: string; items: ContentItem[] }> {
   const cluster = getWeeklyCluster(offset, selectedClusterIds);
   const headlineGenre = getHeadlineGenre(cluster);
 
   if (headlineGenre == null) {
-    return { clusterName: cluster.name, emoji: cluster.emoji, items: [] };
+    return { clusterName: cluster.name, items: [] };
   }
 
   // Some clusters require multiple genres to scope correctly (see
@@ -150,7 +150,7 @@ export async function fetchGenreSpotlight(
       .limit(limit * 8);
 
     if (error || !data) {
-      return { clusterName: cluster.name, emoji: cluster.emoji, items: [] };
+      return { clusterName: cluster.name, items: [] };
     }
 
     const items: ContentItem[] = [];
@@ -165,8 +165,8 @@ export async function fetchGenreSpotlight(
       if (items.length >= limit) break;
     }
 
-    return { clusterName: cluster.name, emoji: cluster.emoji, items };
+    return { clusterName: cluster.name, items };
   } catch {
-    return { clusterName: cluster.name, emoji: cluster.emoji, items: [] };
+    return { clusterName: cluster.name, items: [] };
   }
 }

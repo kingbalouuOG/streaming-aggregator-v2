@@ -3,9 +3,10 @@ title: Parking lot — all IN-XXX entries
 type: register
 tags: [register, parking-lot, in-xxx, status]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-05-07
 sources:
   - raw/v2-strategy/Videx_v2_Implementation_Notes_Parking_Lot_v0.3.4.md
+  - docs/v2/Videx_v2_Implementation_Notes_Parking_Lot_v0.6.md
 related:
   - wiki/sources/implementation-notes-parking-lot-v0-3-4.md
   - wiki/concepts/operations/phase-history.md
@@ -15,7 +16,7 @@ related:
 
 # Parking lot — all IN-XXX entries
 
-Status snapshot of every implementation note. Source of truth: `raw/v2-strategy/Videx_v2_Implementation_Notes_Parking_Lot_v0.3.4.md`. Re-snapshot when the parking lot version bumps.
+Status snapshot of every implementation note. Source of truth: `docs/v2/Videx_v2_Implementation_Notes_Parking_Lot_v0.6.md` (v0.6 published 2026-05-07 covering Phase 5 close-out). Re-snapshot when the parking lot version bumps.
 
 Status legend: ✅ Incorporated · ⏳ Pending · ⚠ Partial · 🛑 Discharged (will not do) · 🅿 Parked (revisit on trigger).
 
@@ -60,7 +61,7 @@ Status legend: ✅ Incorporated · ⏳ Pending · ⚠ Partial · 🛑 Discharged
 | ID | Subject | Status |
 |---|---|---|
 | IN-PX-01 | RLS event trigger pattern for partman-managed tables | ✅ Reference implementation (migration 016) |
-| IN-PX-02 | Consolidate v1 `watched`/`removed` with v2 `marked_watched`/`watchlist_remove` | ⏳ Pending (Phase 5/6 cleanup) |
+| IN-PX-02 | Consolidate v1 `watched`/`removed` with v2 `marked_watched`/`watchlist_remove` | ✅ Incorporated (Phase 5 — migration 037 dropped `marked_watched` from event_type CHECK + read-side cleanup; latent INTERACTION_WEIGHTS rename fix in same PR) |
 | IN-PX-03 | Impression dedup granularity revisit at Phase 3 | ⏳ Pending (precautionary) |
 | IN-PX-04 | `@app_hidden_gems` localStorage purge is intentional no-op | ⏳ Documented (no action required) |
 | IN-PX-06 | TV director extraction widening to `credits.crew[]` "Series Director" | 🅿 Deferred (Phase 1 eval shows TV clusters fine without it) |
@@ -105,20 +106,24 @@ Status legend: ✅ Incorporated · ⏳ Pending · ⚠ Partial · 🛑 Discharged
 
 | ID | Subject | Status |
 |---|---|---|
-| IN-451 | Use HDBSCAN, not k-means | ⏳ Not yet incorporated (entry stale; HDBSCAN shipped Phase 4.5) |
-| IN-452 | Two-pass LLM labelling with editorial override | ⏳ Not yet incorporated (entry stale; shipped Phase 4.5) |
-| IN-453 | Monthly re-clustering with stability constraints | ⏳ Not yet incorporated (entry stale; shipped Phase 4.5) |
-| IN-454 | Mood Rooms for Tonight rotation logic | ⏳ Not yet incorporated (entry stale) |
-| IN-455 | Python + GitHub Actions execution environment | ⏳ Not yet incorporated (entry stale; shipped Phase 4.5 per ADR-005) |
-| IN-456 | psycopg2 direct PostgreSQL connection for bulk vector pulls | ⏳ Not yet incorporated (entry stale; shipped Phase 4.5) |
+| IN-451 | Use HDBSCAN, not k-means | ✅ Incorporated (Phase 4.5) |
+| IN-452 | Two-pass LLM labelling with editorial override | ✅ Incorporated (Phase 4.5) |
+| IN-453 | Monthly re-clustering with stability constraints | ✅ Incorporated (Phase 4.5) |
+| IN-454 | Mood Rooms for Tonight rotation logic | ✅ Incorporated (Phase 4.5) |
+| IN-455 | Python + GitHub Actions execution environment | ✅ Incorporated (Phase 4.5 per ADR-005) |
+| IN-456 | psycopg2 direct PostgreSQL connection for bulk vector pulls | ✅ Incorporated (Phase 4.5) |
 | IN-457 | HDBSCAN fallback plan if clustering quality is poor | ✅ Incorporated (UMAP preprocessing Option 1; full tune sequence completed) |
-| IN-458 | `getAvailableTmdbIds` does not distinguish by `media_type` | ⏳ Not yet incorporated |
+| IN-458 | `getAvailableTmdbIds` does not distinguish by `media_type` | ⏳ Re-targeted to Phase 5.5 (additive new RPC `get_available_tmdb_id_pairs`, not in-place return-shape swap) |
 | IN-459 | Re-evaluate mood room coverage after 3 monthly runs | ⏳ Pending (post-launch action item) |
 | IN-460 | Upgrade `actions/setup-python` when v6 ships (Node.js 20 deprecation) | ⏳ Time-triggered |
 | IN-461 | Review `FORBIDDEN_WORDS` compound-noun carve-outs after May cron | ⏳ May 2026 review |
-| IN-462 | For You tab-switch preservation | ⏳ Pending (Phase 5) |
-
-> ⚠ The Phase 4.5 IN-451 to IN-456 entries are flagged "Not yet incorporated" in the raw parking lot but the work shipped per ADR-005, strategy v1.6.3 §5.2, and orchestration v0.3.3 actuals. Status here mirrors the parking lot for fidelity; entries should be flipped to ✅ in the next parking-lot revision once Phase 4.5 has its own end-of-phase summary file.
+| IN-462 | For You tab-switch preservation | ⏳ Re-targeted to Phase 5.5 (zustand store dependency accepted; not built in Phase 5) |
+| IN-463 | LLM thematic labels for anchored rooms | ✅ Incorporated (Phase 4.5 fast-follow — `mood_rooms.anchor_label_text`, `label-anchor-room` Edge Function, migration 034) |
+| IN-465 | Backfill ~3,807 missing tmdb_ids | ⏳ Re-targeted to Phase 5.5 (script not yet written) |
+| IN-466 | Server-side For You first paint | ✅ Incorporated (`render-foryou-rows` Edge Function, ADR-012) |
+| IN-467 | Mirror tree consolidation evaluation | ⏳ Pending (criteria partially superseded by IN-PX-32) |
+| IN-468 | SWR cache for For You | ⏳ Pending (warm-path p95 telemetry input needed) |
+| IN-469 | Cold-start incidence assessment | ⏳ Pending (telemetry input needed) |
 
 ## Onboarding-flow specific
 
@@ -129,30 +134,57 @@ Status legend: ✅ Incorporated · ⏳ Pending · ⚠ Partial · 🛑 Discharged
 | IN-OB-003 | Selection state styling must match existing app design system | ⏳ Not yet incorporated |
 | IN-OB-004 | Step 3 needs real poster art from TMDb | ⏳ Not yet incorporated |
 | IN-OB-005 | Onboarding back button must preserve step state | ⏳ Not yet incorporated |
+| IN-OB-006 | Onboarding cluster taxonomy review under v2 engine assumptions | 🅿 Deferred (Phase 6 review, post-Phase-4.5 telemetry — three months of data lands ~July 2026) |
 
 ## Cross-phase
 
 | ID | Subject | Status |
 |---|---|---|
-| IN-XPS-001 | Privacy disclosure copy must align with Detail Page Signal Spec | ⏳ Not yet incorporated |
-| IN-XPS-002 | Profiles "Allow public username lookup" policy tightening | ⏳ Flagged, not scheduled |
+| IN-XPS-001 | Privacy disclosure copy must align with Detail Page Signal Spec | ⚠ Partial (in-app "What Videx learns" modal is app-specific and accurate; signup-flow Privacy Policy / Terms links are non-functional spans — see IN-PX-34) |
+| IN-XPS-002 | Profiles "Allow public username lookup" policy tightening | ✅ Incorporated (Phase 5 — migration 038 + `username_available` SECURITY DEFINER RPC; anon SELECT on profiles denied) |
 | IN-XPS-003 | Verify pg_partman automatic partition creation after first month | ⏳ Scheduled post-Phase-0 verification |
-| IN-XPS-004 | Service-role JWT in cron migration files → Supabase Vault | ⏳ Flagged for **pre-public-launch** |
+| IN-XPS-004 | Service-role JWT in cron migration files → Supabase Vault | ⚠ Partial (Phase 5 — migration 039 moved JWT into Vault; **same JWT value**, cryptographic rotation deferred to Phase 6+ pending Supabase JWT-format secret keys) |
 | IN-XPS-005 | Atomic tmp+rename is Windows-hostile for files under active observation | ✅ Incorporated (Phase 0.5 fix; lesson filed) |
-| IN-XPS-006 | Delete account wiring deferred (Phase 3 carry-forward) | ⏳ Flagged for **pre-public-launch** |
-| IN-XPS-007 | Service pricing config needs review cadence (Phase 3 carry-forward) | ⏳ Flagged for pre-public-launch |
-| IN-XPS-008 | Consider pre-built onboarding watched-grid title pool (Phase 3 carry-forward) | 🅿 Consider after user testing |
-| IN-XPS-009 | Retake Taste Profile limited to cluster selection only (Phase 3 carry-forward) | 🅿 Deferred until Phase 4/5 touches files or feedback indicates problem |
+| IN-XPS-006 | Delete account wiring | ⏳ Re-targeted to Phase 5.5 (RPC + client wiring exist in production; UI gate + RPC audit + version-controlled migration are the gaps) |
+| IN-XPS-007 | Service pricing config needs review cadence | ⏳ Flagged for pre-public-launch |
+| IN-XPS-008 | Consider pre-built onboarding watched-grid title pool | 🅿 Consider after user testing |
+| IN-XPS-009 | Retake Taste Profile limited to cluster selection only | 🅿 Deferred until Phase 4/5 touches files or feedback indicates problem |
+| IN-XPS-010 | Supabase Pro→Free downgrade risk inventory | ⏳ Documented; no action unless cost optimisation comes up again |
+| IN-XPS-011 | CI guard against `verify_jwt = false` drift on user-callable Edge Functions | ✅ Incorporated (Phase 5 — six per-function `config.toml` files set `verify_jwt = true`; `.github/workflows/edge-fn-jwt-guard.yml` blocks regressions) |
+| IN-XPS-012 | Promote parity probe to CI smoke test | ✅ Workflow file added (Phase 5); enforcement pending `PARITY_*` repo secrets |
+| IN-XPS-013 | Pre-launch CORS tightening on user-callable Edge Functions | ✅ Incorporated (Phase 5 — `_shared/cors.ts` allow-list helper; applied to `render-foryou-rows` + `label-anchor-room`) |
+
+## Phase 5.5 follow-ups (filed 2026-05-07 from Phase 5 review pass)
+
+Quality / hardening items (IN-PX-21..33) and pre-launch legal blockers (IN-PX-34, IN-PX-35) surfaced from the post-merge multi-agent review of PR #4 plus the Phase 5 close-out legal-disclosures audit.
+
+| ID | Subject | Status |
+|---|---|---|
+| IN-PX-21 | Regenerate `database.types.ts` and delete `as any` casts | ⏳ Filed; ~30 min |
+| IN-PX-22 | Embedding fetch caching for MMR (24h TTL) | ⏳ Filed |
+| IN-PX-23 | MMR partial-coverage fallback (>50% missing → genre-spread) | ⏳ Filed |
+| IN-PX-24 | Float32Array + cosine-norm precompute in MMR | ⏳ Filed (after IN-PX-22) |
+| IN-PX-25 | Test coverage for `computeContextualScore` and `applyMMR` | ⏳ Filed |
+| IN-PX-26 | `buildRowFromPool` options object refactor | ⏳ Filed |
+| IN-PX-27 | `ViewingContext` type to source of truth (`types.ts`) | ⏳ Filed |
+| IN-PX-28 | `edge-fn-jwt-guard` gap — central `supabase/config.toml` | ⏳ Filed |
+| IN-PX-29 | `username_available` rate-limit at gateway | ⏳ Filed (Phase 6 — pre-public-launch) |
+| IN-PX-30 | Defence-in-depth in `extractUserIdFromJwt` | ⏳ Filed (Phase 6 — pre-public-launch) |
+| IN-PX-31 | Trim `supabase/cron/*.sql` source-of-truth confusion | ⏳ Filed |
+| IN-PX-32 | Mirror tree consolidation (`_shared/` as source-of-truth for leaf modules) | ⏳ Filed (supersedes part of IN-467) |
+| IN-PX-33 | Property-level parity probe (golden output) | ⏳ Filed (Phase 6 / before next Edge-client paired feature) |
+| IN-PX-34 | Privacy Policy text + functional legal links | ⏳ Filed (**pre-launch blocker** — store-rejection risk) |
+| IN-PX-35 | Functional "Download my data" — GDPR Article 20 | ⏳ Filed (**pre-launch blocker** — currently a fake-success toast) |
 
 ## Counts
 
-- Total entries: 56.
-- ✅ Incorporated: 32.
-- ⏳ Pending / Not yet incorporated: 18.
-- ⚠ Partial: 1 (IN-104).
-- 🛑 Discharged: 1 (IN-260).
-- 🅿 Parked: 4 (IN-PX-06, IN-261, IN-XPS-008, IN-XPS-009).
+- Total entries: **78** (Pre-PRE 1 + P0 13 + P0.5 7 + P0/0.5 cross 6 + P1 5 + P2 3 + P3 3 + P4 4 + P4.5 16 + OB 6 + XPS 13 + PX-21..35 15).
+- ✅ Incorporated: **42**.
+- ⏳ Pending / Not yet incorporated: **27**.
+- ⚠ Partial: **3** (IN-104, IN-XPS-001, IN-XPS-004).
+- 🛑 Discharged: **1** (IN-260).
+- 🅿 Parked: **5** (IN-PX-06, IN-261, IN-XPS-008, IN-XPS-009, IN-OB-006).
 
 ## Pre-launch blockers (subset of pending)
 
-See the dedicated [pre-launch-blockers register](pre-launch-blockers.md). The IN-XPS-004 / IN-XPS-006 / IN-XPS-007 entries are the parking-lot view of the same set.
+See the dedicated [pre-launch-blockers register](pre-launch-blockers.md). The IN-XPS-004 / IN-XPS-006 / IN-XPS-007 / IN-PX-34 / IN-PX-35 entries are the parking-lot view of the same set.

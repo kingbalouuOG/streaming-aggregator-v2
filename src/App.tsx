@@ -4,7 +4,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { Loader2 } from "lucide-react";
 import { CategoryFilter } from "./components/CategoryFilter";
 import { ContentRow } from "./components/ContentRow";
-import { FeaturedHeroCarousel } from "./components/FeaturedHero";
+// FeaturedHeroCarousel — replaced on Home by <MagazineHero>; the file
+// stays for now until the Phase 5 FeaturedHero matrix row formally
+// retires it.
 import { ForYouPage } from "./components/ForYouPage";
 import { MoodRoomPage } from "./components/MoodRoomPage";
 import type { AnchorRoomPreview } from "./hooks/useAnchorMoodRooms";
@@ -17,7 +19,18 @@ import { WatchlistPage } from "./components/WatchlistPage";
 import { ProfilePage } from "./components/ProfilePage";
 import { OnboardingFlow, OnboardingData } from "./components/OnboardingFlow";
 import { CalendarPage } from "./components/CalendarPage";
-import { ComingSoonCard } from "./components/ComingSoonCard";
+// ComingSoonCard — Home no longer mounts these directly; the
+// CalendarList primitive renders them internally.
+import { MagazineHero } from "./components/MagazineHero";
+import { TopAppBar } from "./components/TopAppBar";
+import { EditorsNote } from "./components/EditorsNote";
+import { CalendarList } from "./components/CalendarList";
+import { FreeTonight } from "./components/FreeTonight";
+import { NumberedChart } from "./components/NumberedChart";
+import { LongRead } from "./components/LongRead";
+import { WideCard } from "./components/WideCard";
+import { SectionHead } from "./components/SectionHead";
+import { ContentCard } from "./components/ContentCard";
 import { ThemeProvider, useTheme } from "./components/ThemeContext";
 import { AuthProvider, useAuth } from "./components/AuthContext";
 import AuthScreen from "./components/auth/AuthScreen";
@@ -43,6 +56,7 @@ import { flushNow } from "./lib/instrumentation/impressionBatcher";
 import { parseContentItemId } from "./lib/adapters/contentAdapter";
 import { emitContentInteraction } from "./lib/storage/interactions";
 import { useIntersectionObserver } from "./hooks/useIntersectionObserver";
+import { IconsDebug, SectionHeadDebug, ContentCardDebug, ServiceStackDebug, BottomNavDebug, MagazineHeroDebug, EditorsNoteDebug, WideCardDebug } from "./dev/DesignSystemDebug";
 
 const categories = ["All", "Movies", "TV Shows", "Docs", "Anime"];
 
@@ -71,6 +85,22 @@ function GenreSpotlightSentinel({
 }
 
 export default function App() {
+  // Dev-only design-system debug routes. The entire `if` branch is
+  // statically eliminated in production builds by Vite, which also
+  // tree-shakes the `./dev/DesignSystemDebug` import since it has no
+  // other reference site.
+  if (import.meta.env.DEV) {
+    const debug = new URLSearchParams(window.location.search).get("debug");
+    if (debug === "icons") return <IconsDebug />;
+    if (debug === "sectionhead") return <SectionHeadDebug />;
+    if (debug === "contentcard") return <ContentCardDebug />;
+    if (debug === "servicestack") return <ServiceStackDebug />;
+    if (debug === "bottomnav") return <BottomNavDebug />;
+    if (debug === "magazinehero") return <MagazineHeroDebug />;
+    if (debug === "editorsnote") return <EditorsNoteDebug />;
+    if (debug === "widecards") return <WideCardDebug />;
+  }
+
   return (
     <ErrorBoundary>
       <AuthProvider>
@@ -437,7 +467,7 @@ function AppContent() {
 
   // --- Scroll tracking for hero parallax ---
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [scrollY, setScrollY] = useState(0);
+  const [, setScrollY] = useState(0);
   const savedScrollPositions = useRef<Record<string, number>>({});
   const browseStateRef = useRef<BrowseStateSnapshot | null>(null);
 
@@ -629,9 +659,15 @@ function AppContent() {
     );
   }
 
+  const showTopAppBar = !selectedItem && !selectedAnchorRoom && !showCalendar;
+
   return (
     <div className="size-full bg-background text-foreground overflow-hidden flex justify-center">
       <div className="w-full max-w-md h-full flex flex-col relative">
+        {showTopAppBar && (
+          <TopAppBar onProfileTap={() => setActiveTab("profile")} />
+        )}
+
         {/* Pull-to-refresh indicator */}
         {(pullDistance > 0 || isRefreshing) && !selectedItem && activeTab === "home" && (
           <div
@@ -655,7 +691,7 @@ function AppContent() {
           onTouchStart={(e) => handlePullStart(e.touches[0].clientY)}
           onTouchMove={(e) => handlePullMove(e.touches[0].clientY)}
           onTouchEnd={handlePullEnd}
-          className="flex-1 overflow-y-auto pb-4 no-scrollbar safe-top"
+          className={`flex-1 overflow-y-auto pb-4 no-scrollbar${showTopAppBar ? "" : " safe-top"}`}
           style={{ overflowX: 'hidden', overscrollBehaviorX: 'none', transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined, transition: isPulling.current ? 'none' : 'transform 0.3s ease' }}
         >
           <AnimatePresence mode="wait">
@@ -743,28 +779,59 @@ function AppContent() {
               >
               {activeTab === "home" && (
                 <>
-                  {/* Featured Hero Carousel */}
-                  {home.popular.items.length > 0 ? (
-                    <FeaturedHeroCarousel
-                      items={home.popular.items.filter(item => item.image && !watchedIds.has(item.id)).slice(0, 5)}
-                      bookmarkedIds={wl.bookmarkedIds}
-                      watchedIds={watchedIds}
-                      userServices={connectedServiceIds}
-                      onToggleBookmark={handleToggleBookmark}
-                      onItemSelect={handleItemSelect}
-                      scrollY={scrollY}
-                    />
-                  ) : home.loading ? (
-                    <div className="w-full aspect-[4/3] bg-secondary/80 overflow-hidden">
-                      <div className="w-full h-full" style={{
-                        background: "linear-gradient(90deg, transparent 0%, var(--shimmer-color) 50%, transparent 100%)",
-                        backgroundSize: "200% 100%",
-                        animation: "shimmer 1.5s ease-in-out infinite",
-                      }} />
-                    </div>
-                  ) : null}
+                  {/* §5.1 — Magazine hero (single feature, replaces the
+                      auto-rotating FeaturedHeroCarousel pending Phase 5
+                      FeaturedHero matrix row). Picks the first popular,
+                      not-yet-watched item with poster art. */}
+                  {(() => {
+                    const heroItem = home.popular.items.find(
+                      (it) => it.image && !watchedIds.has(it.id),
+                    );
+                    return heroItem ? (
+                      <div className="editorial mb-8 mt-2">
+                        <MagazineHero
+                          item={heroItem}
+                          kicker="TODAY'S PICK"
+                          standfirst={heroItem.overview}
+                          userServices={connectedServiceIds}
+                          onSelect={handleItemSelect}
+                          bookmarked={wl.bookmarkedIds.has(heroItem.id)}
+                          onToggleBookmark={handleToggleBookmark}
+                          onMoreInfo={handleItemSelect}
+                          runtime={heroItem.runtime}
+                          inYourPlan={
+                            connectedServiceIds.length > 0 &&
+                            heroItem.services.some((s) => connectedServiceIds.includes(s))
+                          }
+                        />
+                      </div>
+                    ) : home.loading ? (
+                      <div className="editorial mb-8 mt-2">
+                        <div
+                          className="w-full overflow-hidden"
+                          style={{
+                            aspectRatio: "4 / 5",
+                            borderRadius: "var(--r-card)",
+                            background: "var(--surface-elev)",
+                          }}
+                        />
+                      </div>
+                    ) : null;
+                  })()}
 
-                  {/* Category filters */}
+                  {/* §5.2 — Editor's Note (Phase 6 wired). useHomeContent
+                      reads from the editor_notes table once-per-day and
+                      falls back to a baked-in sample when the table
+                      isn't yet populated. */}
+                  <div className="editorial mb-8">
+                    <EditorsNote
+                      kicker={home.editorNote.kicker}
+                      teaser={home.editorNote.teaser}
+                      body={home.editorNote.body}
+                    />
+                  </div>
+
+                  {/* Category filters — restyle deferred to Phase 5 */}
                   <CategoryFilter
                     categories={categories}
                     activeCategory={activeCategory}
@@ -780,46 +847,160 @@ function AppContent() {
                     </div>
                   ) : (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-                      <ContentRow title="Recently Added" sectionKey="recently-added" sourceSurface="home" items={filterLanguage(filterWatched(home.recentlyAdded.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.recentlyAdded.loadMore} loadingMore={home.recentlyAdded.loadingMore} hasMore={home.recentlyAdded.hasMore} />
-                      <ContentRow title="Trending Across Your Services" sectionKey="popular" sourceSurface="home" items={filterLanguage(filterWatched(home.popular.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} onLoadMore={home.popular.loadMore} loadingMore={home.popular.loadingMore} hasMore={home.popular.hasMore} />
-                      {reorderedUpcoming.length > 0 && (
-                        <div className="mb-6 overflow-hidden">
-                          <div className="flex items-center justify-between px-5 mb-3">
-                            <h2 className="text-foreground text-[17px]" style={{ fontWeight: 700 }}>Coming Soon</h2>
-                            <button onClick={handleShowCalendar} className="text-primary text-[13px]" style={{ fontWeight: 500 }}>See All</button>
+                      {/* §5.3 — Recently added */}
+                      <ContentRow
+                        kicker="JUST IN"
+                        title="Recently added."
+                        sectionKey="recently-added"
+                        sourceSurface="home"
+                        items={filterLanguage(filterWatched(home.recentlyAdded.items))}
+                        onItemSelect={handleItemSelect}
+                        bookmarkedIds={wl.bookmarkedIds}
+                        onToggleBookmark={handleToggleBookmark}
+                        userServices={connectedServiceIds}
+                        watchedIds={watchedIds}
+                        onLoadMore={home.recentlyAdded.loadMore}
+                        loadingMore={home.recentlyAdded.loadingMore}
+                        hasMore={home.recentlyAdded.hasMore}
+                      />
+
+                      {/* Free Tonight — green-framed row of items free
+                          on the user's connected free services (BBC /
+                          ITVX / Channel 4). Skipped when the user has
+                          none of those services. */}
+                      <FreeTonight
+                        items={filterLanguage(filterWatched(home.popular.items))}
+                        userServices={connectedServiceIds}
+                        onSelect={handleItemSelect}
+                        bookmarkedIds={wl.bookmarkedIds}
+                        onToggleBookmark={handleToggleBookmark}
+                        watchedIds={watchedIds}
+                      />
+
+                      {/* Long Read — hardcoded editorial spotlight.
+                          See TODO(IN-V3-001) inside LongRead.tsx for the
+                          parking-lot data-source follow-up. */}
+                      <LongRead onSelect={() => {}} />
+
+                      {/* §5.4 — The Charts (numbered editorial Top-5) */}
+                      <NumberedChart
+                        kicker="THE CHARTS"
+                        title="Trending across your stack."
+                        standfirst="What everyone's queueing tonight."
+                        items={filterLanguage(filterWatched(home.popular.items))}
+                        userServices={connectedServiceIds}
+                        onSelect={handleItemSelect}
+                      />
+
+                      {/* §5.5 — Editorial spotlight (single full-bleed lead).
+                          Falls back to the second popular item; the first is
+                          already used by the Magazine hero. */}
+                      {(() => {
+                        const spotlight = home.popular.items.find(
+                          (it, i) => i > 0 && it.image && !watchedIds.has(it.id),
+                        );
+                        return spotlight ? (
+                          <div className="editorial mt-3 mb-9">
+                            <SectionHead
+                              kicker="EDITORIAL SPOTLIGHT"
+                              title="One to watch tonight."
+                              standfirst="Pulled from the chart, with a recommendation."
+                            />
+                            <ContentCard
+                              item={spotlight}
+                              variant="lead"
+                              onSelect={handleItemSelect}
+                              bookmarked={wl.bookmarkedIds.has(spotlight.id)}
+                              onToggleBookmark={handleToggleBookmark}
+                              userServices={connectedServiceIds}
+                              watched={watchedIds.has(spotlight.id)}
+                            />
                           </div>
-                          <div className="flex gap-3 overflow-x-auto px-5 no-scrollbar" style={{ scrollbarWidth: "none" }}>
-                            {reorderedUpcoming.slice(0, 8).map((item) => (
-                              <ComingSoonCard
+                        ) : null;
+                      })()}
+
+                      {/* §5.6 — Per-service rows with service-tinted kickers */}
+                      {home.perServiceCharts.map((chart) => (
+                        <ContentRow
+                          key={`svc-${chart.serviceId}`}
+                          kicker={`NEW ON ${chart.serviceName.toUpperCase()}`}
+                          kickerColor={`var(--svc-${chart.serviceId})`}
+                          title={`This week on ${chart.serviceName}.`}
+                          sectionKey={`svc-chart-${chart.serviceId}`}
+                          sourceSurface="home"
+                          items={filterLanguage(filterWatched(chart.items))}
+                          onItemSelect={handleItemSelect}
+                          bookmarkedIds={wl.bookmarkedIds}
+                          onToggleBookmark={handleToggleBookmark}
+                          userServices={connectedServiceIds}
+                          watchedIds={watchedIds}
+                        />
+                      ))}
+
+                      {/* §5.7 — Critics' Picks (landscape WideCard row) */}
+                      {home.criticallyAcclaimed.length > 0 && (
+                        <section className="mb-8">
+                          <div className="editorial mb-3">
+                            <SectionHead
+                              kicker="CRITICS' PICKS"
+                              title="Decade-defining work."
+                              standfirst="High-rated cinema, surfaced from your stack."
+                            />
+                          </div>
+                          <div
+                            className="flex gap-4 overflow-x-auto no-scrollbar px-5 pb-1"
+                            style={{ scrollbarWidth: "none" }}
+                          >
+                            {filterLanguage(filterWatched(home.criticallyAcclaimed)).map((item) => (
+                              <WideCard
                                 key={item.id}
                                 item={item}
-                                onSelect={(u) => handleItemSelect({ id: u.id, title: u.title, image: u.image, services: u.services, rating: u.rating, type: u.type })}
-                                bookmarked={wl.bookmarkedIds.has(item.id)}
-                                onToggleBookmark={(u) => handleToggleBookmark({ id: u.id, title: u.title, image: u.image, services: u.services, rating: u.rating, type: u.type })}
+                                userServices={connectedServiceIds}
+                                onSelect={handleItemSelect}
                               />
                             ))}
                           </div>
-                        </div>
-                      )}
-                      {/* Per-Service Charts (Phase 4) */}
-                      {home.perServiceCharts.map((chart) => (
-                        <ContentRow key={`svc-${chart.serviceId}`} title={`Popular on ${chart.serviceName}`} sectionKey={`svc-chart-${chart.serviceId}`} sourceSurface="home" items={filterLanguage(filterWatched(chart.items))} onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
-                      ))}
-
-                      {/* Critically Acclaimed (Phase 4, gated) */}
-                      {home.criticallyAcclaimed.length > 0 && (
-                        <ContentRow title="Critically Acclaimed" sectionKey="critically-acclaimed" sourceSurface="home" items={filterLanguage(filterWatched(home.criticallyAcclaimed))} variant="wide" onItemSelect={handleItemSelect} bookmarkedIds={wl.bookmarkedIds} onToggleBookmark={handleToggleBookmark} userServices={connectedServiceIds} watchedIds={watchedIds} />
+                        </section>
                       )}
 
-                      {/* Genre Spotlights (Phase 4 — lazy chain).
-                          Primary spotlight loads with the rest of Home; further
-                          clusters mount as the user scrolls past the previous
-                          one's sentinel. Cycle length = 16 (one per cluster). */}
+                      {/* §5.7 — Calendar strip. Anchored ABOVE the lazy
+                          genre chain so it stays put as the user scrolls;
+                          the chain loads beneath it. */}
+                      {reorderedUpcoming.length > 0 && (
+                        <CalendarList
+                          items={reorderedUpcoming}
+                          kicker="ON THE CALENDAR"
+                          title="Coming up."
+                          standfirst="The next two weeks across your stack."
+                          right={
+                            <button
+                              type="button"
+                              onClick={handleShowCalendar}
+                              className="text-primary"
+                              style={{ fontSize: "var(--t-meta)", fontWeight: 500 }}
+                            >
+                              See all →
+                            </button>
+                          }
+                          onSelect={(u) =>
+                            handleItemSelect({
+                              id: u.id, title: u.title, image: u.image,
+                              services: u.services, rating: u.rating, type: u.type,
+                            })
+                          }
+                        />
+                      )}
+
+                      {/* Genre Spotlights (Phase 4 — lazy chain). Sits
+                          BELOW the calendar; further clusters mount as
+                          the user scrolls past the previous sentinel,
+                          and the calendar stays anchored where it loaded. */}
                       {home.genreSpotlights.map((spotlight, idx) =>
                         spotlight.items.length > 0 ? (
                           <ContentRow
                             key={`genre-spotlight-${idx}`}
-                            title={spotlight.clusterName}
+                            kicker="GENRE"
+                            title={`${spotlight.clusterName}.`}
                             sectionKey={`genre-spotlight-${idx}`}
                             sourceSurface="home"
                             items={filterLanguage(filterWatched(spotlight.items))}
@@ -856,6 +1037,13 @@ function AppContent() {
                   bookmarkedIds={wl.bookmarkedIds}
                   onToggleBookmark={handleToggleBookmark}
                   watchedIds={watchedIds}
+                  upcoming={reorderedUpcoming}
+                  onSelectUpcoming={(u) =>
+                    handleItemSelect({
+                      id: u.id, title: u.title, image: u.image,
+                      services: u.services, rating: u.rating, type: u.type,
+                    })
+                  }
                 />
               )}
 
@@ -888,6 +1076,7 @@ function AppContent() {
                   onRate={handleRate}
                   activeSubTab={watchlistSubTab}
                   onSubTabChange={setWatchlistSubTab}
+                  userServices={connectedServiceIds}
                 />
               )}
 

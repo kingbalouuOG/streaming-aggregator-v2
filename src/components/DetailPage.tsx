@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, EyeOff, Check, CheckCircle2, Undo2, AlertCircle, ChevronDown, ChevronUp, MessageSquare, ExternalLink } from "lucide-react";
-import { TickIcon } from "./icons";
 import { motion } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
-import { ContentItem } from "./ContentCard";
+import { SectionHead } from "./SectionHead";
+import { ContentCard, ContentItem } from "./ContentCard";
 import { ImageSkeleton } from "./ImageSkeleton";
 import type { ServiceId } from "./platformLogos";
 import { serviceLabels as platformServiceLabels } from "./platformLogos";
@@ -12,7 +12,6 @@ import type { DetailData, RentalOption, ServiceLink } from "@/lib/adapters/detai
 import { getDeepLink } from "@/lib/deepLinks";
 import { openDeepLink } from "@/lib/openDeepLink";
 import { classifyProviders } from "@/lib/utils/providerClassifier";
-import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 import { startDwell, exitDwell, setLastAction, getCurrentDwellSeconds } from "@/lib/instrumentation/dwellTimer";
 import { markNotInterested } from "@/lib/storage/interactions";
@@ -191,19 +190,34 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
 
   return (
     <div className="flex flex-col min-h-full">
-      {/* Hero image */}
-      <div className="relative w-full aspect-[4/3] shrink-0">
+      {/* Editorial hero — full-bleed image with Fraunces title overlay */}
+      <div className="relative w-full aspect-[4/5] shrink-0">
         <ImageSkeleton
           src={detail.heroImage}
           alt={detail.title}
-          className="w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
+        {/* Bottom gradient — reads the title block */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(10,10,15,0.95) 0%, rgba(10,10,15,0.55) 35%, rgba(10,10,15,0) 65%)",
+          }}
+        />
 
         <button
           onClick={onBack}
-          className="absolute left-4 w-9 h-9 rounded-xl bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/90 hover:bg-black/60 transition-colors"
-          style={{ top: "max(1rem, env(safe-area-inset-top, 1rem))" }}
+          className="absolute left-4 w-9 h-9 flex items-center justify-center"
+          style={{
+            top: "max(1rem, env(safe-area-inset-top, 1rem))",
+            borderRadius: "var(--r-md)",
+            background: "rgba(20, 20, 28, 0.5)",
+            backdropFilter: "blur(8px) saturate(160%)",
+            WebkitBackdropFilter: "blur(8px) saturate(160%)",
+            color: "#fff",
+          }}
+          aria-label="Back"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
@@ -211,12 +225,14 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
         {/* Status badge (non-interactive) */}
         {(isWatched || bookmarked) && (
           <div
-            className={`absolute right-4 w-8 h-8 rounded-lg flex items-center justify-center ${
-              isWatched
-                ? "bg-emerald-500/90 text-white"
-                : "bg-primary/90 text-white"
-            }`}
-            style={{ top: "max(1rem, env(safe-area-inset-top, 1rem))" }}
+            className="absolute right-4 w-8 h-8 flex items-center justify-center"
+            style={{
+              top: "max(1rem, env(safe-area-inset-top, 1rem))",
+              borderRadius: "var(--r-md)",
+              background: isWatched ? "var(--success)" : "var(--primary)",
+              color: "#fff",
+            }}
+            aria-label={isWatched ? "Watched" : "Bookmarked"}
           >
             {isWatched ? (
               <Check className="w-4 h-4" />
@@ -225,14 +241,27 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             )}
           </div>
         )}
+
+        {/* Title block — overlaid bottom of hero */}
+        <h1
+          className="absolute left-5 right-5 bottom-5"
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 36,
+            fontWeight: 800,
+            fontVariationSettings: '"opsz" 96',
+            letterSpacing: "-0.02em",
+            color: "#fff",
+            lineHeight: 1.05,
+            margin: 0,
+          }}
+        >
+          {detail.title}
+        </h1>
       </div>
 
       {/* Content */}
-      <div className="px-5 pb-8 -mt-4 relative z-10">
-        <h1 className="text-foreground text-[24px] mb-1" style={{ fontWeight: 700, lineHeight: 1.2 }}>
-          {detail.title}
-        </h1>
-
+      <div className="px-5 pb-8 pt-5 relative z-10">
         <p className="text-muted-foreground text-[13px] mb-3">
           {detail.year} <span className="mx-1.5">&middot;</span> {detail.contentRating}
           {detail.runtime && <><span className="mx-1.5">&middot;</span> {detail.runtime}</>}
@@ -525,9 +554,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
         {/* Cast */}
         {detail.cast.length > 0 && (
           <div className="mb-6">
-            <h3 className="text-foreground text-[15px] mb-3" style={{ fontWeight: 600 }}>
-              Cast
-            </h3>
+            <SectionHead kicker="ON SCREEN" title="Cast." />
             <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-5 px-5 pb-2">
               {detail.cast.map((member, i) => (
                 <div key={i} className="flex flex-col items-center shrink-0 w-[76px]">
@@ -555,20 +582,21 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
         {/* More Like This */}
         {similar.length > 0 && (
           <div className="mt-2">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-foreground text-[15px]" style={{ fontWeight: 600 }}>
-                More Like This
-              </h3>
-              <span className="text-muted-foreground text-[11px]">
-                {similar.length} titles
-              </span>
-            </div>
+            <SectionHead
+              kicker="THE NEXT THREAD"
+              title="More like this."
+              right={
+                <span style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--fg-faint)" }}>
+                  {similar.length} titles
+                </span>
+              }
+            />
             <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-5 px-5 pb-2">
-              {similar.map((rec, index) => (
-                <SimilarCard
+              {similar.map((rec) => (
+                <ContentCard
                   key={rec.id}
                   item={rec}
-                  index={index}
+                  variant="default"
                   onSelect={onItemSelect}
                   bookmarked={bookmarkedIds?.has(rec.id)}
                   onToggleBookmark={onToggleBookmarkItem}
@@ -597,14 +625,18 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
   if (!hasAny && detail.allServices.length === 0 && detail.rentalOptions.length === 0) {
     return (
       <div className="mb-6">
-        <h3 className="text-foreground text-[15px] mb-2.5" style={{ fontWeight: 600 }}>
-          Where to Watch
-        </h3>
-        <p className="text-muted-foreground text-[13px]">
-          Not currently available to stream in the UK.
-        </p>
-        <p className="text-muted-foreground/60 text-[12px] mt-1">
-          Check back later — availability changes frequently.
+        <SectionHead kicker="WHERE TO WATCH" title="Not on your stack." />
+        <p
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--t-body)",
+            fontWeight: 400,
+            color: "var(--fg-soft)",
+            lineHeight: 1.45,
+            margin: 0,
+          }}
+        >
+          Not currently available to stream in the UK — check back later, availability changes frequently.
         </p>
       </div>
     );
@@ -634,68 +666,91 @@ function WhereToWatch({ detail, userServices }: { detail: DetailData; userServic
 
   return (
     <div className="mb-6">
-      <h3 className="text-foreground text-[15px] mb-2.5" style={{ fontWeight: 600 }}>
-        Where to Watch
-      </h3>
+      <SectionHead kicker="WHERE TO WATCH" title="On your stack." />
 
-      {/* Tier 1: On Your Services — orange glow, tappable */}
+      {/* Vertical stack — each tier is a column of full-width rows.
+          Tier 1 carries the primary tint; tier 2 sits in the muted
+          surface-tint; tier 3 (rent/buy) keeps the existing
+          price-list component. */}
+
       {tier1.length > 0 && (
-        <div className="mb-3">
-          <p className="text-muted-foreground text-[11px] tracking-wide mb-2" style={{ fontWeight: 600 }}>
-            On Your Services
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {tier1.map((service) => (
-              <button
-                key={service}
-                onClick={() => handleServiceTap(service)}
-                className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-secondary text-foreground text-[13px] active:scale-[0.97] transition-transform"
-                style={{
-                  fontWeight: 600,
-                  border: '1.5px solid #e85d25',
-                  boxShadow: '0 0 0 2px rgba(232, 93, 37, 0.08), 0 0 12px rgba(232, 93, 37, 0.15)',
-                }}
-              >
-                <ServiceBadge service={service} size="sm" />
-                Watch on {serviceLabels[service]}
-                <ExternalLink className="w-3 h-3 opacity-40 ml-auto" />
-              </button>
-            ))}
-          </div>
+        <div className="flex flex-col gap-2 mb-3">
+          {tier1.map((service) => (
+            <button
+              key={service}
+              type="button"
+              onClick={() => handleServiceTap(service)}
+              className="w-full flex items-center gap-3 px-4 py-3 active:scale-[0.99] transition-transform"
+              style={{
+                background: "var(--primary-soft)",
+                border: "1px solid var(--primary-edge)",
+                borderRadius: "var(--r-card)",
+                color: "var(--fg)",
+                fontFamily: "var(--font-ui)",
+                fontSize: 14,
+                fontWeight: 600,
+              }}
+            >
+              <ServiceBadge service={service} size="md" />
+              <span className="flex-1 text-left">Watch on {serviceLabels[service]}</span>
+              <ExternalLink className="w-4 h-4" style={{ color: "var(--primary)" }} />
+            </button>
+          ))}
         </div>
       )}
 
-      {/* Tier 2: Also Available On / Available On — neutral chips, tappable */}
       {tier2.length > 0 && (
         <div className="mb-3">
-          <p className="text-muted-foreground text-[11px] tracking-wide mb-2" style={{ fontWeight: 600 }}>
-            {tier1.length > 0 ? 'Also Available On' : 'Available On'}
+          <p
+            className="mb-2"
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 11,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "1.6px",
+              color: "var(--fg-faint)",
+            }}
+          >
+            {tier1.length > 0 ? "Also available on" : "Available on"}
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2">
             {tier2.map((service) => (
               <button
                 key={service}
+                type="button"
                 onClick={() => handleServiceTap(service)}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary text-muted-foreground text-[13px] active:scale-[0.97] transition-transform"
+                className="w-full flex items-center gap-3 px-4 py-3 active:scale-[0.99] transition-transform"
                 style={{
+                  background: "var(--surface-elev)",
+                  border: "0.5px solid var(--hairline)",
+                  borderRadius: "var(--r-card)",
+                  color: "var(--fg-soft)",
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 14,
                   fontWeight: 500,
-                  border: '1px solid var(--border-subtle)',
-                  minHeight: '44px',
+                  minHeight: 52,
                 }}
               >
-                <ServiceBadge service={service} size="sm" />
-                {serviceLabels[service]}
-                <ExternalLink className="w-3 h-3 opacity-40 ml-auto" />
+                <ServiceBadge service={service} size="md" />
+                <span className="flex-1 text-left">{serviceLabels[service]}</span>
+                <ExternalLink className="w-4 h-4" style={{ color: "var(--fg-faint)" }} />
               </button>
             ))}
           </div>
-          <p className="text-muted-foreground/60 text-[12px] mt-1.5">
-            Not connected to your account
+          <p
+            className="mt-2"
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 12,
+              color: "var(--fg-faint)",
+            }}
+          >
+            Not connected to your account.
           </p>
         </div>
       )}
 
-      {/* Tier 3: Rent or Buy — price list, tappable */}
       {tier3.length > 0 && (
         <RentBuyList
           options={tier3}
@@ -787,83 +842,3 @@ function RentBuyList({ options, title, year, serviceLinks, contentId, mediaType 
   );
 }
 
-// ── Similar Card with service lazy-loading ──────────────
-function SimilarCard({ item, index, onSelect, bookmarked, onToggleBookmark, userServices, watched }: {
-  item: ContentItem;
-  index: number;
-  onSelect?: (item: ContentItem) => void;
-  bookmarked?: boolean;
-  onToggleBookmark?: (item: ContentItem) => void;
-  userServices?: ServiceId[];
-  watched?: boolean;
-}) {
-  const [allServices, setAllServices] = useState<ServiceId[]>(item.services);
-
-  useEffect(() => {
-    if (item.services.length > 0) {
-      setAllServices(item.services);
-      return;
-    }
-    const { tmdbId, mediaType } = parseContentItemId(item.id);
-    getCachedServices(String(tmdbId), mediaType).then(setAllServices);
-  }, [item.id, item.services]);
-
-  const services = userServices?.length
-    ? allServices.filter((s) => userServices.includes(s))
-    : allServices;
-
-  return (
-    <motion.div
-      key={item.id}
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06, type: "spring", damping: 22, stiffness: 300 }}
-      className="relative group shrink-0 w-[165px] h-[240px] rounded-xl overflow-hidden cursor-pointer"
-      onClick={() => onSelect?.(item)}
-    >
-      <ImageSkeleton src={item.image} alt={item.title} className="absolute inset-0 w-full h-full object-cover" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/10" />
-
-      {item.matchPercentage != null && item.matchPercentage > 0 && (
-        <div className="absolute top-2.5 left-2.5 bg-emerald-600 text-white text-[12px] px-3 py-1 rounded-full shadow-lg" style={{ fontWeight: 700 }}>
-          {item.matchPercentage}% Match
-        </div>
-      )}
-
-      {watched ? (
-        <div className="absolute top-2.5 right-2.5 w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center">
-          <TickIcon className="w-3.5 h-3.5 text-white" />
-        </div>
-      ) : (
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggleBookmark?.(item); }}
-          className={`absolute top-2.5 right-2.5 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 ${
-            bookmarked
-              ? "bg-primary text-white"
-              : "bg-black/40 backdrop-blur-sm text-white/70 hover:text-white"
-          }`}
-        >
-          <Bookmark className={`w-3.5 h-3.5 ${bookmarked ? "fill-current" : ""}`} />
-        </button>
-      )}
-
-      <div className="absolute bottom-0 left-0 right-0 p-3">
-        <div className="flex items-center gap-1 mb-1">
-          {services.slice(0, 3).map((s) => (
-            <ServiceBadge key={s} service={s} size="sm" />
-          ))}
-        </div>
-        {item.rating && (
-          <div className="flex items-center gap-1 mb-0.5">
-            <span className="text-yellow-400 text-[11px]">&#9733;</span>
-            <span className="text-white/80 text-[11px]">{item.rating.toFixed(1)}</span>
-          </div>
-        )}
-        <h4 className="text-white text-[13px] leading-tight mb-0.5" style={{ fontWeight: 600 }}>
-          {item.title}
-        </h4>
-        {item.year && <span className="text-white/45 text-[11px]">{item.year}</span>}
-      </div>
-    </motion.div>
-  );
-}

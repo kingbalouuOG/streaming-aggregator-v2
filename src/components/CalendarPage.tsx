@@ -103,21 +103,53 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div>
-              <h1 className="text-foreground text-[18px]" style={{ fontWeight: 700 }}>
-                Coming Soon
+              <span className="t-kicker">ON THE CALENDAR</span>
+              <h1
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "var(--t-title)",
+                  fontWeight: 700,
+                  fontVariationSettings: '"opsz" 36',
+                  letterSpacing: "-0.01em",
+                  color: "var(--fg)",
+                  lineHeight: 1.15,
+                  margin: 0,
+                  marginTop: 2,
+                }}
+              >
+                Coming up.
               </h1>
-              <p className="text-muted-foreground text-[12px]">
+              <p
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 12,
+                  color: "var(--fg-soft)",
+                  marginTop: 2,
+                }}
+              >
                 {filtered.length} upcoming title{filtered.length !== 1 ? "s" : ""}
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={() => setShowServiceFilter(!showServiceFilter)}
-            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-              showServiceFilter || serviceFilter !== "all"
-                ? "bg-primary/15 text-primary"
-                : "bg-secondary text-muted-foreground"
-            }`}
+            className="w-8 h-8 flex items-center justify-center transition-colors"
+            style={{
+              background:
+                showServiceFilter || serviceFilter !== "all"
+                  ? "var(--primary-soft)"
+                  : "transparent",
+              color:
+                showServiceFilter || serviceFilter !== "all"
+                  ? "var(--primary)"
+                  : "var(--fg-soft)",
+              border:
+                showServiceFilter || serviceFilter !== "all"
+                  ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                  : "1px solid var(--hairline)",
+              borderRadius: "var(--r-md)",
+            }}
           >
             <SlidersHorizontal className="w-4 h-4" />
           </button>
@@ -133,28 +165,38 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
               transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
-              <div className="flex gap-1.5 overflow-x-auto px-5 pb-3 no-scrollbar">
+              <div className="flex gap-2 overflow-x-auto px-5 pb-3 no-scrollbar">
                 <button
+                  type="button"
                   onClick={() => setServiceFilter("all")}
-                  className={`shrink-0 px-3 py-1.5 rounded-lg text-[12px] border transition-all ${
-                    serviceFilter === "all"
-                      ? "bg-primary/15 text-primary border-primary/30"
-                      : "bg-secondary/50 text-muted-foreground border-transparent"
-                  }`}
-                  style={{ fontWeight: serviceFilter === "all" ? 600 : 500 }}
+                  className="shrink-0 px-3 py-1.5"
+                  style={{
+                    background: serviceFilter === "all" ? "var(--primary-soft)" : "transparent",
+                    color: serviceFilter === "all" ? "var(--primary)" : "var(--fg-soft)",
+                    border: serviceFilter === "all"
+                      ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                      : "1px solid var(--hairline)",
+                    borderRadius: "var(--r-pill)",
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 12,
+                    fontWeight: serviceFilter === "all" ? 600 : 500,
+                    transition: "background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out), border-color var(--d-fast) var(--ease-out)",
+                  }}
                 >
-                  All Services
+                  All services
                 </button>
                 {userServices.map((s) => (
                   <button
                     key={s}
+                    type="button"
                     onClick={() => setServiceFilter(s === serviceFilter ? "all" : s)}
-                    className={`shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] border transition-all ${
-                      serviceFilter === s
-                        ? "bg-primary/15 text-primary border-primary/30"
-                        : "bg-secondary/50 text-muted-foreground border-transparent"
-                    }`}
-                    style={{ fontWeight: serviceFilter === s ? 600 : 500 }}
+                    className="shrink-0 inline-flex items-center justify-center px-2 py-1"
+                    style={{
+                      background: serviceFilter === s ? "var(--primary-soft)" : "var(--surface-tint)",
+                      borderRadius: "var(--r-pill)",
+                      outline: serviceFilter === s ? "1px solid var(--primary-edge)" : "none",
+                      transition: "background var(--d-fast) var(--ease-out)",
+                    }}
                   >
                     <ServiceBadge service={s} size="sm" />
                   </button>
@@ -168,38 +210,56 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
         {uniqueDates.length > 0 && (
           <div
             ref={dateScrollRef}
-            className="flex gap-1.5 overflow-x-auto px-5 pt-1 pb-3 no-scrollbar"
+            className="flex gap-2 overflow-x-auto px-5 pt-1 pb-3 no-scrollbar"
           >
             <button
+              type="button"
               onClick={() => setDateFilter("all")}
-              className={`shrink-0 px-3 py-1.5 rounded-lg text-[12px] border transition-all ${
-                dateFilter === "all"
-                  ? "bg-primary/15 text-primary border-primary/30"
-                  : "bg-secondary/50 text-muted-foreground border-transparent"
-              }`}
-              style={{ fontWeight: dateFilter === "all" ? 600 : 500 }}
+              className="shrink-0 px-3 py-1.5"
+              style={{
+                background: dateFilter === "all" ? "var(--primary-soft)" : "transparent",
+                color: dateFilter === "all" ? "var(--primary)" : "var(--fg-soft)",
+                border: dateFilter === "all"
+                  ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                  : "1px solid var(--hairline)",
+                borderRadius: "var(--r-pill)",
+                fontFamily: "var(--font-ui)",
+                fontSize: 12,
+                fontWeight: dateFilter === "all" ? 600 : 500,
+                transition: "background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out), border-color var(--d-fast) var(--ease-out)",
+              }}
             >
               All
             </button>
             {uniqueDates.map((date) => {
               const pill = formatDatePill(date);
               const isActive = dateFilter === date;
+              const isPrimary = isActive || pill.isToday;
               return (
                 <button
                   key={date}
+                  type="button"
                   data-today={pill.isToday}
                   onClick={() => setDateFilter(date === dateFilter ? "all" : date)}
-                  className={`shrink-0 flex flex-col items-center px-2.5 py-1 rounded-lg text-center border transition-all min-w-[40px] ${
-                    isActive
-                      ? "bg-primary/15 text-primary border-primary/30"
-                      : pill.isToday
-                        ? "bg-primary text-white border-primary"
-                        : "bg-secondary/50 text-muted-foreground border-transparent"
-                  }`}
-                  style={{ fontWeight: isActive || pill.isToday ? 600 : 500 }}
+                  className="shrink-0 flex flex-col items-center justify-center text-center"
+                  style={{
+                    minWidth: 48,
+                    minHeight: 36,
+                    padding: "4px 10px",
+                    background: isPrimary ? "var(--primary-soft)" : "transparent",
+                    color: isPrimary ? "var(--primary)" : "var(--fg-soft)",
+                    border: isPrimary
+                      ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
+                      : "1px solid var(--hairline)",
+                    borderRadius: "var(--r-pill)",
+                    fontFamily: "var(--font-ui)",
+                    fontWeight: 700,
+                    lineHeight: 1.05,
+                    transition: "background var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out), border-color var(--d-fast) var(--ease-out)",
+                  }}
                 >
-                  <span className="text-[9px] tracking-wider">{pill.day}</span>
-                  <span className="text-[13px] -mt-0.5">{pill.num}</span>
+                  <span style={{ fontSize: 9, letterSpacing: "0.06em" }}>{pill.day}</span>
+                  <span style={{ fontSize: 13 }}>{pill.num}</span>
                 </button>
               );
             })}
@@ -229,12 +289,12 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
           <div className="flex flex-col gap-6 pb-6">
             {grouped.map(([date, releases]) => (
               <div key={date}>
-                <h3
-                  className="text-foreground text-[14px] mb-2.5"
-                  style={{ fontWeight: 700 }}
+                <span
+                  className="t-kicker mb-2.5 inline-block"
+                  style={{ color: "var(--fg-faint)" }}
                 >
                   {formatGroupDate(date)}
-                </h3>
+                </span>
                 <div className="flex flex-col gap-2">
                   {releases.map((item) => {
                     const isBookmarked = bookmarkedIds?.has(item.id);
@@ -242,21 +302,39 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
                       <div
                         key={item.id}
                         onClick={() => onItemSelect(item)}
-                        className="flex items-start gap-3 p-2.5 rounded-xl bg-secondary/50 text-left w-full transition-colors hover:bg-secondary/80 cursor-pointer"
+                        className="flex items-start gap-3 p-2.5 text-left w-full cursor-pointer"
+                        style={{
+                          borderRadius: "var(--r-md)",
+                          background: "var(--surface-tint)",
+                          color: "var(--fg)",
+                          transition: "background var(--d-fast) var(--ease-out)",
+                        }}
                       >
                         {/* Thumbnail */}
-                        <div className="relative w-16 h-24 rounded-lg overflow-hidden shrink-0">
+                        <div
+                          className="relative w-16 h-24 overflow-hidden shrink-0"
+                          style={{ borderRadius: "var(--r-sm)" }}
+                        >
                           <ImageSkeleton
                             src={item.image}
                             alt={item.title}
                             className="w-full h-full object-cover"
                           />
                           <div className="absolute bottom-1 left-1">
-                            <div className="w-4 h-4 rounded bg-black/60 flex items-center justify-center">
+                            <div
+                              className="w-4 h-4 flex items-center justify-center"
+                              style={{
+                                borderRadius: 4,
+                                background: "var(--scrim-glass)",
+                                backdropFilter: "blur(6px) saturate(160%)",
+                                WebkitBackdropFilter: "blur(6px) saturate(160%)",
+                                color: "#fff",
+                              }}
+                            >
                               {item.type === "movie" ? (
-                                <Film className="w-2.5 h-2.5 text-white" />
+                                <Film className="w-2.5 h-2.5" />
                               ) : (
-                                <Tv className="w-2.5 h-2.5 text-white" />
+                                <Tv className="w-2.5 h-2.5" />
                               )}
                             </div>
                           </div>
@@ -264,8 +342,16 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
                         {/* Info */}
                         <div className="flex-1 min-w-0 py-0.5">
                           <h4
-                            className="text-foreground text-[14px] truncate"
-                            style={{ fontWeight: 600 }}
+                            className="truncate"
+                            style={{
+                              fontFamily: "var(--font-display)",
+                              fontSize: 16,
+                              fontWeight: 700,
+                              fontVariationSettings: '"opsz" 24',
+                              letterSpacing: "-0.01em",
+                              color: "var(--fg)",
+                              lineHeight: 1.2,
+                            }}
                           >
                             {item.title}
                           </h4>
@@ -274,13 +360,30 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
                               <ServiceBadge key={s} service={s} size="sm" />
                             ))}
                             {item.genre && (
-                              <span className="text-muted-foreground text-[11px]">
+                              <span
+                                style={{
+                                  fontFamily: "var(--font-ui)",
+                                  fontSize: 11,
+                                  fontWeight: 500,
+                                  letterSpacing: "0.06em",
+                                  textTransform: "uppercase",
+                                  color: "var(--fg-faint)",
+                                }}
+                              >
                                 {item.genre}
                               </span>
                             )}
                           </div>
                           {item.overview && (
-                            <p className="text-muted-foreground text-[11px] mt-1 line-clamp-2 leading-relaxed">
+                            <p
+                              className="mt-1 line-clamp-2"
+                              style={{
+                                fontFamily: "var(--font-ui)",
+                                fontSize: 11,
+                                color: "var(--fg-soft)",
+                                lineHeight: 1.5,
+                              }}
+                            >
                               {item.overview}
                             </p>
                           )}
@@ -288,15 +391,18 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
                         {/* Bookmark */}
                         {onToggleBookmark && (
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               onToggleBookmark(item);
                             }}
-                            className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all mt-0.5 ${
-                              isBookmarked
-                                ? "bg-primary text-white"
-                                : "bg-secondary text-muted-foreground hover:text-foreground"
-                            }`}
+                            className="shrink-0 w-7 h-7 flex items-center justify-center transition-all mt-0.5"
+                            style={{
+                              borderRadius: "var(--r-md)",
+                              background: isBookmarked ? "var(--primary)" : "var(--surface-elev)",
+                              color: isBookmarked ? "var(--primary-foreground)" : "var(--fg-soft)",
+                            }}
+                            aria-label={isBookmarked ? "Remove bookmark" : "Add bookmark"}
                           >
                             <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? "fill-current" : ""}`} />
                           </button>

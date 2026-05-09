@@ -8,12 +8,7 @@ import {
   Monitor,
   LogOut,
   ChevronRight,
-  User,
-  Tv2,
-  Wallet,
   Sparkles,
-  SlidersHorizontal,
-  Palette,
   Shield,
   Bookmark,
   Eye,
@@ -24,8 +19,11 @@ import { toast } from "sonner";
 
 import { OnboardingData } from "./OnboardingFlow";
 import { useTheme } from "./ThemeContext";
-import { PLATFORMS } from "./platformLogos";
+import { PLATFORMS, type ServiceId } from "./platformLogos";
+import { ServiceStack } from "./ServiceBadge";
+import { Kicker } from "./Kicker";
 import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste-v2/tasteClusters";
+import { GenreIconTile, CLUSTER_GLYPHS, PROFILE_GLYPHS, type GlyphName } from "./genreIcons";
 import { getSliderState, saveSliderState } from "@/lib/taste-v2/tasteProfileV2";
 import { DEFAULT_SLIDERS, type SliderState } from "@/lib/taste-v2/types";
 import { SpendDashboard } from "./SpendDashboard";
@@ -163,9 +161,29 @@ function ProfileLanding({
 
   return (
     <div className="flex flex-col min-h-full px-5 pb-8">
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl -mx-5 px-5"
-        style={{ backgroundColor: "var(--background)", paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
-        <h1 className="text-foreground text-[18px] pb-2" style={{ fontWeight: 700 }}>Profile</h1>
+      <div
+        className="sticky top-0 z-20 backdrop-blur-xl -mx-5 px-5 pb-3"
+        style={{
+          background: "color-mix(in srgb, var(--surface) 88%, transparent)",
+          paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))",
+        }}
+      >
+        <span className="t-kicker">YOU</span>
+        <h1
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: "var(--t-title)",
+            fontWeight: 700,
+            fontVariationSettings: '"opsz" 36',
+            letterSpacing: "-0.01em",
+            color: "var(--fg)",
+            lineHeight: 1.15,
+            margin: 0,
+            marginTop: 2,
+          }}
+        >
+          Profile.
+        </h1>
       </div>
 
       {/* Avatar & Info */}
@@ -188,36 +206,61 @@ function ProfileLanding({
 
         {/* Stats row */}
         <div className="flex items-center gap-4 mt-3">
-          <StatBadge icon={<Bookmark className="w-3.5 h-3.5 text-primary" />} count={watchlistCount} label="Watchlist" />
-          <StatBadge icon={<Eye className="w-3.5 h-3.5 text-emerald-400" />} count={watchedCount} label="Watched" />
-          <StatBadge icon={<Film className="w-3.5 h-3.5 text-blue-400" />} count={connectedCount} label="Services" />
+          <StatBadge icon={<Bookmark className="w-3.5 h-3.5" style={{ color: "var(--primary)" }} />} count={watchlistCount} label="Watchlist" />
+          <StatBadge icon={<Eye className="w-3.5 h-3.5" style={{ color: "var(--fg-soft)" }} />} count={watchedCount} label="Watched" />
+          <StatBadge icon={<Film className="w-3.5 h-3.5" style={{ color: "var(--fg-soft)" }} />} count={connectedCount} label="Services" />
         </div>
       </div>
 
-      {/* Action Rows */}
+      {/* Action Rows. Icon tiles use the editorial monochrome treatment:
+          neutral surface-tint background + fg-soft glyph. The orange
+          accent is reserved for the brand mark + active states. */}
       <SectionLabel label="ACCOUNT" />
-      <ActionRow icon={<User className="w-4 h-4" style={{ color: '#60a5fa' }} />} iconBgColor="rgba(96, 165, 250, 0.15)" title="Account Details" subtitle={displayEmail} onClick={() => onNavigate('account')} />
+      <ActionRow glyph={PROFILE_GLYPHS.account} title="Account Details" subtitle={displayEmail} onClick={() => onNavigate('account')} />
 
       <SectionLabel label="SUBSCRIPTIONS" />
-      <ActionRow icon={<Tv2 className="w-4 h-4" style={{ color: '#a78bfa' }} />} iconBgColor="rgba(167, 139, 250, 0.15)" title="Streaming Services" subtitle={`${connectedCount} services connected`} onClick={() => onNavigate('services')} />
+      <ActionRow
+        glyph={PROFILE_GLYPHS.streaming}
+        title="Streaming Services"
+        subtitle={connectedCount === 0 ? "None connected" : undefined}
+        trailing={
+          connectedCount > 0 ? (
+            <ServiceStack
+              services={(userProfile?.services ?? []) as ServiceId[]}
+              size="sm"
+              max={4}
+            />
+          ) : undefined
+        }
+        onClick={() => onNavigate('services')}
+      />
 
       <SectionLabel label="INSIGHTS" />
-      <ActionRow icon={<Wallet className="w-4 h-4" style={{ color: '#34d399' }} />} iconBgColor="rgba(52, 211, 153, 0.15)" title="Monthly Spend" subtitle={`£${connectedCount > 0 ? '—' : '0'}/month`} onClick={() => onNavigate('spend')} />
+      <ActionRow glyph={PROFILE_GLYPHS.spend} title="Monthly Spend" subtitle={`£${connectedCount > 0 ? '—' : '0'}/month`} onClick={() => onNavigate('spend')} />
 
       <SectionLabel label="PERSONALISATION" />
-      <ActionRow icon={<Sparkles className="w-4 h-4" style={{ color: '#fb923c' }} />} iconBgColor="rgba(251, 146, 60, 0.15)" title="Your Taste" subtitle={topClusterNames || 'Set up your taste profile'} onClick={() => onNavigate('taste')} />
-      <ActionRow icon={<SlidersHorizontal className="w-4 h-4" style={{ color: '#facc15' }} />} iconBgColor="rgba(250, 204, 21, 0.15)" title="Tune Recommendations" subtitle="Balanced across all sliders" onClick={() => onNavigate('tune')} />
+      <ActionRow glyph={PROFILE_GLYPHS.taste} title="Your Taste" subtitle={topClusterNames || 'Set up your taste profile'} onClick={() => onNavigate('taste')} />
+      <ActionRow glyph={PROFILE_GLYPHS.tune} title="Tune Recommendations" subtitle="Balanced across all sliders" onClick={() => onNavigate('tune')} />
 
       <SectionLabel label="SETTINGS" />
-      <ActionRow icon={<Palette className="w-4 h-4" style={{ color: '#818cf8' }} />} iconBgColor="rgba(129, 140, 248, 0.15)" title="Appearance" subtitle="Dark" onClick={() => onNavigate('appearance')} />
-      <ActionRow icon={<Shield className="w-4 h-4" style={{ color: '#94a3b8' }} />} iconBgColor="rgba(148, 163, 184, 0.15)" title="Privacy & Data" subtitle="Manage your data" onClick={() => onNavigate('privacy')} />
+      <ActionRow glyph={PROFILE_GLYPHS.appearance} title="Appearance" subtitle="Dark" onClick={() => onNavigate('appearance')} />
+      <ActionRow glyph={PROFILE_GLYPHS.privacy} title="Privacy & Data" subtitle="Manage your data" onClick={() => onNavigate('privacy')} />
 
       {/* Sign Out */}
       <div className="mt-6">
         <button
+          type="button"
           onClick={onSignOut}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary/10 text-primary text-[13px] border border-primary/20 transition-colors hover:bg-primary/20"
-          style={{ fontWeight: 600 }}
+          className="w-full flex items-center justify-center gap-2 py-3 transition-colors"
+          style={{
+            background: "var(--primary-soft)",
+            color: "var(--primary)",
+            border: "0.5px solid color-mix(in srgb, var(--primary) 35%, transparent)",
+            borderRadius: "var(--r-pill)",
+            fontFamily: "var(--font-ui)",
+            fontSize: 13,
+            fontWeight: 600,
+          }}
         >
           <LogOut className="w-4 h-4" />
           Sign Out
@@ -265,23 +308,28 @@ function AccountDetailsPage({
   };
 
   return (
-    <SubPageShell title="Account Details" onBack={onBack}>
+    <SubPageShell kicker="ACCOUNT" title="Your details." onBack={onBack}>
       <div className="space-y-3 mb-6">
         <InputField label="Name" value={name} onChange={setName} />
         <InputField label="Email" value={email} onChange={setEmail} type="email" />
       </div>
       <button
+        type="button"
         onClick={handleSave}
         disabled={!isDirty}
-        className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-[14px] transition-colors ${
-          isDirty
-            ? "bg-primary text-white shadow-lg shadow-primary/25"
-            : "bg-secondary/60 text-muted-foreground"
-        }`}
-        style={{ fontWeight: 600 }}
+        className="w-full flex items-center justify-center gap-2 py-3.5 transition-colors"
+        style={{
+          background: isDirty ? "var(--primary)" : "var(--surface-tint)",
+          color: isDirty ? "#fff" : "var(--fg-faint)",
+          borderRadius: "var(--r-pill)",
+          fontFamily: "var(--font-ui)",
+          fontSize: 14,
+          fontWeight: 600,
+          cursor: isDirty ? "pointer" : "not-allowed",
+        }}
       >
         {isDirty && <Check className="w-4 h-4" />}
-        Save Changes
+        Save changes
       </button>
     </SubPageShell>
   );
@@ -310,7 +358,7 @@ function StreamingServicesPage({
   };
 
   return (
-    <SubPageShell title="Streaming Services" onBack={onBack}>
+    <SubPageShell kicker="SUBSCRIPTIONS" title="Streaming services." onBack={onBack}>
       <p className="text-muted-foreground text-[11px] uppercase tracking-widest mb-3" style={{ fontWeight: 600 }}>
         Choose your services
       </p>
@@ -366,7 +414,7 @@ function AppearancePage({ onBack }: { onBack: () => void }) {
   ];
 
   return (
-    <SubPageShell title="Appearance" onBack={onBack}>
+    <SubPageShell kicker="APPEARANCE" title="How it looks." onBack={onBack}>
       <div className="space-y-2.5">
         {options.map(opt => {
           const isActive = theme === opt.value;
@@ -448,7 +496,7 @@ function YourTastePage({
   }
 
   return (
-    <SubPageShell title="Your Taste" onBack={onBack}>
+    <SubPageShell kicker="PERSONALISATION" title="Your taste." onBack={onBack}>
       <h3 className="text-foreground text-[16px] mb-1" style={{ fontWeight: 700 }}>Your taste profile</h3>
       {summaryText && (
         <p className="text-muted-foreground text-[13px] mb-4 leading-relaxed">{summaryText}</p>
@@ -457,8 +505,8 @@ function YourTastePage({
       {/* Cluster chips */}
       <div className="flex flex-wrap gap-2 mb-6">
         {resolvedClusters.map(c => (
-          <span key={c.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/15 text-foreground text-[13px]" style={{ fontWeight: 500 }}>
-            <span className="text-[16px]">{c.emoji}</span>
+          <span key={c.id} className="inline-flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-full bg-primary/15 text-foreground text-[13px]" style={{ fontWeight: 500 }}>
+            <GenreIconTile glyph={CLUSTER_GLYPHS[c.id]} size={22} />
             {c.name}
           </span>
         ))}
@@ -560,7 +608,7 @@ function RefinePreferencesPage({
   };
 
   return (
-    <SubPageShell title="Refine Preferences" onBack={onBack}>
+    <SubPageShell kicker="PERSONALISATION" title="Refine preferences." onBack={onBack}>
       <div className="flex items-center justify-between mb-3">
         <p className="text-muted-foreground text-[13px]">
           Select the genres that best match your taste
@@ -589,7 +637,7 @@ function RefinePreferencesPage({
               }`}
               style={{ paddingLeft: '0.75rem', paddingRight: '2.25rem', borderColor: isSelected ? undefined : "var(--border-subtle)" }}
             >
-              <span className="text-[20px] shrink-0">{cluster.emoji}</span>
+              <GenreIconTile glyph={CLUSTER_GLYPHS[cluster.id]} size={32} />
               <span className={`text-[13px] ${isSelected ? "text-foreground" : "text-muted-foreground"}`}
                 style={{ fontWeight: isSelected ? 600 : 500 }}>
                 {cluster.name}
@@ -683,7 +731,7 @@ function TuneRecommendationsPage({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <SubPageShell title="Tune Your Recommendations" onBack={onBack}>
+    <SubPageShell kicker="TUNE" title="Recommendations." onBack={onBack}>
       <p className="text-muted-foreground text-[13px]" style={{ marginBottom: '2rem' }}>
         Adjust how Videx serves your recommendations. Changes take effect immediately.
       </p>
@@ -736,7 +784,7 @@ function TuneRecommendationsPage({ onBack }: { onBack: () => void }) {
 // ═════════════════════════════════════════════════════════
 function MonthlySpendPage({ connectedServices, onBack }: { connectedServices: string[]; onBack: () => void }) {
   return (
-    <SubPageShell title="Monthly Spend" onBack={onBack}>
+    <SubPageShell kicker="INSIGHTS" title="Monthly spend." onBack={onBack}>
       <SpendDashboard connectedServices={connectedServices} />
     </SubPageShell>
   );
@@ -750,7 +798,7 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   return (
-    <SubPageShell title="Privacy & Data" onBack={onBack}>
+    <SubPageShell kicker="SETTINGS" title="Privacy & data." onBack={onBack}>
       <p className="text-muted-foreground text-[13px] mb-5 leading-relaxed">
         Videx learns from what you watch, rate, and explore in the app to recommend content that matches your taste. We never sell this data or share it with other services.
       </p>
@@ -760,7 +808,7 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
         onClick={() => setShowLearnMore(true)}
         className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-secondary/60 hover:bg-secondary/80 transition-colors mb-2"
       >
-        <Eye className="w-5 h-5 text-blue-400 shrink-0" />
+        <Eye className="w-5 h-5 shrink-0" style={{ color: "var(--fg-soft)" }} />
         <span className="text-foreground text-[14px] flex-1 text-left" style={{ fontWeight: 500 }}>
           What Videx learns about you
         </span>
@@ -771,7 +819,7 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
         onClick={() => toast.success("Download started", { description: "Your data export will be ready shortly." })}
         className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-secondary/60 hover:bg-secondary/80 transition-colors mb-2"
       >
-        <ArrowLeft className="w-5 h-5 text-emerald-400 shrink-0 rotate-[-90deg]" />
+        <ArrowLeft className="w-5 h-5 shrink-0 rotate-[-90deg]" style={{ color: "var(--fg-soft)" }} />
         <span className="text-foreground text-[14px] flex-1 text-left" style={{ fontWeight: 500 }}>
           Download my data
         </span>
@@ -779,11 +827,17 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
 
       {/* Delete my account */}
       <button
+        type="button"
         onClick={() => setShowDeleteConfirm(true)}
-        className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-3.5 transition-colors"
+        style={{
+          borderRadius: "var(--r-md)",
+          background: "color-mix(in srgb, var(--danger) 10%, transparent)",
+          color: "var(--danger)",
+        }}
       >
-        <Shield className="w-5 h-5 text-red-400 shrink-0" />
-        <span className="text-red-400 text-[14px] flex-1 text-left" style={{ fontWeight: 500 }}>
+        <Shield className="w-5 h-5 shrink-0" />
+        <span className="text-[14px] flex-1 text-left" style={{ fontWeight: 500 }}>
           Delete my account
         </span>
       </button>
@@ -885,9 +939,15 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
                   Cancel
                 </button>
                 <button
+                  type="button"
                   disabled
-                  className="flex-1 py-3 rounded-xl bg-red-500/30 text-red-400/50 text-[14px] cursor-not-allowed"
-                  style={{ fontWeight: 600 }}
+                  className="flex-1 py-3 text-[14px] cursor-not-allowed"
+                  style={{
+                    background: "color-mix(in srgb, var(--danger) 25%, transparent)",
+                    color: "color-mix(in srgb, var(--danger) 60%, transparent)",
+                    borderRadius: "var(--r-md)",
+                    fontWeight: 600,
+                  }}
                 >
                   Delete Account
                 </button>
@@ -904,54 +964,121 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
 // ── Shared Sub-Components ───────────────────────────────
 // ═════════════════════════════════════════════════════════
 
-function SubPageShell({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
+function SubPageShell({
+  title,
+  kicker = "SETTINGS",
+  onBack,
+  children,
+}: {
+  title: string;
+  kicker?: string;
+  onBack: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col min-h-full px-5 pb-8">
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl -mx-5 px-5 flex items-center gap-3"
-        style={{ backgroundColor: "var(--background)", paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
-        <button onClick={onBack} className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+      <div
+        className="sticky top-0 z-20 backdrop-blur-xl -mx-5 px-5 flex items-start gap-3 pb-4"
+        style={{
+          background: "color-mix(in srgb, var(--surface) 88%, transparent)",
+          paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))",
+        }}
+      >
+        <button
+          type="button"
+          onClick={onBack}
+          className="w-9 h-9 inline-flex items-center justify-center shrink-0 mt-1"
+          style={{
+            borderRadius: "var(--r-md)",
+            background: "var(--surface-tint)",
+            color: "var(--fg-soft)",
+          }}
+          aria-label="Back"
+        >
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <h1 className="text-foreground text-[18px] py-2" style={{ fontWeight: 700 }}>{title}</h1>
+        <div>
+          <span className="t-kicker">{kicker}</span>
+          <h1
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: "var(--t-title)",
+              fontWeight: 700,
+              fontVariationSettings: '"opsz" 36',
+              letterSpacing: "-0.01em",
+              color: "var(--fg)",
+              lineHeight: 1.15,
+              margin: 0,
+              marginTop: 2,
+            }}
+          >
+            {title}
+          </h1>
+        </div>
       </div>
       <div className="pt-4">{children}</div>
     </div>
   );
 }
 
-function ActionRow({ icon, iconBg, iconBgColor, title, subtitle, onClick }: {
-  icon: React.ReactNode;
-  iconBg?: string;
-  iconBgColor?: string;
+/**
+ * Editorial settings list row — hairline-bordered, no rounded chip
+ * background. Optional `trailing` slot lets specific rows surface
+ * richer visuals (e.g. a ServiceStack on the Streaming Services row)
+ * in place of the default subtitle text.
+ */
+function ActionRow({ glyph, title, subtitle, trailing, onClick }: {
+  glyph: GlyphName;
   title: string;
-  subtitle: string;
+  subtitle?: string;
+  trailing?: React.ReactNode;
   onClick: () => void;
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-secondary/40 hover:bg-secondary/60 transition-colors mb-2"
+      className="w-full flex items-center gap-3 py-3.5 transition-colors"
+      style={{
+        borderBottom: "0.5px solid var(--hairline)",
+      }}
     >
-      <div
-        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg || (iconBgColor ? '' : 'bg-secondary')}`}
-        style={iconBgColor ? { backgroundColor: iconBgColor } : undefined}
-      >
-        {icon}
-      </div>
+      <GenreIconTile glyph={glyph} size={36} />
       <div className="flex-1 text-left min-w-0">
-        <p className="text-foreground text-[14px]" style={{ fontWeight: 600 }}>{title}</p>
-        {subtitle && <p className="text-muted-foreground text-[12px] truncate">{subtitle}</p>}
+        <p style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: 14,
+          fontWeight: 600,
+          color: "var(--fg)",
+          lineHeight: 1.3,
+        }}>{title}</p>
+        {subtitle && (
+          <p
+            className="truncate"
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 12,
+              color: "var(--fg-soft)",
+              marginTop: 2,
+            }}
+          >
+            {subtitle}
+          </p>
+        )}
       </div>
-      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+      {trailing && <div className="shrink-0 flex items-center">{trailing}</div>}
+      <ChevronRight className="w-4 h-4 shrink-0" style={{ color: "var(--fg-faint)" }} />
     </button>
   );
 }
 
+/** Editorial section divider — uses the canonical Kicker primitive
+ *  in place of the previous bespoke "tracking-widest uppercase" span. */
 function SectionLabel({ label }: { label: string }) {
   return (
-    <p className="text-muted-foreground text-[11px] tracking-widest uppercase mt-4 mb-2 px-1" style={{ fontWeight: 600 }}>
-      {label}
-    </p>
+    <div className="mt-6 mb-2 px-0">
+      <Kicker>{label}</Kicker>
+    </div>
   );
 }
 
@@ -972,13 +1099,37 @@ function InputField({ label, value, onChange, type = "text" }: {
   type?: string;
 }) {
   return (
-    <div className="relative rounded-xl border border-primary/30 bg-secondary/60 ring-1 ring-primary/10">
-      <label className="absolute top-2 left-3 text-muted-foreground text-[10px]">{label}</label>
+    <div
+      className="relative"
+      style={{
+        borderRadius: "var(--r-card)",
+        border: "0.5px solid var(--hairline)",
+        background: "var(--surface-elev)",
+      }}
+    >
+      <label
+        className="absolute top-2 left-3"
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: 10,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "1.4px",
+          color: "var(--fg-faint)",
+        }}
+      >
+        {label}
+      </label>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-transparent px-3 pt-6 pb-2 text-foreground text-[14px] outline-none"
+        className="w-full bg-transparent px-3 pt-6 pb-2 outline-none"
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: 14,
+          color: "var(--fg)",
+        }}
       />
     </div>
   );

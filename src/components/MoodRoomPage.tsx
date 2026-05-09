@@ -3,6 +3,8 @@ import { motion } from 'motion/react';
 import { ArrowLeft } from 'lucide-react';
 
 import { ContentCard, type ContentItem } from './ContentCard';
+import { MagazineHero } from './MagazineHero';
+import { SectionHead } from './SectionHead';
 import type { ServiceId } from './platformLogos';
 import {
   getMoodRoomDetail,
@@ -23,6 +25,23 @@ import type { AnchorRoomLabel } from '@/lib/recommendations-v2/anchorRoomLabels'
 const GRID_PAGE_SIZE = 30;
 const ANCHOR_ROOM_LIMIT = 30;
 const ANCHOR_ROOM_MATCH_LIMIT = 200;
+
+/** Six atmosphere accents per design-system §3. Hash a stable string
+ *  (room id / anchor tmdb id) to pick one — the same room always gets
+ *  the same tint so the visual reads consistent across visits. */
+const ATMOSPHERE_TINTS = [
+  'var(--atm-amber)',
+  'var(--atm-rose)',
+  'var(--atm-teal)',
+  'var(--atm-violet)',
+  'var(--atm-forest)',
+  'var(--atm-slate)',
+] as const;
+function atmosphereForKey(key: string): string {
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
+  return ATMOSPHERE_TINTS[Math.abs(hash) % ATMOSPHERE_TINTS.length];
+}
 
 
 /**
@@ -220,6 +239,12 @@ export function MoodRoomPage(props: MoodRoomPageProps) {
     setVisibleCount((prev) => Math.min(prev + GRID_PAGE_SIZE, filtered.length));
   }, [filtered.length]);
 
+  // Cover-story split — first item becomes the atmospheric hero,
+  // the rest form the supporting mosaic grid below.
+  const heroItem = visible[0] ?? null;
+  const supporting = visible.slice(1);
+  const tint = atmosphereForKey(detailKey);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -228,72 +253,96 @@ export function MoodRoomPage(props: MoodRoomPageProps) {
       transition={{ duration: 0.18 }}
       className="min-h-screen"
     >
-      {/* Header */}
-      <header className="flex items-start gap-3 px-5 pt-5 pb-4">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back to For You"
-          className="w-10 h-10 rounded-full flex items-center justify-center text-foreground bg-surface-elevated shrink-0 focus:outline-none focus:ring-2 focus:ring-primary"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div className="flex-1 min-w-0 pt-1">
-          <h1
-            className="text-foreground text-[22px] leading-tight"
-            style={{ fontWeight: 700 }}
-          >
-            {detail?.label ?? 'Mood Room'}
-          </h1>
-          {detail?.description ? (
-            <p className="text-muted-foreground text-[14px] mt-1 leading-snug">
-              {detail.description}
-            </p>
-          ) : null}
-          {detail ? (
-            <p className="text-muted-foreground text-[12px] mt-2">
-              {filtered.length} of {detail.totalTitleCount} on your services
-            </p>
-          ) : null}
-        </div>
-      </header>
+      {/* Floating back button — overlays the hero. */}
+      <button
+        type="button"
+        onClick={onBack}
+        aria-label="Back to For You"
+        className="absolute z-20 left-4 w-9 h-9 flex items-center justify-center"
+        style={{
+          top: "max(1rem, env(safe-area-inset-top, 1rem))",
+          borderRadius: "var(--r-md)",
+          background: "rgba(20, 20, 28, 0.5)",
+          backdropFilter: "blur(8px) saturate(160%)",
+          WebkitBackdropFilter: "blur(8px) saturate(160%)",
+          color: "#fff",
+        }}
+      >
+        <ArrowLeft className="w-5 h-5" />
+      </button>
 
       {loading ? (
-        <p className="text-muted-foreground text-[14px] text-center px-5 py-12">
+        <p className="px-5 py-24 text-center" style={{ color: "var(--fg-soft)", fontSize: "var(--t-body)" }}>
           Loading room…
         </p>
       ) : error ? (
-        <p className="text-muted-foreground text-[14px] text-center px-5 py-12">
+        <p className="px-5 py-24 text-center" style={{ color: "var(--fg-soft)", fontSize: "var(--t-body)" }}>
           Could not load this room.
         </p>
-      ) : filtered.length === 0 ? (
-        <p className="text-muted-foreground text-[14px] text-center px-5 py-12">
+      ) : filtered.length === 0 || !heroItem ? (
+        <p className="px-5 py-24 text-center" style={{ color: "var(--fg-soft)", fontSize: "var(--t-body)" }}>
           Nothing here is on your services right now.
         </p>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 px-5 pb-6">
-            {visible.map((item) => (
-              <ContentCard
-                key={item.id}
-                item={item}
-                variant="grid"
-                onSelect={onItemSelect}
-                bookmarked={bookmarkedIds.has(item.id)}
-                onToggleBookmark={onToggleBookmark}
-                userServices={connectedServiceIds}
-                watched={watchedIds.has(item.id)}
-              />
-            ))}
+          {/* §5 cover-story hero — atmospheric, lifted from For You. */}
+          <div className="editorial mb-6 mt-2">
+            <MagazineHero
+              item={heroItem}
+              kicker={(detail?.label ?? "MOOD ROOM").toUpperCase()}
+              kickerColor={tint}
+              standfirst={detail?.description ?? undefined}
+              userServices={connectedServiceIds}
+              onSelect={onItemSelect}
+            />
           </div>
 
+          {/* Section break — title for the supporting grid. */}
+          <div className="editorial mb-3">
+            <SectionHead
+              kicker="THE REST OF THE ROOM"
+              kickerColor={tint}
+              title="More like this."
+              standfirst={
+                detail
+                  ? `${filtered.length} of ${detail.totalTitleCount} titles on your services.`
+                  : undefined
+              }
+            />
+          </div>
+
+          {supporting.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 px-5 pb-6">
+              {supporting.map((item) => (
+                <ContentCard
+                  key={item.id}
+                  item={item}
+                  variant="mosaic"
+                  onSelect={onItemSelect}
+                  bookmarked={bookmarkedIds.has(item.id)}
+                  onToggleBookmark={onToggleBookmark}
+                  userServices={connectedServiceIds}
+                  watched={watchedIds.has(item.id)}
+                />
+              ))}
+            </div>
+          )}
+
           {visibleCount < filtered.length ? (
-            <div className="flex justify-center pb-8">
+            <div className="flex justify-center pb-10">
               <button
                 type="button"
                 onClick={handleLoadMore}
-                className="px-4 py-2 rounded-lg bg-surface-elevated text-foreground text-[14px] focus:outline-none focus:ring-2 focus:ring-primary"
-                style={{ fontWeight: 500 }}
+                className="px-5 py-2.5 active:scale-[0.97] transition-transform"
+                style={{
+                  background: "var(--surface-elev)",
+                  border: "0.5px solid var(--hairline)",
+                  borderRadius: "var(--r-pill)",
+                  color: "var(--fg)",
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 14,
+                  fontWeight: 500,
+                }}
               >
                 Show more
               </button>

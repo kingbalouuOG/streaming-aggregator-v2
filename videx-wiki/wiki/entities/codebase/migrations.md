@@ -3,14 +3,16 @@ title: Migration Changelog
 type: entity
 tags: [supabase, migrations, postgres]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-05-07
 sources:
   - raw/codebase-snapshots/migration-changelog.md
+  - docs/v2/Videx_v2_Project_Orchestration_v0.6.md
 related:
   - wiki/entities/codebase/database-schema.md
   - wiki/concepts/operations/supabase-migration-workflow.md
   - wiki/concepts/decisions/adr-006-card-impressions-dedicated-table.md
   - wiki/concepts/decisions/adr-010-pg-partman-card-impressions.md
+  - wiki/concepts/operations/service-role-jwt-rotation.md
 ---
 
 # Migration Changelog
@@ -51,9 +53,20 @@ Chronological list of every applied migration. Source of truth: `supabase/migrat
 | 030 | `030_mood_room_titles_table.sql` | Phase 4.5 | applied | `mood_room_titles` membership table. |
 | 031 | `031_mood_rooms_rpcs.sql` | Phase 4.5 | applied | `get_mood_rooms_for_user`, `get_mood_room_thumbnails`, `get_mood_room_detail`. |
 | 032 | `032_card_impressions_mood_room_surface.sql` | Phase 4.5 | applied | Allows `'mood_room'` value in `card_impressions.source_surface`. |
+| 033 | `033_card_impressions_anchor_room_metadata.sql` | Phase 4.5 (anchored rooms redirect, 2026-04-27) | applied | Two changes: extend `card_impressions.source_surface` CHECK with `'anchor_room'`; add `card_impressions.metadata jsonb` column. For anchored rooms, metadata captures `{ anchor_tmdb_id, anchor_tier, anchor_source_cluster_id, tier_1_inside_stated_cluster }`. |
+| 034 | `034_mood_room_anchor_labels.sql` | Phase 4.5 (IN-463 fast-follow, April 2026) | applied | `mood_rooms.anchor_label_text`, `anchor_label_generated_at`. Backed by `label-anchor-room` Edge Function (LLM-generated thematic labels). |
+| 035 | `035_available_tmdb_ids_rpc_array_return.sql` | Phase 4.5 (cold-start fix, April 2026) | applied | `get_available_tmdb_ids` return shape changed `TABLE` → JSONB array. Saves ~1.5–2s on Edge Function cold-starts (eliminates per-row PostgREST envelope cost). Consumers (`hardFilters.ts`, anchor rooms, BYW filtering) parse client-side. |
+| 036 | `036_taste_profiles_rls.sql` | Phase 5 (2026-05-06) | applied | Enable RLS on `taste_profiles` with `FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id)`. Pre-existing gap surfaced by Phase 4 security review M1 — table predates version-controlled migrations and never had RLS. Service-role bypass preserves Edge Function reads. Verified anon SELECT returns 0 rows. |
+| 037 | `037_drop_marked_watched_from_check.sql` | Phase 5 (2026-05-06) | applied | Drop `'marked_watched'` from `user_interactions.event_type` CHECK constraint. Pre-flight count was 0 → clean DROP / ADD swap. Read-side filters (`useForYouContent.ts:511`, `render-foryou-rows/index.ts:468`) cleaned up in same PR. The `exit_reason` payload value (Detail Page Signal Spec v0.3.2) is unrelated and stays. |
+| 038 | `038_profiles_username_lookup_rpc.sql` | Phase 5 (IN-XPS-002, 2026-05-06) | applied | Replace wide-open `FOR SELECT USING (true)` "Allow public username lookup" anon policy on `profiles` with `username_available(check_username text) RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE`. `AuthContext.checkUsernameAvailable` rewired. Anon SELECT on profiles now denied. |
+| 039 | `039_cron_jobs_vault_jwt.sql` | Phase 5 (IN-XPS-004, 2026-05-06) | applied | **NOT a cryptographic rotation.** Move inline service-role JWT out of `006_cron_schedule.sql` and three `supabase/cron/*.sql` files into Supabase Vault. Same JWT value, different storage location. Re-create four cron jobs (`daily-content-sync`, `embed-new-titles`, `enrich-new-titles`, `refresh-service-fingerprints`) using `vault.decrypted_secrets` lookups. Full cryptographic rotation deferred to Phase 6 pending Supabase tooling — new opaque `sb_secret_…` tokens fail `verify_jwt = true` on Edge Functions. RPC body of `delete_own_account` flagged as a separate audit gap (lives in production but not in any version-controlled migration; capture in Phase 5.5 migration 041). |
+| 040 | `040_available_tmdb_ids_with_media_type.sql` | Phase 5 (IN-458) | **deferred to Phase 5.5 / 6** | Extend `get_available_tmdb_ids` to return `(tmdb_id, media_type)` pairs. Closes 0.8% movie/TV id collision rate. Real but small impact; deferred to keep Phase 5 scope tight. **Migration shape**: must be additive (new function `get_available_tmdb_id_pairs`), not in-place — never swap RPC return shape when clients consume it. |
 
 ## Notes
 
-- Schema-evolution migrations live here. Operational automation (cron job SQL definitions) lives in `supabase/cron/` rather than the migration sequence as of Phase 0.5.
+- Schema-evolution migrations live here. Operational automation (cron job SQL definitions) lives in `supabase/cron/` rather than the migration sequence as of Phase 0.5. **Caveat post-Phase-5:** the three `supabase/cron/*.sql` files (`embed_new_titles`, `enrich_new_titles`, `refresh_service_fingerprints`) overlap with migration 039 — both manage the same cron registrations. Phase 5.5 IN-PX-31 will resolve this by either deleting the cron files or marking them as historical.
 - Phase 0 numbering deviated by +2 (migrations 015 and 016 inserted in-phase). All subsequent phase migrations were renumbered upward to preserve order. Strategy v1.6.3 records this renumbering.
+- Phase 4.5 numbering: original Gates 1–4 plan was 029–032. Mid-phase redirect added 033 (anchored rooms metadata), 034 (LLM thematic labels via IN-463), 035 (cold-start fix). All applied April 2026.
+- Phase 5 numbering: 036–039 applied 2026-05-06 via Studio SQL editor. 040 deferred.
 - Workflow for adding new migrations: see [supabase migration workflow runbook](../../concepts/operations/supabase-migration-workflow.md).
+- **Source-of-truth gap:** `delete_own_account` RPC exists in production but its definition is not in any version-controlled migration (only `027_function_search_path_pin.sql:28` references it). Capture in Phase 5.5 migration 041 before any UI flip on the Profile → Privacy & Data → "Delete my account" button.

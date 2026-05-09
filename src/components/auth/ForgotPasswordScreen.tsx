@@ -68,14 +68,36 @@ export default function ForgotPasswordScreen({ onBack }: ForgotPasswordScreenPro
                 <KeyRound className="text-primary" style={{ width: 40, height: 40 }} />
               </div>
 
+              <span className="t-kicker text-center" style={{ marginBottom: 12 }}>
+                RESET PASSWORD
+              </span>
               <h1
-                className="text-foreground text-[26px] text-center mb-2"
-                style={{ fontWeight: 700 }}
+                className="text-center"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "var(--t-headline)",
+                  fontWeight: 600,
+                  fontVariationSettings: '"opsz" 48',
+                  letterSpacing: "-0.01em",
+                  color: "var(--fg)",
+                  lineHeight: 1.15,
+                  margin: 0,
+                  marginBottom: 8,
+                }}
               >
-                Reset Password
+                Forgot it? Easy fix.
               </h1>
-              <p className="text-muted-foreground text-[14px] text-center max-w-[280px]">
-                Enter your email and we'll send you a reset link
+              <p
+                className="text-center max-w-[280px]"
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "var(--t-body)",
+                  fontWeight: 400,
+                  color: "var(--fg-soft)",
+                  lineHeight: 1.45,
+                }}
+              >
+                Enter your email and we'll send a reset link.
               </p>
             </div>
 
@@ -161,15 +183,37 @@ export default function ForgotPasswordScreen({ onBack }: ForgotPasswordScreenPro
                 <Check style={{ width: 28, height: 28, color: '#4ade80' }} />
               </motion.div>
 
+              <span className="t-kicker text-center" style={{ marginBottom: 12 }}>
+                LINK SENT
+              </span>
               <h1
-                className="text-foreground text-[26px] text-center mb-2"
-                style={{ fontWeight: 700 }}
+                className="text-center"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "var(--t-headline)",
+                  fontWeight: 600,
+                  fontVariationSettings: '"opsz" 48',
+                  letterSpacing: "-0.01em",
+                  color: "var(--fg)",
+                  lineHeight: 1.15,
+                  margin: 0,
+                  marginBottom: 8,
+                }}
               >
-                Check your email
+                Check your email.
               </h1>
-              <p className="text-muted-foreground text-[14px] text-center max-w-[280px]">
+              <p
+                className="text-center max-w-[280px]"
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "var(--t-body)",
+                  fontWeight: 400,
+                  color: "var(--fg-soft)",
+                  lineHeight: 1.45,
+                }}
+              >
                 We've sent a password reset link to{' '}
-                <span className="text-foreground" style={{ fontWeight: 600 }}>{email}</span>
+                <span style={{ color: "var(--fg)", fontStyle: "normal", fontWeight: 600 }}>{email}</span>.
               </p>
             </div>
 

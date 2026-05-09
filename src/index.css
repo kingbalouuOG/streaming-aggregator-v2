@@ -1,13 +1,31 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap");
+/* ─────────────────────────────────────────────────────────────
+ * Videx — index.css
+ * Phase 0 of the 2026 editorial redesign.
+ *
+ * Top of file: NEW canonical design tokens (paper / ink / cream /
+ * surface / fg / etc.) per docs/v3-design/design-system.md §3 and
+ * docs/v3-design/tokens.css.
+ *
+ * Below them: a clearly-marked DEPRECATED compat-alias block that
+ * maps the old token names (--background, --card, --secondary, etc.)
+ * onto the new ones, so existing screens continue to render until
+ * each phase migrates them. Remove each alias as the screen that
+ * uses it adopts the new tokens.
+ *
+ * Do not hard-code hex outside this file.
+ * ───────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..800;1,9..40,300..800&family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&display=swap');
 
 @import "tailwindcss";
 
 /* ── Dark mode via data attribute ────────────────────────────── */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* ── Theme tokens (Tailwind v4 @theme) ───────────────────────── */
+/* ── Tailwind v4 @theme — utility-class mapping ──────────────── */
 @theme {
   --font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: var(--font-display);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -31,97 +49,240 @@
   --radius-3xl: 1.5rem;
 }
 
-/* ── Custom CSS variables (dark theme default) ───────────────── */
+/* ─────────────────────────────────────────────────────────────
+ * NEW CANONICAL TOKENS — design-system.md §3
+ * Pasted from docs/v3-design/tokens.css. These are the source of
+ * truth; the compat aliases below derive from them.
+ * ───────────────────────────────────────────────────────────── */
 :root {
-  --font-size: 16px;
-  --background: #0a0a0f;
-  --foreground: #f0f0f5;
-  --card: #161620;
-  --card-foreground: #f0f0f5;
-  --popover: #161620;
-  --popover-foreground: #f0f0f5;
-  --primary: #e85d25;
-  --primary-foreground: #ffffff;
-  --secondary: #1e1e2a;
-  --secondary-foreground: #f0f0f5;
-  --muted: #1e1e2a;
-  --muted-foreground: #8888a0;
-  --accent: #2a2a3a;
-  --accent-foreground: #f0f0f5;
-  --destructive: #d4183d;
-  --destructive-foreground: #ffffff;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: transparent;
-  --input-background: #1e1e2a;
-  --switch-background: #3a3a4a;
-  --ring: oklch(0.708 0 0);
-  --radius: 0.625rem;
+  /* Surfaces — light (paper) */
+  --paper:        #f5f1e8;
+  --paper-card:   #ffffff;
+  --paper-line:   rgba(20,20,28,0.10);
+  --paper-tint:   rgba(20,20,28,0.04);
 
-  --nav-bg: rgba(13, 13, 20, 0.95);
-  --surface-elevated: #111118;
-  --hero-gradient: 10, 10, 15;
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-subtle-2: rgba(255, 255, 255, 0.04);
-  --overlay-subtle: rgba(255, 255, 255, 0.06);
-  --overlay-medium: rgba(255, 255, 255, 0.10);
-  --shimmer-color: rgba(255, 255, 255, 0.04);
-  --drag-handle: rgba(255, 255, 255, 0.2);
-  --slider-track: rgba(255, 255, 255, 0.10);
-  --check-border: rgba(255, 255, 255, 0.15);
-  --check-border-2: rgba(255, 255, 255, 0.10);
-  --toast-bg: rgba(30, 30, 40, 0.95);
-  --toast-border: rgba(255, 255, 255, 0.08);
-  --toast-color: #ffffff;
-  --backdrop: rgba(0, 0, 0, 0.60);
-  --success: #10b981;
-  --success-foreground: #ffffff;
-  --danger: #ef4444;
-  --danger-foreground: #ffffff;
+  /* Surfaces — dark (default) */
+  --bg:           #0a0a0f;
+  --bg-elev:      #14141c;
+  --bg-tint:      rgba(245,241,232,0.05);
+  --line:         rgba(245,241,232,0.10);
+
+  /* Ink — light fg */
+  --ink:          #14141c;
+  --ink-soft:     rgba(20,20,28,0.62);
+  --ink-faint:    rgba(20,20,28,0.40);
+
+  /* Cream — dark fg */
+  --cream:        #f5f1e8;
+  --cream-soft:   rgba(245,241,232,0.62);
+  --cream-faint:  rgba(245,241,232,0.40);
+
+  /* Brand */
+  --primary:      #e85d25;
+  --primary-soft: rgba(232,93,37,0.10);
+  --primary-edge: rgba(232,93,37,0.30);
+
+  /* Glass scrim — dark blur surface used on top of imagery (hero
+   * pills, top-right service badges, bookmark/info chips). Lives on
+   * imagery, so doesn't theme — same value in both modes.
+   *
+   * Three weights:
+   *   - soft   (0.45): passive chips (service stack on poster TL)
+   *   - base   (0.55): label-bearing chips (status pill, badges)
+   *   - action (0.78): tappable affordances (hero bookmark/info,
+   *                    ContentCard bookmark TR). Slightly more solid
+   *                    so the affordance reads cleanly. */
+  --scrim-glass: rgba(20, 20, 28, 0.55);
+  --scrim-glass-soft: rgba(20, 20, 28, 0.45);
+  --scrim-glass-action: rgba(20, 20, 28, 0.78);
+  /* Subtle 0.5px hairline edge for action buttons over imagery. Used
+   * via box-shadow inset so it doesn't add to layout. */
+  --scrim-glass-edge: 0 0 0 0.5px rgba(255, 255, 255, 0.10) inset;
+
+  /* Service-badge halo — soft drop-shadow that lifts the logo away
+   * from the underlying poster. Doesn't theme; lives on imagery. */
+  --badge-glow: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+
+  /* Star colour — used wherever we render a ★ rating glyph (cards,
+   * meta lines, hero pill). Same value in both themes. */
+  --star: #fbbf24;
+
+  /* Atmosphere accents (6) — mood rooms / atmospheric overlays only */
+  --atm-amber:    #d97706;
+  --atm-rose:     #be185d;
+  --atm-teal:     #0d9488;
+  --atm-violet:   #7c3aed;
+  --atm-forest:   #166534;
+  --atm-slate:    #475569;
+
+  /* Service tints (10) — ServiceBadge backgrounds & per-service kickers */
+  --svc-netflix:  #e50914;
+  --svc-prime:    #00a8e1;
+  --svc-disney:   #113ccf;
+  --svc-apple:    #1d1d1f;
+  --svc-now:      #0072ec;
+  --svc-paramount:#0064ff;
+  --svc-skygo:    #0072ec;
+  --svc-bbc:      #f54b3a;
+  --svc-itvx:     #2470ff;
+  --svc-c4:       #ff206e;
+
+  /* Type families */
+  --font-display: "Fraunces", Georgia, serif;
+  --font-ui:      "DM Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+  /* Type ramp (use opsz axis at the value shown) */
+  --t-display-1:  64px;     /* opsz 144, weight 800 */
+  --t-display-2:  44px;     /* opsz 96,  weight 700 */
+  --t-headline:   28px;     /* opsz 48,  weight 600 */
+  --t-title:      22px;     /* opsz 36,  weight 700 */
+  --t-section:    18px;     /* opsz 24,  weight 600 */
+  --t-body:       13px;
+  --t-meta:       13px;
+  --t-kicker:     11px;     /* DM Sans 700 uppercase, tracked 1.6px */
+
+  /* Spacing */
+  --s-1: 4px; --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-7: 32px; --s-8: 40px;
+  --s-9: 56px; --s-10: 80px;
+
+  /* Radii */
+  --r-xs: 4px; --r-sm: 6px; --r-md: 10px; --r-lg: 14px;
+  --r-xl: 20px; --r-card: 12px; --r-pill: 9999px;
+
+  /* Shadows */
+  --shadow-card:  0 1px 2px rgba(0,0,0,0.04), 0 6px 18px rgba(0,0,0,0.06);
+  --shadow-hero:  0 20px 50px rgba(0,0,0,0.45);
+  --shadow-sheet: 0 -2px 24px rgba(0,0,0,0.18);
+
+  /* Motion */
+  --ease-out:    cubic-bezier(0.16, 1, 0.30, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --d-fast:   140ms;
+  --d-base:   220ms;
+  --d-slow:   360ms;
 }
 
-/* ── Light theme overrides ───────────────────────────────────── */
+/* Default (dark) — site already runs dark; light is opt-in. */
+:root,
+[data-theme="dark"] {
+  --surface:      var(--bg);
+  --surface-elev: var(--bg-elev);
+  --surface-tint: var(--bg-tint);
+  --hairline:     var(--line);
+  --fg:           var(--cream);
+  --fg-soft:      var(--cream-soft);
+  --fg-faint:     var(--cream-faint);
+}
+
 [data-theme="light"] {
-  --background: #f5f4f1;
-  --foreground: #1a1a2e;
-  --card: #ffffff;
-  --card-foreground: #1a1a2e;
-  --popover: #ffffff;
-  --popover-foreground: #1a1a2e;
-  --primary: #e85d25;
-  --primary-foreground: #ffffff;
-  --secondary: #ebe8e3;
-  --secondary-foreground: #1a1a2e;
-  --muted: #e0ddd7;
-  --muted-foreground: #6b6b80;
-  --accent: #e0ddd7;
-  --accent-foreground: #1a1a2e;
-  --destructive: #d4183d;
-  --destructive-foreground: #ffffff;
-  --border: rgba(0, 0, 0, 0.08);
-  --input: transparent;
-  --input-background: #ebe8e3;
-  --switch-background: #c8c5be;
-  --nav-bg: rgba(255, 255, 255, 0.95);
-  --surface-elevated: #ffffff;
-  --hero-gradient: 26, 26, 46;
-  --border-subtle: rgba(0, 0, 0, 0.07);
-  --border-subtle-2: rgba(0, 0, 0, 0.05);
-  --overlay-subtle: rgba(0, 0, 0, 0.04);
-  --overlay-medium: rgba(0, 0, 0, 0.07);
-  --shimmer-color: rgba(0, 0, 0, 0.05);
-  --drag-handle: rgba(0, 0, 0, 0.15);
-  --slider-track: rgba(0, 0, 0, 0.10);
-  --check-border: rgba(0, 0, 0, 0.15);
-  --check-border-2: rgba(0, 0, 0, 0.10);
-  --toast-bg: rgba(255, 255, 255, 0.95);
-  --toast-border: rgba(0, 0, 0, 0.08);
-  --toast-color: #1a1a2e;
-  --backdrop: rgba(0, 0, 0, 0.50);
-  --success: #059669;
-  --success-foreground: #ffffff;
-  --danger: #dc2626;
-  --danger-foreground: #ffffff;
+  --surface:      var(--paper);
+  --surface-elev: var(--paper-card);
+  --surface-tint: var(--paper-tint);
+  --hairline:     var(--paper-line);
+  --fg:           var(--ink);
+  --fg-soft:      var(--ink-soft);
+  --fg-faint:     var(--ink-faint);
 }
+
+/* ─────────────────────────────────────────────────────────────
+ * DEPRECATED — compat aliases for old token names.
+ * Each line below maps a legacy var name to the new canonical
+ * token. Remove the line as the screens that reference it migrate
+ * to the new tokens. Tracking issue: "Remove deprecated token
+ * aliases" — closed when this block is empty.
+ *
+ * Aliases that resolve through canonical tokens (var(--surface) etc.)
+ * sit in :root and follow the theme automatically. Aliases with
+ * literal hex/rgba that differ between themes are duplicated in
+ * the per-theme blocks below.
+ * ───────────────────────────────────────────────────────────── */
+:root {
+  --background:           var(--surface);          /* bg-background */
+  --foreground:           var(--fg);               /* text-foreground */
+  --card:                 var(--surface-elev);     /* bg-card */
+  --secondary:            var(--surface-tint);     /* bg-secondary */
+  --muted:                var(--surface-tint);     /* bg-muted */
+  --muted-foreground:     var(--fg-soft);          /* text-muted-foreground */
+  --accent:               var(--surface-tint);     /* bg-accent (hover only) */
+  --border:               var(--hairline);         /* border-border */
+  --surface-elevated:     var(--surface-elev);
+  --primary-foreground:   #ffffff;     /* TODO: design-system has no
+                                          canonical primary-foreground;
+                                          add to tokens.css or drop. */
+  --destructive:          #d4183d;
+  --input:                transparent;
+  --ring:                 oklch(0.708 0 0);
+  --radius:               0.625rem;
+  --font-size:            16px;
+}
+
+/* Aliases with literal values that differ per theme. */
+:root, [data-theme="dark"] {
+  --input-background:     #1e1e2a;
+  --switch-background:    #3a3a4a;
+  --nav-bg:               rgba(13, 13, 20, 0.95);
+  --border-subtle:        rgba(255, 255, 255, 0.06);
+  --overlay-medium:       rgba(255, 255, 255, 0.10);
+  --shimmer-color:        rgba(255, 255, 255, 0.04);
+  --slider-track:         rgba(255, 255, 255, 0.10);
+  --check-border:         rgba(255, 255, 255, 0.15);
+  --check-border-2:       rgba(255, 255, 255, 0.10);
+  --toast-bg:             rgba(30, 30, 40, 0.95);
+  --toast-border:         rgba(255, 255, 255, 0.08);
+  --toast-color:          #ffffff;
+  --backdrop:             rgba(0, 0, 0, 0.60);
+  --success:              #10b981;
+  --success-foreground:   #ffffff;
+  --danger:               #ef4444;
+  --danger-foreground:    #ffffff;
+}
+
+[data-theme="light"] {
+  --input-background:     #ebe8e3;
+  --switch-background:    #c8c5be;
+  --nav-bg:               rgba(255, 255, 255, 0.95);
+  --border-subtle:        rgba(0, 0, 0, 0.07);
+  --overlay-medium:       rgba(0, 0, 0, 0.07);
+  --shimmer-color:        rgba(0, 0, 0, 0.05);
+  --slider-track:         rgba(0, 0, 0, 0.10);
+  --check-border:         rgba(0, 0, 0, 0.15);
+  --check-border-2:       rgba(0, 0, 0, 0.10);
+  --toast-bg:             rgba(255, 255, 255, 0.95);
+  --toast-border:         rgba(0, 0, 0, 0.08);
+  --toast-color:          #1a1a2e;
+  --backdrop:             rgba(0, 0, 0, 0.50);
+  --success:              #059669;
+  --danger:               #dc2626;
+  /* --success-foreground / --danger-foreground are #ffffff in both
+     themes; defined once in the dark block above. */
+}
+
+/* ── Editorial helper classes (from tokens.css) ──────────────── */
+.t-display { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em; font-variation-settings: "opsz" 144; }
+.t-headline { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em; font-variation-settings: "opsz" 48; }
+.t-section { font-family: var(--font-display); font-weight: 600; font-variation-settings: "opsz" 24; }
+
+.t-kicker {
+  font-family: var(--font-ui); font-size: var(--t-kicker);
+  font-weight: 700; text-transform: uppercase; letter-spacing: 1.6px;
+  color: var(--primary);
+}
+
+/* Kicker contrast bump for light theme. The brand `--primary` orange
+ * (#e85d25) hits only 3.09:1 against paper (#f5f1e8) — below AA 4.5:1
+ * for body text. Darkened ~12% for the kicker only so the brand mark
+ * elsewhere keeps the original colour. */
+[data-theme="light"] .t-kicker { color: #b8451a; }
+
+.hairline { border-top: 0.5px solid var(--hairline); }
+
+/* Editorial container — clamps to magazine column width and centres
+ * horizontally. Uses `margin-left/right: auto` (not the `margin: 0 auto`
+ * shorthand) so per-element `mt-*` / `mb-*` Tailwind utilities are
+ * preserved instead of being reset by the shorthand's `0` vertical
+ * value. */
+.editorial { max-width: 480px; margin-left: auto; margin-right: auto; padding: 0 18px; }
 
 /* ── Base styles ─────────────────────────────────────────────── */
 html {
@@ -135,9 +296,10 @@ html, body, #root {
 }
 
 body {
-  font-family: var(--font-sans);
-  background-color: var(--background);
-  color: var(--foreground);
+  background: var(--surface);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
 }
 
 * {
@@ -186,8 +348,8 @@ input[type="range"].videx-slider {
     to right,
     var(--primary) 0%,
     var(--primary) var(--slider-fill, 50%),
-    rgba(255, 255, 255, 0.12) var(--slider-fill, 50%),
-    rgba(255, 255, 255, 0.12) 100%
+    var(--slider-track) var(--slider-fill, 50%),
+    var(--slider-track) 100%
   );
   cursor: pointer;
   padding: 0;

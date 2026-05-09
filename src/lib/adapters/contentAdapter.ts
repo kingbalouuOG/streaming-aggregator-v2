@@ -5,7 +5,7 @@
 
 import type { ContentItem } from '@/components/ContentCard';
 import type { ServiceId } from '@/components/platformLogos';
-import { buildPosterUrl } from '../api/tmdb';
+import { buildPosterUrl, buildBackdropUrl } from '../api/tmdb';
 import { GENRE_NAMES } from '../constants/genres';
 
 const ISO_TO_LANGUAGE: Record<string, string> = {
@@ -25,16 +25,20 @@ export function isoToLanguageName(code: string): string | undefined {
  * Services are left empty — lazy-loaded per card via serviceCache.
  */
 export function tmdbMovieToContentItem(movie: any): ContentItem {
+  const genreIds: number[] = movie.genre_ids || [];
   return {
     id: `movie-${movie.id}`,
     title: movie.title || 'Untitled',
     image: buildPosterUrl(movie.poster_path) || '',
+    backdrop: buildBackdropUrl(movie.backdrop_path, 'w780') || undefined,
     services: [] as ServiceId[],
     rating: movie.vote_average ?? undefined,
     year: movie.release_date ? parseInt(movie.release_date.substring(0, 4), 10) : undefined,
-    type: movie.genre_ids?.includes(99) ? 'doc' : 'movie',
+    type: genreIds.includes(99) ? 'doc' : 'movie',
+    genre: genreIds[0] ? GENRE_NAMES[genreIds[0]] : undefined,
+    overview: movie.overview || undefined,
     language: movie.original_language ? ISO_TO_LANGUAGE[movie.original_language] : undefined,
-    genreIds: movie.genre_ids || [],
+    genreIds,
     originalLanguage: movie.original_language || undefined,
     popularity: movie.popularity ?? undefined,
     voteCount: movie.vote_count ?? undefined,
@@ -46,16 +50,20 @@ export function tmdbMovieToContentItem(movie: any): ContentItem {
  * Services are left empty — lazy-loaded per card via serviceCache.
  */
 export function tmdbTVToContentItem(tvShow: any): ContentItem {
+  const genreIds: number[] = tvShow.genre_ids || [];
   return {
     id: `tv-${tvShow.id}`,
     title: tvShow.name || tvShow.title || 'Untitled',
     image: buildPosterUrl(tvShow.poster_path) || '',
+    backdrop: buildBackdropUrl(tvShow.backdrop_path, 'w780') || undefined,
     services: [] as ServiceId[],
     rating: tvShow.vote_average ?? undefined,
     year: tvShow.first_air_date ? parseInt(tvShow.first_air_date.substring(0, 4), 10) : undefined,
-    type: tvShow.genre_ids?.includes(99) ? 'doc' : 'tv',
+    type: genreIds.includes(99) ? 'doc' : 'tv',
+    genre: genreIds[0] ? GENRE_NAMES[genreIds[0]] : undefined,
+    overview: tvShow.overview || undefined,
     language: tvShow.original_language ? ISO_TO_LANGUAGE[tvShow.original_language] : undefined,
-    genreIds: tvShow.genre_ids || [],
+    genreIds,
     originalLanguage: tvShow.original_language || undefined,
     popularity: tvShow.popularity ?? undefined,
     voteCount: tvShow.vote_count ?? undefined,

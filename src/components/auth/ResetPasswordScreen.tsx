@@ -71,14 +71,36 @@ export default function ResetPasswordScreen() {
                 <KeyRound className="text-primary" style={{ width: 40, height: 40 }} />
               </div>
 
+              <span className="t-kicker text-center" style={{ marginBottom: 12 }}>
+                NEW PASSWORD
+              </span>
               <h1
-                className="text-foreground text-[26px] text-center mb-2"
-                style={{ fontWeight: 700 }}
+                className="text-center"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "var(--t-headline)",
+                  fontWeight: 600,
+                  fontVariationSettings: '"opsz" 48',
+                  letterSpacing: "-0.01em",
+                  color: "var(--fg)",
+                  lineHeight: 1.15,
+                  margin: 0,
+                  marginBottom: 8,
+                }}
               >
-                Set New Password
+                Set a new password.
               </h1>
-              <p className="text-muted-foreground text-[14px] text-center max-w-[280px]">
-                Enter your new password below
+              <p
+                className="text-center max-w-[280px]"
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "var(--t-body)",
+                  fontWeight: 400,
+                  color: "var(--fg-soft)",
+                  lineHeight: 1.45,
+                }}
+              >
+                Enter your new password below.
               </p>
             </div>
 
@@ -225,14 +247,36 @@ export default function ResetPasswordScreen() {
                 <Check style={{ width: 28, height: 28, color: '#4ade80' }} />
               </motion.div>
 
+              <span className="t-kicker text-center" style={{ marginBottom: 12 }}>
+                PASSWORD UPDATED
+              </span>
               <h1
-                className="text-foreground text-[26px] text-center mb-2"
-                style={{ fontWeight: 700 }}
+                className="text-center"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "var(--t-headline)",
+                  fontWeight: 600,
+                  fontVariationSettings: '"opsz" 48',
+                  letterSpacing: "-0.01em",
+                  color: "var(--fg)",
+                  lineHeight: 1.15,
+                  margin: 0,
+                  marginBottom: 8,
+                }}
               >
-                Password Updated
+                You're set.
               </h1>
-              <p className="text-muted-foreground text-[14px] text-center max-w-[280px]">
-                Your password has been changed successfully
+              <p
+                className="text-center max-w-[280px]"
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "var(--t-body)",
+                  fontWeight: 400,
+                  color: "var(--fg-soft)",
+                  lineHeight: 1.45,
+                }}
+              >
+                Your password has been changed successfully.
               </p>
             </div>
 

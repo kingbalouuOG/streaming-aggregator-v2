@@ -42,22 +42,48 @@ export default function SignInScreen({ onForgotPassword, onGoToSignUp }: SignInS
           <Popcorn className="text-white" style={{ width: 40, height: 40 }} />
         </motion.div>
 
+        <motion.span
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="t-kicker text-center"
+          style={{ marginBottom: 12 }}
+        >
+          SIGN IN
+        </motion.span>
         <motion.h1
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
-          className="text-foreground text-[26px] text-center mb-2"
-          style={{ fontWeight: 700 }}
+          className="text-center"
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: "var(--t-headline)",
+            fontWeight: 600,
+            fontVariationSettings: '"opsz" 48',
+            letterSpacing: "-0.01em",
+            color: "var(--fg)",
+            lineHeight: 1.15,
+            margin: 0,
+            marginBottom: 8,
+          }}
         >
-          Welcome back
+          Welcome back.
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35 }}
-          className="text-muted-foreground text-[14px] text-center max-w-[280px]"
+          className="text-center max-w-[280px]"
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--t-body)",
+            fontWeight: 400,
+            color: "var(--fg-soft)",
+            lineHeight: 1.45,
+          }}
         >
-          Sign in to your VIDEX account
+          Sign in to pick up where you left off.
         </motion.p>
       </div>
 
