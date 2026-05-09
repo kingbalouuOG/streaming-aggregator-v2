@@ -1654,6 +1654,52 @@ That's the entire implementation. No actual data export happens. The toast is mi
 
 ---
 
+## ADR-013 follow-ups (filed 2026-05-08 from cluster-dominant bootstrap PR)
+
+Out of the best-practices research run during the cluster-dominant bootstrap retune (ADR-013). Each is a known industry pattern that improves recsys quality but was deliberately deferred from the launch-blocking PR. None are pre-launch blockers — post-launch optimisations that tighten the system once we have real behavioural data to validate against.
+
+### IN-PX-36: Programmatic similarity-threshold dedupe on cluster representatives
+
+**Source:** ADR-013 best-practices research (2026-05-08).
+
+**Detail:** Manual dedup ran in ADR-013 (each title now in exactly one cluster). Industry SemDeDup (NVIDIA NeMo, arXiv 2502.09667) prescribes a stricter pass: drop any cluster rep whose embedding has cosine ≥ ~0.9 to another rep in the same cluster, *or* to any rep in another cluster. Catches sequels (Toy Story 1/2/3 sit so close in embedding space that all three contributing dilutes the centroid even though they're distinct TMDb IDs) and franchises (Avengers films) that the manual pass missed.
+
+**Fix:** SQL function or build-time check that loads all `representativeTmdbIds` embeddings, computes pairwise cosine, flags any pair > 0.9. Either auto-prune (keep the one closest to the cluster centroid, NeMo's approach) or surface as a CI lint failure for manual review on the next cluster edit.
+
+**Phase target:** Phase 6 (post-launch optimisation cluster). Re-run `scripts/simulate-validate-winner.ts` after applying to confirm CAF / persona-distinctness lift.
+
+**Status:** ⏳ Filed.
+
+### IN-PX-37: Popularity de-bias on recommendation ranking
+
+**Source:** ADR-013 best-practices research; Steck et al., Netflix Research (arXiv 2403.05440); arXiv 2404.12008 spectral analysis of popularity-bias amplification.
+
+**Detail:** Cosine on content embeddings has a documented popularity bias — popular titles have richer Wikipedia / IMDB text feeding their embedding, producing denser, more "central" representations that cosine-rank inflates. We saw the empirical version pre-ADR-013: every persona's top recs were Marvel/Avengers because those titles sit at the centre of the embedding space and pull toward any L2-normalised user vector.
+
+ADR-013 mitigated this on the *bootstrap* side (cluster-dominant weights pull profiles away from the central blob). The *ranking* side still has the bias.
+
+**Fix:** Either (a) inverse-popularity downweight on the final score: `score' = score - λ · log(vote_count)`, or (b) MMR re-rank at candidate generation extended with a popularity penalty term. We already implemented MMR for genre diversity in Phase 5 (`src/lib/recommendations-v2/diversity.ts`); extending it is incremental.
+
+**Phase target:** Phase 6 (post-launch). Tune λ from telemetry (CTR by popularity quartile).
+
+**Status:** ⏳ Filed.
+
+### IN-PX-38: Phase 2 — two-tower neural recommender
+
+**Source:** ADR-013 best-practices research. NVIDIA Merlin two-tower for cold start, Allegro 2025 (arXiv 2508.03702), Spotify Research Sept 2025 generalised user representations, Google Cloud retrieval reference architecture.
+
+**Detail:** The current architecture (weighted centroid of service / watched / cluster vectors → cosine retrieval) is the textbook content-based cold-start baseline. The industrial upgrade path consensus is a two-tower model: an item tower over content features (we already have OpenAI title embeddings — the harder piece is done), a user tower over context + onboarding signals + early implicit behaviour, trained jointly with a contrastive loss, served via ANN. Generalises the centroid trick (a frozen centroid is just an untrained user tower) and learns the explicit-vs-implicit signal weighting from data instead of hand-setting it (which is what ADR-013 had to do empirically via simulation).
+
+**Fix:** R&D project. Initial scope: PyTorch two-tower over the existing 1536D item embeddings + a user tower with learned embeddings for service IDs / cluster IDs / age range / viewing context / onboarding tap history / early implicit interactions. Train on `user_interactions` data once we have ≥10k interactions per active cohort. Serve via existing `match_titles_by_vector` RPC (just replace the user-side input).
+
+**Why this isn't urgent:** the centroid baseline is sufficient for the prototype-user phase. The two-tower upgrade pays off once we have enough behavioural data to train it. Pre-launch we don't.
+
+**Phase target:** Phase 7+ (post-Phase-6 launch, after behavioural data accumulates). Major effort, separate roadmap entry.
+
+**Status:** ⏳ Filed for future planning.
+
+---
+
 ## Onboarding implementation notes
 
 *(Specific to the v2 onboarding flow build — applies to Phase 3 where onboarding gets wired to backend logic)*
