@@ -57,6 +57,18 @@ interface ContentCardProps {
    */
   userServices?: ServiceId[];
   watched?: boolean;
+  /**
+   * Phase Search V2 search-results composition. When true, the card
+   * renders an off-services state: the bottom-left rating pill is
+   * replaced by a "Not on yours" label and the poster + meta drop to
+   * 0.75 opacity to read as suppressed (artboard 03 / 06).
+   *
+   * Mutually exclusive with the rating pill — never both, per the
+   * design brief §2 "One signal per element" principle.
+   *
+   * Default `false` keeps existing call-sites visually unchanged.
+   */
+  notOnYours?: boolean;
 }
 
 export function ContentCard({
@@ -67,6 +79,7 @@ export function ContentCard({
   onToggleBookmark,
   userServices,
   watched = false,
+  notOnYours = false,
 }: ContentCardProps) {
   const [justToggled, setJustToggled] = useState(false);
   const [allServices, setAllServices] = useState<ServiceId[]>(item.services);
@@ -110,6 +123,7 @@ export function ContentCard({
     <div
       onClick={() => onSelect?.(item)}
       className={`group ${widthClass} ${widthForBlock} cursor-pointer`}
+      style={notOnYours ? { opacity: 0.75 } : undefined}
     >
       {/* Poster */}
       <div
@@ -174,14 +188,15 @@ export function ContentCard({
           </motion.button>
         )}
 
-        {/* Rating — bottom-left, dark glass pill so the star + number
-            stay legible on bright posters where plain text on the
-            gradient washes out. */}
-        {item.rating != null && item.rating > 0 && (
+        {/* Bottom-left pill — rating OR "Not on yours", never both
+            (design brief §2 "One signal per element"). The off-
+            services pill takes priority when `notOnYours` is set so
+            search results stay legible at a glance. */}
+        {notOnYours ? (
           <div
-            className="absolute bottom-2 left-2 inline-flex items-center gap-1"
+            className="absolute bottom-2 left-2 inline-flex items-center"
             style={{
-              padding: "3px 7px",
+              padding: "3px 8px",
               background: "var(--scrim-glass-action)",
               backdropFilter: "blur(8px) saturate(160%)",
               WebkitBackdropFilter: "blur(8px) saturate(160%)",
@@ -192,11 +207,33 @@ export function ContentCard({
               fontSize: 11,
               fontWeight: 600,
               lineHeight: 1,
+              letterSpacing: "0.01em",
             }}
           >
-            <span style={{ color: "var(--star)" }}>★</span>
-            <span>{item.rating.toFixed(1)}</span>
+            Not on yours
           </div>
+        ) : (
+          item.rating != null && item.rating > 0 && (
+            <div
+              className="absolute bottom-2 left-2 inline-flex items-center gap-1"
+              style={{
+                padding: "3px 7px",
+                background: "var(--scrim-glass-action)",
+                backdropFilter: "blur(8px) saturate(160%)",
+                WebkitBackdropFilter: "blur(8px) saturate(160%)",
+                boxShadow: "var(--scrim-glass-edge)",
+                borderRadius: "var(--r-pill)",
+                color: "#fff",
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                fontWeight: 600,
+                lineHeight: 1,
+              }}
+            >
+              <span style={{ color: "var(--star)" }}>★</span>
+              <span>{item.rating.toFixed(1)}</span>
+            </div>
+          )
         )}
       </div>
 
