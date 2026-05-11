@@ -7,12 +7,29 @@ import type { ContentItem } from '@/components/ContentCard';
 import type { ServiceId } from '@/components/platformLogos';
 import { API_CONFIG } from '@/lib/constants/config';
 import { emitSearch } from '@/lib/storage/interactions';
+import { getAvailableTmdbIds } from '@/lib/recommendations-v2/hardFilters';
 
 const BADGE_FLUSH_INTERVAL_MS = 200;
 
-export function useSearch(userServices?: ServiceId[], initialQuery?: string, initialResults?: ContentItem[]) {
+interface UseSearchOptions {
+  /** When true, results not available on any of `userServices` are
+   *  dropped before render. When false, they stay in the grid but get
+   *  flagged in `unavailableIds` so the renderer can tag them
+   *  notOnYours. Defaults to true to match `FilterState.onlyOnMyServices`
+   *  default. */
+  onlyOnMyServices?: boolean;
+}
+
+export function useSearch(
+  userServices?: ServiceId[],
+  initialQuery?: string,
+  initialResults?: ContentItem[],
+  options: UseSearchOptions = {},
+) {
+  const { onlyOnMyServices = true } = options;
   const [query, setQuery] = useState(initialQuery || '');
   const [results, setResults] = useState<ContentItem[]>(initialResults || []);
+  const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -24,42 +41,39 @@ export function useSearch(userServices?: ServiceId[], initialQuery?: string, ini
   const currentQueryRef = useRef(query);
   const badgeFlushRef = useRef<ReturnType<typeof setTimeout>>();
   const pendingBadgesRef = useRef<Map<string, ServiceId[]>>(new Map());
-  const unavailableIdsRef = useRef<Set<string>>(new Set());
 
   // Stabilize dependency to avoid infinite re-renders
   const servicesKey = userServices?.join(',') || '';
 
   const tooShort = query.trim().length > 0 && query.trim().length < 2;
 
-  // Flush accumulated badge updates + remove unavailable items in a single setResults call
+  // Flush accumulated badge updates in a single setResults call. The
+  // pre-call RPC now owns availability filtering (see search() below);
+  // this path only paints the per-item badge stack — it never removes
+  // items.
   const flushBadges = useCallback((q: string) => {
     if (currentQueryRef.current !== q) return;
     const pending = pendingBadgesRef.current;
-    const unavailable = unavailableIdsRef.current;
-    if (pending.size === 0 && unavailable.size === 0) return;
+    if (pending.size === 0) return;
 
     const badgeUpdates = new Map(pending);
     pending.clear();
-    const removeIds = new Set(unavailable);
-    unavailable.clear();
 
-    setResults(prev => {
-      const filtered = removeIds.size > 0
-        ? prev.filter(item => !removeIds.has(item.id))
-        : prev;
-      return badgeUpdates.size > 0
-        ? filtered.map(item => {
-            const services = badgeUpdates.get(item.id);
-            return services ? { ...item, services } : item;
-          })
-        : filtered;
-    });
+    setResults(prev =>
+      prev.map(item => {
+        const services = badgeUpdates.get(item.id);
+        return services ? { ...item, services } : item;
+      })
+    );
   }, []);
 
-  // Non-blocking provider fetch: populates badges + removes items with no UK availability
+  // Non-blocking per-item provider fetch — populates badges only.
+  // Availability filtering moved to the pre-call get_available_tmdb_ids
+  // RPC in `search()` so off-services items are dropped (or tagged)
+  // upfront instead of trickling out item-by-item.
   const fetchBadgesInBackground = useCallback((items: ContentItem[], q: string, connectedServices: ServiceId[]) => {
+    if (connectedServices.length === 0) return;
     pendingBadgesRef.current.clear();
-    unavailableIdsRef.current.clear();
     if (badgeFlushRef.current) clearTimeout(badgeFlushRef.current);
 
     let completed = 0;
@@ -69,22 +83,15 @@ export function useSearch(userServices?: ServiceId[], initialQuery?: string, ini
       try {
         const { tmdbId, mediaType } = parseContentItemId(item.id);
         const allItemServices = await getCachedServices(String(tmdbId), mediaType);
-
-        if (allItemServices.length === 0) {
-          // No UK availability at all — mark for removal
-          unavailableIdsRef.current.add(item.id);
-        } else if (connectedServices.length > 0) {
-          // Has UK availability — check for badge matches
-          const matching = allItemServices.filter((s) => connectedServices.includes(s));
-          if (matching.length > 0) {
-            pendingBadgesRef.current.set(item.id, matching);
-          }
+        const matching = allItemServices.filter((s) => connectedServices.includes(s));
+        if (matching.length > 0) {
+          pendingBadgesRef.current.set(item.id, matching);
         }
       } catch {
         // Silently skip failed lookups — item stays visible
       } finally {
         completed++;
-        // Schedule a flush every BADGE_FLUSH_INTERVAL_MS, and one final flush when all complete
+        // Periodic flush; final one when all complete
         if (completed === total) {
           if (badgeFlushRef.current) clearTimeout(badgeFlushRef.current);
           flushBadges(q);
@@ -92,7 +99,6 @@ export function useSearch(userServices?: ServiceId[], initialQuery?: string, ini
           badgeFlushRef.current = setTimeout(() => {
             badgeFlushRef.current = undefined;
             flushBadges(q);
-            // Schedule next flush if still pending
             if (completed < total) {
               badgeFlushRef.current = setTimeout(() => {
                 badgeFlushRef.current = undefined;
@@ -110,6 +116,7 @@ export function useSearch(userServices?: ServiceId[], initialQuery?: string, ini
     if (!trimmed || trimmed.length < 2) {
       if (!append) {
         setResults([]);
+        setUnavailableIds(new Set());
         setLoading(false);
       }
       return;
@@ -123,10 +130,17 @@ export function useSearch(userServices?: ServiceId[], initialQuery?: string, ini
       const { cleanQuery, year } = extractYearFromQuery(trimmed);
       const shouldFetchMovies = category === 'All' || category === 'Movies';
       const shouldFetchTV = category === 'All' || category === 'TV';
+      // Fire the availability RPC in parallel with TMDb so we don't pay
+      // an extra round-trip — both finish before the first paint.
+      // Skip the RPC when there are no user services to intersect
+      // against (logged-out / pre-onboarding); without it we have no
+      // way to compute "not on yours" anyway, so every item stays.
+      const services = userServices || [];
 
-      const [movieRes, tvRes] = await Promise.all([
+      const [movieRes, tvRes, availableTmdbIds] = await Promise.all([
         shouldFetchMovies ? searchMovies(cleanQuery, searchPage, year) : null,
         shouldFetchTV ? searchTV(cleanQuery, searchPage, year) : null,
+        services.length > 0 ? getAvailableTmdbIds(services) : Promise.resolve<Set<number>>(new Set()),
       ]);
 
       // Guard against stale results
@@ -137,32 +151,69 @@ export function useSearch(userServices?: ServiceId[], initialQuery?: string, ini
       const merged = [...movieItems, ...tvItems];
       const ranked = reRankSearchResults(merged, cleanQuery);
 
+      // Partition into available vs unavailable using the pre-fetched
+      // ID set. When the user has no services connected, the set is
+      // empty and we treat every item as available — there's no
+      // ground truth to compare against.
+      const hasAvailability = services.length > 0 && availableTmdbIds.size > 0;
+      const isAvailable = (item: ContentItem) => {
+        if (!hasAvailability) return true;
+        const { tmdbId } = parseContentItemId(item.id);
+        return availableTmdbIds.has(tmdbId);
+      };
+
+      let finalItems: ContentItem[];
+      let nextUnavailable: Set<string>;
+      if (onlyOnMyServices && hasAvailability) {
+        // Filter unavailable items out before they hit the grid.
+        finalItems = ranked.filter(isAvailable);
+        nextUnavailable = new Set();
+      } else {
+        // Keep all items, tag the off-services ones so the renderer
+        // can apply the "Not on yours" pill + 0.75 opacity treatment.
+        finalItems = ranked;
+        nextUnavailable = new Set(
+          hasAvailability ? ranked.filter((i) => !isAvailable(i)).map((i) => i.id) : [],
+        );
+      }
+
       // Pagination: has more if either endpoint has more pages
       const movieTotalPages = movieRes?.data?.total_pages || 0;
       const tvTotalPages = tvRes?.data?.total_pages || 0;
       const maxTotalPages = Math.max(movieTotalPages, tvTotalPages);
 
       if (append) {
-        setResults(prev => [...prev, ...ranked]);
+        setResults(prev => [...prev, ...finalItems]);
+        setUnavailableIds(prev => {
+          const merged = new Set(prev);
+          nextUnavailable.forEach((id) => merged.add(id));
+          return merged;
+        });
       } else {
-        setResults(ranked);
-        emitSearch(cleanQuery, ranked.length);
+        setResults(finalItems);
+        setUnavailableIds(nextUnavailable);
+        emitSearch(cleanQuery, finalItems.length);
       }
       setPage(searchPage);
       setHasMore(searchPage < maxTotalPages);
 
-      // Fire non-blocking provider fetch for badges + UK availability filter
-      fetchBadgesInBackground(ranked, q, userServices || []);
+      // Fire non-blocking per-item provider fetch for badge population.
+      // Availability filtering already happened above; this hook now
+      // only paints the per-card ServiceStack.
+      fetchBadgesInBackground(finalItems, q, services);
     } catch (err: any) {
       if (currentQueryRef.current !== q) return;
       setError(err.message || 'Search failed');
-      if (!append) setResults([]);
+      if (!append) {
+        setResults([]);
+        setUnavailableIds(new Set());
+      }
     } finally {
       if (currentQueryRef.current === q) {
         setLoading(false);
       }
     }
-  }, [servicesKey, fetchBadgesInBackground]);
+  }, [servicesKey, fetchBadgesInBackground, onlyOnMyServices]);
 
   // Reset page when category changes
   useEffect(() => {
@@ -223,6 +274,7 @@ export function useSearch(userServices?: ServiceId[], initialQuery?: string, ini
   const clearSearch = useCallback(() => {
     setQuery('');
     setResults([]);
+    setUnavailableIds(new Set());
     setError(null);
     setPage(1);
     setHasMore(false);
@@ -237,5 +289,13 @@ export function useSearch(userServices?: ServiceId[], initialQuery?: string, ini
     };
   }, []);
 
-  return { query, setQuery, results, loading, error, clearSearch, hasMore, loadMore, activeCategory, setActiveCategory, tooShort };
+  return {
+    query, setQuery, results, loading, error, clearSearch,
+    hasMore, loadMore, activeCategory, setActiveCategory, tooShort,
+    /** Content IDs that aren't available on any of the user's services.
+     *  Empty when `onlyOnMyServices` is true (items get filtered out
+     *  instead). Renderer uses this to tag off-services cards with the
+     *  "Not on yours" pill + 0.75 opacity. */
+    unavailableIds,
+  };
 }

@@ -34,7 +34,9 @@ interface BrowsePageProps {
 export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters, onShowFiltersChange, bookmarkedIds, onToggleBookmark, providerIds = [], userServices, watchedIds, savedState }: BrowsePageProps) {
   const initial = savedState?.current;
 
-  const search = useSearch(userServices, initial?.query, initial?.results);
+  const search = useSearch(userServices, initial?.query, initial?.results, {
+    onlyOnMyServices: filters.onlyOnMyServices,
+  });
 
   // Mirror filter state to the URL hash so deep links and back-button
   // navigation restore prior filters. Hook reads on mount, writes on
@@ -307,7 +309,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
         {displayItems.length > 0 && (
           <div className="grid grid-cols-2 gap-3">
             {displayItems.map((item, index) => (
-              <BrowseCard key={item.id} item={item} index={index} onSelect={onItemSelect} bookmarked={bookmarkedIds?.has(item.id)} onToggleBookmark={onToggleBookmark} userServices={userServices} watched={watchedIds?.has(item.id)} />
+              <BrowseCard key={item.id} item={item} index={index} onSelect={onItemSelect} bookmarked={bookmarkedIds?.has(item.id)} onToggleBookmark={onToggleBookmark} userServices={userServices} watched={watchedIds?.has(item.id)} notOnYours={search.unavailableIds.has(item.id)} />
             ))}
           </div>
         )}

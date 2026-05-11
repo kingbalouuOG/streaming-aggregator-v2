@@ -11,6 +11,9 @@ interface BrowseCardProps {
   onToggleBookmark?: (item: ContentItem) => void;
   userServices?: ServiceId[];
   watched?: boolean;
+  /** Forwarded to ContentCard — when true, rating pill is replaced by
+   *  the "Not on yours" pill and the card drops to 0.75 opacity. */
+  notOnYours?: boolean;
 }
 
 /**
