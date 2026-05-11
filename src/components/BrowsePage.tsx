@@ -2,10 +2,11 @@ import React, { useMemo, useEffect, useRef } from "react";
 import { Search, X, SlidersHorizontal, Loader2 } from "lucide-react";
 import { BrowseCard } from "./BrowseCard";
 import { ContentItem } from "./ContentCard";
-import { FilterSheet, FilterState } from "./FilterSheet";
+import { FilterSheet, FilterState, ALL_GENRES, FILTER_LANGUAGES } from "./FilterSheet";
 import { useSearch } from "@/hooks/useSearch";
 import { providerIdsToServiceIds } from "@/lib/adapters/platformAdapter";
 import { GENRE_NAME_TO_ID } from "@/lib/constants/genres";
+import { useFilterUrlSync } from "@/lib/search/useFilterUrlSync";
 import type { ServiceId } from "./platformLogos";
 
 const browseCategories = ["All", "Movies", "TV"];
@@ -34,6 +35,15 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
   const initial = savedState?.current;
 
   const search = useSearch(userServices, initial?.query, initial?.results);
+
+  // Mirror filter state to the URL hash so deep links and back-button
+  // navigation restore prior filters. Hook reads on mount, writes on
+  // change. Phase Search V2 A1.
+  useFilterUrlSync(filters, onFiltersChange, userServices ?? [], {
+    genres: ALL_GENRES,
+    languages: FILTER_LANGUAGES,
+    enabled: true,
+  });
 
   // Sync category from saved state on mount
   useEffect(() => {

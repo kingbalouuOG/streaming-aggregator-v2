@@ -8,7 +8,7 @@ import { TV_UNSUPPORTED_GENRE_NAMES } from "@/lib/constants/genres";
 // ----- Data -----
 const contentTypes = ["All", "Movies", "TV", "Docs"];
 const costOptions = ["All", "Free", "Paid"];
-const ALL_GENRES = [
+export const ALL_GENRES = [
   "Action", "Adventure", "Animation",
   "Comedy", "Crime", "Documentary", "Drama",
   "Family", "Fantasy", "History", "Horror",
@@ -16,11 +16,12 @@ const ALL_GENRES = [
   "Thriller", "War", "Western",
 ];
 const TV_UNSUPPORTED_SET = new Set<string>(TV_UNSUPPORTED_GENRE_NAMES);
-const languages = [
+export const FILTER_LANGUAGES = [
   "English", "Japanese", "Korean", "Spanish",
   "French", "German", "Hindi", "Italian",
   "Turkish", "Danish", "Norwegian", "Swedish",
 ];
+const languages = FILTER_LANGUAGES;
 
 // ----- Filter state types -----
 export interface FilterState {
