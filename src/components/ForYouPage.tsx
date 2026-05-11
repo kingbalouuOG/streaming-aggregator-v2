@@ -19,8 +19,8 @@
  * follow-up PR.
  */
 
-import { useState, useCallback, useMemo } from 'react';
-import { Sliders, Loader2 } from 'lucide-react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { Loader2, Lock, LockOpen } from 'lucide-react';
 import { motion } from 'motion/react';
 import { ContentRow } from './ContentRow';
 import { NumberedChart } from './NumberedChart';
@@ -76,6 +76,143 @@ const MOOD_GLYPHS: Record<(typeof MOOD_CHIPS)[number], { title: string; subtitle
   'Funny':        { title: 'Funny',       subtitle: 'Belly laugh' },
   'Romance':      { title: 'Romance',     subtitle: 'Heart swell' },
 };
+
+/**
+ * TasteSlider — single slider row inside the taste fingerprint card.
+ * Renders read-only when `editable=false` (current behaviour); switches
+ * to a draggable variant when unlocked, with a larger pointer hit-area
+ * so the thin 2px track is comfortable to grab on touch.
+ *
+ * `onChange` fires on every drag tick (cheap visual update); `onCommit`
+ * fires once on pointer release with the final value (kicks the
+ * recommender re-rank). Same split keeps the rerank from churning at
+ * 60fps while the thumb is moving.
+ */
+function TasteSlider({
+  value,
+  editable,
+  onChange,
+  onCommit,
+  left,
+  right,
+  label,
+}: {
+  value: number;
+  editable: boolean;
+  onChange: (v: number) => void;
+  onCommit: (v: number) => void;
+  left: string;
+  right: string;
+  label: string;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+  const latestValueRef = useRef(value);
+  latestValueRef.current = value;
+
+  const valueFromEvent = (clientX: number): number => {
+    if (!trackRef.current) return value;
+    const rect = trackRef.current.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (!editable) return;
+    draggingRef.current = true;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    onChange(valueFromEvent(e.clientX));
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!draggingRef.current) return;
+    onChange(valueFromEvent(e.clientX));
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    onCommit(latestValueRef.current);
+  };
+
+  return (
+    <div className="flex flex-col gap-1 min-w-0">
+      <div
+        className="flex items-center justify-between gap-2"
+        style={{
+          fontFamily: 'var(--font-ui)',
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          color: 'var(--fg-faint)',
+        }}
+      >
+        <span className="truncate">{left}</span>
+        <span className="truncate">{right}</span>
+      </div>
+      {/* Hit-area wraps the visible track. When editable we expand the
+          touch target to 24px tall so the 2px line is easy to grab; the
+          line itself stays thin via the inner element. `touch-action:
+          none` prevents the page from picking the gesture up as a
+          vertical scroll. */}
+      <div
+        ref={trackRef}
+        className="relative w-full"
+        style={{
+          height: editable ? 24 : 2,
+          marginTop: editable ? -5 : 6,
+          marginBottom: editable ? -5 : 0,
+          touchAction: editable ? 'none' : 'auto',
+          cursor: editable ? 'pointer' : 'default',
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
+        <div
+          className="absolute left-0 right-0"
+          style={{
+            top: '50%',
+            transform: 'translateY(-50%)',
+            height: 2,
+            background: 'var(--surface-tint)',
+            borderRadius: 'var(--r-pill)',
+          }}
+        />
+        <span
+          aria-hidden
+          className="absolute"
+          style={{
+            left: `calc(${value * 100}% - 7px)`,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: editable ? 16 : 14,
+            height: editable ? 16 : 14,
+            borderRadius: '50%',
+            background: 'var(--primary)',
+            boxShadow: editable
+              ? '0 0 0 4px color-mix(in srgb, var(--primary) 25%, transparent), 0 1px 4px rgba(0,0,0,0.25)'
+              : '0 1px 4px rgba(0,0,0,0.25)',
+            transition: 'width 120ms var(--ease-out), height 120ms var(--ease-out), box-shadow 120ms var(--ease-out)',
+          }}
+        />
+      </div>
+      <span
+        style={{
+          fontFamily: 'var(--font-ui)',
+          fontSize: 12,
+          fontWeight: 600,
+          color: 'var(--fg)',
+          marginTop: 6,
+        }}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
 
 function getGreeting(now = new Date()): string {
   const h = now.getHours();
@@ -237,6 +374,68 @@ export function ForYouPage({
   );
   const [showSliderTray, setShowSliderTray] = useState(false);
   const [activeMood, setActiveMood] = useState<string | null>(null);
+
+  // Inline taste-fingerprint editing. Locked by default — tap the lock
+  // icon to unlock; sliders become draggable. Auto-relocks 5s after
+  // the last interaction so the surface doesn't sit exposed if the
+  // user wanders. Drafts are local during a drag; on pointer-release
+  // we commit via `content.rerank` which updates the engine's slider
+  // state and re-scores the cached pool.
+  const [slidersUnlocked, setSlidersUnlocked] = useState(false);
+  const [draftSliders, setDraftSliders] = useState<Partial<SliderState>>({});
+  const lockTimerRef = useRef<number | null>(null);
+
+  const cancelLockTimer = useCallback(() => {
+    if (lockTimerRef.current !== null) {
+      window.clearTimeout(lockTimerRef.current);
+      lockTimerRef.current = null;
+    }
+  }, []);
+
+  const armLockTimer = useCallback(() => {
+    cancelLockTimer();
+    lockTimerRef.current = window.setTimeout(() => {
+      setSlidersUnlocked(false);
+      setDraftSliders({});
+      lockTimerRef.current = null;
+    }, 5000);
+  }, [cancelLockTimer]);
+
+  useEffect(() => () => cancelLockTimer(), [cancelLockTimer]);
+
+  const handleSliderDraft = useCallback(
+    (key: keyof SliderState, value: number) => {
+      setDraftSliders((prev) => ({ ...prev, [key]: value }));
+      armLockTimer();
+    },
+    [armLockTimer],
+  );
+
+  const handleSliderCommit = useCallback(
+    (key: keyof SliderState, value: number) => {
+      if (!content.sliders) return;
+      content.rerank({ ...content.sliders, [key]: value });
+      setDraftSliders((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      armLockTimer();
+    },
+    [content, armLockTimer],
+  );
+
+  const handleLockToggle = useCallback(() => {
+    setSlidersUnlocked((wasUnlocked) => {
+      if (wasUnlocked) {
+        cancelLockTimer();
+        setDraftSliders({});
+        return false;
+      }
+      armLockTimer();
+      return true;
+    });
+  }, [armLockTimer, cancelLockTimer]);
 
   const applyFilters = useCallback(
     (items: ContentItem[]) => filterLanguage(filterWatched(items)),
@@ -420,19 +619,24 @@ export function ForYouPage({
             {content.sliders && (
               <button
                 type="button"
-                onClick={() => setShowSliderTray(true)}
-                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5"
+                onClick={handleLockToggle}
+                aria-label={slidersUnlocked ? 'Lock taste sliders' : 'Unlock taste sliders to edit'}
+                aria-pressed={slidersUnlocked}
+                className="shrink-0 inline-flex items-center justify-center w-9 h-9 transition-colors"
                 style={{
-                  background: 'var(--surface-tint)',
-                  color: 'var(--fg)',
+                  background: slidersUnlocked
+                    ? 'color-mix(in srgb, var(--primary) 14%, transparent)'
+                    : 'var(--surface-tint)',
+                  color: slidersUnlocked ? 'var(--primary)' : 'var(--fg-soft)',
+                  border: slidersUnlocked
+                    ? '1px solid color-mix(in srgb, var(--primary) 50%, transparent)'
+                    : '1px solid transparent',
                   borderRadius: 'var(--r-pill)',
-                  fontFamily: 'var(--font-ui)',
-                  fontSize: 13,
-                  fontWeight: 500,
                 }}
               >
-                <Sliders className="w-3.5 h-3.5" />
-                <span>Tune</span>
+                {slidersUnlocked
+                  ? <LockOpen className="w-4 h-4" />
+                  : <Lock className="w-4 h-4" />}
               </button>
             )}
           </div>
@@ -443,58 +647,23 @@ export function ForYouPage({
               { key: 'contentMix',   left: 'TV',      right: 'FILM',       label: 'Content mix' },
               { key: 'variety',      left: 'FOCUSED', right: 'VARIETY',    label: 'Focus' },
             ] as const).map(({ key, left, right, label }) => {
-              const value = content.sliders?.[key] ?? 0.5;
+              // Drafts override the engine's value while the user is
+              // actively dragging; otherwise we read the committed
+              // engine state. Falling back to 0.5 keeps the thumb
+              // centred until taste-v2 finishes loading.
+              const liveValue =
+                draftSliders[key] ?? content.sliders?.[key] ?? 0.5;
               return (
-                <div key={key} className="flex flex-col gap-1 min-w-0">
-                  <div
-                    className="flex items-center justify-between gap-2"
-                    style={{
-                      fontFamily: 'var(--font-ui)',
-                      fontSize: 10,
-                      fontWeight: 700,
-                      letterSpacing: '0.08em',
-                      textTransform: 'uppercase',
-                      color: 'var(--fg-faint)',
-                    }}
-                  >
-                    <span className="truncate">{left}</span>
-                    <span className="truncate">{right}</span>
-                  </div>
-                  <div
-                    className="relative w-full"
-                    style={{
-                      height: 2,
-                      background: 'var(--surface-tint)',
-                      borderRadius: 'var(--r-pill)',
-                      marginTop: 6,
-                    }}
-                  >
-                    <span
-                      aria-hidden
-                      className="absolute"
-                      style={{
-                        left: `calc(${value * 100}% - 7px)`,
-                        top: -6,
-                        width: 14,
-                        height: 14,
-                        borderRadius: '50%',
-                        background: 'var(--primary)',
-                        boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
-                      }}
-                    />
-                  </div>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-ui)',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: 'var(--fg)',
-                      marginTop: 6,
-                    }}
-                  >
-                    {label}
-                  </span>
-                </div>
+                <TasteSlider
+                  key={key}
+                  value={liveValue}
+                  editable={slidersUnlocked}
+                  onChange={(v) => handleSliderDraft(key, v)}
+                  onCommit={(v) => handleSliderCommit(key, v)}
+                  left={left}
+                  right={right}
+                  label={label}
+                />
               );
             })}
           </div>
