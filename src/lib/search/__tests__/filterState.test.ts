@@ -67,7 +67,6 @@ test("defaultFor scalars match brief defaults", () => {
   assert.equal(s.minRating, 0);
   assert.equal(s.showWatched, "all");
   assert.deepStrictEqual(s.genres, []);
-  assert.deepStrictEqual(s.decades, []);
   assert.deepStrictEqual(s.languages, []);
 });
 
@@ -116,7 +115,6 @@ test("round-trip: fully-populated state", () => {
     cost: "in_plan",
     runtime: "60_120",
     genres: ["Drama", "Thriller"],
-    decades: ["70s", "80s"],
     minRating: 6.8,
     showWatched: "hide",
     languages: ["English", "Korean"],
@@ -128,7 +126,6 @@ test("round-trip: fully-populated state", () => {
   assert.equal(rt.cost, "in_plan");
   assert.equal(rt.runtime, "60_120");
   assert.deepStrictEqual(rt.genres.sort(), ["Drama", "Thriller"]);
-  assert.deepStrictEqual(rt.decades.sort(), ["70s", "80s"]);
   assert.equal(rt.minRating, 6.8);
   assert.equal(rt.showWatched, "hide");
   assert.deepStrictEqual(rt.languages.sort(), ["English", "Korean"]);

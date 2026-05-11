@@ -247,7 +247,6 @@ function AppContent() {
     (filters.cost !== "all" ? 1 : 0) +
     (filters.runtime !== "any" ? 1 : 0) +
     filters.genres.length +
-    filters.decades.length +
     (filters.minRating > 0 ? 1 : 0) +
     (filters.showWatched !== "all" ? 1 : 0) +
     filters.languages.length;

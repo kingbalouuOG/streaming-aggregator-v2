@@ -15,7 +15,6 @@ import type { ServiceId } from "../../components/platformLogos";
 export type ContentType = "all" | "movie" | "tv" | "doc";
 export type Cost = "all" | "free" | "in_plan" | "rent_ok";
 export type Runtime = "any" | "under_60" | "60_120" | "over_120";
-export type Decade = "60s" | "70s" | "80s" | "90s" | "00s" | "10s" | "20s";
 export type ShowWatched = "all" | "hide" | "only";
 
 export interface FilterState {
@@ -24,14 +23,12 @@ export interface FilterState {
   cost: Cost;
   runtime: Runtime;
   genres: string[];
-  decades: Decade[];
   minRating: number;
   showWatched: ShowWatched;
   languages: string[];
   onlyOnMyServices: boolean;
 }
 
-export const DECADES: readonly Decade[] = ["60s", "70s", "80s", "90s", "00s", "10s", "20s"];
 const CONTENT_TYPES: readonly ContentType[] = ["all", "movie", "tv", "doc"];
 const COSTS: readonly Cost[] = ["all", "free", "in_plan", "rent_ok"];
 const RUNTIMES: readonly Runtime[] = ["any", "under_60", "60_120", "over_120"];
@@ -51,7 +48,6 @@ export function defaultFor(userServices: readonly ServiceId[]): FilterState {
     cost: "all",
     runtime: "any",
     genres: [],
-    decades: [],
     minRating: 0,
     showWatched: "all",
     languages: [],
@@ -72,7 +68,6 @@ export function isDefault(state: FilterState, userServices: readonly ServiceId[]
     state.showWatched === "all" &&
     state.onlyOnMyServices === true &&
     state.genres.length === 0 &&
-    state.decades.length === 0 &&
     state.languages.length === 0 &&
     sameSet(state.services, userServices)
   );
@@ -97,7 +92,6 @@ export function serialize(state: FilterState, userServices: readonly ServiceId[]
   if (state.cost !== "all") params.set("cost", state.cost);
   if (state.runtime !== "any") params.set("runtime", state.runtime);
   if (state.genres.length > 0) params.set("genre", [...state.genres].map(slug).sort().join(","));
-  if (state.decades.length > 0) params.set("decade", [...state.decades].sort().join(","));
   if (state.minRating > 0) params.set("min", state.minRating.toFixed(1));
   if (state.showWatched !== "all") params.set("watched", state.showWatched);
   if (state.languages.length > 0) params.set("lang", [...state.languages].map(slug).sort().join(","));
@@ -129,9 +123,6 @@ export function deserialize(
 
   const genre = params.get("genre");
   if (genre) base.genres = unslugAgainst(genre.split(","), genreCatalogue);
-
-  const decade = params.get("decade");
-  if (decade) base.decades = decade.split(",").filter((d): d is Decade => (DECADES as readonly string[]).includes(d));
 
   const min = params.get("min");
   if (min) {
@@ -165,7 +156,6 @@ export function hash(state: FilterState): string {
     cost: state.cost,
     runtime: state.runtime,
     genres: [...state.genres].sort(),
-    decades: [...state.decades].sort(),
     minRating: state.minRating,
     showWatched: state.showWatched,
     languages: [...state.languages].sort(),

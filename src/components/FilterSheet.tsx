@@ -5,13 +5,11 @@ import { ServiceTile } from "./ServiceTile";
 import { TV_UNSUPPORTED_GENRE_NAMES } from "@/lib/constants/genres";
 import {
   defaultFor,
-  DECADES,
   type FilterState,
   type ContentType,
   type Cost,
   type Runtime,
   type ShowWatched,
-  type Decade,
 } from "@/lib/search/filterState";
 import type { ServiceId } from "./platformLogos";
 
@@ -80,14 +78,15 @@ interface FilterSheetProps {
  *   4. COST (segmented)
  *   5. RUNTIME (segmented, new axis)
  *   6. GENRE (chip multi-select)
- *   7. DECADE (chip multi-select, new axis)
- *   8. MINIMUM RATING (slider)
- *   9. SHOW WATCHED (segmented tri-state)
- *  10. LANGUAGE (chip multi-select)
+ *   7. MINIMUM RATING (slider)
+ *   8. SHOW WATCHED (segmented tri-state)
+ *   9. LANGUAGE (chip multi-select)
  *
- * UK RATING section intentionally omitted (H7 resolution — no compliance
- * pressure, no clean UK/US/MPAA/TV mapping). Add back when parental
- * controls land or a real user need surfaces.
+ * UK RATING omitted per the H7 resolution (no compliance pressure, no
+ * clean UK/US/MPAA/TV mapping). DECADE dropped post-A2 review — Joe's
+ * call that nobody would reach for it; the runtime + genre + minRating
+ * axes already cover "what to watch tonight." Add either back when a
+ * real user signal surfaces.
  *
  * Dismissal: × button, backdrop tap, or swipe-down on grabber — all
  * close without applying. Apply is the only commit affordance.
@@ -142,15 +141,6 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, userServices }:
     }));
   };
 
-  const toggleDecade = (d: Decade) => {
-    setLocal((prev) => ({
-      ...prev,
-      decades: prev.decades.includes(d)
-        ? prev.decades.filter((x) => x !== d)
-        : [...prev.decades, d],
-    }));
-  };
-
   const toggleLanguage = (lang: string) => {
     setLocal((prev) => ({
       ...prev,
@@ -195,7 +185,6 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, userServices }:
     (local.cost !== "all" ? 1 : 0) +
     (local.runtime !== "any" ? 1 : 0) +
     (local.genres.length > 0 ? 1 : 0) +
-    (local.decades.length > 0 ? 1 : 0) +
     (local.minRating > 0 ? 1 : 0) +
     (local.showWatched !== "all" ? 1 : 0) +
     (local.languages.length > 0 ? 1 : 0) +
@@ -410,16 +399,7 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, userServices }:
                 onToggle={toggleGenre}
               />
 
-              {/* ── Section 7: DECADE (new) ─────────────────────── */}
-              <SectionLabel sub="When was it made?">DECADE</SectionLabel>
-              <ChipMulti
-                options={DECADES as readonly Decade[]}
-                getLabel={decadeLabel}
-                isSelected={(d) => local.decades.includes(d)}
-                onToggle={toggleDecade}
-              />
-
-              {/* ── Section 8: MINIMUM RATING ───────────────────── */}
+              {/* ── Section 7: MINIMUM RATING ───────────────────── */}
               <SectionLabel sub="Critic + audience.">MINIMUM RATING</SectionLabel>
               <div className="mb-2">
                 <span
@@ -463,7 +443,7 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, userServices }:
                 <span>10</span>
               </div>
 
-              {/* ── Section 9: SHOW WATCHED (tri-state) ─────────── */}
+              {/* ── Section 8: SHOW WATCHED (tri-state) ─────────── */}
               <SectionLabel sub="Already-watched titles.">SHOW WATCHED</SectionLabel>
               <Segmented<ShowWatched>
                 options={SHOW_WATCHED_OPTIONS}
@@ -471,7 +451,7 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, userServices }:
                 onChange={(v) => setLocal((p) => ({ ...p, showWatched: v }))}
               />
 
-              {/* ── Section 10: LANGUAGE ────────────────────────── */}
+              {/* ── Section 9: LANGUAGE ─────────────────────────── */}
               <SectionLabel sub="None selected = show all.">LANGUAGE</SectionLabel>
               <ChipMulti
                 options={FILTER_LANGUAGES}
@@ -525,10 +505,6 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, userServices }:
 }
 
 // ─── Internal helpers ───────────────────────────────────────────
-
-function decadeLabel(d: Decade): string {
-  return d === "60s" ? "1960s" : d;
-}
 
 function sameSet<T>(a: readonly T[], b: readonly T[]): boolean {
   if (a.length !== b.length) return false;
