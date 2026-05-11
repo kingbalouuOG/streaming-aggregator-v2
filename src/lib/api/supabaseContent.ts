@@ -7,7 +7,11 @@
 import { supabase } from '../supabase';
 import { getCachedData, setCachedData, CACHE_PREFIXES } from './cache';
 import { saServiceToServiceId } from '../adapters/platformAdapter';
+import type { ContentItem } from '@/components/ContentCard';
 import type { ServiceId } from '@/components/platformLogos';
+import { buildPosterUrl, buildBackdropUrl } from './tmdb';
+import { GENRE_NAMES } from '../constants/genres';
+import { isoToLanguageName } from '../adapters/contentAdapter';
 
 export interface StreamingLink {
   serviceId: ServiceId;
@@ -63,6 +67,70 @@ export async function getStreamingLinks(
 
     if (result.length > 0) await setCachedData(cacheKey, result);
     return result;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Substring search against the Postgres `titles` cache.
+ *
+ * Companion to TMDb `/search/movie` + `/search/tv`. TMDb tokenises the
+ * query by word boundary and ignores anything that isn't a whole-word
+ * prefix — so "salt" never finds "Saltburn". The Postgres cache covers
+ * ~20K UK-available titles and we own the matching logic here, which
+ * lets us paper over the gap for compound-word titles, slightly-mis-
+ * spelled queries, and partial recall on franchise titles.
+ *
+ * Returns the same `ContentItem` shape as `tmdbMovieToContentItem` so
+ * callers can merge the two sources by `id` and re-rank uniformly.
+ *
+ * Soft cap at 20 rows — anything more is noise; the user is better
+ * served by typing more characters. Empty `services` array left in
+ * place; per-item TMDb /watch/providers fills it in like the TMDb
+ * path does.
+ */
+export async function searchTitlesByText(
+  query: string,
+  limit = 20,
+): Promise<ContentItem[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('titles')
+      .select('tmdb_id, media_type, title, overview, release_year, poster_path, backdrop_path, genre_ids, vote_average, vote_count, popularity, original_language, runtime')
+      .ilike('title', `%${q}%`)
+      .order('popularity', { ascending: false, nullsFirst: false })
+      .limit(limit);
+
+    if (error || !data) return [];
+
+    return data
+      .filter((row: any) => row.media_type === 'movie' || row.media_type === 'tv')
+      .map((row: any) => {
+        const genreIds: number[] = Array.isArray(row.genre_ids) ? row.genre_ids : [];
+        const isDoc = row.media_type === 'movie' && genreIds.includes(99);
+        return {
+          id: `${row.media_type}-${row.tmdb_id}`,
+          title: row.title || 'Untitled',
+          image: buildPosterUrl(row.poster_path) || '',
+          backdrop: buildBackdropUrl(row.backdrop_path, 'w780') || undefined,
+          services: [] as ServiceId[],
+          rating: row.vote_average ?? undefined,
+          year: row.release_year ?? undefined,
+          type: row.media_type === 'tv' ? 'tv' : isDoc ? 'doc' : 'movie',
+          genre: genreIds[0] != null ? GENRE_NAMES[genreIds[0]] : undefined,
+          overview: row.overview || undefined,
+          language: row.original_language ? isoToLanguageName(row.original_language) : undefined,
+          genreIds,
+          originalLanguage: row.original_language ?? undefined,
+          popularity: row.popularity ?? undefined,
+          voteCount: row.vote_count ?? undefined,
+          runtime: row.runtime ?? undefined,
+        } as ContentItem;
+      });
   } catch {
     return [];
   }

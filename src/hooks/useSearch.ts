@@ -7,7 +7,7 @@ import type { ContentItem } from '@/components/ContentCard';
 import type { ServiceId } from '@/components/platformLogos';
 import { API_CONFIG } from '@/lib/constants/config';
 import { emitSearch } from '@/lib/storage/interactions';
-import { getAvailableTmdbIds } from '@/lib/recommendations-v2/hardFilters';
+import { searchTitlesByText } from '@/lib/api/supabaseContent';
 
 const BADGE_FLUSH_INTERVAL_MS = 200;
 
@@ -41,75 +41,126 @@ export function useSearch(
   const currentQueryRef = useRef(query);
   const badgeFlushRef = useRef<ReturnType<typeof setTimeout>>();
   const pendingBadgesRef = useRef<Map<string, ServiceId[]>>(new Map());
+  /** Items confirmed in UK but not on the user's services (per-item check). */
+  const offServicesRef = useRef<Set<string>>(new Set());
+  /** Items confirmed with no UK availability OR off-services + drop mode. */
+  const removeRef = useRef<Set<string>>(new Set());
+  /** Mirror of `onlyOnMyServices` so the background per-item flow sees
+   *  the live value without a stale closure. */
+  const onlyOnMyServicesRef = useRef(onlyOnMyServices);
+  onlyOnMyServicesRef.current = onlyOnMyServices;
 
   // Stabilize dependency to avoid infinite re-renders
   const servicesKey = userServices?.join(',') || '';
 
   const tooShort = query.trim().length > 0 && query.trim().length < 2;
 
-  // Flush accumulated badge updates in a single setResults call. The
-  // pre-call RPC now owns availability filtering (see search() below);
-  // this path only paints the per-item badge stack — it never removes
-  // items.
-  const flushBadges = useCallback((q: string) => {
+  // Per-item provider fetch — populates badges AND owns the availability
+  // verdict. The pre-call `get_available_tmdb_ids` RPC was tried in A8
+  // but produces false negatives for titles outside our ~20K Postgres
+  // cache (TMDb is millions of titles). `getCachedServices` calls
+  // TMDb /watch/providers per item — slower but authoritative.
+  //
+  // Per-item outcomes:
+  //   - No UK availability at all  → drop the item from `results`.
+  //   - On user services           → populate ServiceStack badge.
+  //   - In UK but not on services  → tag `notOnYours` (when
+  //                                  onlyOnMyServices=false) or drop
+  //                                  (when onlyOnMyServices=true).
+  const flushPendingUpdates = useCallback((q: string) => {
     if (currentQueryRef.current !== q) return;
     const pending = pendingBadgesRef.current;
-    if (pending.size === 0) return;
+    const offServices = offServicesRef.current;
+    const remove = removeRef.current;
+    if (pending.size === 0 && offServices.size === 0 && remove.size === 0) return;
 
     const badgeUpdates = new Map(pending);
+    const offSet = new Set(offServices);
+    const removeSet = new Set(remove);
     pending.clear();
+    offServices.clear();
+    remove.clear();
 
-    setResults(prev =>
-      prev.map(item => {
-        const services = badgeUpdates.get(item.id);
-        return services ? { ...item, services } : item;
-      })
-    );
+    setResults(prev => {
+      const filtered = removeSet.size > 0
+        ? prev.filter(item => !removeSet.has(item.id))
+        : prev;
+      return badgeUpdates.size > 0
+        ? filtered.map(item => {
+            const services = badgeUpdates.get(item.id);
+            return services ? { ...item, services } : item;
+          })
+        : filtered;
+    });
+    if (offSet.size > 0) {
+      setUnavailableIds(prev => {
+        const next = new Set(prev);
+        offSet.forEach((id) => next.add(id));
+        return next;
+      });
+    }
   }, []);
 
-  // Non-blocking per-item provider fetch — populates badges only.
-  // Availability filtering moved to the pre-call get_available_tmdb_ids
-  // RPC in `search()` so off-services items are dropped (or tagged)
-  // upfront instead of trickling out item-by-item.
-  const fetchBadgesInBackground = useCallback((items: ContentItem[], q: string, connectedServices: ServiceId[]) => {
-    if (connectedServices.length === 0) return;
+  const fetchAvailabilityAndBadges = useCallback((items: ContentItem[], q: string, connectedServices: ServiceId[]) => {
     pendingBadgesRef.current.clear();
+    offServicesRef.current.clear();
+    removeRef.current.clear();
     if (badgeFlushRef.current) clearTimeout(badgeFlushRef.current);
 
     let completed = 0;
     const total = items.length;
+    const noUserServices = connectedServices.length === 0;
+    const dropOffServices = onlyOnMyServicesRef.current && !noUserServices;
 
     items.forEach(async (item) => {
       try {
         const { tmdbId, mediaType } = parseContentItemId(item.id);
         const allItemServices = await getCachedServices(String(tmdbId), mediaType);
+
+        if (allItemServices.length === 0) {
+          // No UK availability — always drop.
+          removeRef.current.add(item.id);
+          return;
+        }
+        if (noUserServices) {
+          // Logged-out / pre-onboarding: no service set to intersect
+          // against, but the title is at least UK-available — show it.
+          pendingBadgesRef.current.set(item.id, allItemServices);
+          return;
+        }
         const matching = allItemServices.filter((s) => connectedServices.includes(s));
         if (matching.length > 0) {
           pendingBadgesRef.current.set(item.id, matching);
+        } else if (dropOffServices) {
+          removeRef.current.add(item.id);
+        } else {
+          // onlyOnMyServices=false: keep visible, tag as off-services
+          // so the renderer applies the "Not on yours" pill + 0.75 opacity.
+          offServicesRef.current.add(item.id);
+          pendingBadgesRef.current.set(item.id, allItemServices.slice(0, 3));
         }
       } catch {
-        // Silently skip failed lookups — item stays visible
+        // Silently skip failed lookups — item stays visible.
       } finally {
         completed++;
-        // Periodic flush; final one when all complete
         if (completed === total) {
           if (badgeFlushRef.current) clearTimeout(badgeFlushRef.current);
-          flushBadges(q);
+          flushPendingUpdates(q);
         } else if (!badgeFlushRef.current) {
           badgeFlushRef.current = setTimeout(() => {
             badgeFlushRef.current = undefined;
-            flushBadges(q);
+            flushPendingUpdates(q);
             if (completed < total) {
               badgeFlushRef.current = setTimeout(() => {
                 badgeFlushRef.current = undefined;
-                flushBadges(q);
+                flushPendingUpdates(q);
               }, BADGE_FLUSH_INTERVAL_MS);
             }
           }, BADGE_FLUSH_INTERVAL_MS);
         }
       }
     });
-  }, [flushBadges]);
+  }, [flushPendingUpdates]);
 
   const search = useCallback(async (q: string, searchPage: number, append: boolean, category: string) => {
     const trimmed = q.trim();
@@ -130,17 +181,19 @@ export function useSearch(
       const { cleanQuery, year } = extractYearFromQuery(trimmed);
       const shouldFetchMovies = category === 'All' || category === 'Movies';
       const shouldFetchTV = category === 'All' || category === 'TV';
-      // Fire the availability RPC in parallel with TMDb so we don't pay
-      // an extra round-trip — both finish before the first paint.
-      // Skip the RPC when there are no user services to intersect
-      // against (logged-out / pre-onboarding); without it we have no
-      // way to compute "not on yours" anyway, so every item stays.
       const services = userServices || [];
 
-      const [movieRes, tvRes, availableTmdbIds] = await Promise.all([
+      // Parallel sources:
+      //   TMDb /search/movie + /search/tv — broad catalogue but
+      //     tokenises queries by word boundary ("salt" never matches
+      //     "Saltburn").
+      //   Postgres titles ILIKE — covers the substring + compound-word
+      //     gap for the ~20K UK-available titles we have cached.
+      // First-page only for Postgres; TMDb pagination handles depth.
+      const [movieRes, tvRes, cacheItems] = await Promise.all([
         shouldFetchMovies ? searchMovies(cleanQuery, searchPage, year) : null,
         shouldFetchTV ? searchTV(cleanQuery, searchPage, year) : null,
-        services.length > 0 ? getAvailableTmdbIds(services) : Promise.resolve<Set<number>>(new Set()),
+        searchPage === 1 ? searchTitlesByText(cleanQuery, 20) : Promise.resolve<ContentItem[]>([]),
       ]);
 
       // Guard against stale results
@@ -148,59 +201,51 @@ export function useSearch(
 
       const movieItems = (movieRes?.data?.results || []).map(tmdbMovieToContentItem);
       const tvItems = (tvRes?.data?.results || []).map(tmdbTVToContentItem);
-      const merged = [...movieItems, ...tvItems];
-      const ranked = reRankSearchResults(merged, cleanQuery);
+      // Filter the Postgres-cache hits to match the active category so
+      // the All/Movies/TV pill still narrows results.
+      const filteredCache = cacheItems.filter((item) => {
+        if (category === 'Movies') return item.type === 'movie' || item.type === 'doc';
+        if (category === 'TV') return item.type === 'tv';
+        return true;
+      });
 
-      // Partition into available vs unavailable using the pre-fetched
-      // ID set. When the user has no services connected, the set is
-      // empty and we treat every item as available — there's no
-      // ground truth to compare against.
-      const hasAvailability = services.length > 0 && availableTmdbIds.size > 0;
-      const isAvailable = (item: ContentItem) => {
-        if (!hasAvailability) return true;
-        const { tmdbId } = parseContentItemId(item.id);
-        return availableTmdbIds.has(tmdbId);
-      };
-
-      let finalItems: ContentItem[];
-      let nextUnavailable: Set<string>;
-      if (onlyOnMyServices && hasAvailability) {
-        // Filter unavailable items out before they hit the grid.
-        finalItems = ranked.filter(isAvailable);
-        nextUnavailable = new Set();
-      } else {
-        // Keep all items, tag the off-services ones so the renderer
-        // can apply the "Not on yours" pill + 0.75 opacity treatment.
-        finalItems = ranked;
-        nextUnavailable = new Set(
-          hasAvailability ? ranked.filter((i) => !isAvailable(i)).map((i) => i.id) : [],
-        );
+      // Dedupe by id — Postgres entries fill in compound-word gaps
+      // TMDb missed; identical hits collapse cleanly.
+      const seen = new Set<string>();
+      const dedupedItems: ContentItem[] = [];
+      for (const item of [...movieItems, ...tvItems, ...filteredCache]) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        dedupedItems.push(item);
       }
+      const ranked = reRankSearchResults(dedupedItems, cleanQuery);
 
-      // Pagination: has more if either endpoint has more pages
+      // Set results immediately — every item visible until per-item
+      // /watch/providers confirms availability. This is the only path
+      // that has positive ground truth for cache-missed titles like
+      // "Exactly Salt" that aren't in our Postgres cache.
       const movieTotalPages = movieRes?.data?.total_pages || 0;
       const tvTotalPages = tvRes?.data?.total_pages || 0;
       const maxTotalPages = Math.max(movieTotalPages, tvTotalPages);
 
       if (append) {
-        setResults(prev => [...prev, ...finalItems]);
-        setUnavailableIds(prev => {
-          const merged = new Set(prev);
-          nextUnavailable.forEach((id) => merged.add(id));
-          return merged;
+        setResults(prev => {
+          const have = new Set(prev.map((p) => p.id));
+          const news = ranked.filter((r) => !have.has(r.id));
+          return [...prev, ...news];
         });
       } else {
-        setResults(finalItems);
-        setUnavailableIds(nextUnavailable);
-        emitSearch(cleanQuery, finalItems.length);
+        setResults(ranked);
+        setUnavailableIds(new Set());
+        emitSearch(cleanQuery, ranked.length);
       }
       setPage(searchPage);
       setHasMore(searchPage < maxTotalPages);
 
-      // Fire non-blocking per-item provider fetch for badge population.
-      // Availability filtering already happened above; this hook now
-      // only paints the per-card ServiceStack.
-      fetchBadgesInBackground(finalItems, q, services);
+      // Per-item availability + badge fetch. Owns the notOnYours /
+      // remove decisions — see fetchAvailabilityAndBadges for the
+      // outcome table.
+      fetchAvailabilityAndBadges(ranked, q, services);
     } catch (err: any) {
       if (currentQueryRef.current !== q) return;
       setError(err.message || 'Search failed');
@@ -213,7 +258,7 @@ export function useSearch(
         setLoading(false);
       }
     }
-  }, [servicesKey, fetchBadgesInBackground, onlyOnMyServices]);
+  }, [servicesKey, fetchAvailabilityAndBadges]);
 
   // Reset page when category changes
   useEffect(() => {
@@ -270,6 +315,30 @@ export function useSearch(
       search(query, page + 1, true, activeCategory);
     }
   }, [hasMore, loading, query, page, activeCategory, search]);
+
+  // Auto-paginate to a minimum visible count. After per-item availability
+  // settles the grid often holds fewer items than the user expects from
+  // page 1 (TMDb returns 40 candidates, filtering can leave 0–3). Keep
+  // fetching the next page until we've shown the user at least
+  // MIN_VISIBLE titles — or run out of pages, or hit the auto-fetch cap
+  // (prevents runaway when a query has no on-services hits at all).
+  const MIN_VISIBLE = 4;
+  const MAX_AUTO_FETCH_PAGES = 3;
+  const autoFetchedRef = useRef(0);
+  useEffect(() => {
+    // Reset the auto-fetch counter whenever the user issues a fresh query.
+    autoFetchedRef.current = 0;
+  }, [query, activeCategory]);
+  useEffect(() => {
+    if (loading) return;
+    if (!query.trim() || query.trim().length < 2) return;
+    if (!hasMore) return;
+    if (autoFetchedRef.current >= MAX_AUTO_FETCH_PAGES) return;
+    const visibleCount = results.length - unavailableIds.size;
+    if (visibleCount >= MIN_VISIBLE) return;
+    autoFetchedRef.current += 1;
+    search(query, page + 1, true, activeCategory);
+  }, [loading, hasMore, results.length, unavailableIds, query, activeCategory, page, search]);
 
   const clearSearch = useCallback(() => {
     setQuery('');
