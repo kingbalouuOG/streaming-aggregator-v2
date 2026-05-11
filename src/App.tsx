@@ -14,7 +14,8 @@ import { BottomNav } from "./components/BottomNav";
 import { ContentItem } from "./components/ContentCard";
 import { BrowsePage, BrowseStateSnapshot } from "./components/BrowsePage";
 import { DetailPage } from "./components/DetailPage";
-import { FilterSheet, FilterState, defaultFilters } from "./components/FilterSheet";
+import { FilterSheet } from "./components/FilterSheet";
+import { defaultFor, type FilterState } from "./lib/search/filterState";
 import { WatchlistPage } from "./components/WatchlistPage";
 import { ProfilePage } from "./components/ProfilePage";
 import { OnboardingFlow, OnboardingData } from "./components/OnboardingFlow";
@@ -123,7 +124,7 @@ function AppContent() {
   const [showFilters, setShowFilters] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [watchlistSubTab, setWatchlistSubTab] = useState<"want" | "watched">("want");
-  const [filters, setFilters] = useState<FilterState>(defaultFilters);
+  const [filters, setFilters] = useState<FilterState>(() => defaultFor([]));
   const [showSignUpSuccess, setShowSignUpSuccess] = useState(false);
   const [showSignUpOnboarding, setShowSignUpOnboarding] = useState(false);
   const [authUsername, setAuthUsername] = useState<string | null>(null);
@@ -203,9 +204,9 @@ function AppContent() {
   // --- Build home filters from category pills + FilterSheet ---
   const homeFilters: FilterState = useMemo(() => {
     const base = { ...filters };
-    if (activeCategory === "Movies") base.contentType = "Movies";
-    else if (activeCategory === "TV Shows") base.contentType = "TV";
-    else if (activeCategory === "Docs") base.contentType = "Docs";
+    if (activeCategory === "Movies") base.contentType = "movie";
+    else if (activeCategory === "TV Shows") base.contentType = "tv";
+    else if (activeCategory === "Docs") base.contentType = "doc";
     else if (activeCategory === "Anime") {
       // Anime = Animation genre filter
       base.genres = [...new Set([...base.genres, "Animation"])];
@@ -242,16 +243,20 @@ function AppContent() {
 
   const activeFilterCount =
     filters.services.length +
-    (filters.contentType !== "All" ? 1 : 0) +
-    (filters.cost !== "All" ? 1 : 0) +
+    (filters.contentType !== "all" ? 1 : 0) +
+    (filters.cost !== "all" ? 1 : 0) +
+    (filters.runtime !== "any" ? 1 : 0) +
     filters.genres.length +
+    filters.decades.length +
     (filters.minRating > 0 ? 1 : 0) +
-    (filters.showWatched ? 1 : 0) +
+    (filters.showWatched !== "all" ? 1 : 0) +
     filters.languages.length;
 
-  // Filter out watched items from home content unless showWatched is on
+  // Filter out watched items from home content based on showWatched setting.
+  // 'all' → show everything; 'hide' → drop watched; 'only' → keep just watched.
   const filterWatched = useCallback((items: ContentItem[]) => {
-    if (filters.showWatched || watchedIds.size === 0) return items;
+    if (filters.showWatched === "all" || watchedIds.size === 0) return items;
+    if (filters.showWatched === "only") return items.filter((item) => watchedIds.has(item.id));
     return items.filter((item) => !watchedIds.has(item.id));
   }, [filters.showWatched, watchedIds]);
 
@@ -1117,7 +1122,7 @@ function AppContent() {
             onClose={() => setShowFilters(false)}
             filters={filters}
             onApply={setFilters}
-            connectedServices={providerIdsToServiceIds(connectedServices)}
+            userServices={connectedServiceIds}
           />
         )}
       </div>

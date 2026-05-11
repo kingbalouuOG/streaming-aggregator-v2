@@ -14,10 +14,7 @@ import {
   serialize,
   deserialize,
   hash,
-  fromLegacy,
-  toLegacy,
   type FilterState,
-  type LegacyFilterState,
 } from "../filterState.ts";
 import type { ServiceId } from "../../../components/platformLogos.ts";
 
@@ -202,87 +199,6 @@ test("hash differs across material changes", () => {
 test("hash output is 8-char hex", () => {
   const h = hash(defaultFor(USER));
   assert.match(h, /^[0-9a-f]{8}$/);
-});
-
-// ── Legacy interop ────────────────────────────────────────────────
-
-test("fromLegacy maps empty services to all-user-services", () => {
-  const legacy: LegacyFilterState = {
-    services: [],
-    contentType: "All",
-    cost: "All",
-    genres: [],
-    minRating: 0,
-    showWatched: false,
-    languages: [],
-  };
-  const s = fromLegacy(legacy, USER);
-  assert.deepStrictEqual(s.services.sort(), ["apple", "netflix"]);
-  assert.equal(s.contentType, "all");
-  assert.equal(s.cost, "all");
-  assert.equal(s.showWatched, "all");
-});
-
-test("fromLegacy maps populated legacy fields", () => {
-  const legacy: LegacyFilterState = {
-    services: ["netflix"],
-    contentType: "Movies",
-    cost: "Free",
-    genres: ["Drama"],
-    minRating: 7.5,
-    showWatched: true,
-    languages: ["English"],
-  };
-  const s = fromLegacy(legacy, USER);
-  assert.deepStrictEqual(s.services, ["netflix"]);
-  assert.equal(s.contentType, "movie");
-  assert.equal(s.cost, "free");
-  assert.deepStrictEqual(s.genres, ["Drama"]);
-  assert.equal(s.minRating, 7.5);
-  assert.equal(s.showWatched, "only");
-  assert.deepStrictEqual(s.languages, ["English"]);
-});
-
-test("toLegacy preserves what legacy callers expect", () => {
-  const s: FilterState = {
-    services: ["disney"],
-    contentType: "tv",
-    cost: "free",
-    runtime: "any",
-    genres: ["Comedy"],
-    decades: [],
-    minRating: 0,
-    showWatched: "only",
-    languages: [],
-    onlyOnMyServices: true,
-  };
-  const legacy = toLegacy(s);
-  assert.deepStrictEqual(legacy.services, ["disney"]);
-  assert.equal(legacy.contentType, "TV");
-  assert.equal(legacy.cost, "Free");
-  assert.equal(legacy.showWatched, true);
-});
-
-test("toLegacy → fromLegacy is information-preserving for legacy-expressible state", () => {
-  const original: FilterState = {
-    services: ["netflix"],
-    contentType: "movie",
-    cost: "free",
-    runtime: "any",
-    genres: ["Drama"],
-    decades: [],
-    minRating: 6.0,
-    showWatched: "only",
-    languages: ["English"],
-    onlyOnMyServices: true,
-  };
-  const back = fromLegacy(toLegacy(original), USER);
-  assert.deepStrictEqual(back.services, original.services);
-  assert.equal(back.contentType, original.contentType);
-  assert.equal(back.cost, original.cost);
-  assert.deepStrictEqual(back.genres, original.genres);
-  assert.equal(back.minRating, original.minRating);
-  assert.equal(back.showWatched, original.showWatched);
 });
 
 // ── Summary ────────────────────────────────────────────────────────

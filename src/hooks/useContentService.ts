@@ -8,7 +8,7 @@ import { serviceIdsToProviderIds, providerIdsToServiceIds } from '@/lib/adapters
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import { getCachedServices } from '@/lib/utils/serviceCache';
 import type { ContentItem } from '@/components/ContentCard';
-import type { FilterState } from '@/components/FilterSheet';
+import type { FilterState } from '@/lib/search/filterState';
 import type { ServiceId } from '@/components/platformLogos';
 
 export interface GenreRow {
@@ -82,18 +82,23 @@ export function useContentService(providerIds: number[], filters?: FilterState) 
         baseParams['vote_count.gte'] = 50;
       }
 
-      // Cost filter (monetization type)
-      if (filters?.cost === 'Free') {
-        baseParams.with_watch_monetization_types = 'flatrate|free|ads';
-      } else if (filters?.cost === 'Paid') {
+      // Cost filter (monetization type). 'in_plan' narrows to flatrate
+      // only; 'free' to free/ads; 'rent_ok' to rent/buy with a paid-
+      // only post-filter so the user doesn't get titles already in their
+      // flatrate.
+      if (filters?.cost === 'free') {
+        baseParams.with_watch_monetization_types = 'free|ads';
+      } else if (filters?.cost === 'in_plan') {
+        baseParams.with_watch_monetization_types = 'flatrate';
+      } else if (filters?.cost === 'rent_ok') {
         baseParams.with_watch_monetization_types = 'rent|buy';
         // Remove provider constraint — we want ANY rent/buy title in GB,
         // then post-filter to exclude titles also available as flatrate on user's platforms
         delete baseParams.with_watch_providers;
       }
 
-      // Post-filter helper for "Paid": exclude titles with free flatrate on user's platforms
-      const isPaidFilter = filters?.cost === 'Paid';
+      // Post-filter helper for "Rent OK": exclude titles with free flatrate on user's platforms
+      const isPaidFilter = filters?.cost === 'rent_ok';
       const userServiceIds = isPaidFilter ? providerIdsToServiceIds(providerIds) : [];
       async function filterPaidOnly(items: ContentItem[]): Promise<ContentItem[]> {
         if (!isPaidFilter) return items;
@@ -110,9 +115,9 @@ export function useContentService(providerIds: number[], filters?: FilterState) 
       const today = new Date().toISOString().split('T')[0];
 
       // Content type filter
-      const contentType = filters?.contentType || 'All';
-      const fetchMovies = contentType === 'All' || contentType === 'Movies' || contentType === 'Docs';
-      const fetchTV = contentType === 'All' || contentType === 'TV';
+      const contentType = filters?.contentType || 'all';
+      const fetchMovies = contentType === 'all' || contentType === 'movie' || contentType === 'doc';
+      const fetchTV = contentType === 'all' || contentType === 'tv';
 
       // Fetch main sections in parallel
       const [popularMovies, popularTV, topMovies, topTV, recentMovies, recentTV] = await Promise.all([

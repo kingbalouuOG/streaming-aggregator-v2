@@ -74,10 +74,13 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
 
   const activeFilterCount =
     filters.services.length +
-    (filters.contentType !== "All" ? 1 : 0) +
-    (filters.cost !== "All" ? 1 : 0) +
+    (filters.contentType !== "all" ? 1 : 0) +
+    (filters.cost !== "all" ? 1 : 0) +
+    (filters.runtime !== "any" ? 1 : 0) +
     filters.genres.length +
+    filters.decades.length +
     (filters.minRating > 0 ? 1 : 0) +
+    (filters.showWatched !== "all" ? 1 : 0) +
     filters.languages.length;
 
   // Display items: search results, filtered by genre/rating/language
@@ -343,7 +346,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
         onClose={() => onShowFiltersChange(false)}
         filters={filters}
         onApply={onFiltersChange}
-        connectedServices={providerIdsToServiceIds(providerIds)}
+        userServices={providerIdsToServiceIds(providerIds)}
       />
     </div>
   );

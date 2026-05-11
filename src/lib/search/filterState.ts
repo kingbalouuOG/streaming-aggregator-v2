@@ -1,11 +1,7 @@
 // FilterState — canonical filter shape for Phase Search V2.
 //
-// New shape replaces the legacy `FilterState` defined in
-// `src/components/FilterSheet.tsx`. The legacy export stays in place
-// during Cluster A so unmigrated callers (`useBrowse`, `useHomeContent`,
-// `useContentService`, `App.tsx` home shortcut) keep compiling. A2
-// rewrites FilterSheet against this shape and re-exports `FilterState`
-// from here; legacy callers migrate as their commits land.
+// Adopted app-wide as of A2; FilterSheet re-exports the type so legacy
+// import paths keep compiling.
 //
 // UK content rating axis is intentionally omitted — dropped from
 // Phase 1 per the kickoff-brief H7 resolution (no compliance pressure,
@@ -185,87 +181,6 @@ function fnv1a(s: string): string {
     h = Math.imul(h, 0x01000193);
   }
   return (h >>> 0).toString(16).padStart(8, "0");
-}
-
-// ─── Legacy interop ───────────────────────────────────────────────
-
-/**
- * The pre-Phase-Search-V2 filter shape (`src/components/FilterSheet.tsx`).
- * Kept here so the shim stays type-safe; the source export will be
- * dropped in A2 when FilterSheet adopts the new shape directly.
- */
-export interface LegacyFilterState {
-  services: string[];
-  contentType: string;
-  cost: string;
-  genres: string[];
-  minRating: number;
-  showWatched: boolean;
-  languages: string[];
-}
-
-export function fromLegacy(legacy: LegacyFilterState, userServices: readonly ServiceId[]): FilterState {
-  const base = defaultFor(userServices);
-  // Legacy `services` was opt-IN — empty array meant "no service
-  // filter". Match that semantics on conversion: empty legacy → all
-  // user services (default). Populated legacy → narrow to those.
-  base.services = legacy.services.length > 0
-    ? legacy.services.filter((s): s is ServiceId => isServiceId(s))
-    : [...userServices];
-  base.contentType = mapLegacyContentType(legacy.contentType);
-  base.cost = mapLegacyCost(legacy.cost);
-  base.genres = legacy.genres;
-  base.minRating = legacy.minRating;
-  base.showWatched = legacy.showWatched ? "only" : "all";
-  base.languages = legacy.languages;
-  return base;
-}
-
-export function toLegacy(state: FilterState): LegacyFilterState {
-  return {
-    services: state.services,
-    contentType: legacyContentType(state.contentType),
-    cost: legacyCost(state.cost),
-    genres: state.genres,
-    minRating: state.minRating,
-    showWatched: state.showWatched === "only",
-    languages: state.languages,
-  };
-}
-
-function mapLegacyContentType(v: string): ContentType {
-  switch (v) {
-    case "Movies": return "movie";
-    case "TV": return "tv";
-    case "Docs": return "doc";
-    default: return "all";
-  }
-}
-
-function legacyContentType(v: ContentType): string {
-  switch (v) {
-    case "movie": return "Movies";
-    case "tv": return "TV";
-    case "doc": return "Docs";
-    default: return "All";
-  }
-}
-
-function mapLegacyCost(v: string): Cost {
-  switch (v) {
-    case "Free": return "free";
-    case "Paid": return "rent_ok";
-    default: return "all";
-  }
-}
-
-function legacyCost(v: Cost): string {
-  switch (v) {
-    case "free": return "Free";
-    case "rent_ok": return "Paid";
-    case "in_plan": return "Paid";
-    default: return "All";
-  }
 }
 
 // ─── Small helpers ────────────────────────────────────────────────

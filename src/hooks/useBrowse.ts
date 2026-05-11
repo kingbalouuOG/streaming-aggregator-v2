@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { discoverMovies, discoverTV } from '@/lib/api/tmdb';
 import { tmdbMovieToContentItem, tmdbTVToContentItem } from '@/lib/adapters/contentAdapter';
 import type { ContentItem } from '@/components/ContentCard';
-import type { FilterState } from '@/components/FilterSheet';
+import type { FilterState } from '@/lib/search/filterState';
 import { serviceIdsToProviderIds, providerIdsToServiceIds } from '@/lib/adapters/platformAdapter';
 import { GENRE_NAME_TO_ID } from '@/lib/constants/genres';
 import { getCachedServices } from '@/lib/utils/serviceCache';
@@ -49,10 +49,14 @@ export function useBrowse(filters: FilterState, providerIds: number[]) {
       params['vote_count.gte'] = 50;
     }
 
-    // Cost filter (monetization type)
-    if (filters.cost === 'Free') {
-      params.with_watch_monetization_types = 'flatrate|free|ads';
-    } else if (filters.cost === 'Paid') {
+    // Cost filter (monetization type). Maps Phase Search V2's four-way
+    // cost axis onto TMDb's monetization types — 'in_plan' and 'free'
+    // both shop the flatrate/free pool; 'rent_ok' opens up rent/buy.
+    if (filters.cost === 'free') {
+      params.with_watch_monetization_types = 'free|ads';
+    } else if (filters.cost === 'in_plan') {
+      params.with_watch_monetization_types = 'flatrate';
+    } else if (filters.cost === 'rent_ok') {
       params.with_watch_monetization_types = 'rent|buy';
       // Remove provider constraint — we want ANY rent/buy title in GB,
       // then post-filter to exclude titles also available as flatrate on user's platforms
@@ -70,8 +74,8 @@ export function useBrowse(filters: FilterState, providerIds: number[]) {
 
     try {
       const params = { ...buildDiscoverParams(), page: pageNum };
-      const shouldFetchMovies = filters.contentType === 'All' || filters.contentType === 'Movies' || filters.contentType === 'Docs';
-      const shouldFetchTV = filters.contentType === 'All' || filters.contentType === 'TV';
+      const shouldFetchMovies = filters.contentType === 'all' || filters.contentType === 'movie' || filters.contentType === 'doc';
+      const shouldFetchTV = filters.contentType === 'all' || filters.contentType === 'tv';
 
       const promises: Promise<any>[] = [];
       if (shouldFetchMovies) promises.push(discoverMovies(params));
@@ -92,8 +96,9 @@ export function useBrowse(filters: FilterState, providerIds: number[]) {
       // Sort by popularity (interleave movies and TV)
       newItems.sort(() => Math.random() - 0.5);
 
-      // Post-filter for "Paid": exclude titles that have free flatrate on user's platforms
-      if (filters.cost === 'Paid') {
+      // Post-filter for "Rent OK": exclude titles that have free
+      // flatrate on user's platforms (caller wants paid-only candidates)
+      if (filters.cost === 'rent_ok') {
         const userServiceIds = providerIdsToServiceIds(providerIds);
         const checks = await Promise.all(
           newItems.map(async (item) => {

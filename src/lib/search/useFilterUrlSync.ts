@@ -13,17 +13,11 @@
 // Hash format: `#search?services=netflix&type=movie&...`. The `search?`
 // prefix scopes the persisted state to this surface so other tabs are
 // free to use the hash for their own purposes later without collision.
-//
-// State shape boundary: this hook converts between the legacy
-// FilterState (the live app's shape — what `App.tsx` still owns) and
-// the canonical Phase Search V2 FilterState (`filterState.ts`). When
-// FilterSheet adopts the new shape directly (A2), the `fromLegacy` /
-// `toLegacy` calls become identity and can be removed.
 
 import { useEffect, useRef } from "react";
 import type { ServiceId } from "../../components/platformLogos";
-import type { LegacyFilterState } from "./filterState";
-import { deserialize, fromLegacy, hash as hashState, serialize, toLegacy } from "./filterState";
+import type { FilterState } from "./filterState";
+import { deserialize, hash as hashState, serialize } from "./filterState";
 
 const HASH_PREFIX = "search?";
 
@@ -38,8 +32,8 @@ interface Options {
 }
 
 export function useFilterUrlSync(
-  filters: LegacyFilterState,
-  onFiltersChange: (next: LegacyFilterState) => void,
+  filters: FilterState,
+  onFiltersChange: (next: FilterState) => void,
   userServices: readonly ServiceId[],
   options: Options,
 ): void {
@@ -59,22 +53,20 @@ export function useFilterUrlSync(
     if (params.toString() === "") return;
 
     const restored = deserialize(params, userServices, genres, languages);
-    onFiltersChange(toLegacy(restored));
+    onFiltersChange(restored);
     lastWrittenHashRef.current = hashState(restored);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
 
-  // Mirror live state to hash. Skip the very first effect tick (the
-  // hydrate effect may have triggered a state change we don't want to
-  // immediately re-serialise into a noop URL update).
+  // Mirror live state to hash. Gated on hydration so the read-from-
+  // hash flow doesn't immediately echo back the same value.
   useEffect(() => {
     if (!enabled || !hydratedRef.current) return;
 
-    const modern = fromLegacy(filters, userServices);
-    const next = hashState(modern);
+    const next = hashState(filters);
     if (next === lastWrittenHashRef.current) return;
 
-    const params = serialize(modern, userServices);
+    const params = serialize(filters, userServices);
     const serialised = params.toString();
     const newHash = serialised ? `#${HASH_PREFIX}${serialised}` : "";
     if (newHash === window.location.hash) return;
