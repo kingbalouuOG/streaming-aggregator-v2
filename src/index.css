@@ -79,8 +79,15 @@
 
   /* Brand */
   --primary:      #e85d25;
-  --primary-soft: rgba(232,93,37,0.10);
-  --primary-edge: rgba(232,93,37,0.30);
+  --primary-soft: rgba(232,93,37,0.14);
+  --primary-edge: rgba(232,93,37,0.42);
+  /* Foreground on top of `--primary-soft` backgrounds. Brand orange
+   * (#e85d25) on a 14% tint of itself reads as low-contrast and
+   * monotone; salmon (`#ff8d5a`) sits one step lighter and gives the
+   * pill/chip text the legibility it needs against the soft fill.
+   * Used on `<ActiveFilterPill>`, small filter chips, "in your plan"
+   * sub-badges, the Mode C indicator copy, and similar surfaces. */
+  --primary-fg-on-soft: #ff8d5a;
 
   /* Glass scrim — dark blur surface used on top of imagery (hero
    * pills, top-right service badges, bookmark/info chips). Lives on
