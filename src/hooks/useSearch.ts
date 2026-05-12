@@ -18,6 +18,11 @@ interface UseSearchOptions {
    *  notOnYours. Defaults to true to match `FilterState.onlyOnMyServices`
    *  default. */
   onlyOnMyServices?: boolean;
+  /** Restore the off-services tag set across navigation. Paired with
+   *  `initialResults` — if the caller passes restored results from
+   *  `BrowseStateSnapshot`, this prop carries the matching off-services
+   *  decisions so a tap-into-detail-then-back doesn't drop them. */
+  initialUnavailableIds?: readonly string[];
 }
 
 export function useSearch(
@@ -26,10 +31,12 @@ export function useSearch(
   initialResults?: ContentItem[],
   options: UseSearchOptions = {},
 ) {
-  const { onlyOnMyServices = true } = options;
+  const { onlyOnMyServices = true, initialUnavailableIds } = options;
   const [query, setQuery] = useState(initialQuery || '');
   const [results, setResults] = useState<ContentItem[]>(initialResults || []);
-  const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set());
+  const [unavailableIds, setUnavailableIds] = useState<Set<string>>(() =>
+    initialUnavailableIds ? new Set(initialUnavailableIds) : new Set()
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);

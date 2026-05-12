@@ -15,6 +15,10 @@ export interface BrowseStateSnapshot {
   query: string;
   results: ContentItem[];
   activeCategory: string;
+  /** IDs of items the per-item /watch/providers check tagged as off-
+   *  services. Saved across navigation so a tap-into-detail-then-back
+   *  doesn't drop the "Not on yours" treatment. */
+  unavailableIds: string[];
 }
 
 interface BrowsePageProps {
@@ -36,6 +40,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
 
   const search = useSearch(userServices, initial?.query, initial?.results, {
     onlyOnMyServices: filters.onlyOnMyServices,
+    initialUnavailableIds: initial?.unavailableIds,
   });
 
   // Mirror filter state to the URL hash so deep links and back-button
@@ -66,6 +71,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
           query: searchRef.current.query,
           results: searchRef.current.results,
           activeCategory: searchRef.current.activeCategory,
+          unavailableIds: Array.from(searchRef.current.unavailableIds),
         };
       }
     };
