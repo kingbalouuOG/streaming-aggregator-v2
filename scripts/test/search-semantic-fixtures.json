@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "description": "Phase Search V2 Cluster B (B6) — semantic search eval fixtures. Each entry is a hand-written descriptive query with the top-N TMDb IDs the eval expects to surface. Joe authors the real set; this stub keeps the script + workflow runnable until the real fixtures land.",
+  "thresholds": {
+    "precisionAt10": 0.6,
+    "mrr": 0.7
+  },
+  "queries": [
+    {
+      "query": "slow burn psychological thrillers",
+      "expected": [
+        { "tmdbId": 14336, "mediaType": "movie", "title": "Drive" },
+        { "tmdbId": 365, "mediaType": "movie", "title": "Mulholland Drive" },
+        { "tmdbId": 466272, "mediaType": "movie", "title": "Once Upon a Time in Hollywood" }
+      ],
+      "_note": "Placeholder — replace with real curated top-10 set."
+    },
+    {
+      "query": "comfort comedy from the 90s",
+      "expected": [
+        { "tmdbId": 808, "mediaType": "movie", "title": "Shrek" },
+        { "tmdbId": 105, "mediaType": "movie", "title": "Back to the Future" }
+      ],
+      "_note": "Placeholder — replace with real curated top-10 set."
+    }
+  ]
+}
