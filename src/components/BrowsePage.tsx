@@ -1014,15 +1014,30 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
           </div>
         )}
 
-        {/* Load more for search */}
-        {search.hasMore && displayItems.length > 0 && (
+        {/* Load more — covers both modes. Auto-paginate fills the
+            grid to the per-mode visible threshold; this button is the
+            user's explicit "give me more" once they're past it. */}
+        {((filterOnlyMode && browse.hasMore) || (!filterOnlyMode && search.hasMore)) && displayItems.length > 0 && (
           <div className="flex justify-center py-6">
             <button
-              onClick={search.loadMore}
-              disabled={search.loading}
-              className="px-6 py-2 rounded-full bg-secondary text-foreground text-[13px] hover:bg-accent transition-colors"
+              type="button"
+              onClick={() => (filterOnlyMode ? browse.loadMore() : search.loadMore())}
+              disabled={isLoading}
+              className="inline-flex items-center justify-center gap-2 transition-colors"
+              style={{
+                padding: "8px 18px",
+                background: "var(--surface-tint)",
+                border: "0.5px solid var(--hairline)",
+                borderRadius: "var(--r-pill)",
+                color: "var(--fg)",
+                fontFamily: "var(--font-ui)",
+                fontSize: 13,
+                fontWeight: 600,
+                letterSpacing: "-0.005em",
+                opacity: isLoading ? 0.6 : 1,
+              }}
             >
-              {search.loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Load More"}
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Load more"}
             </button>
           </div>
         )}

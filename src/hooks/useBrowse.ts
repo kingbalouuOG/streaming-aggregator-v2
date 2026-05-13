@@ -41,12 +41,18 @@ export function useBrowse(
         : {}),
     };
 
-    // Provider filter: use filters.services if set, otherwise user's providers
-    if (filters.services.length > 0) {
-      const filterProviderIds = serviceIdsToProviderIds(filters.services as ServiceId[]);
-      params.with_watch_providers = filterProviderIds.join('|');
-    } else if (providerStr) {
-      params.with_watch_providers = providerStr.replace(/,/g, '|');
+    // Provider filter. Only constrain when "Only on my services" is
+    // ON — otherwise the user has explicitly asked to see options
+    // beyond their stack, so we let TMDb return the broader GB
+    // catalogue and rely on useItemAvailability to tag off-service
+    // items downstream.
+    if (filters.onlyOnMyServices) {
+      if (filters.services.length > 0) {
+        const filterProviderIds = serviceIdsToProviderIds(filters.services as ServiceId[]);
+        params.with_watch_providers = filterProviderIds.join('|');
+      } else if (providerStr) {
+        params.with_watch_providers = providerStr.replace(/,/g, '|');
+      }
     }
 
     // Genre filter
@@ -162,7 +168,7 @@ export function useBrowse(
   loadRef.current = load;
 
   // Stable key from actual filter values — avoids infinite loop from unstable function refs
-  const filterKey = `${filters.contentType}|${[...filters.costs].sort().join(',')}|${filters.services.join(',')}|${filters.genres.join(',')}|${filters.minRating}|${providerStr}|${sortBy}`;
+  const filterKey = `${filters.contentType}|${[...filters.costs].sort().join(',')}|${filters.services.join(',')}|${filters.genres.join(',')}|${filters.minRating}|${providerStr}|${sortBy}|${filters.onlyOnMyServices ? '1' : '0'}`;
 
   // Reload when filters change. `skip` lets BrowsePage call this hook
   // unconditionally (React rules) but suppress the /discover round-
