@@ -427,9 +427,13 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     <div className="flex flex-col gap-0">
       {/* Sticky search + filter controls */}
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl pb-1" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))", backgroundColor: "var(--background)" }}>
-        {/* Search bar + Filter button — editorial paper/ink surface. */}
-        <div className="px-5 mb-3 flex gap-2">
-          <div className="relative flex-1">
+        {/* Full-width search bar. The filter icon button used to live
+            here on the right but moved below — from the empty state
+            the user picks between typing and the "Build your search"
+            CTA, so the icon was redundant. From the results page the
+            Edit filters pill takes its place on a row below. */}
+        <div className="px-5 mb-3">
+          <div className="relative">
             <Search
               className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] pointer-events-none"
               style={{ color: "var(--fg-faint)" }}
@@ -473,42 +477,58 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
               </button>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => onShowFiltersChange(true)}
-            className="relative w-11 h-11 flex items-center justify-center shrink-0 transition-all duration-200"
-            style={{
-              background: activeFilterCount > 0 ? "var(--primary-soft)" : "var(--surface-elev)",
-              border: activeFilterCount > 0
-                ? "1px solid color-mix(in srgb, var(--primary) 50%, transparent)"
-                : "0.5px solid var(--hairline)",
-              borderRadius: "var(--r-card)",
-              color: activeFilterCount > 0 ? "var(--primary)" : "var(--fg-soft)",
-            }}
-            aria-label="Filters"
-          >
-            <SlidersHorizontal className="w-[18px] h-[18px]" />
-            {activeFilterCount > 0 && (
-              <span
-                className="absolute -top-1 -right-1 inline-flex items-center justify-center"
-                style={{
-                  minWidth: 18,
-                  height: 18,
-                  padding: "0 4px",
-                  borderRadius: "var(--r-pill)",
-                  background: "var(--primary)",
-                  color: "var(--primary-foreground)",
-                  fontFamily: "var(--font-ui)",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  border: "2px solid var(--surface)",
-                }}
-              >
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
         </div>
+
+        {/* Edit filters pill — sits under the search bar whenever the
+            user is engaged with results (typing a query OR has filters
+            applied). Hidden on the bare landing state (no query AND
+            default filters) so the empty-state journeys aren't
+            crowded. */}
+        {(hasQuery || !filtersAreDefault) && (
+          <div className="px-5 mb-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => onShowFiltersChange(true)}
+              className="inline-flex items-center gap-1.5"
+              style={{
+                padding: "6px 12px",
+                background: activeFilterCount > 0 ? "var(--primary-soft)" : "var(--surface-tint)",
+                border: activeFilterCount > 0
+                  ? "0.5px solid var(--primary-edge)"
+                  : "0.5px solid var(--hairline)",
+                borderRadius: "var(--r-pill)",
+                color: activeFilterCount > 0 ? "var(--primary-fg-on-soft)" : "var(--fg)",
+                fontFamily: "var(--font-ui)",
+                fontSize: 12.5,
+                fontWeight: 600,
+                letterSpacing: "-0.005em",
+              }}
+              aria-label="Edit filters"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Edit filters</span>
+              {activeFilterCount > 0 && (
+                <span
+                  className="inline-flex items-center justify-center"
+                  style={{
+                    minWidth: 18,
+                    height: 18,
+                    padding: "0 5px",
+                    borderRadius: "9999px",
+                    background: "var(--primary)",
+                    color: "#fff",
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    lineHeight: 1,
+                  }}
+                >
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
 
         {/* Category filter pills — editorial chip bar with kicker. */}
         {isSearching && (
