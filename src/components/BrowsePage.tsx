@@ -5,6 +5,9 @@ import { ContentItem } from "./ContentCard";
 import { FilterSheet, FilterState, ALL_GENRES, FILTER_LANGUAGES } from "./FilterSheet";
 import { MoodChip } from "./MoodChip";
 import { SearchSuggestions } from "./search/SearchSuggestions";
+import { SearchModeIndicator } from "./search/SearchModeIndicator";
+import { SearchSemanticCTA } from "./search/SearchSemanticCTA";
+import { toast } from "sonner";
 import { useSearch } from "@/hooks/useSearch";
 import { useBrowse, type BrowseSortBy } from "@/hooks/useBrowse";
 import { useItemAvailability } from "@/hooks/useItemAvailability";
@@ -223,6 +226,24 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
       requestAnimationFrame(() => search.setMode('semantic'));
     }
   }, [search, semanticFlagOn]);
+
+  // Mode A → Mode C opt-in tap. Flag on: dispatch semantic. Flag
+  // off: show the preview toast so the CTA isn't a dead button
+  // during the eval-gated rollout.
+  const handleSemanticAccept = useCallback(() => {
+    if (semanticFlagOn) {
+      search.setMode('semantic');
+      return;
+    }
+    toast('Semantic search is in preview', {
+      description: 'We’re tuning this for accuracy. It’ll switch on for everyone once the eval rig is green.',
+    });
+  }, [search, semanticFlagOn]);
+
+  // Mode C revert — "Search keywords instead" link.
+  const handleSemanticRevert = useCallback(() => {
+    search.setMode('lookup');
+  }, [search]);
 
   const handleBuildYourSearch = useCallback(() => {
     onShowFiltersChange(true);
@@ -870,8 +891,24 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
           </div>
         )}
 
+        {/* Mode A → Mode C opt-in CTA. Renders when useSearch
+            decides the current Mode A query looks free-text and
+            sparse. Tap dispatches Mode C when flag on, or shows a
+            preview toast when off — handler decides. Above any
+            sparse-grid render so the user sees the CTA even when
+            results.length is 0–2. */}
+        {!searchFocused && search.shouldShowSemanticCTA && (
+          <SearchSemanticCTA query={search.query} onAccept={handleSemanticAccept} />
+        )}
+
         {!searchFocused && displayItems.length > 0 && (
           <>
+            {/* Mode C indicator — italic Fraunces "Showing titles
+                like '…'" + revert link. Only renders in semantic
+                mode so Mode A grids stay un-prefixed. */}
+            {search.mode === 'semantic' && (
+              <SearchModeIndicator query={search.query} onRevert={handleSemanticRevert} />
+            )}
 
             {/* Active-filter strip — only when ≥ 1 filter active.
                 Kicker "N FILTERS · CLEAR" + horizontally-scrolling
