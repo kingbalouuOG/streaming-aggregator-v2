@@ -4,6 +4,7 @@ import { BrowseCard } from "./BrowseCard";
 import { ContentItem } from "./ContentCard";
 import { FilterSheet, FilterState, ALL_GENRES, FILTER_LANGUAGES } from "./FilterSheet";
 import { MoodChip } from "./MoodChip";
+import { SearchSuggestions } from "./search/SearchSuggestions";
 import { useSearch } from "@/hooks/useSearch";
 import { providerIdsToServiceIds } from "@/lib/adapters/platformAdapter";
 import { GENRE_NAME_TO_ID } from "@/lib/constants/genres";
@@ -99,6 +100,11 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
 
   const hasQuery = search.query.trim().length > 0;
   const isSearching = search.query.trim().length >= 2;
+
+  // Search input focus state — drives the suggestions/grid toggle.
+  // Focused + has query → suggestions list (artboard 02).
+  // Blurred (post-Enter / post-tap-outside) → results grid.
+  const [searchFocused, setSearchFocused] = useState(false);
 
   // Recent searches — local store. Tracked in state so add/remove
   // re-renders the empty state. The store is the source of truth; the
@@ -205,9 +211,17 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
             />
             <input
               type="text"
-              placeholder="Search movies and TV shows…"
+              placeholder="Search titles, moods, descriptions"
               value={search.query}
               onChange={(e) => search.setQuery(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              onKeyDown={(e) => {
+                // Enter commits the query — blur dismisses the mobile
+                // keyboard, which in turn drops the suggestions list
+                // and surfaces the results grid.
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
               className="w-full pl-10 pr-10 py-3 outline-none transition-all"
               style={{
                 background: "var(--surface-elev)",
@@ -473,22 +487,44 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
           </div>
         )}
 
-        {/* Too short query state */}
-        {search.tooShort && (
+        {/* Typing view — suggestions list under the input. Renders
+            while the input is focused so the user sees dense matches
+            as they type. Enter (or tapping out) blurs the input and
+            surfaces the full results grid below. */}
+        {searchFocused && hasQuery && (
+          <SearchSuggestions
+            query={search.query}
+            items={displayItems}
+            loading={isLoading}
+            tooShort={search.tooShort}
+            onSelect={(item) => onItemSelect?.(item)}
+          />
+        )}
+
+        {/* Submitted view — full results grid */}
+        {!searchFocused && hasQuery && search.tooShort && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <p className="text-muted-foreground text-[13px]">Keep typing to search...</p>
+            <p
+              style={{
+                fontFamily: "var(--font-display)",
+                fontStyle: "italic",
+                fontSize: 14,
+                fontWeight: 500,
+                color: "var(--fg-soft)",
+              }}
+            >
+              Keep typing…
+            </p>
           </div>
         )}
 
-        {/* Loading state */}
-        {isLoading && displayItems.length === 0 && isSearching && (
+        {!searchFocused && isLoading && displayItems.length === 0 && isSearching && (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
           </div>
         )}
 
-        {/* Results grid */}
-        {displayItems.length > 0 && (
+        {!searchFocused && displayItems.length > 0 && (
           <div className="grid grid-cols-2 gap-3">
             {displayItems.map((item, index) => (
               <BrowseCard key={item.id} item={item} index={index} onSelect={onItemSelect} bookmarked={bookmarkedIds?.has(item.id)} onToggleBookmark={onToggleBookmark} userServices={userServices} watched={watchedIds?.has(item.id)} offService={search.unavailableIds.has(item.id)} rentBuyPriceLabel={search.rentBuyPrices.get(item.id)} />
@@ -496,8 +532,8 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
           </div>
         )}
 
-        {/* No results state */}
-        {isSearching && !isLoading && displayItems.length === 0 && search.results.length >= 0 && !search.tooShort && (
+        {/* No results state — only on the submitted view */}
+        {!searchFocused && isSearching && !isLoading && displayItems.length === 0 && search.results.length >= 0 && !search.tooShort && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Search className="w-10 h-10 text-muted-foreground/40 mb-3" />
             <p className="text-muted-foreground text-[15px]" style={{ fontWeight: 500 }}>
