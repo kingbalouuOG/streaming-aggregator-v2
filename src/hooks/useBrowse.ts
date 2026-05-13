@@ -49,17 +49,20 @@ export function useBrowse(filters: FilterState, providerIds: number[]) {
       params['vote_count.gte'] = 50;
     }
 
-    // Cost filter (monetization type). Maps Phase Search V2's four-way
-    // cost axis onto TMDb's monetization types — 'in_plan' and 'free'
-    // both shop the flatrate/free pool; 'rent_ok' opens up rent/buy.
+    // Cost filter. Phase Search V2's axis is All / Free / Rent / Buy.
+    // "Free" covers everything no-marginal-cost — flatrate sub already
+    // paid for, plus true free/ads — folded together because the user
+    // experience is identical at point of play. Rent and Buy are the
+    // two paid tiers and each maps to a single TMDb monetization type.
     if (filters.cost === 'free') {
-      params.with_watch_monetization_types = 'free|ads';
-    } else if (filters.cost === 'in_plan') {
-      params.with_watch_monetization_types = 'flatrate';
-    } else if (filters.cost === 'rent_ok') {
-      params.with_watch_monetization_types = 'rent|buy';
-      // Remove provider constraint — we want ANY rent/buy title in GB,
-      // then post-filter to exclude titles also available as flatrate on user's platforms
+      params.with_watch_monetization_types = 'flatrate|free|ads';
+    } else if (filters.cost === 'rent') {
+      params.with_watch_monetization_types = 'rent';
+      // Drop the provider constraint — we want any rent-available
+      // title in GB, then post-filter for the paid-only intent.
+      delete params.with_watch_providers;
+    } else if (filters.cost === 'buy') {
+      params.with_watch_monetization_types = 'buy';
       delete params.with_watch_providers;
     }
 
@@ -96,9 +99,10 @@ export function useBrowse(filters: FilterState, providerIds: number[]) {
       // Sort by popularity (interleave movies and TV)
       newItems.sort(() => Math.random() - 0.5);
 
-      // Post-filter for "Rent OK": exclude titles that have free
-      // flatrate on user's platforms (caller wants paid-only candidates)
-      if (filters.cost === 'rent_ok') {
+      // Post-filter for Rent / Buy: exclude titles that already sit on
+      // the user's flatrate (caller wants paid-only candidates, not
+      // things they could already stream for free).
+      if (filters.cost === 'rent' || filters.cost === 'buy') {
         const userServiceIds = providerIdsToServiceIds(providerIds);
         const checks = await Promise.all(
           newItems.map(async (item) => {

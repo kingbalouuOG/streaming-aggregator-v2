@@ -13,7 +13,7 @@ import type { ServiceId } from "../../components/platformLogos";
 // ─── Types ────────────────────────────────────────────────────────
 
 export type ContentType = "all" | "movie" | "tv" | "doc";
-export type Cost = "all" | "free" | "in_plan" | "rent_ok";
+export type Cost = "all" | "free" | "rent" | "buy";
 export type Runtime = "any" | "under_60" | "60_120" | "over_120";
 export type ShowWatched = "all" | "hide" | "only";
 
@@ -30,7 +30,7 @@ export interface FilterState {
 }
 
 const CONTENT_TYPES: readonly ContentType[] = ["all", "movie", "tv", "doc"];
-const COSTS: readonly Cost[] = ["all", "free", "in_plan", "rent_ok"];
+const COSTS: readonly Cost[] = ["all", "free", "rent", "buy"];
 const RUNTIMES: readonly Runtime[] = ["any", "under_60", "60_120", "over_120"];
 const SHOW_WATCHED: readonly ShowWatched[] = ["all", "hide", "only"];
 

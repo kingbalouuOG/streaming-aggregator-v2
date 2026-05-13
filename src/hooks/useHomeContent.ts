@@ -178,11 +178,12 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     }
 
     if (filters?.cost === 'free') {
-      params.with_watch_monetization_types = 'free|ads';
-    } else if (filters?.cost === 'in_plan') {
-      params.with_watch_monetization_types = 'flatrate';
-    } else if (filters?.cost === 'rent_ok') {
-      params.with_watch_monetization_types = 'rent|buy';
+      params.with_watch_monetization_types = 'flatrate|free|ads';
+    } else if (filters?.cost === 'rent') {
+      params.with_watch_monetization_types = 'rent';
+      delete params.with_watch_providers;
+    } else if (filters?.cost === 'buy') {
+      params.with_watch_monetization_types = 'buy';
       delete params.with_watch_providers;
     }
 

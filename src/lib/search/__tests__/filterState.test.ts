@@ -112,7 +112,7 @@ test("round-trip: fully-populated state", () => {
   const s: FilterState = {
     services: ["netflix"],
     contentType: "movie",
-    cost: "in_plan",
+    cost: "rent",
     runtime: "60_120",
     genres: ["Drama", "Thriller"],
     minRating: 6.8,
@@ -123,7 +123,7 @@ test("round-trip: fully-populated state", () => {
   const rt = roundTrip(s);
   assert.deepStrictEqual(rt.services.sort(), ["netflix"]);
   assert.equal(rt.contentType, "movie");
-  assert.equal(rt.cost, "in_plan");
+  assert.equal(rt.cost, "rent");
   assert.equal(rt.runtime, "60_120");
   assert.deepStrictEqual(rt.genres.sort(), ["Drama", "Thriller"]);
   assert.equal(rt.minRating, 6.8);
@@ -149,10 +149,10 @@ test("serialize emits services= when user opts a service out", () => {
 });
 
 test("deserialize ignores unknown enum values", () => {
-  const params = new URLSearchParams("type=bogus&cost=in_plan");
+  const params = new URLSearchParams("type=bogus&cost=rent");
   const s = deserialize(params, USER, GENRES, LANGUAGES);
   assert.equal(s.contentType, "all");
-  assert.equal(s.cost, "in_plan");
+  assert.equal(s.cost, "rent");
 });
 
 test("deserialize ignores unknown service ids", () => {

@@ -40,10 +40,13 @@ const CONTENT_TYPE_OPTIONS: SegmentedOption<ContentType>[] = [
 ];
 
 const COST_OPTIONS: SegmentedOption<Cost>[] = [
+  // "Free" covers flatrate subscriptions (already paid for) + true
+  // free/ads — anything with zero marginal cost to the user at point
+  // of play. Rent / Buy are the two paid tiers.
   { value: "all", label: "All" },
   { value: "free", label: "Free" },
-  { value: "in_plan", label: "In plan" },
-  { value: "rent_ok", label: "Rent OK" },
+  { value: "rent", label: "Rent" },
+  { value: "buy", label: "Buy" },
 ];
 
 const RUNTIME_OPTIONS: SegmentedOption<Runtime>[] = [

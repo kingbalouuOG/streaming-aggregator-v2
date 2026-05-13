@@ -11,14 +11,18 @@ interface ServiceTileProps {
  * ServiceTile — 56×56 service logo button used in the Phase Search V2
  * FilterSheet's STREAMING SERVICES row.
  *
- * Active: orange ring + 18px tick badge at the bottom-right of the tile.
- * Inactive: greyscale + 40% opacity inner thumbnail so excluded services
- * read as suppressed (per artboard 05). Tap toggles selection.
+ * Active reads as "deliberately on": 3px orange ring around the logo,
+ * 20×20 tick badge at the bottom-right, soft orange glow, full-colour
+ * thumbnail. Default state in the sheet has every user service active
+ * (opt-out, not opt-in), so the on-state needs to feel obvious enough
+ * that the user recognises it as a selection.
  *
- * Anatomy (artboard 05 / videx-search-v2.jsx SvServiceTile):
+ * Inactive: 50% grayscale + 40% opacity inner thumbnail, hairline edge,
+ * faint label — reads as suppressed.
+ *
+ * Anatomy (artboard 05):
  *   - 64w column → 56×56 ring + 11px service name below
- *   - Ring becomes filled `--primary` when active; transparent otherwise
- *   - Inner 12px-radius thumbnail holds the logo and dims when inactive
+ *   - Ring is `padding: 3px` of `--primary` between outer and inner radii
  */
 export function ServiceTile({ service, active, onToggle }: ServiceTileProps) {
   const platform = getPlatform(service);
@@ -30,7 +34,7 @@ export function ServiceTile({ service, active, onToggle }: ServiceTileProps) {
       onClick={() => onToggle(service)}
       className="flex flex-col items-center gap-[7px] shrink-0 focus:outline-none"
       style={{ width: 64 }}
-      aria-pressed={active}
+      aria-pressed={active ? "true" : "false"}
       aria-label={`${platform.name} — ${active ? "selected" : "excluded"}`}
     >
       <div
@@ -39,9 +43,10 @@ export function ServiceTile({ service, active, onToggle }: ServiceTileProps) {
           width: 56,
           height: 56,
           borderRadius: 14,
-          padding: 2,
+          padding: 3,
           background: active ? "var(--primary)" : "transparent",
-          transition: "background var(--d-base) var(--ease-out)",
+          boxShadow: active ? "0 2px 10px rgba(232, 93, 37, 0.30)" : "none",
+          transition: "background var(--d-base) var(--ease-out), box-shadow var(--d-base) var(--ease-out)",
         }}
       >
         <div
@@ -49,7 +54,7 @@ export function ServiceTile({ service, active, onToggle }: ServiceTileProps) {
           style={{
             width: "100%",
             height: "100%",
-            borderRadius: 12,
+            borderRadius: 11,
             background: "#000",
             boxShadow: active ? "none" : "inset 0 0 0 0.5px var(--hairline)",
             opacity: active ? 1 : 0.4,
@@ -67,17 +72,17 @@ export function ServiceTile({ service, active, onToggle }: ServiceTileProps) {
           <span
             className="absolute flex items-center justify-center"
             style={{
-              bottom: -2,
-              right: -2,
-              width: 18,
-              height: 18,
+              bottom: -3,
+              right: -3,
+              width: 20,
+              height: 20,
               borderRadius: "9999px",
               background: "var(--primary)",
               color: "#fff",
               boxShadow: "0 0 0 2px var(--surface-elev)",
             }}
           >
-            <TickIcon className="w-[10px] h-[10px]" />
+            <TickIcon className="w-[12px] h-[12px]" />
           </span>
         )}
       </div>
@@ -86,7 +91,7 @@ export function ServiceTile({ service, active, onToggle }: ServiceTileProps) {
         style={{
           fontFamily: "var(--font-ui)",
           fontSize: 10.5,
-          fontWeight: 600,
+          fontWeight: active ? 700 : 500,
           letterSpacing: "-0.01em",
           lineHeight: 1,
           color: active ? "var(--fg)" : "var(--fg-faint)",

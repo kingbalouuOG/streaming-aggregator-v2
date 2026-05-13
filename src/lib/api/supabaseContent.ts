@@ -73,26 +73,26 @@ export async function getStreamingLinks(
 }
 
 /**
- * Cheapest rent/buy price for a title, formatted as "From £X.XX".
+ * Cheapest rent/buy price for a title, formatted as "Rent from £X.XX"
+ * or "Buy from £X.XX".
  *
- * Queries `streaming_availability` for any rent/buy entries with a
- * known price and returns the lowest, formatted. Returns null when
- * the title has no rent/buy availability OR no price data (some
- * SA rows record availability without a concrete price).
+ * Queries `streaming_availability` for rent + buy entries with a known
+ * price and picks the lowest, retaining the stream_type so the label
+ * tells the user *how* the price applies. When both rent and buy are
+ * available, rent's lower price wins automatically (rent is always
+ * cheaper than buy for the same title) and the pill reads "Rent from
+ * £X.XX." If only buy is available, "Buy from £X.XX." Returns null
+ * when there's no priced rent/buy entry.
  *
- * Used on the search results grid to surface the "From £X.XX" pill
- * for off-service titles that are still actionable. Caching follows
- * the existing SA prefix (24h TTL) so a re-search of the same title
- * doesn't re-query.
+ * Cached under the SA prefix (24h TTL); both hits and absences are
+ * memoised so re-searches don't re-query.
  */
 export async function getRentBuyPrice(
   tmdbId: number,
   mediaType: 'movie' | 'tv'
-): Promise<{ fromFormatted: string } | null> {
-  const cacheKey = `${CACHE_PREFIXES.SA}rentbuy_${tmdbId}_${mediaType}`;
+): Promise<{ fromFormatted: string; streamType: 'rent' | 'buy' } | null> {
+  const cacheKey = `${CACHE_PREFIXES.SA}rentbuy_v2_${tmdbId}_${mediaType}`;
   const cached = await getCachedData(cacheKey);
-  // The cache stores `{ fromFormatted: string } | { absent: true }`;
-  // both branches are cache hits and skip the Supabase round-trip.
   if (cached) {
     return 'absent' in cached ? null : cached;
   }
@@ -114,10 +114,10 @@ export async function getRentBuyPrice(
     }
 
     const row: any = data[0];
-    const label = row.price_formatted
-      ? `From ${row.price_formatted}`
-      : `From £${parseFloat(row.price_amount).toFixed(2)}`;
-    const result = { fromFormatted: label };
+    const streamType: 'rent' | 'buy' = row.stream_type === 'buy' ? 'buy' : 'rent';
+    const verb = streamType === 'buy' ? 'Buy' : 'Rent';
+    const priceText = row.price_formatted || `£${parseFloat(row.price_amount).toFixed(2)}`;
+    const result = { fromFormatted: `${verb} from ${priceText}`, streamType };
     await setCachedData(cacheKey, result);
     return result;
   } catch {

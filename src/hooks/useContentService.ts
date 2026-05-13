@@ -82,23 +82,23 @@ export function useContentService(providerIds: number[], filters?: FilterState) 
         baseParams['vote_count.gte'] = 50;
       }
 
-      // Cost filter (monetization type). 'in_plan' narrows to flatrate
-      // only; 'free' to free/ads; 'rent_ok' to rent/buy with a paid-
-      // only post-filter so the user doesn't get titles already in their
-      // flatrate.
+      // Cost filter (monetization type). 'free' folds flatrate + true
+      // free + ads together (all no-marginal-cost). 'rent' and 'buy'
+      // are the two paid tiers; each opens to ANY GB title in that
+      // tier with a paid-only post-filter that excludes titles the
+      // user could already stream via their flatrate.
       if (filters?.cost === 'free') {
-        baseParams.with_watch_monetization_types = 'free|ads';
-      } else if (filters?.cost === 'in_plan') {
-        baseParams.with_watch_monetization_types = 'flatrate';
-      } else if (filters?.cost === 'rent_ok') {
-        baseParams.with_watch_monetization_types = 'rent|buy';
-        // Remove provider constraint — we want ANY rent/buy title in GB,
-        // then post-filter to exclude titles also available as flatrate on user's platforms
+        baseParams.with_watch_monetization_types = 'flatrate|free|ads';
+      } else if (filters?.cost === 'rent') {
+        baseParams.with_watch_monetization_types = 'rent';
+        delete baseParams.with_watch_providers;
+      } else if (filters?.cost === 'buy') {
+        baseParams.with_watch_monetization_types = 'buy';
         delete baseParams.with_watch_providers;
       }
 
-      // Post-filter helper for "Rent OK": exclude titles with free flatrate on user's platforms
-      const isPaidFilter = filters?.cost === 'rent_ok';
+      // Post-filter helper for Rent / Buy: exclude titles with free flatrate on user's platforms
+      const isPaidFilter = filters?.cost === 'rent' || filters?.cost === 'buy';
       const userServiceIds = isPaidFilter ? providerIdsToServiceIds(providerIds) : [];
       async function filterPaidOnly(items: ContentItem[]): Promise<ContentItem[]> {
         if (!isPaidFilter) return items;
