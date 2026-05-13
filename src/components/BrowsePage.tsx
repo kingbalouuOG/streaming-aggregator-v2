@@ -6,7 +6,7 @@ import { FilterSheet, FilterState, ALL_GENRES, FILTER_LANGUAGES } from "./Filter
 import { MoodChip } from "./MoodChip";
 import { SearchSuggestions } from "./search/SearchSuggestions";
 import { useSearch } from "@/hooks/useSearch";
-import { useBrowse } from "@/hooks/useBrowse";
+import { useBrowse, type BrowseSortBy } from "@/hooks/useBrowse";
 import { useItemAvailability } from "@/hooks/useItemAvailability";
 import { providerIdsToServiceIds } from "@/lib/adapters/platformAdapter";
 import { GENRE_NAME_TO_ID } from "@/lib/constants/genres";
@@ -123,6 +123,18 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
   // Blurred (post-Enter / post-tap-outside) → results grid.
   const [searchFocused, setSearchFocused] = useState(false);
 
+  // Sort axis. `best` is the default — relevance order for text
+  // search, popularity for filter-only browse. Explicit options
+  // override both. Session state (not in FilterState / URL) — it's
+  // an ordering concern, not a filtering one.
+  type SortMode = "best" | "popularity" | "rating" | "a_z" | "z_a";
+  const [sortBy, setSortBy] = useState<SortMode>("best");
+  const browseSortBy: BrowseSortBy =
+    sortBy === "rating" ? "vote_average.desc"
+    : sortBy === "a_z" ? "title.asc"
+    : sortBy === "z_a" ? "title.desc"
+    : "popularity.desc"; // best + popularity both map here for /discover
+
   // Recent searches — local store. Tracked in state so add/remove
   // re-renders the empty state. The store is the source of truth; the
   // state mirror is just a render trigger.
@@ -200,7 +212,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     [filters, userServices],
   );
   const filterOnlyMode = !hasQuery && !filtersAreDefault;
-  const browse = useBrowse(filters, providerIds, !filterOnlyMode);
+  const browse = useBrowse(filters, providerIds, !filterOnlyMode, browseSortBy);
 
   // Phase Search V2 A10 — instrumentation. Hash values are derived
   // here; the useEffect bodies that emit live below `displayItems`.
@@ -264,8 +276,21 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
         item.language ? filters.languages.includes(item.language) : true
       );
     }
+    // Apply sort. `best` preserves source order — relevance for text
+    // search, popularity for filter-only (TMDb's default). Explicit
+    // sort modes override both, and since they're applied client-side
+    // they work uniformly across search + browse paths.
+    if (sortBy === "popularity") {
+      items = [...items].sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+    } else if (sortBy === "rating") {
+      items = [...items].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+    } else if (sortBy === "a_z") {
+      items = [...items].sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sortBy === "z_a") {
+      items = [...items].sort((a, b) => b.title.localeCompare(a.title));
+    }
     return items;
-  }, [rawItems, filters.costs, filters.genres, filters.minRating, filters.languages, availability.removedIds, availability.availableTiers]);
+  }, [rawItems, filters.costs, filters.genres, filters.minRating, filters.languages, availability.removedIds, availability.availableTiers, sortBy]);
   const isLoading = filterOnlyMode ? browse.loading : search.loading;
 
   // Keep availabilityRef in sync so the unmount snapshot captures the
@@ -287,7 +312,21 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     autoFetchedRef.current = 0;
   }, [search.query, search.activeCategory]);
   useEffect(() => {
-    if (filterOnlyMode) return; // Auto-paginate only applies to text search
+    // Auto-paginate covers both modes — TMDb's first page often
+    // returns 20 candidates that the availability + post-filter prune
+    // down to just 1–2 visible. Keep fetching the next page until
+    // we've shown the user at least MIN_VISIBLE titles, capped at
+    // MAX_AUTO_FETCH_PAGES so a query with no on-services hits doesn't
+    // run forever.
+    if (filterOnlyMode) {
+      if (browse.loading) return;
+      if (!browse.hasMore) return;
+      if (autoFetchedRef.current >= MAX_AUTO_FETCH_PAGES) return;
+      if (displayItems.length >= MIN_VISIBLE) return;
+      autoFetchedRef.current += 1;
+      browse.loadMore();
+      return;
+    }
     if (search.loading) return;
     if (search.query.trim().length < 2) return;
     if (!search.hasMore) return;
@@ -295,7 +334,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     if (displayItems.length >= MIN_VISIBLE) return;
     autoFetchedRef.current += 1;
     search.loadMore();
-  }, [filterOnlyMode, search.loading, search.hasMore, search.query, search.activeCategory, displayItems.length, search]);
+  }, [filterOnlyMode, search.loading, search.hasMore, search.query, search.activeCategory, browse.loading, browse.hasMore, displayItems.length, search, browse]);
 
   // Search-surface card impressions — record once per (tmdbId, query,
   // filter set) tuple per session. Empty-state cards (recents / mood
@@ -667,42 +706,83 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
 
         {!searchFocused && displayItems.length > 0 && (
           <>
-            {/* Mode indicator row — copy adapts to the source:
+            {/* Mode indicator + sort dropdown row. Mode copy adapts:
                   text search → "Results for '<query>' · N in your stack"
                   filter-only → "Filter results · N titles"
-                The bolded value contrasts against the faint surround. */}
-            <div
-              className="flex items-baseline gap-1 mb-3"
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 13,
-                fontWeight: 500,
-                color: "var(--fg-soft)",
-                letterSpacing: "-0.005em",
-              }}
-            >
-              {filterOnlyMode ? (
-                <span>
-                  Filter results{" "}
-                  <span style={{ color: "var(--fg-faint)" }}>
-                    · {displayItems.length} {displayItems.length === 1 ? "title" : "titles"}
-                  </span>
-                </span>
-              ) : (
-                <>
-                  <span>
-                    Results for{" "}
-                    <span style={{ color: "var(--fg)", fontWeight: 600 }}>
-                      &lsquo;{search.query.trim()}&rsquo;
-                    </span>
-                  </span>
-                  {filters.onlyOnMyServices && (
+                Sort uses a native <select> so the platform's picker
+                renders correctly on mobile. "Best match" preserves
+                relevance (search) or popularity (filter-only). */}
+            <div className="flex items-baseline justify-between gap-3 mb-3">
+              <div
+                className="flex items-baseline gap-1 min-w-0"
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "var(--fg-soft)",
+                  letterSpacing: "-0.005em",
+                }}
+              >
+                {filterOnlyMode ? (
+                  <span className="truncate">
+                    Filter results{" "}
                     <span style={{ color: "var(--fg-faint)" }}>
-                      · {displayItems.length - availability.unavailableIds.size} in your stack
+                      · {displayItems.length} {displayItems.length === 1 ? "title" : "titles"}
                     </span>
-                  )}
-                </>
-              )}
+                  </span>
+                ) : (
+                  <>
+                    <span className="truncate">
+                      Results for{" "}
+                      <span style={{ color: "var(--fg)", fontWeight: 600 }}>
+                        &lsquo;{search.query.trim()}&rsquo;
+                      </span>
+                    </span>
+                    {filters.onlyOnMyServices && (
+                      <span className="shrink-0" style={{ color: "var(--fg-faint)" }}>
+                        · {displayItems.length - availability.unavailableIds.size} in your stack
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+              <label className="relative shrink-0 inline-flex items-center">
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortMode)}
+                  className="appearance-none"
+                  style={{
+                    background: "var(--surface-tint)",
+                    color: "var(--fg)",
+                    border: "0.5px solid var(--hairline)",
+                    borderRadius: "var(--r-pill)",
+                    padding: "4px 24px 4px 10px",
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    letterSpacing: "-0.005em",
+                  }}
+                  aria-label="Sort results"
+                >
+                  <option value="best">Best match</option>
+                  <option value="popularity">Popularity</option>
+                  <option value="rating">Rating</option>
+                  <option value="a_z">A–Z</option>
+                  <option value="z_a">Z–A</option>
+                </select>
+                <span
+                  className="absolute pointer-events-none"
+                  style={{
+                    right: 10,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: "var(--fg-faint)",
+                    fontSize: 9,
+                  }}
+                >
+                  ▾
+                </span>
+              </label>
             </div>
 
             {/* Active-filter strip — only when ≥ 1 filter active.

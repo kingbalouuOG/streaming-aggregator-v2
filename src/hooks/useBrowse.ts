@@ -5,11 +5,18 @@ import type { ContentItem } from '@/components/ContentCard';
 import type { FilterState } from '@/lib/search/filterState';
 import { serviceIdsToProviderIds, providerIdsToServiceIds } from '@/lib/adapters/platformAdapter';
 import { GENRE_NAME_TO_ID } from '@/lib/constants/genres';
-import { getCachedServices } from '@/lib/utils/serviceCache';
+import { getServiceProviders } from '@/lib/utils/serviceCache';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import type { ServiceId } from '@/components/platformLogos';
 
-export function useBrowse(filters: FilterState, providerIds: number[], skip = false) {
+export type BrowseSortBy = 'popularity.desc' | 'vote_average.desc' | 'title.asc' | 'title.desc';
+
+export function useBrowse(
+  filters: FilterState,
+  providerIds: number[],
+  skip = false,
+  sortBy: BrowseSortBy = 'popularity.desc',
+) {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +31,14 @@ export function useBrowse(filters: FilterState, providerIds: number[], skip = fa
   const buildDiscoverParams = useCallback(() => {
     const params: Record<string, unknown> = {
       watch_region: 'GB',
-      sort_by: 'popularity.desc',
+      sort_by: sortBy,
+      // TMDb's title.asc / title.desc sort needs a min vote_count to
+      // avoid drowning the top in obscure long-tail titles. Same for
+      // vote_average.desc (otherwise titles with 1 perfect rating top
+      // the list). 50 is the floor we use elsewhere in the codebase.
+      ...((sortBy === 'vote_average.desc' || sortBy === 'title.asc' || sortBy === 'title.desc')
+        ? { 'vote_count.gte': 50 }
+        : {}),
     };
 
     // Provider filter: use filters.services if set, otherwise user's providers
@@ -96,13 +110,21 @@ export function useBrowse(filters: FilterState, providerIds: number[], skip = fa
         newItems.push(...(responses[idx].data?.results || []).map((t: any) => tmdbTVToContentItem(t)));
       }
 
-      // Sort by popularity (interleave movies and TV)
-      newItems.sort(() => Math.random() - 0.5);
+      // Movies first, then TV. Stable order — earlier code random-
+      // shuffled here, which produced a fresh order on every refetch
+      // (including remounts after detail-page navigation). The
+      // snapshot doesn't preserve useBrowse state, so the shuffle
+      // surfaced as "items reorder when you tap into a card and
+      // come back."
 
       // Post-filter for paid-only (Rent/Buy selected without Free):
-      // exclude titles that already sit on the user's flatrate so we
-      // don't surface paid versions of things they could already
-      // stream for free.
+      // exclude titles already available in the user's FREE tier
+      // (flatrate / true free / ads) so the user doesn't see paid
+      // versions of things they could already stream for free. Note
+      // we scope this to the free tier specifically — a title that
+      // also happens to be rentable on a user's service should NOT
+      // be excluded, because that's exactly the rent path the user
+      // is asking for.
       const costSetForFilter = new Set(filters.costs);
       const paidOnly = !costSetForFilter.has('free')
         && (costSetForFilter.has('rent') || costSetForFilter.has('buy'));
@@ -111,8 +133,9 @@ export function useBrowse(filters: FilterState, providerIds: number[], skip = fa
         const checks = await Promise.all(
           newItems.map(async (item) => {
             const { tmdbId, mediaType } = parseContentItemId(item.id);
-            const services = await getCachedServices(String(tmdbId), mediaType);
-            return !services.some((s) => userServiceIds.includes(s));
+            const providers = await getServiceProviders(String(tmdbId), mediaType);
+            const onUserFree = providers.free.some((s) => userServiceIds.includes(s));
+            return !onUserFree;
           })
         );
         newItems = newItems.filter((_, i) => checks[i]);
@@ -139,7 +162,7 @@ export function useBrowse(filters: FilterState, providerIds: number[], skip = fa
   loadRef.current = load;
 
   // Stable key from actual filter values — avoids infinite loop from unstable function refs
-  const filterKey = `${filters.contentType}|${[...filters.costs].sort().join(',')}|${filters.services.join(',')}|${filters.genres.join(',')}|${filters.minRating}|${providerStr}`;
+  const filterKey = `${filters.contentType}|${[...filters.costs].sort().join(',')}|${filters.services.join(',')}|${filters.genres.join(',')}|${filters.minRating}|${providerStr}|${sortBy}`;
 
   // Reload when filters change. `skip` lets BrowsePage call this hook
   // unconditionally (React rules) but suppress the /discover round-

@@ -104,17 +104,20 @@ export async function processItemAvailability(
     // State 1.5 — rent/buy on user's service. Try the price scoped to
     // those user services first; fall back to any-service price when
     // SA data has null prices for the user-service entries (the LotR
-    // Fellowship case).
+    // Fellowship case). When neither is priced, still surface the
+    // chip with just the verb — knowing it's rentable / buyable is
+    // the load-bearing signal; the price is a bonus.
     const scoped = await getRentBuyPrice(tmdbId, mediaType, paidOnUser);
     const price = scoped ?? (await getRentBuyPrice(tmdbId, mediaType));
     const tiers = new Set<Tier>();
     if (rentOnUser.length) tiers.add("rent");
     if (buyOnUser.length) tiers.add("buy");
+    const fallbackLabel = rentOnUser.length > 0 ? "Rent" : "Buy";
     return {
       kind: "on-service",
       matchedServices: paidOnUser,
       tiers,
-      priceLabel: price?.fromFormatted ?? null,
+      priceLabel: price?.fromFormatted ?? fallbackLabel,
     };
   }
 
@@ -127,10 +130,16 @@ export async function processItemAvailability(
   if (providers.free.length) tiers.add("free");
   if (providers.rent.length) tiers.add("rent");
   if (providers.buy.length) tiers.add("buy");
+  // Same fallback as on-service paid: when rent/buy exists but no
+  // priced SA entry, drop in just the verb so the user still sees
+  // "this is rentable" at a glance.
+  const hasRentBuy = providers.rent.length > 0 || providers.buy.length > 0;
+  const fallbackLabel = providers.rent.length > 0 ? "Rent" : "Buy";
+  const priceLabel = price?.fromFormatted ?? (hasRentBuy ? fallbackLabel : null);
   return {
     kind: "off-service",
     allServices,
     tiers,
-    priceLabel: price?.fromFormatted ?? null,
+    priceLabel,
   };
 }
