@@ -615,7 +615,7 @@ function ChipMulti<T extends string>({ options, getLabel, isSelected, onToggle }
             key={opt}
             type="button"
             onClick={() => onToggle(opt)}
-            className="px-3 py-1.5 transition-colors"
+            className="px-4 py-2 transition-colors"
             style={{
               background: selected ? "var(--primary-soft)" : "transparent",
               color: selected ? "var(--primary-fg-on-soft)" : "var(--fg-soft)",

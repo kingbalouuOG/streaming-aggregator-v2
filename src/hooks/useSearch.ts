@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { searchMovies, searchTV } from '@/lib/api/tmdb';
 import { tmdbMovieToContentItem, tmdbTVToContentItem, parseContentItemId } from '@/lib/adapters/contentAdapter';
-import { getCachedServices } from '@/lib/utils/serviceCache';
+import { getServiceProviders } from '@/lib/utils/serviceCache';
 import { extractYearFromQuery, reRankSearchResults } from '@/lib/utils/searchUtils';
 import type { ContentItem } from '@/components/ContentCard';
 import type { ServiceId } from '@/components/platformLogos';
@@ -27,6 +27,9 @@ interface UseSearchOptions {
    *  labels. Pass as a list of `[contentId, label]` tuples so the
    *  snapshot stays JSON-safe. */
   initialRentBuyPrices?: ReadonlyArray<readonly [string, string]>;
+  /** Per-item tier set across navigation. Stored as
+   *  `[contentId, tier[]]` tuples. */
+  initialAvailableTiers?: ReadonlyArray<readonly [string, ReadonlyArray<'free' | 'rent' | 'buy'>]>;
 }
 
 export function useSearch(
@@ -35,7 +38,7 @@ export function useSearch(
   initialResults?: ContentItem[],
   options: UseSearchOptions = {},
 ) {
-  const { onlyOnMyServices = true, initialUnavailableIds, initialRentBuyPrices } = options;
+  const { onlyOnMyServices = true, initialUnavailableIds, initialRentBuyPrices, initialAvailableTiers } = options;
   const [query, setQuery] = useState(initialQuery || '');
   const [results, setResults] = useState<ContentItem[]>(initialResults || []);
   const [unavailableIds, setUnavailableIds] = useState<Set<string>>(() =>
@@ -43,6 +46,11 @@ export function useSearch(
   );
   const [rentBuyPrices, setRentBuyPrices] = useState<Map<string, string>>(() =>
     initialRentBuyPrices ? new Map(initialRentBuyPrices) : new Map()
+  );
+  const [availableTiers, setAvailableTiers] = useState<Map<string, Set<'free' | 'rent' | 'buy'>>>(() =>
+    initialAvailableTiers
+      ? new Map(initialAvailableTiers.map(([id, tiers]) => [id, new Set(tiers)]))
+      : new Map()
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +69,11 @@ export function useSearch(
   const removeRef = useRef<Set<string>>(new Set());
   /** Rent/buy "From £X.XX" labels resolved per-item from streaming_availability. */
   const pendingRentBuyRef = useRef<Map<string, string>>(new Map());
+  /** Per-item tier set — what tiers (free/rent/buy) the user can use to
+   *  watch this title. For on-service items, restricted to user's
+   *  services. For off-service items, tiers anywhere. Used by the cost
+   *  filter to narrow results post-resolution. */
+  const pendingTiersRef = useRef<Map<string, Set<'free' | 'rent' | 'buy'>>>(new Map());
   /** Mirror of `onlyOnMyServices` so the background per-item flow sees
    *  the live value without a stale closure. */
   const onlyOnMyServicesRef = useRef(onlyOnMyServices);
@@ -89,16 +102,25 @@ export function useSearch(
     const offServices = offServicesRef.current;
     const remove = removeRef.current;
     const rentBuy = pendingRentBuyRef.current;
-    if (pending.size === 0 && offServices.size === 0 && remove.size === 0 && rentBuy.size === 0) return;
+    const tiers = pendingTiersRef.current;
+    if (
+      pending.size === 0 &&
+      offServices.size === 0 &&
+      remove.size === 0 &&
+      rentBuy.size === 0 &&
+      tiers.size === 0
+    ) return;
 
     const badgeUpdates = new Map(pending);
     const offSet = new Set(offServices);
     const removeSet = new Set(remove);
     const rentBuyUpdates = new Map(rentBuy);
+    const tierUpdates = new Map(tiers);
     pending.clear();
     offServices.clear();
     remove.clear();
     rentBuy.clear();
+    tiers.clear();
 
     setResults(prev => {
       const filtered = removeSet.size > 0
@@ -125,6 +147,13 @@ export function useSearch(
         return next;
       });
     }
+    if (tierUpdates.size > 0) {
+      setAvailableTiers(prev => {
+        const next = new Map(prev);
+        tierUpdates.forEach((tierSet, id) => next.set(id, tierSet));
+        return next;
+      });
+    }
   }, []);
 
   const fetchAvailabilityAndBadges = useCallback((items: ContentItem[], q: string, connectedServices: ServiceId[]) => {
@@ -132,6 +161,7 @@ export function useSearch(
     offServicesRef.current.clear();
     removeRef.current.clear();
     pendingRentBuyRef.current.clear();
+    pendingTiersRef.current.clear();
     if (badgeFlushRef.current) clearTimeout(badgeFlushRef.current);
 
     let completed = 0;
@@ -142,32 +172,66 @@ export function useSearch(
     items.forEach(async (item) => {
       try {
         const { tmdbId, mediaType } = parseContentItemId(item.id);
-        const allItemServices = await getCachedServices(String(tmdbId), mediaType);
+        const providers = await getServiceProviders(String(tmdbId), mediaType);
+        const allServices = [
+          ...providers.free,
+          ...providers.rent.filter((s) => !providers.free.includes(s)),
+          ...providers.buy.filter((s) => !providers.free.includes(s) && !providers.rent.includes(s)),
+        ];
 
-        if (allItemServices.length === 0) {
+        if (allServices.length === 0) {
           // No UK availability — always drop.
           removeRef.current.add(item.id);
           return;
         }
+
         if (noUserServices) {
           // Logged-out / pre-onboarding: no service set to intersect
-          // against, but the title is at least UK-available — show it.
-          pendingBadgesRef.current.set(item.id, allItemServices);
+          // against, but the title is at least UK-available — show
+          // it. Populate availableTiers from the catalogue at large
+          // so the cost filter still works.
+          pendingBadgesRef.current.set(item.id, allServices);
+          const tiers = new Set<'free' | 'rent' | 'buy'>();
+          if (providers.free.length) tiers.add('free');
+          if (providers.rent.length) tiers.add('rent');
+          if (providers.buy.length) tiers.add('buy');
+          pendingTiersRef.current.set(item.id, tiers);
           return;
         }
-        const matching = allItemServices.filter((s) => connectedServices.includes(s));
-        if (matching.length > 0) {
-          // On-service path — title lives on at least one of the
-          // user's services in some tier. Priority order:
-          //   1. If it's rent/buy on a user service → state 1.5:
-          //      no tint, matched service icons, price pill showing
-          //      "Rent/Buy from £X.XX". The user can act on the
-          //      title without leaving their existing setup, but
-          //      they'll pay. Honour-the-money-they'd-spend signal.
-          //   2. Otherwise → state 1: no tint, no price pill (free
-          //      at point of play via subscription / ads / free).
-          pendingBadgesRef.current.set(item.id, matching);
-          getRentBuyPrice(tmdbId, mediaType, matching).then((price) => {
+
+        // Tier-aware on-service decision:
+        //   - freeOnUser non-empty   → state 1   (full colour, no chip)
+        //   - paidOnUser non-empty   → state 1.5 (full colour, chip)
+        //   - off-service            → state 2/3
+        const freeOnUser = providers.free.filter((s) => connectedServices.includes(s));
+        const rentOnUser = providers.rent.filter((s) => connectedServices.includes(s));
+        const buyOnUser = providers.buy.filter((s) => connectedServices.includes(s));
+        const paidOnUser = [...rentOnUser, ...buyOnUser.filter((s) => !rentOnUser.includes(s))];
+
+        if (freeOnUser.length > 0) {
+          // State 1 — free on user's services. The cheapest path is
+          // already subscription; no rent/buy chip needed even when
+          // the title is also rentable somewhere.
+          pendingBadgesRef.current.set(item.id, freeOnUser);
+          const tiers = new Set<'free' | 'rent' | 'buy'>(['free']);
+          if (rentOnUser.length) tiers.add('rent');
+          if (buyOnUser.length) tiers.add('buy');
+          pendingTiersRef.current.set(item.id, tiers);
+        } else if (paidOnUser.length > 0) {
+          // State 1.5 — rent/buy on user's service. Show matched
+          // service icons + a price chip. Try the price scoped to
+          // those user services first; fall back to any service when
+          // our SA cache has null prices for that service (real-world
+          // data gap). Either way, "Rent/Buy from £X.XX" signals the
+          // title is paid.
+          pendingBadgesRef.current.set(item.id, paidOnUser);
+          const tiers = new Set<'free' | 'rent' | 'buy'>();
+          if (rentOnUser.length) tiers.add('rent');
+          if (buyOnUser.length) tiers.add('buy');
+          pendingTiersRef.current.set(item.id, tiers);
+          (async () => {
+            const scoped = await getRentBuyPrice(tmdbId, mediaType, paidOnUser);
+            const price = scoped ?? await getRentBuyPrice(tmdbId, mediaType);
             if (price && currentQueryRef.current === q) {
               pendingRentBuyRef.current.set(item.id, price.fromFormatted);
               if (!badgeFlushRef.current) {
@@ -177,16 +241,20 @@ export function useSearch(
                 }, BADGE_FLUSH_INTERVAL_MS);
               }
             }
-          }).catch(() => { /* silently skip */ });
+          })().catch(() => { /* silently skip */ });
         } else if (dropOffServices) {
           removeRef.current.add(item.id);
         } else {
-          // Off-service (state 2 or 3). Tag for tinting + populate the
-          // "where it lives" icons (all the title's services, not
-          // filtered). Fire the rent/buy price check across every
-          // service; if it returns a label we'll upgrade to state 3.
+          // Off-service path (state 2 or 3). Tint + "where it lives"
+          // icons + cheapest rent/buy price across any service when
+          // it exists.
           offServicesRef.current.add(item.id);
-          pendingBadgesRef.current.set(item.id, allItemServices.slice(0, 3));
+          pendingBadgesRef.current.set(item.id, allServices.slice(0, 3));
+          const tiers = new Set<'free' | 'rent' | 'buy'>();
+          if (providers.free.length) tiers.add('free');
+          if (providers.rent.length) tiers.add('rent');
+          if (providers.buy.length) tiers.add('buy');
+          pendingTiersRef.current.set(item.id, tiers);
           getRentBuyPrice(tmdbId, mediaType).then((price) => {
             if (price && currentQueryRef.current === q) {
               pendingRentBuyRef.current.set(item.id, price.fromFormatted);
@@ -229,6 +297,7 @@ export function useSearch(
         setResults([]);
         setUnavailableIds(new Set());
         setRentBuyPrices(new Map());
+        setAvailableTiers(new Map());
         setLoading(false);
       }
       return;
@@ -299,6 +368,7 @@ export function useSearch(
         setResults(ranked);
         setUnavailableIds(new Set());
         setRentBuyPrices(new Map());
+        setAvailableTiers(new Map());
         emitSearch(cleanQuery, ranked.length);
       }
       setPage(searchPage);
@@ -315,6 +385,7 @@ export function useSearch(
         setResults([]);
         setUnavailableIds(new Set());
         setRentBuyPrices(new Map());
+        setAvailableTiers(new Map());
       }
     } finally {
       if (currentQueryRef.current === q) {
@@ -408,6 +479,7 @@ export function useSearch(
     setResults([]);
     setUnavailableIds(new Set());
     setRentBuyPrices(new Map());
+    setAvailableTiers(new Map());
     setError(null);
     setPage(1);
     setHasMore(false);
@@ -430,10 +502,14 @@ export function useSearch(
      *  instead). Renderer uses this to tint the poster + show "where
      *  it lives" service icons (state 2/3). */
     unavailableIds,
-    /** Per-item "From £X.XX" labels for off-service titles that are
-     *  rentable/buyable. Renderer passes the value through to
-     *  ContentCard's `rentBuyPriceLabel` prop (state 3). Items absent
-     *  from this map are state 2 (off-service, no rent/buy). */
+    /** Per-item "From £X.XX" labels. Used for both state 1.5 (on-
+     *  service paid) and state 3 (off-service rentable). Items absent
+     *  from this map have no priced rent/buy entry. */
     rentBuyPrices,
+    /** Per-item set of tiers the user can use to watch this title.
+     *  On-service items: tiers restricted to user's services. Off-
+     *  service items: tiers anywhere. Drives the cost filter post-
+     *  processing in the renderer. */
+    availableTiers,
   };
 }

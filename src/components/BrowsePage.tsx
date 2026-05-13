@@ -19,9 +19,13 @@ export interface BrowseStateSnapshot {
    *  services. Saved across navigation so a tap-into-detail-then-back
    *  doesn't drop the off-service tint treatment. */
   unavailableIds: string[];
-  /** [contentId, "From £X.XX"] tuples for rentable/buyable off-
-   *  service items. Also preserved across navigation. */
+  /** [contentId, "From £X.XX"] tuples for items where a rent/buy
+   *  price exists. Preserved across navigation. */
   rentBuyPrices: [string, string][];
+  /** [contentId, tier[]] tuples — which tiers the user can use to
+   *  watch each item. Persists so the cost filter still works after
+   *  detail navigation without re-running per-item availability. */
+  availableTiers: [string, ('free' | 'rent' | 'buy')[]][];
 }
 
 interface BrowsePageProps {
@@ -45,6 +49,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     onlyOnMyServices: filters.onlyOnMyServices,
     initialUnavailableIds: initial?.unavailableIds,
     initialRentBuyPrices: initial?.rentBuyPrices,
+    initialAvailableTiers: initial?.availableTiers,
   });
 
   // Mirror filter state to the URL hash so deep links and back-button
@@ -77,6 +82,9 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
           activeCategory: searchRef.current.activeCategory,
           unavailableIds: Array.from(searchRef.current.unavailableIds),
           rentBuyPrices: Array.from(searchRef.current.rentBuyPrices.entries()),
+          availableTiers: Array.from(searchRef.current.availableTiers.entries()).map(
+            ([id, tiers]) => [id, Array.from(tiers)] as [string, ('free' | 'rent' | 'buy')[]],
+          ),
         };
       }
     };
@@ -95,10 +103,26 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     (filters.showWatched !== "all" ? 1 : 0) +
     filters.languages.length;
 
-  // Display items: search results, filtered by genre/rating/language
+  // Display items: search results, filtered by cost/genre/rating/language
   const rawItems = search.results;
   const displayItems = useMemo(() => {
     let items = rawItems;
+    if (filters.costs.length > 0) {
+      // Per-item availableTiers tells us which tiers the user can use
+      // to watch each title (restricted to user services when on-
+      // service; unrestricted when off-service). Item passes the cost
+      // filter when the intersection with the selected costs is non-
+      // empty. Items missing from the map are still resolving — keep
+      // them visible until the per-item flow lands so the grid
+      // doesn't churn empty during availability resolution.
+      const costSet = new Set(filters.costs);
+      items = items.filter((item) => {
+        const tiers = search.availableTiers.get(item.id);
+        if (!tiers) return true;
+        for (const c of costSet) if (tiers.has(c)) return true;
+        return false;
+      });
+    }
     if (filters.genres.length > 0) {
       const genreIdSet = new Set(filters.genres.map((name) => GENRE_NAME_TO_ID[name]).filter(Boolean));
       items = items.filter((item) =>
@@ -114,7 +138,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
       );
     }
     return items;
-  }, [rawItems, filters.genres, filters.minRating, filters.languages]);
+  }, [rawItems, filters.costs, filters.genres, filters.minRating, filters.languages, search.availableTiers]);
   const isLoading = search.loading;
 
   return (
