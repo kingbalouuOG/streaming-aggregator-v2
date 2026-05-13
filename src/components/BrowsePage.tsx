@@ -6,6 +6,7 @@ import { FilterSheet, FilterState, ALL_GENRES, FILTER_LANGUAGES } from "./Filter
 import { MoodChip } from "./MoodChip";
 import { SearchSuggestions } from "./search/SearchSuggestions";
 import { useSearch } from "@/hooks/useSearch";
+import { useBrowse } from "@/hooks/useBrowse";
 import { providerIdsToServiceIds } from "@/lib/adapters/platformAdapter";
 import { GENRE_NAME_TO_ID } from "@/lib/constants/genres";
 import { useFilterUrlSync } from "@/lib/search/useFilterUrlSync";
@@ -153,7 +154,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     search.setQuery(phrase);
   }, [search]);
 
-  const handleBrowseByFilter = useCallback(() => {
+  const handleBuildYourSearch = useCallback(() => {
     onShowFiltersChange(true);
   }, [onShowFiltersChange]);
 
@@ -175,6 +176,23 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     [filters, userServices, onFiltersChange],
   );
 
+  // Filter-only browse mode — when the user opens FilterSheet via
+  // "Build your search" and applies filters without typing a query.
+  // useBrowse hits /discover/movie + /discover/tv with the filter set
+  // and the user's providers, so we surface results purely on filter
+  // criteria.
+  //
+  // `skip` gates the /discover round-trip: when the user is searching
+  // by text OR filters are at default, useBrowse's results would be
+  // ignored anyway. Calling the hook unconditionally satisfies React's
+  // hooks rules; the skip flag prevents wasted network calls.
+  const filtersAreDefault = useMemo(
+    () => isDefaultFilters(filters, userServices ?? []),
+    [filters, userServices],
+  );
+  const filterOnlyMode = !hasQuery && !filtersAreDefault;
+  const browse = useBrowse(filters, providerIds, !filterOnlyMode);
+
   // Phase Search V2 A10 — instrumentation. Hash values are derived
   // here; the useEffect bodies that emit live below `displayItems`.
   const impressionDedupRef = useRef<Set<string>>(new Set());
@@ -187,8 +205,13 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
   const searchMode: 'lookup' | 'filter' = queryTrimmed.length >= 2 ? 'lookup' : 'filter';
   const lastFilterModeEmitRef = useRef<string>('');
 
-  // Display items: search results, filtered by cost/genre/rating/language
-  const rawItems = search.results;
+  // Display items: in text-search mode the source is search.results;
+  // in filter-only mode it's browse.items (TMDb /discover with the
+  // filter set). Most downstream filters (cost, genres, minRating,
+  // languages) are already enforced upstream by useBrowse via TMDb
+  // discover params, but we still apply them post-fetch for the
+  // search path where TMDb /search doesn't accept those constraints.
+  const rawItems = filterOnlyMode ? browse.items : search.results;
   const displayItems = useMemo(() => {
     let items = rawItems;
     if (filters.costs.length > 0) {
@@ -223,7 +246,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     }
     return items;
   }, [rawItems, filters.costs, filters.genres, filters.minRating, filters.languages, search.availableTiers]);
-  const isLoading = search.loading;
+  const isLoading = filterOnlyMode ? browse.loading : search.loading;
 
   // Search-surface card impressions — record once per (tmdbId, query,
   // filter set) tuple per session. Empty-state cards (recents / mood
@@ -399,9 +422,10 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
       <div className="px-5">
         {/* Empty state — Phase Search V2 A3 per artboard 01.
             Three composable journeys: recents (history shortcut),
-            Browse-by-filter (custom search), and mood chips (atmospheric
-            entry points). All hidden the moment the user types. */}
-        {!hasQuery && !isLoading && (
+            "Build your search" (filter-only browse), and mood chips
+            (atmospheric entry points). Hidden the moment the user
+            types OR applies any filter. */}
+        {!hasQuery && !isLoading && filtersAreDefault && (
           <div className="flex flex-col pt-4 pb-8 gap-8">
             {/* RECENT — only renders when the user has prior queries */}
             {recents.length > 0 && (
@@ -463,7 +487,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                 intentional; this is the larger of the two journeys. */}
             <button
               type="button"
-              onClick={handleBrowseByFilter}
+              onClick={handleBuildYourSearch}
               className="flex flex-col items-start text-left"
               style={{
                 padding: "20px 22px",
@@ -484,7 +508,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                     lineHeight: 1.15,
                   }}
                 >
-                  Browse by filter
+                  Build your search
                 </span>
               </span>
               <span
@@ -498,7 +522,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                   lineHeight: 1.3,
                 }}
               >
-                Service, genre, runtime, rating — build the query that fits your night.
+                Pick service, cost, runtime, genre, rating — Apply to browse the matches.
               </span>
             </button>
 
@@ -586,7 +610,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
           </div>
         )}
 
-        {!searchFocused && isLoading && displayItems.length === 0 && isSearching && (
+        {!searchFocused && isLoading && displayItems.length === 0 && (isSearching || filterOnlyMode) && (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
           </div>
@@ -594,9 +618,10 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
 
         {!searchFocused && displayItems.length > 0 && (
           <>
-            {/* Mode indicator row — "Results for '<query>'" + faint
-                "· N in your stack" when on-services filter is active.
-                Drops below results count when filters are stacked. */}
+            {/* Mode indicator row — copy adapts to the source:
+                  text search → "Results for '<query>' · N in your stack"
+                  filter-only → "Filter results · N titles"
+                The bolded value contrasts against the faint surround. */}
             <div
               className="flex items-baseline gap-1 mb-3"
               style={{
@@ -607,16 +632,27 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                 letterSpacing: "-0.005em",
               }}
             >
-              <span>
-                Results for{" "}
-                <span style={{ color: "var(--fg)", fontWeight: 600 }}>
-                  &lsquo;{search.query.trim()}&rsquo;
+              {filterOnlyMode ? (
+                <span>
+                  Filter results{" "}
+                  <span style={{ color: "var(--fg-faint)" }}>
+                    · {displayItems.length} {displayItems.length === 1 ? "title" : "titles"}
+                  </span>
                 </span>
-              </span>
-              {filters.onlyOnMyServices && (
-                <span style={{ color: "var(--fg-faint)" }}>
-                  · {displayItems.length - search.unavailableIds.size} in your stack
-                </span>
+              ) : (
+                <>
+                  <span>
+                    Results for{" "}
+                    <span style={{ color: "var(--fg)", fontWeight: 600 }}>
+                      &lsquo;{search.query.trim()}&rsquo;
+                    </span>
+                  </span>
+                  {filters.onlyOnMyServices && (
+                    <span style={{ color: "var(--fg-faint)" }}>
+                      · {displayItems.length - search.unavailableIds.size} in your stack
+                    </span>
+                  )}
+                </>
               )}
             </div>
 
@@ -694,7 +730,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
         {/* No-results state — redesigned per artboard. Distinguishes
             "no matches for this query at all" from "matches exist but
             filters are too tight." */}
-        {!searchFocused && isSearching && !isLoading && displayItems.length === 0 && search.results.length >= 0 && !search.tooShort && (
+        {!searchFocused && !isLoading && displayItems.length === 0 && !search.tooShort && (isSearching || filterOnlyMode) && (
           <div className="flex flex-col items-start py-12">
             <Search className="w-8 h-8 mb-4" style={{ color: "var(--fg-faint)" }} />
             <p

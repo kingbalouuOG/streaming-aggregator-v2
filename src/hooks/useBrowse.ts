@@ -9,7 +9,7 @@ import { getCachedServices } from '@/lib/utils/serviceCache';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import type { ServiceId } from '@/components/platformLogos';
 
-export function useBrowse(filters: FilterState, providerIds: number[]) {
+export function useBrowse(filters: FilterState, providerIds: number[], skip = false) {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -141,10 +141,14 @@ export function useBrowse(filters: FilterState, providerIds: number[]) {
   // Stable key from actual filter values — avoids infinite loop from unstable function refs
   const filterKey = `${filters.contentType}|${[...filters.costs].sort().join(',')}|${filters.services.join(',')}|${filters.genres.join(',')}|${filters.minRating}|${providerStr}`;
 
-  // Reload when filters change
+  // Reload when filters change. `skip` lets BrowsePage call this hook
+  // unconditionally (React rules) but suppress the /discover round-
+  // trip when the user is searching by text — useSearch owns that
+  // path and useBrowse's results would be ignored anyway.
   useEffect(() => {
+    if (skip) return;
     loadRef.current(1, false);
-  }, [filterKey]);
+  }, [filterKey, skip]);
 
   const loadMore = useCallback(() => {
     if (hasMore && !loadingRef.current) {

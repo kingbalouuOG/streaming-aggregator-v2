@@ -94,7 +94,16 @@ export function SearchSuggestions({ items, loading, tooShort, onSelect }: Search
   if (items.length === 0) return null;
 
   return (
-    <div className="flex flex-col">
+    // onMouseDown preventDefault stops the search input from blurring
+    // when the user clicks a suggestion. Without this, blur fires
+    // first → BrowsePage flips off `searchFocused` → this entire list
+    // unmounts before the button's onClick can run, and the tap
+    // appears to do nothing. preventDefault on mousedown keeps focus
+    // on the input so the click reaches the button.
+    <div
+      className="flex flex-col"
+      onMouseDown={(e) => e.preventDefault()}
+    >
       <span className="t-kicker mb-2" style={{ paddingLeft: 0 }}>SUGGESTIONS</span>
       <ul className="flex flex-col">
         {items.slice(0, 5).map((item) => {
