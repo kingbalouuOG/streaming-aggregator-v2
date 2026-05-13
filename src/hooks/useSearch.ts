@@ -385,7 +385,9 @@ export function useSearch(
         setUnavailableIds(new Set());
         setRentBuyPrices(new Map());
         setAvailableTiers(new Map());
-        emitSearch(cleanQuery, ranked.length);
+        // Mode A keyword search — semantic (Cluster B) flips this to
+        // 'semantic' when the embedding path lands.
+        emitSearch(cleanQuery, ranked.length, { mode: 'lookup' });
       }
       setPage(searchPage);
       setHasMore(searchPage < maxTotalPages);

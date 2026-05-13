@@ -17,6 +17,11 @@ import {
 } from "@/lib/search/recentSearches";
 import { buildActiveFilterPills, clearAllActiveFilters } from "@/lib/search/activeFilterPills";
 import { ActiveFilterPill } from "./ActiveFilterPill";
+import { hash as hashFilters, hashString, isDefault as isDefaultFilters } from "@/lib/search/filterState";
+import { recordImpression } from "@/lib/instrumentation/impressionBatcher";
+import { getCurrentSessionId } from "@/lib/instrumentation/sessionId";
+import { parseContentItemId } from "@/lib/adapters/contentAdapter";
+import { emitSearch } from "@/lib/storage/interactions";
 import type { ServiceId } from "./platformLogos";
 
 const browseCategories = ["All", "Movies", "TV", "Docs"];
@@ -170,6 +175,18 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     [filters, userServices, onFiltersChange],
   );
 
+  // Phase Search V2 A10 — instrumentation. Hash values are derived
+  // here; the useEffect bodies that emit live below `displayItems`.
+  const impressionDedupRef = useRef<Set<string>>(new Set());
+  const filterSetHash = useMemo(() => hashFilters(filters), [filters]);
+  const queryTrimmed = search.query.trim();
+  const queryHash = useMemo(
+    () => (queryTrimmed ? hashString(queryTrimmed.toLowerCase()) : ''),
+    [queryTrimmed],
+  );
+  const searchMode: 'lookup' | 'filter' = queryTrimmed.length >= 2 ? 'lookup' : 'filter';
+  const lastFilterModeEmitRef = useRef<string>('');
+
   // Display items: search results, filtered by cost/genre/rating/language
   const rawItems = search.results;
   const displayItems = useMemo(() => {
@@ -207,6 +224,47 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     return items;
   }, [rawItems, filters.costs, filters.genres, filters.minRating, filters.languages, search.availableTiers]);
   const isLoading = search.loading;
+
+  // Search-surface card impressions — record once per (tmdbId, query,
+  // filter set) tuple per session. Empty-state cards (recents / mood
+  // chips) aren't search results so skip when no query AND filters
+  // are at default.
+  useEffect(() => {
+    if (queryTrimmed.length < 2 && isDefaultFilters(filters, userServices ?? [])) return;
+    if (displayItems.length === 0) return;
+    const sessionId = getCurrentSessionId();
+    displayItems.forEach((item, position) => {
+      const { tmdbId } = parseContentItemId(item.id);
+      if (Number.isNaN(tmdbId)) return;
+      const key = `${tmdbId}:${sessionId}:${queryHash}:${filterSetHash}`;
+      if (impressionDedupRef.current.has(key)) return;
+      impressionDedupRef.current.add(key);
+      recordImpression({
+        contentId: tmdbId,
+        sourceSurface: 'search',
+        position,
+        metadata: {
+          mode: searchMode,
+          query_hash: queryHash || null,
+          filter_set_hash: filterSetHash,
+        },
+      });
+    });
+  }, [displayItems, queryHash, filterSetHash, searchMode, queryTrimmed, filters, userServices]);
+
+  // Mode 'filter' search event — fires once per distinct filter-set
+  // when the user is in a filter-only state (no query, ≥ 1 filter).
+  // emitSearch's text-query path (mode=lookup) is owned by useSearch.
+  useEffect(() => {
+    if (queryTrimmed.length >= 2) return;
+    if (isDefaultFilters(filters, userServices ?? [])) return;
+    if (lastFilterModeEmitRef.current === filterSetHash) return;
+    lastFilterModeEmitRef.current = filterSetHash;
+    emitSearch('', displayItems.length, {
+      mode: 'filter',
+      metadata: { filter_set_hash: filterSetHash },
+    });
+  }, [filters, userServices, filterSetHash, queryTrimmed, displayItems.length]);
 
   return (
     <div className="flex flex-col gap-0">

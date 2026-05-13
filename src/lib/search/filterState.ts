@@ -171,6 +171,16 @@ export function hash(state: FilterState): string {
   return fnv1a(canonical);
 }
 
+/**
+ * 32-bit FNV-1a hash, hex-encoded. Same primitive `hash()` uses for
+ * filter-set hashing; exposed here so the search instrumentation can
+ * compute query_hash on the same algorithm (consistent column shape
+ * across `card_impressions.metadata`).
+ */
+export function hashString(s: string): string {
+  return fnv1a(s);
+}
+
 function fnv1a(s: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
