@@ -276,16 +276,6 @@ function AppContent() {
   const upcoming = useUpcoming(connectedServices, home.fetchMovies, home.fetchTV);
   const reorderedUpcoming = upcoming.items;
 
-  const activeFilterCount =
-    filters.services.length +
-    (filters.contentType !== "all" ? 1 : 0) +
-    (filters.costs.length > 0 ? 1 : 0) +
-    (filters.runtime !== "any" ? 1 : 0) +
-    filters.genres.length +
-    (filters.minRating > 0 ? 1 : 0) +
-    (filters.showWatched !== "all" ? 1 : 0) +
-    filters.languages.length;
-
   // Filter out watched items from home content based on showWatched setting.
   // 'all' → show everything; 'hide' → drop watched; 'only' → keep just watched.
   const filterWatched = useCallback((items: ContentItem[]) => {

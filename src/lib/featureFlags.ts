@@ -12,8 +12,10 @@
 
 import { supabase } from './supabase';
 
-const KNOWN_FLAGS = ['search_semantic'] as const;
-export type FlagName = (typeof KNOWN_FLAGS)[number];
+// Allow-list of known flag names. Extend the union when adding a new
+// per-user gated feature; the database column is `flag_name TEXT` and
+// accepts anything, but routing through this type keeps callers honest.
+export type FlagName = 'search_semantic';
 
 // Module-scope cache. Key = `${userId}:${flagName}`. Promise valued so
 // concurrent callers during the initial fetch share the round-trip

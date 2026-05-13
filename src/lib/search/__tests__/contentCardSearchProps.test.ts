@@ -74,7 +74,7 @@ function test(name: string, fn: () => void): void {
 function findViolations(dir: string): Array<{ file: string; prop: string; lines: number[] }> {
   const violations: Array<{ file: string; prop: string; lines: number[] }> = [];
   for (const path of listTsxFiles(dir)) {
-    const filename = path.split(/[\/\\]/).pop()!;
+    const filename = path.split(/[/\\]/).pop()!;
     if (ALLOWED_FILES.has(filename)) continue;
     const text = readFileSync(path, "utf-8");
     const lines = text.split("\n");
