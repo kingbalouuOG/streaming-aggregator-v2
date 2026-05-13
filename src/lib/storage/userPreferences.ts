@@ -161,6 +161,15 @@ export const hasCompletedOnboarding = async (): Promise<boolean> => {
 
 export const clearAllData = async () => {
   await storage.multiRemove([STORAGE_KEYS.USER_PROFILE, STORAGE_KEYS.USER_PREFERENCES, STORAGE_KEYS.AUTH_USER_ID]);
+  // Recent search history is user-specific — clear on sign-out so the
+  // next user doesn't see the previous user's queries on the search
+  // empty state.
+  try {
+    const { clearRecentSearches } = await import('@/lib/search/recentSearches');
+    clearRecentSearches();
+  } catch {
+    // dynamic import shouldn't fail in this codebase, but be defensive
+  }
   // v1 clearTasteProfile removed — v2 taste data lives in Supabase (cascade on profile delete)
   if (DEBUG) console.log('[Storage] All user data cleared');
 };
