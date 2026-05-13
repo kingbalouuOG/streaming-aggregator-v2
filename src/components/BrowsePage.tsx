@@ -65,12 +65,21 @@ interface BrowsePageProps {
   /** User's 1536D taste vector — drives the filter-only "Best match"
    *  sort. When null/undefined, Best match falls back to popularity. */
   tasteVector?: number[] | null;
+  /** Phase Search V2 Cluster B — semantic search feature flag. When
+   *  true, Mode C dispatch paths (mood chips, opt-in CTA tap) call
+   *  the embed-query Edge function. When false, mood chips fall back
+   *  to Mode A keyword search, and the opt-in CTA shows a preview
+   *  toast on tap. */
+  semanticFlagOn?: boolean;
 }
 
-export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters, onShowFiltersChange, bookmarkedIds, onToggleBookmark, providerIds = [], userServices, watchedIds, savedState, tasteVector }: BrowsePageProps) {
+export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters, onShowFiltersChange, bookmarkedIds, onToggleBookmark, providerIds = [], userServices, watchedIds, savedState, tasteVector, semanticFlagOn = false }: BrowsePageProps) {
   const initial = savedState?.current;
 
-  const search = useSearch(userServices, initial?.query, initial?.results);
+  const search = useSearch(userServices, initial?.query, initial?.results, {
+    filters,
+    userTasteVector: tasteVector,
+  });
 
   // Mirror filter state to the URL hash so deep links and back-button
   // navigation restore prior filters. Hook reads on mount, writes on
@@ -201,12 +210,19 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     setRecents([]);
   }, []);
 
-  // Mood-chip tap → populate query + submit as a regular search. When
-  // Cluster B (semantic search) lands, this will dispatch Mode C; for
-  // now it's plain Mode A keyword search.
+  // Mood-chip tap → populate the query, then dispatch Mode C
+  // (semantic) when the user has the feature flag on. Flag-off users
+  // silently fall back to Mode A — the chip is a discovery hint, not
+  // a hard semantic-only contract.
   const handleMoodChip = useCallback((phrase: string) => {
     search.setQuery(phrase);
-  }, [search]);
+    if (semanticFlagOn) {
+      // setMode re-runs the current query through the semantic path.
+      // Calling it after setQuery means the next render's query state
+      // is what setMode dispatches with.
+      requestAnimationFrame(() => search.setMode('semantic'));
+    }
+  }, [search, semanticFlagOn]);
 
   const handleBuildYourSearch = useCallback(() => {
     onShowFiltersChange(true);

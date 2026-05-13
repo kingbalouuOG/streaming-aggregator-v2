@@ -169,6 +169,26 @@ function AppContent() {
   // --- Taste profile (continuous learning) ---
   const taste = useTasteProfile();
 
+  // Phase Search V2 Cluster B — semantic search feature flag. Read
+  // once when the user resolves; module-level cache in featureFlags.ts
+  // keeps subsequent reads cheap. Defaults to false so production
+  // users don't see Mode C surfaces until Joe flips the flag in
+  // Studio.
+  const [semanticFlagOn, setSemanticFlagOn] = useState(false);
+  useEffect(() => {
+    if (!userId) {
+      setSemanticFlagOn(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { getFlag } = await import('./lib/featureFlags');
+      const on = await getFlag('search_semantic', false);
+      if (!cancelled) setSemanticFlagOn(on);
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
   // --- Derive provider IDs from user's selected services ---
   const connectedServices = userPrefs.preferences?.platforms
     ?.filter((p) => p.selected !== false)
@@ -1079,6 +1099,7 @@ function AppContent() {
                   watchedIds={watchedIds}
                   savedState={browseStateRef}
                   tasteVector={taste.profile?.tasteVector ?? null}
+                  semanticFlagOn={semanticFlagOn}
                 />
               )}
 
