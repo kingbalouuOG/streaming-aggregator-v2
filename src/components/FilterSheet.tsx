@@ -394,6 +394,7 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, userServices }:
                 getLabel={(c) => COST_LABELS[c]}
                 isSelected={(c) => local.costs.includes(c)}
                 onToggle={toggleCost}
+                fillRow
               />
 
               {/* ── Section 5: RUNTIME (new) ────────────────────── */}
@@ -603,11 +604,18 @@ interface ChipMultiProps<T extends string> {
   getLabel: (v: T) => string;
   isSelected: (v: T) => boolean;
   onToggle: (v: T) => void;
+  /** When true, chips share the row equally (like the Segmented
+   *  control). Use for small fixed sets (Cost) so the chips look like
+   *  uniform-width pills. Default false — chips are content-sized and
+   *  wrap (suitable for long lists like Genre / Language). */
+  fillRow?: boolean;
 }
 
-function ChipMulti<T extends string>({ options, getLabel, isSelected, onToggle }: ChipMultiProps<T>) {
+function ChipMulti<T extends string>({ options, getLabel, isSelected, onToggle, fillRow = false }: ChipMultiProps<T>) {
+  const containerClass = fillRow ? "flex gap-2 mb-6" : "flex flex-wrap gap-2 mb-6";
+  const buttonClass = fillRow ? "flex-1 py-2 transition-colors" : "px-4 py-2 transition-colors";
   return (
-    <div className="flex flex-wrap gap-2 mb-6">
+    <div className={containerClass}>
       {options.map((opt) => {
         const selected = isSelected(opt);
         return (
@@ -615,7 +623,7 @@ function ChipMulti<T extends string>({ options, getLabel, isSelected, onToggle }
             key={opt}
             type="button"
             onClick={() => onToggle(opt)}
-            className="px-4 py-2 transition-colors"
+            className={buttonClass}
             style={{
               background: selected ? "var(--primary-soft)" : "transparent",
               color: selected ? "var(--primary-fg-on-soft)" : "var(--fg-soft)",

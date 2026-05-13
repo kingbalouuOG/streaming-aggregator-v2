@@ -272,7 +272,16 @@ export function useSearch(
       } finally {
         completed++;
         if (completed === total) {
-          if (badgeFlushRef.current) clearTimeout(badgeFlushRef.current);
+          if (badgeFlushRef.current) {
+            clearTimeout(badgeFlushRef.current);
+            // Critical — clear the ref too so any rent/buy callback
+            // that resolves AFTER this final flush can re-arm a
+            // flush. Without this, `if (!badgeFlushRef.current)` in
+            // the price-fetch callbacks below sees the stale cleared
+            // timeout ID (still truthy) and skips scheduling, and
+            // the chip never paints.
+            badgeFlushRef.current = undefined;
+          }
           flushPendingUpdates(q);
         } else if (!badgeFlushRef.current) {
           badgeFlushRef.current = setTimeout(() => {
