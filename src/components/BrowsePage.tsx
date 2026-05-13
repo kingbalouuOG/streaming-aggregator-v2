@@ -479,13 +479,13 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
           </div>
         </div>
 
-        {/* Edit filters pill — sits under the search bar whenever the
-            user is engaged with results (typing a query OR has filters
-            applied). Hidden on the bare landing state (no query AND
-            default filters) so the empty-state journeys aren't
-            crowded. */}
+        {/* Controls row — Edit filters left, Sort right. Same pill
+            height + font on both so they sit on a shared baseline.
+            Hidden on the bare landing state (no query AND default
+            filters). Sort only appears once results are showing
+            (typing-only suggestions view drops it). */}
         {(hasQuery || !filtersAreDefault) && (
-          <div className="px-5 mb-3 flex justify-end">
+          <div className="px-5 mb-3 flex items-center justify-between gap-3">
             <button
               type="button"
               onClick={() => onShowFiltersChange(true)}
@@ -527,6 +527,90 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                 </span>
               )}
             </button>
+            {!searchFocused && displayItems.length > 0 && (
+              <div ref={sortMenuRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSortMenuOpen((o) => !o)}
+                  className="inline-flex items-center gap-1.5"
+                  aria-haspopup="listbox"
+                  aria-expanded={sortMenuOpen}
+                  aria-label={`Sort: ${SORT_LABELS[sortBy]}`}
+                  style={{
+                    padding: "6px 12px",
+                    background: sortMenuOpen ? "var(--primary-soft)" : "var(--surface-tint)",
+                    border: sortMenuOpen
+                      ? "0.5px solid var(--primary-edge)"
+                      : "0.5px solid var(--hairline)",
+                    borderRadius: "var(--r-pill)",
+                    color: sortMenuOpen ? "var(--primary-fg-on-soft)" : "var(--fg)",
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    letterSpacing: "-0.005em",
+                    transition: "background var(--d-fast) var(--ease-out), border-color var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out)",
+                  }}
+                >
+                  <span style={{ color: "var(--fg-faint)" }}>Sort</span>
+                  <span>{SORT_LABELS[sortBy]}</span>
+                  <ChevronDown
+                    className="w-3 h-3"
+                    style={{
+                      transform: sortMenuOpen ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform var(--d-fast) var(--ease-out)",
+                    }}
+                  />
+                </button>
+                {sortMenuOpen && (
+                  <div
+                    role="listbox"
+                    className="absolute z-30 flex flex-col py-1"
+                    style={{
+                      top: "calc(100% + 6px)",
+                      right: 0,
+                      minWidth: 160,
+                      background: "var(--surface-elev)",
+                      border: "0.5px solid var(--hairline)",
+                      borderRadius: "var(--r-md)",
+                      boxShadow: "var(--shadow-card)",
+                    }}
+                  >
+                    {SORT_OPTIONS.map((opt) => {
+                      const selected = sortBy === opt;
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          onClick={() => {
+                            setSortBy(opt);
+                            setSortMenuOpen(false);
+                          }}
+                          className="flex items-center justify-between gap-3 px-3 py-2 text-left"
+                          style={{
+                            background: selected ? "var(--surface-tint)" : "transparent",
+                            color: selected ? "var(--fg)" : "var(--fg-soft)",
+                            fontFamily: "var(--font-ui)",
+                            fontSize: 13,
+                            fontWeight: selected ? 600 : 500,
+                            letterSpacing: "-0.005em",
+                          }}
+                        >
+                          <span>{SORT_LABELS[opt]}</span>
+                          {selected && (
+                            <Check
+                              className="w-3.5 h-3.5 shrink-0"
+                              style={{ color: "var(--primary)" }}
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -772,100 +856,6 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
 
         {!searchFocused && displayItems.length > 0 && (
           <>
-            {/* Sort dropdown row. Mode-indicator text was removed —
-                catalogue counts (3,000+ comedies, etc.) are too large
-                to be useful at the top of the page, and the active-
-                filter strip below already communicates "what's
-                applied." The user scrolls + uses Load more to widen. */}
-            <div className="flex justify-end mb-3">
-              {/* Sort dropdown — custom popover so the trigger + panel
-                  pick up the design-system tokens. Native <select>
-                  would render the OS picker on mobile but takes
-                  ChromeOS-style styling on desktop; the custom build
-                  is consistent and matches the Edit-filters pill. */}
-              <div ref={sortMenuRef} className="relative shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setSortMenuOpen((o) => !o)}
-                  className="inline-flex items-center gap-1.5"
-                  aria-haspopup="listbox"
-                  aria-expanded={sortMenuOpen}
-                  aria-label={`Sort: ${SORT_LABELS[sortBy]}`}
-                  style={{
-                    padding: "5px 10px",
-                    background: sortMenuOpen ? "var(--primary-soft)" : "var(--surface-tint)",
-                    border: sortMenuOpen
-                      ? "0.5px solid var(--primary-edge)"
-                      : "0.5px solid var(--hairline)",
-                    borderRadius: "var(--r-pill)",
-                    color: sortMenuOpen ? "var(--primary-fg-on-soft)" : "var(--fg)",
-                    fontFamily: "var(--font-ui)",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    letterSpacing: "-0.005em",
-                    transition: "background var(--d-fast) var(--ease-out), border-color var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out)",
-                  }}
-                >
-                  <span style={{ color: "var(--fg-faint)" }}>Sort</span>
-                  <span>{SORT_LABELS[sortBy]}</span>
-                  <ChevronDown
-                    className="w-3 h-3"
-                    style={{
-                      transform: sortMenuOpen ? "rotate(180deg)" : "rotate(0deg)",
-                      transition: "transform var(--d-fast) var(--ease-out)",
-                    }}
-                  />
-                </button>
-                {sortMenuOpen && (
-                  <div
-                    role="listbox"
-                    className="absolute z-30 flex flex-col py-1"
-                    style={{
-                      top: "calc(100% + 6px)",
-                      right: 0,
-                      minWidth: 160,
-                      background: "var(--surface-elev)",
-                      border: "0.5px solid var(--hairline)",
-                      borderRadius: "var(--r-md)",
-                      boxShadow: "var(--shadow-card)",
-                    }}
-                  >
-                    {SORT_OPTIONS.map((opt) => {
-                      const selected = sortBy === opt;
-                      return (
-                        <button
-                          key={opt}
-                          type="button"
-                          role="option"
-                          aria-selected={selected}
-                          onClick={() => {
-                            setSortBy(opt);
-                            setSortMenuOpen(false);
-                          }}
-                          className="flex items-center justify-between gap-3 px-3 py-2 text-left"
-                          style={{
-                            background: selected ? "var(--surface-tint)" : "transparent",
-                            color: selected ? "var(--fg)" : "var(--fg-soft)",
-                            fontFamily: "var(--font-ui)",
-                            fontSize: 13,
-                            fontWeight: selected ? 600 : 500,
-                            letterSpacing: "-0.005em",
-                          }}
-                        >
-                          <span>{SORT_LABELS[opt]}</span>
-                          {selected && (
-                            <Check
-                              className="w-3.5 h-3.5 shrink-0"
-                              style={{ color: "var(--primary)" }}
-                            />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
 
             {/* Active-filter strip — only when ≥ 1 filter active.
                 Kicker "N FILTERS · CLEAR" + horizontally-scrolling
