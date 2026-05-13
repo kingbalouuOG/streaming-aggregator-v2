@@ -29,6 +29,11 @@ export function useSearch(
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  /** TMDb-reported total result count for the current query — sum of
+   *  /search/movie and /search/tv totals. The grid usually shows a
+   *  smaller number after availability + post-filter, but this is the
+   *  catalogue ceiling the user is querying against. */
+  const [totalResults, setTotalResults] = useState(0);
   const [activeCategory, setActiveCategory] = useState<string>('All');
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -106,6 +111,14 @@ export function useSearch(
       const movieTotalPages = movieRes?.data?.total_pages || 0;
       const tvTotalPages = tvRes?.data?.total_pages || 0;
       const maxTotalPages = Math.max(movieTotalPages, tvTotalPages);
+      // Total result count across both endpoints. Set on page 1 only —
+      // TMDb's total is stable for a given query so re-summing on
+      // subsequent pages would just produce noise.
+      if (searchPage === 1) {
+        const movieTotal = movieRes?.data?.total_results || 0;
+        const tvTotal = tvRes?.data?.total_results || 0;
+        setTotalResults(movieTotal + tvTotal);
+      }
 
       if (append) {
         setResults(prev => {
@@ -199,6 +212,7 @@ export function useSearch(
     setError(null);
     setPage(1);
     setHasMore(false);
+    setTotalResults(0);
     currentQueryRef.current = '';
   }, []);
 
@@ -212,5 +226,6 @@ export function useSearch(
   return {
     query, setQuery, results, loading, error, clearSearch,
     hasMore, loadMore, activeCategory, setActiveCategory, tooShort,
+    totalResults,
   };
 }

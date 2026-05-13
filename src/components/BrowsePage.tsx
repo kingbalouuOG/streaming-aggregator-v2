@@ -757,7 +757,10 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                   <span className="truncate">
                     Filter results{" "}
                     <span style={{ color: "var(--fg-faint)" }}>
-                      · {displayItems.length} {displayItems.length === 1 ? "title" : "titles"}
+                      · Showing {displayItems.length}
+                      {browse.totalResults > displayItems.length
+                        ? ` of ~${browse.totalResults.toLocaleString("en-GB")}`
+                        : ""}
                     </span>
                   </span>
                 ) : (
@@ -768,11 +771,17 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                         &lsquo;{search.query.trim()}&rsquo;
                       </span>
                     </span>
-                    {filters.onlyOnMyServices && (
-                      <span className="shrink-0" style={{ color: "var(--fg-faint)" }}>
-                        · {displayItems.length - availability.unavailableIds.size} in your stack
-                      </span>
-                    )}
+                    <span className="shrink-0" style={{ color: "var(--fg-faint)" }}>
+                      {filters.onlyOnMyServices
+                        ? ` · ${displayItems.length - availability.unavailableIds.size} in your stack${
+                            search.totalResults > displayItems.length
+                              ? ` of ~${search.totalResults.toLocaleString("en-GB")}`
+                              : ""
+                          }`
+                        : search.totalResults > displayItems.length
+                        ? ` · Showing ${displayItems.length} of ~${search.totalResults.toLocaleString("en-GB")}`
+                        : ""}
+                    </span>
                   </>
                 )}
               </div>

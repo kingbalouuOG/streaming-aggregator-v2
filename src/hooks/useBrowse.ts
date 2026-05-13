@@ -22,6 +22,11 @@ export function useBrowse(
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  /** TMDb-reported total result count across all pages for the current
+   *  query. Cap of the catalogue we could surface; the actually-shown
+   *  count drops below this after the user-side post-filter +
+   *  availability check. */
+  const [totalResults, setTotalResults] = useState(0);
   const loadingRef = useRef(false);
   const loadRef = useRef<(pageNum?: number, append?: boolean) => Promise<void>>(null!);
 
@@ -148,6 +153,17 @@ export function useBrowse(
       }
 
       const totalPages = Math.max(...responses.map((r: any) => r.data?.total_pages || 1));
+      // Sum total_results across movie + tv responses so the mode
+      // indicator can show the catalogue ceiling, not just the
+      // currently-loaded slice. Only update on page 1 — TMDb's
+      // total is stable across pages for a given query.
+      if (pageNum === 1) {
+        const total = responses.reduce(
+          (sum: number, r: any) => sum + (r.data?.total_results || 0),
+          0,
+        );
+        setTotalResults(total);
+      }
       setHasMore(pageNum < totalPages);
 
       if (append) {
@@ -185,5 +201,5 @@ export function useBrowse(
     }
   }, [hasMore, page]);
 
-  return { items, loading, error, hasMore, loadMore };
+  return { items, loading, error, hasMore, loadMore, totalResults };
 }
