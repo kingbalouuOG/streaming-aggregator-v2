@@ -988,7 +988,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
             >
               {activeFilterPills.length > 0
                 ? "Nothing matches this combination."
-                : `No matches for &lsquo;${search.query.trim()}&rsquo;.`}
+                : `No matches for ‘${search.query.trim()}’.`}
             </p>
             <p
               style={{
