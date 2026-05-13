@@ -318,7 +318,10 @@ export function useSearch(
 
     try {
       const { cleanQuery, year } = extractYearFromQuery(trimmed);
-      const shouldFetchMovies = category === 'All' || category === 'Movies';
+      // Docs ride on the /search/movie endpoint (TMDb classifies docs
+      // as movies with genre 99); they get type='doc' on adapter
+      // transform and we partition them out below.
+      const shouldFetchMovies = category === 'All' || category === 'Movies' || category === 'Docs';
       const shouldFetchTV = category === 'All' || category === 'TV';
       const services = userServices || [];
 
@@ -340,19 +343,23 @@ export function useSearch(
 
       const movieItems = (movieRes?.data?.results || []).map(tmdbMovieToContentItem);
       const tvItems = (tvRes?.data?.results || []).map(tmdbTVToContentItem);
-      // Filter the Postgres-cache hits to match the active category so
-      // the All/Movies/TV pill still narrows results.
-      const filteredCache = cacheItems.filter((item) => {
-        if (category === 'Movies') return item.type === 'movie' || item.type === 'doc';
+      // Partition by category. Movies/Docs/TV are mutually exclusive
+      // buckets; All accepts everything.
+      const passesCategory = (item: ContentItem): boolean => {
+        if (category === 'Movies') return item.type === 'movie';
+        if (category === 'Docs') return item.type === 'doc';
         if (category === 'TV') return item.type === 'tv';
         return true;
-      });
+      };
+      const filteredMovies = movieItems.filter(passesCategory);
+      const filteredCache = cacheItems.filter(passesCategory);
 
       // Dedupe by id — Postgres entries fill in compound-word gaps
       // TMDb missed; identical hits collapse cleanly.
       const seen = new Set<string>();
       const dedupedItems: ContentItem[] = [];
-      for (const item of [...movieItems, ...tvItems, ...filteredCache]) {
+      const filteredTV = tvItems.filter(passesCategory);
+      for (const item of [...filteredMovies, ...filteredTV, ...filteredCache]) {
         if (seen.has(item.id)) continue;
         seen.add(item.id);
         dedupedItems.push(item);

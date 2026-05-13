@@ -15,9 +15,11 @@ import {
   removeRecentSearch,
   clearRecentSearches,
 } from "@/lib/search/recentSearches";
+import { buildActiveFilterPills, clearAllActiveFilters } from "@/lib/search/activeFilterPills";
+import { ActiveFilterPill } from "./ActiveFilterPill";
 import type { ServiceId } from "./platformLogos";
 
-const browseCategories = ["All", "Movies", "TV"];
+const browseCategories = ["All", "Movies", "TV", "Docs"];
 
 export interface BrowseStateSnapshot {
   query: string;
@@ -159,6 +161,14 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     (filters.minRating > 0 ? 1 : 0) +
     (filters.showWatched !== "all" ? 1 : 0) +
     filters.languages.length;
+
+  // Per-axis pills for the results-page active-filter strip. Each
+  // pill carries its own remove handler so the renderer doesn't have
+  // to know which axis it's clearing.
+  const activeFilterPills = useMemo(
+    () => buildActiveFilterPills(filters, userServices ?? [], onFiltersChange),
+    [filters, userServices, onFiltersChange],
+  );
 
   // Display items: search results, filtered by cost/genre/rating/language
   const rawItems = search.results;
@@ -525,23 +535,161 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
         )}
 
         {!searchFocused && displayItems.length > 0 && (
-          <div className="grid grid-cols-2 gap-3">
-            {displayItems.map((item, index) => (
-              <BrowseCard key={item.id} item={item} index={index} onSelect={onItemSelect} bookmarked={bookmarkedIds?.has(item.id)} onToggleBookmark={onToggleBookmark} userServices={userServices} watched={watchedIds?.has(item.id)} offService={search.unavailableIds.has(item.id)} rentBuyPriceLabel={search.rentBuyPrices.get(item.id)} />
-            ))}
-          </div>
+          <>
+            {/* Mode indicator row — "Results for '<query>'" + faint
+                "· N in your stack" when on-services filter is active.
+                Drops below results count when filters are stacked. */}
+            <div
+              className="flex items-baseline gap-1 mb-3"
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--fg-soft)",
+                letterSpacing: "-0.005em",
+              }}
+            >
+              <span>
+                Results for{" "}
+                <span style={{ color: "var(--fg)", fontWeight: 600 }}>
+                  &lsquo;{search.query.trim()}&rsquo;
+                </span>
+              </span>
+              {filters.onlyOnMyServices && (
+                <span style={{ color: "var(--fg-faint)" }}>
+                  · {displayItems.length - search.unavailableIds.size} in your stack
+                </span>
+              )}
+            </div>
+
+            {/* Active-filter strip — only when ≥ 1 filter active.
+                Kicker "N FILTERS · CLEAR" + horizontally-scrolling
+                pills + count row + Edit-filters shortcut. */}
+            {activeFilterPills.length > 0 && (
+              <div className="flex flex-col mb-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="t-kicker">
+                    {activeFilterPills.length} {activeFilterPills.length === 1 ? "FILTER" : "FILTERS"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => clearAllActiveFilters(userServices ?? [], onFiltersChange)}
+                    className="t-kicker"
+                    style={{ color: "var(--fg-faint)" }}
+                    aria-label="Clear all filters"
+                  >
+                    CLEAR
+                  </button>
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
+                  {activeFilterPills.map((p) => (
+                    <ActiveFilterPill key={p.key} label={p.label} onRemove={p.onRemove} />
+                  ))}
+                </div>
+                <div
+                  className="flex items-center justify-between mt-3 pt-3"
+                  style={{ borderTop: "0.5px solid var(--hairline)" }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "var(--font-ui)",
+                      fontSize: 13,
+                      color: "var(--fg-soft)",
+                    }}
+                  >
+                    <span style={{ color: "var(--fg)", fontWeight: 700 }}>
+                      {displayItems.length} {displayItems.length === 1 ? "title" : "titles"}
+                    </span>{" "}
+                    match{displayItems.length === 1 ? "es" : ""} all {activeFilterPills.length}{" "}
+                    filter{activeFilterPills.length === 1 ? "" : "s"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onShowFiltersChange(true)}
+                    className="inline-flex items-center gap-1.5 shrink-0"
+                    style={{
+                      padding: "5px 10px",
+                      background: "var(--primary-soft)",
+                      border: "0.5px solid var(--primary-edge)",
+                      borderRadius: "var(--r-pill)",
+                      color: "var(--primary-fg-on-soft)",
+                      fontFamily: "var(--font-ui)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                    Edit filters
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              {displayItems.map((item, index) => (
+                <BrowseCard key={item.id} item={item} index={index} onSelect={onItemSelect} bookmarked={bookmarkedIds?.has(item.id)} onToggleBookmark={onToggleBookmark} userServices={userServices} watched={watchedIds?.has(item.id)} offService={search.unavailableIds.has(item.id)} rentBuyPriceLabel={search.rentBuyPrices.get(item.id)} />
+              ))}
+            </div>
+          </>
         )}
 
-        {/* No results state — only on the submitted view */}
+        {/* No-results state — redesigned per artboard. Distinguishes
+            "no matches for this query at all" from "matches exist but
+            filters are too tight." */}
         {!searchFocused && isSearching && !isLoading && displayItems.length === 0 && search.results.length >= 0 && !search.tooShort && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <Search className="w-10 h-10 text-muted-foreground/40 mb-3" />
-            <p className="text-muted-foreground text-[15px]" style={{ fontWeight: 500 }}>
-              No results found
+          <div className="flex flex-col items-start py-12">
+            <Search className="w-8 h-8 mb-4" style={{ color: "var(--fg-faint)" }} />
+            <p
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 19,
+                fontWeight: 600,
+                fontVariationSettings: '"opsz" 24',
+                color: "var(--fg)",
+                letterSpacing: "-0.01em",
+                lineHeight: 1.2,
+                margin: 0,
+                marginBottom: 8,
+              }}
+            >
+              {activeFilterPills.length > 0
+                ? "Nothing matches this combination."
+                : `No matches for &lsquo;${search.query.trim()}&rsquo;.`}
             </p>
-            <p className="text-muted-foreground/60 text-[13px] mt-1">
-              Try a different search term
+            <p
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--fg-soft)",
+                lineHeight: 1.45,
+                margin: 0,
+                marginBottom: 16,
+              }}
+            >
+              {activeFilterPills.length > 0
+                ? "Loosen a filter to widen the catch — Edit filters opens the sheet, or drop one chip below."
+                : "Try a different spelling or a related phrase."}
             </p>
+            {activeFilterPills.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onShowFiltersChange(true)}
+                className="inline-flex items-center gap-2"
+                style={{
+                  padding: "8px 14px",
+                  background: "var(--primary)",
+                  color: "#fff",
+                  borderRadius: "var(--r-pill)",
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                Edit filters
+              </button>
+            )}
           </div>
         )}
 
