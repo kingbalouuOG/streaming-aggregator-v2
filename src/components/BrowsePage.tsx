@@ -218,13 +218,13 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
   // silently fall back to Mode A — the chip is a discovery hint, not
   // a hard semantic-only contract.
   const handleMoodChip = useCallback((phrase: string) => {
-    search.setQuery(phrase);
+    // Arm the mode before setQuery so the debounced query effect
+    // dispatches via the semantic path. Calling setMode with its own
+    // dispatch would race the debounced Mode A from setQuery.
     if (semanticFlagOn) {
-      // setMode re-runs the current query through the semantic path.
-      // Calling it after setQuery means the next render's query state
-      // is what setMode dispatches with.
-      requestAnimationFrame(() => search.setMode('semantic'));
+      search.setMode('semantic', { dispatch: false });
     }
+    search.setQuery(phrase);
   }, [search, semanticFlagOn]);
 
   // Mode A → Mode C opt-in tap. Flag on: dispatch semantic. Flag

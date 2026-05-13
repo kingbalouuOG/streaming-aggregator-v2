@@ -308,9 +308,15 @@ export function useSearch(
   // the new retrieval path so the grid swaps in place. The caller
   // (BrowsePage) gates semantic on the feature flag — useSearch
   // doesn't second-guess, it just runs what it's told.
-  const setMode = useCallback((next: SearchMode) => {
+  //
+  // `dispatch: false` arms the mode without firing a search — for
+  // callers that change the mode and the query in the same tick (mood
+  // chip). The debounced query effect picks up `modeRef.current` when
+  // its timer fires, so dispatching here would race that timer.
+  const setMode = useCallback((next: SearchMode, opts?: { dispatch?: boolean }) => {
     setModeState(next);
     modeRef.current = next;
+    if (opts?.dispatch === false) return;
     const q = query.trim();
     if (!q || q.length < 2) return;
     setLoading(true);
