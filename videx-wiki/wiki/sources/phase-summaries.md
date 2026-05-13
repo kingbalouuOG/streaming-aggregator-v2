@@ -3,7 +3,7 @@ title: Source — Phase Summaries (collected)
 type: source
 tags: [phase-summaries, history, deliverables]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-05-13
 sources:
   - raw/phase-summaries/Videx_v2_Phase_0_End_of_Phase_Summary.md
   - raw/phase-summaries/Videx_v2_Phase_0_5_End_of_Phase_Summary.md
@@ -18,6 +18,8 @@ sources:
   - raw/phase-summaries/phase-4-and-4.5-summary.md
   - raw/phase-summaries/phase-4.5-anchored-rooms-summary.md
   - raw/phase-summaries/IN-466-server-side-foryou-render-summary.md
+  - docs/v2/phase-summaries/phase-5-summary.md
+  - docs/v2/phase-summaries/phase-search-v2-summary.md
 related:
   - wiki/concepts/operations/phase-history.md
   - wiki/concepts/operations/phase-0.md
@@ -28,6 +30,8 @@ related:
   - wiki/concepts/operations/phase-2-6.md
   - wiki/concepts/operations/phase-3.md
   - wiki/concepts/operations/phase-4.md
+  - wiki/concepts/operations/phase-5.md
+  - wiki/concepts/operations/phase-search-v2.md
   - wiki/concepts/evaluations/phase-2-6-decision.md
   - wiki/concepts/evaluations/phase-2-6-variance-eval.md
   - wiki/concepts/decisions/adr-012-server-side-foryou-render.md
@@ -54,6 +58,8 @@ End-of-phase summary documents under `raw/phase-summaries/`. Per the implementat
 | 4 + 4.5 (combined) | `phase-4-and-4.5-summary.md` | — |
 | 4.5 anchored rooms | `phase-4.5-anchored-rooms-summary.md` | — |
 | IN-466 server-side render | `IN-466-server-side-foryou-render-summary.md` | [for-you-surface §Server-side render path](../concepts/architecture/for-you-surface.md), [ADR-012](../concepts/decisions/adr-012-server-side-foryou-render.md) |
+| 5 | `docs/v2/phase-summaries/phase-5-summary.md` | [phase-5](../concepts/operations/phase-5.md) |
+| Search V2 | `docs/v2/phase-summaries/phase-search-v2-summary.md` | [phase-search-v2](../concepts/operations/phase-search-v2.md) |
 
 ## Notes
 
