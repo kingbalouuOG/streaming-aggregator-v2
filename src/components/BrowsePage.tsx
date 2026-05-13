@@ -7,6 +7,7 @@ import { MoodChip } from "./MoodChip";
 import { SearchSuggestions } from "./search/SearchSuggestions";
 import { useSearch } from "@/hooks/useSearch";
 import { useBrowse } from "@/hooks/useBrowse";
+import { useItemAvailability } from "@/hooks/useItemAvailability";
 import { providerIdsToServiceIds } from "@/lib/adapters/platformAdapter";
 import { GENRE_NAME_TO_ID } from "@/lib/constants/genres";
 import { useFilterUrlSync } from "@/lib/search/useFilterUrlSync";
@@ -42,6 +43,10 @@ export interface BrowseStateSnapshot {
    *  watch each item. Persists so the cost filter still works after
    *  detail navigation without re-running per-item availability. */
   availableTiers: [string, ('free' | 'rent' | 'buy')[]][];
+  /** [contentId, ServiceId[]] tuples — the displayable service set
+   *  the renderer should use instead of the raw item.services list.
+   *  Preserves on-service vs "where it lives" decisions across nav. */
+  serviceBadges: [string, ServiceId[]][];
 }
 
 interface BrowsePageProps {
@@ -61,12 +66,7 @@ interface BrowsePageProps {
 export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters, onShowFiltersChange, bookmarkedIds, onToggleBookmark, providerIds = [], userServices, watchedIds, savedState }: BrowsePageProps) {
   const initial = savedState?.current;
 
-  const search = useSearch(userServices, initial?.query, initial?.results, {
-    onlyOnMyServices: filters.onlyOnMyServices,
-    initialUnavailableIds: initial?.unavailableIds,
-    initialRentBuyPrices: initial?.rentBuyPrices,
-    initialAvailableTiers: initial?.availableTiers,
-  });
+  const search = useSearch(userServices, initial?.query, initial?.results);
 
   // Mirror filter state to the URL hash so deep links and back-button
   // navigation restore prior filters. Hook reads on mount, writes on
@@ -84,22 +84,31 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     }
   }, []);
 
-  // Ref to track latest values for unmount cleanup
+  // Refs to capture latest values for the unmount snapshot. The
+  // snapshot survives navigation to a detail page so a tap-into-then-
+  // back restores results AND the per-item availability decisions.
   const searchRef = useRef(search);
   searchRef.current = search;
+  // availabilityRef is wired below once `availability` is defined; it's
+  // declared here so the unmount effect closes over the correct ref.
+  const availabilityRef = useRef<{ unavailableIds: Set<string>; rentBuyPrices: Map<string, string>; availableTiers: Map<string, Set<'free' | 'rent' | 'buy'>>; serviceBadges: Map<string, ServiceId[]> } | null>(null);
 
   // Save state back to ref on unmount
   useEffect(() => {
     return () => {
-      if (savedState) {
+      if (savedState && availabilityRef.current) {
+        const a = availabilityRef.current;
         savedState.current = {
           query: searchRef.current.query,
           results: searchRef.current.results,
           activeCategory: searchRef.current.activeCategory,
-          unavailableIds: Array.from(searchRef.current.unavailableIds),
-          rentBuyPrices: Array.from(searchRef.current.rentBuyPrices.entries()),
-          availableTiers: Array.from(searchRef.current.availableTiers.entries()).map(
+          unavailableIds: Array.from(a.unavailableIds),
+          rentBuyPrices: Array.from(a.rentBuyPrices.entries()),
+          availableTiers: Array.from(a.availableTiers.entries()).map(
             ([id, tiers]) => [id, Array.from(tiers)] as [string, ('free' | 'rent' | 'buy')[]],
+          ),
+          serviceBadges: Array.from(a.serviceBadges.entries()).map(
+            ([id, ids]) => [id, [...ids]] as [string, ServiceId[]],
           ),
         };
       }
@@ -207,24 +216,35 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
 
   // Display items: in text-search mode the source is search.results;
   // in filter-only mode it's browse.items (TMDb /discover with the
-  // filter set). Most downstream filters (cost, genres, minRating,
-  // languages) are already enforced upstream by useBrowse via TMDb
-  // discover params, but we still apply them post-fetch for the
-  // search path where TMDb /search doesn't accept those constraints.
+  // filter set).
   const rawItems = filterOnlyMode ? browse.items : search.results;
+
+  // Per-item availability — single source of truth for both surfaces.
+  // Drives off-service tint, rent/buy price chip, and the cost filter
+  // (via the availableTiers map). Snapshot fields restore the same
+  // state across detail-page navigation.
+  const availability = useItemAvailability(rawItems, userServices, {
+    onlyOnMyServices: filters.onlyOnMyServices,
+    initialUnavailableIds: initial?.unavailableIds,
+    initialRentBuyPrices: initial?.rentBuyPrices,
+    initialAvailableTiers: initial?.availableTiers,
+    initialServiceBadges: initial?.serviceBadges,
+  });
+
   const displayItems = useMemo(() => {
-    let items = rawItems;
+    // Drop items the availability check decided to remove (no UK
+    // availability OR off-service + drop mode).
+    let items = rawItems.filter((item) => !availability.removedIds.has(item.id));
     if (filters.costs.length > 0) {
       // Per-item availableTiers tells us which tiers the user can use
       // to watch each title (restricted to user services when on-
-      // service; unrestricted when off-service). Item passes the cost
-      // filter when the intersection with the selected costs is non-
-      // empty. Items missing from the map are still resolving — keep
-      // them visible until the per-item flow lands so the grid
-      // doesn't churn empty during availability resolution.
+      // service; unrestricted when off-service). Items missing from
+      // the map are still resolving — keep them visible until the
+      // per-item flow lands so the grid doesn't churn empty during
+      // availability resolution.
       const costSet = new Set(filters.costs);
       items = items.filter((item) => {
-        const tiers = search.availableTiers.get(item.id);
+        const tiers = availability.availableTiers.get(item.id);
         if (!tiers) return true;
         for (const c of costSet) if (tiers.has(c)) return true;
         return false;
@@ -245,8 +265,37 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
       );
     }
     return items;
-  }, [rawItems, filters.costs, filters.genres, filters.minRating, filters.languages, search.availableTiers]);
+  }, [rawItems, filters.costs, filters.genres, filters.minRating, filters.languages, availability.removedIds, availability.availableTiers]);
   const isLoading = filterOnlyMode ? browse.loading : search.loading;
+
+  // Keep availabilityRef in sync so the unmount snapshot captures the
+  // latest state without re-rendering on every map mutation.
+  availabilityRef.current = availability;
+
+  // Auto-paginate to a minimum visible count. After per-item
+  // availability settles, the grid often holds fewer items than the
+  // user expects from page 1 — TMDb returns 40 candidates per page;
+  // filtering can leave 0–3 visible. Keep fetching the next page
+  // until we've shown the user at least MIN_VISIBLE titles, capped at
+  // MAX_AUTO_FETCH_PAGES to avoid runaway when a query has no on-
+  // services hits at all.
+  const MIN_VISIBLE = 4;
+  const MAX_AUTO_FETCH_PAGES = 3;
+  const autoFetchedRef = useRef(0);
+  useEffect(() => {
+    // Reset counter on fresh query / category change.
+    autoFetchedRef.current = 0;
+  }, [search.query, search.activeCategory]);
+  useEffect(() => {
+    if (filterOnlyMode) return; // Auto-paginate only applies to text search
+    if (search.loading) return;
+    if (search.query.trim().length < 2) return;
+    if (!search.hasMore) return;
+    if (autoFetchedRef.current >= MAX_AUTO_FETCH_PAGES) return;
+    if (displayItems.length >= MIN_VISIBLE) return;
+    autoFetchedRef.current += 1;
+    search.loadMore();
+  }, [filterOnlyMode, search.loading, search.hasMore, search.query, search.activeCategory, displayItems.length, search]);
 
   // Search-surface card impressions — record once per (tmdbId, query,
   // filter set) tuple per session. Empty-state cards (recents / mood
@@ -649,7 +698,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                   </span>
                   {filters.onlyOnMyServices && (
                     <span style={{ color: "var(--fg-faint)" }}>
-                      · {displayItems.length - search.unavailableIds.size} in your stack
+                      · {displayItems.length - availability.unavailableIds.size} in your stack
                     </span>
                   )}
                 </>
@@ -720,9 +769,27 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              {displayItems.map((item, index) => (
-                <BrowseCard key={item.id} item={item} index={index} onSelect={onItemSelect} bookmarked={bookmarkedIds?.has(item.id)} onToggleBookmark={onToggleBookmark} userServices={userServices} watched={watchedIds?.has(item.id)} offService={search.unavailableIds.has(item.id)} rentBuyPriceLabel={search.rentBuyPrices.get(item.id)} />
-              ))}
+              {displayItems.map((item, index) => {
+                // Override item.services with the matched/displayable
+                // set from the availability check so the ServiceStack
+                // reflects on-service vs "where it lives" intent.
+                const badges = availability.serviceBadges.get(item.id);
+                const renderItem = badges ? { ...item, services: badges } : item;
+                return (
+                  <BrowseCard
+                    key={item.id}
+                    item={renderItem}
+                    index={index}
+                    onSelect={onItemSelect}
+                    bookmarked={bookmarkedIds?.has(item.id)}
+                    onToggleBookmark={onToggleBookmark}
+                    userServices={userServices}
+                    watched={watchedIds?.has(item.id)}
+                    offService={availability.unavailableIds.has(item.id)}
+                    rentBuyPriceLabel={availability.rentBuyPrices.get(item.id)}
+                  />
+                );
+              })}
             </div>
           </>
         )}
