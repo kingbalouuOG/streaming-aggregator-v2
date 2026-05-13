@@ -1,12 +1,19 @@
-import React, { useMemo, useEffect, useRef } from "react";
-import { Search, X, SlidersHorizontal, Loader2 } from "lucide-react";
+import React, { useMemo, useEffect, useRef, useState, useCallback } from "react";
+import { Search, X, SlidersHorizontal, Loader2, Clock, Leaf, Zap, Moon, Heart } from "lucide-react";
 import { BrowseCard } from "./BrowseCard";
 import { ContentItem } from "./ContentCard";
 import { FilterSheet, FilterState, ALL_GENRES, FILTER_LANGUAGES } from "./FilterSheet";
+import { MoodChip } from "./MoodChip";
 import { useSearch } from "@/hooks/useSearch";
 import { providerIdsToServiceIds } from "@/lib/adapters/platformAdapter";
 import { GENRE_NAME_TO_ID } from "@/lib/constants/genres";
 import { useFilterUrlSync } from "@/lib/search/useFilterUrlSync";
+import {
+  getRecentSearches,
+  addRecentSearch,
+  removeRecentSearch,
+  clearRecentSearches,
+} from "@/lib/search/recentSearches";
 import type { ServiceId } from "./platformLogos";
 
 const browseCategories = ["All", "Movies", "TV"];
@@ -92,6 +99,50 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
 
   const hasQuery = search.query.trim().length > 0;
   const isSearching = search.query.trim().length >= 2;
+
+  // Recent searches — local store. Tracked in state so add/remove
+  // re-renders the empty state. The store is the source of truth; the
+  // state mirror is just a render trigger.
+  const [recents, setRecents] = useState<string[]>(() => getRecentSearches());
+  const lastRecordedRef = useRef<string>('');
+
+  // Record a query into the recents store once it's submitted in a
+  // meaningful way (≥ 2 chars + has resolved with a non-loading state).
+  // Dedupe via the most-recently-recorded ref so re-renders don't keep
+  // re-adding the same query.
+  useEffect(() => {
+    if (!isSearching || search.loading) return;
+    const q = search.query.trim();
+    if (!q || q === lastRecordedRef.current) return;
+    lastRecordedRef.current = q;
+    addRecentSearch(q);
+    setRecents(getRecentSearches());
+  }, [search.query, search.loading, isSearching]);
+
+  const handleSelectRecent = useCallback((query: string) => {
+    search.setQuery(query);
+  }, [search]);
+
+  const handleDismissRecent = useCallback((query: string) => {
+    removeRecentSearch(query);
+    setRecents(getRecentSearches());
+  }, []);
+
+  const handleClearRecents = useCallback(() => {
+    clearRecentSearches();
+    setRecents([]);
+  }, []);
+
+  // Mood-chip tap → populate query + submit as a regular search. When
+  // Cluster B (semantic search) lands, this will dispatch Mode C; for
+  // now it's plain Mode A keyword search.
+  const handleMoodChip = useCallback((phrase: string) => {
+    search.setQuery(phrase);
+  }, [search]);
+
+  const handleBrowseByFilter = useCallback(() => {
+    onShowFiltersChange(true);
+  }, [onShowFiltersChange]);
 
   const activeFilterCount =
     filters.services.length +
@@ -264,65 +315,161 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
 
       {/* Content area */}
       <div className="px-5">
-        {/* Empty default state — editor's-note tone */}
+        {/* Empty state — Phase Search V2 A3 per artboard 01.
+            Three composable journeys: recents (history shortcut),
+            Browse-by-filter (custom search), and mood chips (atmospheric
+            entry points). All hidden the moment the user types. */}
         {!hasQuery && !isLoading && (
-          <div className="flex flex-col items-start py-16">
-            <span className="t-kicker" style={{ marginBottom: 12 }}>
-              EDITOR'S NOTE · BROWSE
-            </span>
-            <h2
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: "var(--t-headline)",
-                fontWeight: 600,
-                fontVariationSettings: '"opsz" 48',
-                letterSpacing: "-0.01em",
-                color: "var(--fg)",
-                lineHeight: 1.15,
-                margin: 0,
-                marginBottom: 12,
-              }}
-            >
-              What are you in the mood for?
-            </h2>
-            <p
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: "var(--t-body)",
-                fontWeight: 400,
-                color: "var(--fg-soft)",
-                lineHeight: 1.45,
-                margin: 0,
-              }}
-            >
-              Search movies and TV shows — we'll show you where they're available across your stack.
-            </p>
+          <div className="flex flex-col pt-4 pb-8 gap-8">
+            {/* RECENT — only renders when the user has prior queries */}
+            {recents.length > 0 && (
+              <section className="flex flex-col">
+                <header className="flex items-center justify-between mb-3">
+                  <span className="t-kicker">RECENT</span>
+                  <button
+                    type="button"
+                    onClick={handleClearRecents}
+                    className="t-kicker"
+                    style={{ color: "var(--fg-faint)", letterSpacing: "1.4px" }}
+                    aria-label="Clear recent searches"
+                  >
+                    CLEAR
+                  </button>
+                </header>
+                <ul className="flex flex-col">
+                  {recents.slice(0, 5).map((query) => (
+                    <li
+                      key={query}
+                      className="flex items-center justify-between gap-3 py-3"
+                      style={{ borderBottom: "0.5px solid var(--hairline)" }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleSelectRecent(query)}
+                        className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                      >
+                        <Clock className="w-4 h-4 shrink-0" style={{ color: "var(--fg-faint)" }} />
+                        <span
+                          className="truncate"
+                          style={{
+                            fontFamily: "var(--font-ui)",
+                            fontSize: 14,
+                            fontWeight: 500,
+                            color: "var(--fg)",
+                          }}
+                        >
+                          {query}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDismissRecent(query)}
+                        className="w-7 h-7 flex items-center justify-center shrink-0"
+                        style={{ color: "var(--fg-faint)" }}
+                        aria-label={`Remove ${query} from recent searches`}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
-            {/* Quick-start chips. Pre-populate the search with a
-                common-mood query so a tap kicks discovery off without
-                the user having to think of a term. */}
-            <span className="t-kicker mt-8 mb-3">TRY ONE OF THESE</span>
-            <div className="flex flex-wrap gap-2">
-              {["Slow burn", "Comedy", "Crime", "Sci-fi", "Romance", "Documentary"].map((seed) => (
-                <button
-                  key={seed}
-                  type="button"
-                  onClick={() => search.setQuery(seed)}
-                  className="px-3 py-1.5"
+            {/* Browse-by-filter CTA — full-width, opens FilterSheet
+                standalone. Per design brief §3.1: the orange weight is
+                intentional; this is the larger of the two journeys. */}
+            <button
+              type="button"
+              onClick={handleBrowseByFilter}
+              className="flex flex-col items-start text-left"
+              style={{
+                padding: "20px 22px",
+                borderRadius: "var(--r-lg)",
+                background: "var(--primary)",
+                color: "#fff",
+              }}
+            >
+              <span className="flex items-center gap-3">
+                <SlidersHorizontal className="w-5 h-5" />
+                <span
                   style={{
-                    background: "var(--surface-tint)",
-                    color: "var(--fg)",
-                    borderRadius: "var(--r-pill)",
-                    fontFamily: "var(--font-ui)",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    letterSpacing: "0.01em",
+                    fontFamily: "var(--font-display)",
+                    fontSize: 19,
+                    fontWeight: 600,
+                    fontVariationSettings: '"opsz" 36',
+                    letterSpacing: "-0.01em",
+                    lineHeight: 1.15,
                   }}
                 >
-                  {seed}
-                </button>
-              ))}
-            </div>
+                  Browse by filter
+                </span>
+              </span>
+              <span
+                style={{
+                  marginTop: 4,
+                  marginLeft: 32,
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  opacity: 0.85,
+                  lineHeight: 1.3,
+                }}
+              >
+                Service, genre, runtime, rating — build the query that fits your night.
+              </span>
+            </button>
+
+            {/* Mood-chip grid — 2×2. Each chip seeds a search query
+                with the mood label. Hue maps to the editorial atmosphere
+                accents in index.css so the chips read as related but
+                distinct. */}
+            <section className="flex flex-col">
+              <header className="flex flex-col mb-3">
+                <span className="t-kicker">OR START WITH A FEELING</span>
+                <span
+                  style={{
+                    marginTop: 4,
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: "var(--fg-faint)",
+                  }}
+                >
+                  Tap to search the mood.
+                </span>
+              </header>
+              <div className="grid grid-cols-2 gap-2">
+                <MoodChip
+                  icon={<Leaf className="w-3.5 h-3.5" strokeWidth={2} />}
+                  label="Slow burn"
+                  sub="Patient & quiet"
+                  hue="var(--atm-teal)"
+                  onClick={() => handleMoodChip("Slow burn")}
+                />
+                <MoodChip
+                  icon={<Zap className="w-3.5 h-3.5" strokeWidth={2} />}
+                  label="Quick hit"
+                  sub="Under 90 min"
+                  hue="var(--atm-amber)"
+                  onClick={() => handleMoodChip("Quick hit")}
+                />
+                <MoodChip
+                  icon={<Moon className="w-3.5 h-3.5" strokeWidth={2} />}
+                  label="Late-night"
+                  sub="Strange & dark"
+                  hue="var(--atm-violet)"
+                  onClick={() => handleMoodChip("Late-night")}
+                />
+                <MoodChip
+                  icon={<Heart className="w-3.5 h-3.5" strokeWidth={2} />}
+                  label="Comfort"
+                  sub="A favourite kind"
+                  hue="var(--atm-rose)"
+                  onClick={() => handleMoodChip("Comfort")}
+                />
+              </div>
+            </section>
           </div>
         )}
 
