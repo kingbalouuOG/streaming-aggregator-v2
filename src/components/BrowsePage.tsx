@@ -8,6 +8,7 @@ import { SearchSuggestions } from "./search/SearchSuggestions";
 import { useSearch } from "@/hooks/useSearch";
 import { useBrowse, type BrowseSortBy } from "@/hooks/useBrowse";
 import { useItemAvailability } from "@/hooks/useItemAvailability";
+import { useTasteRanking } from "@/hooks/useTasteRanking";
 import { providerIdsToServiceIds } from "@/lib/adapters/platformAdapter";
 import { GENRE_NAME_TO_ID } from "@/lib/constants/genres";
 import { useFilterUrlSync } from "@/lib/search/useFilterUrlSync";
@@ -61,9 +62,12 @@ interface BrowsePageProps {
   userServices?: ServiceId[];
   watchedIds?: Set<string>;
   savedState?: React.MutableRefObject<BrowseStateSnapshot | null>;
+  /** User's 1536D taste vector — drives the filter-only "Best match"
+   *  sort. When null/undefined, Best match falls back to popularity. */
+  tasteVector?: number[] | null;
 }
 
-export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters, onShowFiltersChange, bookmarkedIds, onToggleBookmark, providerIds = [], userServices, watchedIds, savedState }: BrowsePageProps) {
+export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters, onShowFiltersChange, bookmarkedIds, onToggleBookmark, providerIds = [], userServices, watchedIds, savedState, tasteVector }: BrowsePageProps) {
   const initial = savedState?.current;
 
   const search = useSearch(userServices, initial?.query, initial?.results);
@@ -320,6 +324,18 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     }
     return items;
   }, [rawItems, filters.costs, filters.genres, filters.minRating, filters.languages, availability.removedIds, availability.availableTiers, sortBy]);
+
+  // "Best match" in filter-only mode is taste-ranked — re-sort the
+  // post-filter items by cosine similarity to the user's taste
+  // vector. Text-search keeps its relevance order (the search-utils
+  // re-rank already factors in taste as a tie-breaker), and other
+  // sort modes ignore taste entirely. When the user has no taste
+  // vector yet (pre-onboarding signal), best falls back to the
+  // popularity ordering set by the items source.
+  const tasteRankEnabled = filterOnlyMode && sortBy === "best" && !!tasteVector;
+  const taste = useTasteRanking(displayItems, tasteVector ?? null, tasteRankEnabled);
+  const finalItems = tasteRankEnabled && taste.rankedItems ? taste.rankedItems : displayItems;
+
   const isLoading = filterOnlyMode ? browse.loading : search.loading;
 
   // Keep availabilityRef in sync so the unmount snapshot captures the
@@ -736,55 +752,12 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
 
         {!searchFocused && displayItems.length > 0 && (
           <>
-            {/* Mode indicator + sort dropdown row. Mode copy adapts:
-                  text search → "Results for '<query>' · N in your stack"
-                  filter-only → "Filter results · N titles"
-                Sort uses a native <select> so the platform's picker
-                renders correctly on mobile. "Best match" preserves
-                relevance (search) or popularity (filter-only). */}
-            <div className="flex items-baseline justify-between gap-3 mb-3">
-              <div
-                className="flex items-baseline gap-1 min-w-0"
-                style={{
-                  fontFamily: "var(--font-ui)",
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: "var(--fg-soft)",
-                  letterSpacing: "-0.005em",
-                }}
-              >
-                {filterOnlyMode ? (
-                  <span className="truncate">
-                    Filter results{" "}
-                    <span style={{ color: "var(--fg-faint)" }}>
-                      · Showing {displayItems.length}
-                      {browse.totalResults > displayItems.length
-                        ? ` of ~${browse.totalResults.toLocaleString("en-GB")}`
-                        : ""}
-                    </span>
-                  </span>
-                ) : (
-                  <>
-                    <span className="truncate">
-                      Results for{" "}
-                      <span style={{ color: "var(--fg)", fontWeight: 600 }}>
-                        &lsquo;{search.query.trim()}&rsquo;
-                      </span>
-                    </span>
-                    <span className="shrink-0" style={{ color: "var(--fg-faint)" }}>
-                      {filters.onlyOnMyServices
-                        ? ` · ${displayItems.length - availability.unavailableIds.size} in your stack${
-                            search.totalResults > displayItems.length
-                              ? ` of ~${search.totalResults.toLocaleString("en-GB")}`
-                              : ""
-                          }`
-                        : search.totalResults > displayItems.length
-                        ? ` · Showing ${displayItems.length} of ~${search.totalResults.toLocaleString("en-GB")}`
-                        : ""}
-                    </span>
-                  </>
-                )}
-              </div>
+            {/* Sort dropdown row. Mode-indicator text was removed —
+                catalogue counts (3,000+ comedies, etc.) are too large
+                to be useful at the top of the page, and the active-
+                filter strip below already communicates "what's
+                applied." The user scrolls + uses Load more to widen. */}
+            <div className="flex justify-end mb-3">
               {/* Sort dropdown — custom popover so the trigger + panel
                   pick up the design-system tokens. Native <select>
                   would render the OS picker on mobile but takes
@@ -898,47 +871,15 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                     <ActiveFilterPill key={p.key} label={p.label} onRemove={p.onRemove} />
                   ))}
                 </div>
-                <div
-                  className="flex items-center justify-between mt-3 pt-3"
-                  style={{ borderTop: "0.5px solid var(--hairline)" }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "var(--font-ui)",
-                      fontSize: 13,
-                      color: "var(--fg-soft)",
-                    }}
-                  >
-                    <span style={{ color: "var(--fg)", fontWeight: 700 }}>
-                      {displayItems.length} {displayItems.length === 1 ? "title" : "titles"}
-                    </span>{" "}
-                    match{displayItems.length === 1 ? "es" : ""} all {activeFilterPills.length}{" "}
-                    filter{activeFilterPills.length === 1 ? "" : "s"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onShowFiltersChange(true)}
-                    className="inline-flex items-center gap-1.5 shrink-0"
-                    style={{
-                      padding: "5px 10px",
-                      background: "var(--primary-soft)",
-                      border: "0.5px solid var(--primary-edge)",
-                      borderRadius: "var(--r-pill)",
-                      color: "var(--primary-fg-on-soft)",
-                      fontFamily: "var(--font-ui)",
-                      fontSize: 12,
-                      fontWeight: 600,
-                    }}
-                  >
-                    <SlidersHorizontal className="w-3.5 h-3.5" />
-                    Edit filters
-                  </button>
-                </div>
+                {/* Count row + inline Edit-filters pill removed — the
+                    counts were too coarse to be useful (TMDb totals
+                    in the thousands), and the filter sheet is one tap
+                    away via the sliders icon next to the search bar. */}
               </div>
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              {displayItems.map((item, index) => {
+              {finalItems.map((item, index) => {
                 // Override item.services with the matched/displayable
                 // set from the availability check so the ServiceStack
                 // reflects on-service vs "where it lives" intent.

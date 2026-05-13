@@ -1078,6 +1078,7 @@ function AppContent() {
                   userServices={connectedServiceIds}
                   watchedIds={watchedIds}
                   savedState={browseStateRef}
+                  tasteVector={taste.profile?.tasteVector ?? null}
                 />
               )}
 
