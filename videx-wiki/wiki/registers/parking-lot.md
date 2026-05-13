@@ -3,7 +3,7 @@ title: Parking lot — all IN-XXX entries
 type: register
 tags: [register, parking-lot, in-xxx, status]
 created: 2026-04-26
-updated: 2026-05-09
+updated: 2026-05-13
 sources:
   - raw/v2-strategy/Videx_v2_Implementation_Notes_Parking_Lot_v0.3.4.md
   - docs/v2/Videx_v2_Implementation_Notes_Parking_Lot_v0.6.md
@@ -160,7 +160,7 @@ Quality / hardening items (IN-PX-21..33) and pre-launch legal blockers (IN-PX-34
 
 | ID | Subject | Status |
 |---|---|---|
-| IN-PX-21 | Regenerate `database.types.ts` and delete `as any` casts | ⏳ Filed; ~30 min |
+| IN-PX-21 | Regenerate `database.types.ts` and delete `as any` casts | ⏳ Filed; ~30 min — additional dependent surfaced in Phase Search V2 (`src/lib/featureFlags.ts:47` for `user_feature_flags`) |
 | IN-PX-22 | Embedding fetch caching for MMR (24h TTL) | ⏳ Filed |
 | IN-PX-23 | MMR partial-coverage fallback (>50% missing → genre-spread) | ⏳ Filed |
 | IN-PX-24 | Float32Array + cosine-norm precompute in MMR | ⏳ Filed (after IN-PX-22) |
@@ -186,6 +186,17 @@ Filed when bootstrap weights flipped from watched-grid-dominant to cluster-domin
 | IN-PX-37 | Cluster-rep dedup edge cases — verify each title appears in exactly one cluster after reconciliation | ⏳ Filed |
 | IN-PX-38 | Watched-grid candidate-pool restructure follow-up — service-availability filter restoration if the broader pool starves cold-start | ⏳ Filed |
 
+## Phase Search V2 follow-ups (filed 2026-05-13 from close-out review pass)
+
+Surfaced during the close-out three-agent review (`security-sentinel` SAFE-TO-MERGE, `kieran-typescript-reviewer` SHIP-IT, `performance-oracle` FIX-FIRST → fixed in commit `9ec4868`). Items below are post-merge follow-ups, not blockers.
+
+| ID | Subject | Status |
+|---|---|---|
+| IN-PX-39 | Replace `catch (err: any)` in `src/hooks/useSearch.ts:138, 223` with `unknown` + narrowing helper. Flagged by `kieran-typescript-reviewer`. Trivial. | ⏳ Filed (Phase 5.5) |
+| IN-PX-40 | 20-query semantic-eval fixture authorship (`scripts/test/search-semantic-fixtures.json`). Gates `search_semantic` flag-flip from Joe-only → prototype users. B6 commit landed a 2-query stub. | ⏳ Filed (Joe — author at own pace, then verify `search-semantic-eval` workflow goes green) |
+| IN-PX-41 | Per-user feature flag UI — Studio SQL is fine for Joe, but flipping flags for prototype users (post-eval-green) wants either an admin UI surface or a documented runbook. | ⏳ Filed (decide pre-rollout) |
+| IN-PX-42 | Consider extracting `<SearchInput>`, `<CategoryPills>`, segmented control, toggle row, slider, sheet primitive when a 2nd consumer appears. Kickoff §7 H6 risk note kept primitives narrow this phase. | 🅿 Parked (revisit when a 2nd consumer materialises) |
+
 ## v3 editorial-redesign follow-ups (filed 2026-05-09 from end-to-end review)
 
 Surfaced during the end-to-end visual review against the design reference. UI shipped; data layer pending.
@@ -198,12 +209,12 @@ Surfaced during the end-to-end visual review against the design reference. UI sh
 
 ## Counts
 
-- Total entries: **84** (Pre-PRE 1 + P0 13 + P0.5 7 + P0/0.5 cross 6 + P1 5 + P2 3 + P3 3 + P4 4 + P4.5 16 + OB 6 + XPS 13 + PX-21..35 15 + PX-36..38 3 + V3-001..003 3).
+- Total entries: **88** (Pre-PRE 1 + P0 13 + P0.5 7 + P0/0.5 cross 6 + P1 5 + P2 3 + P3 3 + P4 4 + P4.5 16 + OB 6 + XPS 13 + PX-21..35 15 + PX-36..38 3 + PX-39..42 4 + V3-001..003 3).
 - ✅ Incorporated: **42**.
-- ⏳ Pending / Not yet incorporated: **33** (IN-V3-002 IN YOUR PLAN portion ✅ shipped; the match%/mood portion remains pending).
+- ⏳ Pending / Not yet incorporated: **36** (IN-V3-002 IN YOUR PLAN portion ✅ shipped; the match%/mood portion remains pending).
 - ⚠ Partial: **3** (IN-104, IN-XPS-001, IN-XPS-004).
 - 🛑 Discharged: **1** (IN-260).
-- 🅿 Parked: **5** (IN-PX-06, IN-261, IN-XPS-008, IN-XPS-009, IN-OB-006).
+- 🅿 Parked: **6** (IN-PX-06, IN-261, IN-XPS-008, IN-XPS-009, IN-OB-006, IN-PX-42).
 
 ## Pre-launch blockers (subset of pending)
 
