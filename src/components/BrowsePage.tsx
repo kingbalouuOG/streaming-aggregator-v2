@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useRef, useState, useCallback } from "react";
-import { Search, X, SlidersHorizontal, Loader2, Clock, Leaf, Zap, Moon, Heart } from "lucide-react";
+import { Search, X, SlidersHorizontal, Loader2, Clock, Leaf, Zap, Moon, Heart, Check, ChevronDown } from "lucide-react";
 import { BrowseCard } from "./BrowseCard";
 import { ContentItem } from "./ContentCard";
 import { FilterSheet, FilterState, ALL_GENRES, FILTER_LANGUAGES } from "./FilterSheet";
@@ -129,11 +129,40 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
   // an ordering concern, not a filtering one.
   type SortMode = "best" | "popularity" | "rating" | "a_z" | "z_a";
   const [sortBy, setSortBy] = useState<SortMode>("best");
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+  const SORT_LABELS: Record<SortMode, string> = {
+    best: "Best match",
+    popularity: "Popularity",
+    rating: "Rating",
+    a_z: "A–Z",
+    z_a: "Z–A",
+  };
+  const SORT_OPTIONS: SortMode[] = ["best", "popularity", "rating", "a_z", "z_a"];
   const browseSortBy: BrowseSortBy =
     sortBy === "rating" ? "vote_average.desc"
     : sortBy === "a_z" ? "title.asc"
     : sortBy === "z_a" ? "title.desc"
     : "popularity.desc"; // best + popularity both map here for /discover
+
+  // Close the sort menu on outside-click / Escape.
+  useEffect(() => {
+    if (!sortMenuOpen) return;
+    const onPointer = (e: PointerEvent) => {
+      if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
+        setSortMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSortMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [sortMenuOpen]);
 
   // Recent searches — local store. Tracked in state so add/remove
   // re-renders the empty state. The store is the source of truth; the
@@ -299,13 +328,14 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
 
   // Auto-paginate to a minimum visible count. After per-item
   // availability settles, the grid often holds fewer items than the
-  // user expects from page 1 — TMDb returns 40 candidates per page;
-  // filtering can leave 0–3 visible. Keep fetching the next page
-  // until we've shown the user at least MIN_VISIBLE titles, capped at
-  // MAX_AUTO_FETCH_PAGES to avoid runaway when a query has no on-
-  // services hits at all.
-  const MIN_VISIBLE = 4;
-  const MAX_AUTO_FETCH_PAGES = 3;
+  // user expects from page 1. Search and browse have different
+  // expectations — search is targeted (3 pages × 20 ≈ 60 candidates
+  // is plenty for a typed query), browse is scan-mode (the user
+  // wants to skim a stack). Browse caps go higher.
+  const MIN_VISIBLE_SEARCH = 4;
+  const MIN_VISIBLE_BROWSE = 12;
+  const MAX_AUTO_FETCH_PAGES_SEARCH = 3;
+  const MAX_AUTO_FETCH_PAGES_BROWSE = 6;
   const autoFetchedRef = useRef(0);
   useEffect(() => {
     // Reset counter on fresh query / category change.
@@ -321,8 +351,8 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     if (filterOnlyMode) {
       if (browse.loading) return;
       if (!browse.hasMore) return;
-      if (autoFetchedRef.current >= MAX_AUTO_FETCH_PAGES) return;
-      if (displayItems.length >= MIN_VISIBLE) return;
+      if (autoFetchedRef.current >= MAX_AUTO_FETCH_PAGES_BROWSE) return;
+      if (displayItems.length >= MIN_VISIBLE_BROWSE) return;
       autoFetchedRef.current += 1;
       browse.loadMore();
       return;
@@ -330,8 +360,8 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
     if (search.loading) return;
     if (search.query.trim().length < 2) return;
     if (!search.hasMore) return;
-    if (autoFetchedRef.current >= MAX_AUTO_FETCH_PAGES) return;
-    if (displayItems.length >= MIN_VISIBLE) return;
+    if (autoFetchedRef.current >= MAX_AUTO_FETCH_PAGES_SEARCH) return;
+    if (displayItems.length >= MIN_VISIBLE_SEARCH) return;
     autoFetchedRef.current += 1;
     search.loadMore();
   }, [filterOnlyMode, search.loading, search.hasMore, search.query, search.activeCategory, browse.loading, browse.hasMore, displayItems.length, search, browse]);
@@ -746,43 +776,93 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                   </>
                 )}
               </div>
-              <label className="relative shrink-0 inline-flex items-center">
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortMode)}
-                  className="appearance-none"
+              {/* Sort dropdown — custom popover so the trigger + panel
+                  pick up the design-system tokens. Native <select>
+                  would render the OS picker on mobile but takes
+                  ChromeOS-style styling on desktop; the custom build
+                  is consistent and matches the Edit-filters pill. */}
+              <div ref={sortMenuRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSortMenuOpen((o) => !o)}
+                  className="inline-flex items-center gap-1.5"
+                  aria-haspopup="listbox"
+                  aria-expanded={sortMenuOpen}
+                  aria-label={`Sort: ${SORT_LABELS[sortBy]}`}
                   style={{
-                    background: "var(--surface-tint)",
-                    color: "var(--fg)",
-                    border: "0.5px solid var(--hairline)",
+                    padding: "5px 10px",
+                    background: sortMenuOpen ? "var(--primary-soft)" : "var(--surface-tint)",
+                    border: sortMenuOpen
+                      ? "0.5px solid var(--primary-edge)"
+                      : "0.5px solid var(--hairline)",
                     borderRadius: "var(--r-pill)",
-                    padding: "4px 24px 4px 10px",
+                    color: sortMenuOpen ? "var(--primary-fg-on-soft)" : "var(--fg)",
                     fontFamily: "var(--font-ui)",
                     fontSize: 12,
                     fontWeight: 600,
                     letterSpacing: "-0.005em",
-                  }}
-                  aria-label="Sort results"
-                >
-                  <option value="best">Best match</option>
-                  <option value="popularity">Popularity</option>
-                  <option value="rating">Rating</option>
-                  <option value="a_z">A–Z</option>
-                  <option value="z_a">Z–A</option>
-                </select>
-                <span
-                  className="absolute pointer-events-none"
-                  style={{
-                    right: 10,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    color: "var(--fg-faint)",
-                    fontSize: 9,
+                    transition: "background var(--d-fast) var(--ease-out), border-color var(--d-fast) var(--ease-out), color var(--d-fast) var(--ease-out)",
                   }}
                 >
-                  ▾
-                </span>
-              </label>
+                  <span style={{ color: "var(--fg-faint)" }}>Sort</span>
+                  <span>{SORT_LABELS[sortBy]}</span>
+                  <ChevronDown
+                    className="w-3 h-3"
+                    style={{
+                      transform: sortMenuOpen ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform var(--d-fast) var(--ease-out)",
+                    }}
+                  />
+                </button>
+                {sortMenuOpen && (
+                  <div
+                    role="listbox"
+                    className="absolute z-30 flex flex-col py-1"
+                    style={{
+                      top: "calc(100% + 6px)",
+                      right: 0,
+                      minWidth: 160,
+                      background: "var(--surface-elev)",
+                      border: "0.5px solid var(--hairline)",
+                      borderRadius: "var(--r-md)",
+                      boxShadow: "var(--shadow-card)",
+                    }}
+                  >
+                    {SORT_OPTIONS.map((opt) => {
+                      const selected = sortBy === opt;
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          onClick={() => {
+                            setSortBy(opt);
+                            setSortMenuOpen(false);
+                          }}
+                          className="flex items-center justify-between gap-3 px-3 py-2 text-left"
+                          style={{
+                            background: selected ? "var(--surface-tint)" : "transparent",
+                            color: selected ? "var(--fg)" : "var(--fg-soft)",
+                            fontFamily: "var(--font-ui)",
+                            fontSize: 13,
+                            fontWeight: selected ? 600 : 500,
+                            letterSpacing: "-0.005em",
+                          }}
+                        >
+                          <span>{SORT_LABELS[opt]}</span>
+                          {selected && (
+                            <Check
+                              className="w-3.5 h-3.5 shrink-0"
+                              style={{ color: "var(--primary)" }}
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Active-filter strip — only when ≥ 1 filter active.
