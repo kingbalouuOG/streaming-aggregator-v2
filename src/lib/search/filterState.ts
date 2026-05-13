@@ -13,14 +13,17 @@ import type { ServiceId } from "../../components/platformLogos";
 // ─── Types ────────────────────────────────────────────────────────
 
 export type ContentType = "all" | "movie" | "tv" | "doc";
-export type Cost = "all" | "free" | "rent" | "buy";
+export type Cost = "free" | "rent" | "buy";
 export type Runtime = "any" | "under_60" | "60_120" | "over_120";
 export type ShowWatched = "all" | "hide" | "only";
 
 export interface FilterState {
   services: ServiceId[];
   contentType: ContentType;
-  cost: Cost;
+  /** Multi-select. Empty array = no cost filter (= "all"). Selecting
+   *  Free + Rent = OR semantics: titles available either free or for
+   *  rent. */
+  costs: Cost[];
   runtime: Runtime;
   genres: string[];
   minRating: number;
@@ -30,7 +33,7 @@ export interface FilterState {
 }
 
 const CONTENT_TYPES: readonly ContentType[] = ["all", "movie", "tv", "doc"];
-const COSTS: readonly Cost[] = ["all", "free", "rent", "buy"];
+const COSTS: readonly Cost[] = ["free", "rent", "buy"];
 const RUNTIMES: readonly Runtime[] = ["any", "under_60", "60_120", "over_120"];
 const SHOW_WATCHED: readonly ShowWatched[] = ["all", "hide", "only"];
 
@@ -45,7 +48,7 @@ export function defaultFor(userServices: readonly ServiceId[]): FilterState {
   return {
     services: [...userServices],
     contentType: "all",
-    cost: "all",
+    costs: [],
     runtime: "any",
     genres: [],
     minRating: 0,
@@ -62,7 +65,7 @@ export function defaultFor(userServices: readonly ServiceId[]): FilterState {
 export function isDefault(state: FilterState, userServices: readonly ServiceId[]): boolean {
   return (
     state.contentType === "all" &&
-    state.cost === "all" &&
+    state.costs.length === 0 &&
     state.runtime === "any" &&
     state.minRating === 0 &&
     state.showWatched === "all" &&
@@ -89,7 +92,7 @@ export function serialize(state: FilterState, userServices: readonly ServiceId[]
     params.set("services", [...state.services].sort().join(","));
   }
   if (state.contentType !== "all") params.set("type", state.contentType);
-  if (state.cost !== "all") params.set("cost", state.cost);
+  if (state.costs.length > 0) params.set("cost", [...state.costs].sort().join(","));
   if (state.runtime !== "any") params.set("runtime", state.runtime);
   if (state.genres.length > 0) params.set("genre", [...state.genres].map(slug).sort().join(","));
   if (state.minRating > 0) params.set("min", state.minRating.toFixed(1));
@@ -116,7 +119,11 @@ export function deserialize(
   if (type && CONTENT_TYPES.includes(type as ContentType)) base.contentType = type as ContentType;
 
   const cost = params.get("cost");
-  if (cost && COSTS.includes(cost as Cost)) base.cost = cost as Cost;
+  if (cost) {
+    base.costs = cost
+      .split(",")
+      .filter((c): c is Cost => (COSTS as readonly string[]).includes(c));
+  }
 
   const runtime = params.get("runtime");
   if (runtime && RUNTIMES.includes(runtime as Runtime)) base.runtime = runtime as Runtime;
@@ -153,7 +160,7 @@ export function hash(state: FilterState): string {
   const canonical = JSON.stringify({
     services: [...state.services].sort(),
     contentType: state.contentType,
-    cost: state.cost,
+    costs: [...state.costs].sort(),
     runtime: state.runtime,
     genres: [...state.genres].sort(),
     minRating: state.minRating,

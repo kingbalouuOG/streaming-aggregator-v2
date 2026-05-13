@@ -76,37 +76,51 @@ export async function getStreamingLinks(
  * Cheapest rent/buy price for a title, formatted as "Rent from £X.XX"
  * or "Buy from £X.XX".
  *
- * Queries `streaming_availability` for rent + buy entries with a known
- * price and picks the lowest, retaining the stream_type so the label
- * tells the user *how* the price applies. When both rent and buy are
- * available, rent's lower price wins automatically (rent is always
- * cheaper than buy for the same title) and the pill reads "Rent from
- * £X.XX." If only buy is available, "Buy from £X.XX." Returns null
- * when there's no priced rent/buy entry.
+ * `restrictToServices` narrows the query to specific services — used
+ * by the search-results renderer to ask "is this title rent/buy on
+ * one of the *user's* services?" (state 1.5: on-service paid). When
+ * undefined, queries across every service that carries the title
+ * (state 3: off-service rentable).
  *
- * Cached under the SA prefix (24h TTL); both hits and absences are
- * memoised so re-searches don't re-query.
+ * Returns the lowest priced entry across the eligible set, retaining
+ * the stream_type so the label tells the user *how* the price
+ * applies. Rent always wins over buy when both exist (rent is always
+ * cheaper). Returns null when there's no priced rent/buy entry.
+ *
+ * Cached under the SA prefix (24h TTL). The cache key includes a
+ * stable hash of the service restriction so the all-services answer
+ * and a services-restricted answer don't collide.
  */
 export async function getRentBuyPrice(
   tmdbId: number,
-  mediaType: 'movie' | 'tv'
+  mediaType: 'movie' | 'tv',
+  restrictToServices?: readonly ServiceId[],
 ): Promise<{ fromFormatted: string; streamType: 'rent' | 'buy' } | null> {
-  const cacheKey = `${CACHE_PREFIXES.SA}rentbuy_v2_${tmdbId}_${mediaType}`;
+  const serviceKey = restrictToServices && restrictToServices.length > 0
+    ? `_s_${[...restrictToServices].sort().join(',')}`
+    : '';
+  const cacheKey = `${CACHE_PREFIXES.SA}rentbuy_v2_${tmdbId}_${mediaType}${serviceKey}`;
   const cached = await getCachedData(cacheKey);
   if (cached) {
     return 'absent' in cached ? null : cached;
   }
 
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('streaming_availability')
-      .select('price_amount, price_formatted, price_currency, stream_type')
+      .select('price_amount, price_formatted, price_currency, stream_type, service_id')
       .eq('tmdb_id', tmdbId)
       .eq('media_type', mediaType)
       .in('stream_type', ['rent', 'buy'])
       .not('price_amount', 'is', null)
       .order('price_amount', { ascending: true })
       .limit(1);
+
+    if (restrictToServices && restrictToServices.length > 0) {
+      query = query.in('service_id', restrictToServices as string[]);
+    }
+
+    const { data, error } = await query;
 
     if (error || !data || data.length === 0) {
       await setCachedData(cacheKey, { absent: true });

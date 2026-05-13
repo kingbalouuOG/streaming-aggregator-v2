@@ -25,7 +25,7 @@ interface CacheEntry {
 
 const CACHE_TTL = 1000 * 60 * 30; // 30 minutes
 const MAX_CACHE_SIZE = 500;
-const CACHE_VERSION = 5; // Bump when provider data format changes — v5 drops rent/buy from the aggregate (live elsewhere via getRentBuyPrice)
+const CACHE_VERSION = 6; // v6 restores rent/buy in the aggregate (priority: on-service-rent > off-service-tint per Joe's design)
 
 // In-memory cache
 const serviceCache = new Map<string, CacheEntry>();
@@ -123,18 +123,19 @@ const fetchServicesFromAPI = async (
     const response = await getContentWatchProviders(Number(itemId), mediaType, 'GB');
 
     if (response.success && response.data) {
-      // Only services that carry the title at NO marginal cost to a
-      // subscriber are aggregated here — flatrate / free / ads. Rent
-      // and buy live in their own path (getRentBuyPrice / getStreaming-
-      // Links) because surfacing them here would falsely report "on
-      // your stack" for any title rentable on a service the user
-      // happens to subscribe to (e.g. LotR is rent-only on Prime even
-      // for Prime subscribers; Prime should NOT show as the streaming
-      // service).
+      // All monetisation tiers contribute — a title rentable on a
+      // service the user has subscribed to still counts as "on their
+      // stack" (the user can pay £3.49 inside Prime without leaving
+      // their existing setup). The renderer distinguishes free-on-
+      // user-services from rent-on-user-services by separately
+      // checking getRentBuyPrice scoped to the user's services and
+      // showing the price pill when applicable.
       const allProviders: any[] = [
         ...(response.data.flatrate || []),
         ...(response.data.free || []),
         ...(response.data.ads || []),
+        ...(response.data.rent || []),
+        ...(response.data.buy || []),
       ];
       const seen = new Set<ServiceId>();
       const services: ServiceId[] = [];

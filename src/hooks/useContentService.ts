@@ -82,23 +82,23 @@ export function useContentService(providerIds: number[], filters?: FilterState) 
         baseParams['vote_count.gte'] = 50;
       }
 
-      // Cost filter (monetization type). 'free' folds flatrate + true
-      // free + ads together (all no-marginal-cost). 'rent' and 'buy'
-      // are the two paid tiers; each opens to ANY GB title in that
-      // tier with a paid-only post-filter that excludes titles the
-      // user could already stream via their flatrate.
-      if (filters?.cost === 'free') {
-        baseParams.with_watch_monetization_types = 'flatrate|free|ads';
-      } else if (filters?.cost === 'rent') {
-        baseParams.with_watch_monetization_types = 'rent';
-        delete baseParams.with_watch_providers;
-      } else if (filters?.cost === 'buy') {
-        baseParams.with_watch_monetization_types = 'buy';
-        delete baseParams.with_watch_providers;
+      // Cost filter — multi-select. 'free' folds flatrate + free + ads
+      // (all no-marginal-cost). Rent / Buy are paid tiers. When ONLY
+      // paid tiers are selected (no Free), drop the provider constraint
+      // and post-filter to exclude flatrate-on-user-platforms hits.
+      const costSet = new Set(filters?.costs || []);
+      if (costSet.size > 0) {
+        const tmdbTypes: string[] = [];
+        if (costSet.has('free')) tmdbTypes.push('flatrate', 'free', 'ads');
+        if (costSet.has('rent')) tmdbTypes.push('rent');
+        if (costSet.has('buy')) tmdbTypes.push('buy');
+        baseParams.with_watch_monetization_types = tmdbTypes.join('|');
+        const paidOnly = !costSet.has('free') && (costSet.has('rent') || costSet.has('buy'));
+        if (paidOnly) delete baseParams.with_watch_providers;
       }
 
-      // Post-filter helper for Rent / Buy: exclude titles with free flatrate on user's platforms
-      const isPaidFilter = filters?.cost === 'rent' || filters?.cost === 'buy';
+      // Post-filter helper for paid-only mode
+      const isPaidFilter = !costSet.has('free') && (costSet.has('rent') || costSet.has('buy'));
       const userServiceIds = isPaidFilter ? providerIdsToServiceIds(providerIds) : [];
       async function filterPaidOnly(items: ContentItem[]): Promise<ContentItem[]> {
         if (!isPaidFilter) return items;
@@ -212,14 +212,14 @@ export function useContentService(providerIds: number[], filters?: FilterState) 
       console.error('[ContentService] Load failed:', err);
       setState((s) => ({ ...s, loading: false, error: err.message || 'Failed to load content' }));
     }
-  }, [providerStr, filters?.contentType, filters?.cost, filters?.services?.join(','), filters?.genres?.join(','), filters?.minRating]);
+  }, [providerStr, filters?.contentType, [...(filters?.costs || [])].sort().join(','), filters?.services?.join(','), filters?.genres?.join(','), filters?.minRating]);
 
   // Always keep ref pointing to latest load to avoid stale closures
   const loadRef = useRef(load);
   loadRef.current = load;
 
   // Stable key to trigger reloads without infinite loops
-  const filterKey = `${providerStr}|${filters?.contentType || 'All'}|${filters?.cost || 'All'}|${filters?.services?.join(',') || ''}|${filters?.genres?.join(',') || ''}|${filters?.minRating || 0}`;
+  const filterKey = `${providerStr}|${filters?.contentType || 'all'}|${[...(filters?.costs || [])].sort().join(',')}|${filters?.services?.join(',') || ''}|${filters?.genres?.join(',') || ''}|${filters?.minRating || 0}`;
 
   useEffect(() => {
     loadRef.current();

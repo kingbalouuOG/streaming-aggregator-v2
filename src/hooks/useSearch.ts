@@ -157,23 +157,39 @@ export function useSearch(
         }
         const matching = allItemServices.filter((s) => connectedServices.includes(s));
         if (matching.length > 0) {
-          // On-service — service icons filtered to matches; no rent/
-          // buy pill (state 1).
+          // On-service path — title lives on at least one of the
+          // user's services in some tier. Priority order:
+          //   1. If it's rent/buy on a user service → state 1.5:
+          //      no tint, matched service icons, price pill showing
+          //      "Rent/Buy from £X.XX". The user can act on the
+          //      title without leaving their existing setup, but
+          //      they'll pay. Honour-the-money-they'd-spend signal.
+          //   2. Otherwise → state 1: no tint, no price pill (free
+          //      at point of play via subscription / ads / free).
           pendingBadgesRef.current.set(item.id, matching);
+          getRentBuyPrice(tmdbId, mediaType, matching).then((price) => {
+            if (price && currentQueryRef.current === q) {
+              pendingRentBuyRef.current.set(item.id, price.fromFormatted);
+              if (!badgeFlushRef.current) {
+                badgeFlushRef.current = setTimeout(() => {
+                  badgeFlushRef.current = undefined;
+                  flushPendingUpdates(q);
+                }, BADGE_FLUSH_INTERVAL_MS);
+              }
+            }
+          }).catch(() => { /* silently skip */ });
         } else if (dropOffServices) {
           removeRef.current.add(item.id);
         } else {
           // Off-service (state 2 or 3). Tag for tinting + populate the
           // "where it lives" icons (all the title's services, not
-          // filtered). Fire the rent/buy price check; if it returns a
-          // label we'll upgrade to state 3.
+          // filtered). Fire the rent/buy price check across every
+          // service; if it returns a label we'll upgrade to state 3.
           offServicesRef.current.add(item.id);
           pendingBadgesRef.current.set(item.id, allItemServices.slice(0, 3));
           getRentBuyPrice(tmdbId, mediaType).then((price) => {
             if (price && currentQueryRef.current === q) {
               pendingRentBuyRef.current.set(item.id, price.fromFormatted);
-              // Nudge a flush so the pill paints without waiting for
-              // the next batch tick.
               if (!badgeFlushRef.current) {
                 badgeFlushRef.current = setTimeout(() => {
                   badgeFlushRef.current = undefined;

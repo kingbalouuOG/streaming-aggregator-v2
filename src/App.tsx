@@ -180,6 +180,21 @@ function AppContent() {
     [connectedServices.join(',')]
   );
 
+  // Seed the filter's `services` array from the user's connected
+  // services on first resolve. `filters` is initialised with
+  // `defaultFor([])` because connectedServiceIds isn't known at mount
+  // time, so without this the FilterSheet opens with an empty service
+  // set (every tile unselected) until the user manually picks one.
+  // The ref guards against re-seeding if the user later deselects all
+  // services on purpose.
+  const filtersSeededRef = useRef(false);
+  useEffect(() => {
+    if (filtersSeededRef.current) return;
+    if (connectedServiceIds.length === 0) return;
+    filtersSeededRef.current = true;
+    setFilters((prev) => ({ ...prev, services: connectedServiceIds }));
+  }, [connectedServiceIds]);
+
   // --- Warm the For You Edge Function (IN-466 Variant A) ---
   // Fire-and-forget hit on render-foryou-rows itself once auth + prefs
   // have resolved. Edge Function instances are per-function, so warming
@@ -244,7 +259,7 @@ function AppContent() {
   const activeFilterCount =
     filters.services.length +
     (filters.contentType !== "all" ? 1 : 0) +
-    (filters.cost !== "all" ? 1 : 0) +
+    (filters.costs.length > 0 ? 1 : 0) +
     (filters.runtime !== "any" ? 1 : 0) +
     filters.genres.length +
     (filters.minRating > 0 ? 1 : 0) +

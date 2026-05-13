@@ -39,15 +39,16 @@ const CONTENT_TYPE_OPTIONS: SegmentedOption<ContentType>[] = [
   { value: "doc", label: "Docs" },
 ];
 
-const COST_OPTIONS: SegmentedOption<Cost>[] = [
-  // "Free" covers flatrate subscriptions (already paid for) + true
-  // free/ads — anything with zero marginal cost to the user at point
-  // of play. Rent / Buy are the two paid tiers.
-  { value: "all", label: "All" },
-  { value: "free", label: "Free" },
-  { value: "rent", label: "Rent" },
-  { value: "buy", label: "Buy" },
-];
+// Cost is multi-select (chip-based). Empty array = no filter (= "all").
+// "Free" covers flatrate subscriptions + true free + ads. Rent / Buy
+// are the two paid tiers. Pick any combination — selecting Free + Rent
+// returns titles available either free OR for rent.
+const COST_VALUES: readonly Cost[] = ["free", "rent", "buy"];
+const COST_LABELS: Record<Cost, string> = {
+  free: "Free",
+  rent: "Rent",
+  buy: "Buy",
+};
 
 const RUNTIME_OPTIONS: SegmentedOption<Runtime>[] = [
   { value: "any", label: "Any" },
@@ -144,6 +145,15 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, userServices }:
     }));
   };
 
+  const toggleCost = (c: Cost) => {
+    setLocal((prev) => ({
+      ...prev,
+      costs: prev.costs.includes(c)
+        ? prev.costs.filter((x) => x !== c)
+        : [...prev.costs, c],
+    }));
+  };
+
   const toggleLanguage = (lang: string) => {
     setLocal((prev) => ({
       ...prev,
@@ -185,7 +195,7 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, userServices }:
   const activeFilterCount =
     (sameSet(local.services, userServices ?? []) ? 0 : 1) +
     (local.contentType !== "all" ? 1 : 0) +
-    (local.cost !== "all" ? 1 : 0) +
+    (local.costs.length > 0 ? 1 : 0) +
     (local.runtime !== "any" ? 1 : 0) +
     (local.genres.length > 0 ? 1 : 0) +
     (local.minRating > 0 ? 1 : 0) +
@@ -377,12 +387,13 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, userServices }:
                 onChange={(v) => setLocal((p) => ({ ...p, contentType: v }))}
               />
 
-              {/* ── Section 4: COST ─────────────────────────────── */}
-              <SectionLabel sub="Free, in-plan or rent OK?">COST</SectionLabel>
-              <Segmented<Cost>
-                options={COST_OPTIONS}
-                value={local.cost}
-                onChange={(v) => setLocal((p) => ({ ...p, cost: v }))}
+              {/* ── Section 4: COST (multi-select) ──────────────── */}
+              <SectionLabel sub="Pick any — free, rent, buy.">COST</SectionLabel>
+              <ChipMulti
+                options={COST_VALUES}
+                getLabel={(c) => COST_LABELS[c]}
+                isSelected={(c) => local.costs.includes(c)}
+                onToggle={toggleCost}
               />
 
               {/* ── Section 5: RUNTIME (new) ────────────────────── */}

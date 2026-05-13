@@ -177,24 +177,26 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
       params['vote_count.gte'] = 50;
     }
 
-    if (filters?.cost === 'free') {
-      params.with_watch_monetization_types = 'flatrate|free|ads';
-    } else if (filters?.cost === 'rent') {
-      params.with_watch_monetization_types = 'rent';
-      delete params.with_watch_providers;
-    } else if (filters?.cost === 'buy') {
-      params.with_watch_monetization_types = 'buy';
-      delete params.with_watch_providers;
+    const costSet = new Set(filters?.costs || []);
+    if (costSet.size > 0) {
+      const tmdbTypes: string[] = [];
+      if (costSet.has('free')) tmdbTypes.push('flatrate', 'free', 'ads');
+      if (costSet.has('rent')) tmdbTypes.push('rent');
+      if (costSet.has('buy')) tmdbTypes.push('buy');
+      params.with_watch_monetization_types = tmdbTypes.join('|');
+      const paidOnly = !costSet.has('free') && (costSet.has('rent') || costSet.has('buy'));
+      if (paidOnly) delete params.with_watch_providers;
     }
 
     const contentType = filters?.contentType || 'all';
     const fm = contentType === 'all' || contentType === 'movie' || contentType === 'doc';
     const ft = contentType === 'all' || contentType === 'tv';
 
-    const key = `${providerStr}|${filters?.contentType || 'all'}|${filters?.cost || 'all'}|${filters?.services?.join(',') || ''}|${filters?.genres?.join(',') || ''}|${filters?.minRating || 0}`;
+    const costKey = [...(filters?.costs || [])].sort().join(',');
+    const key = `${providerStr}|${filters?.contentType || 'all'}|${costKey}|${filters?.services?.join(',') || ''}|${filters?.genres?.join(',') || ''}|${filters?.minRating || 0}`;
 
     return { baseParams: params, filterKey: key, fetchMovies: fm, fetchTV: ft };
-  }, [providerStr, filters?.contentType, filters?.cost, filters?.services?.join(','), filters?.genres?.join(','), filters?.minRating]);
+  }, [providerStr, filters?.contentType, [...(filters?.costs || [])].sort().join(','), filters?.services?.join(','), filters?.genres?.join(','), filters?.minRating]);
 
   // Composite key: includes reloadCounter so sections re-init on pull-to-refresh
   const sectionKeyBase = `${filterKey}|${reloadCounter}`;

@@ -62,7 +62,7 @@ test("defaultFor with no services yields an empty array, not undefined", () => {
 test("defaultFor scalars match brief defaults", () => {
   const s = defaultFor(USER);
   assert.equal(s.contentType, "all");
-  assert.equal(s.cost, "all");
+  assert.deepStrictEqual(s.costs, []);
   assert.equal(s.runtime, "any");
   assert.equal(s.minRating, 0);
   assert.equal(s.showWatched, "all");
@@ -112,7 +112,7 @@ test("round-trip: fully-populated state", () => {
   const s: FilterState = {
     services: ["netflix"],
     contentType: "movie",
-    cost: "rent",
+    costs: ["free", "rent"],
     runtime: "60_120",
     genres: ["Drama", "Thriller"],
     minRating: 6.8,
@@ -123,7 +123,7 @@ test("round-trip: fully-populated state", () => {
   const rt = roundTrip(s);
   assert.deepStrictEqual(rt.services.sort(), ["netflix"]);
   assert.equal(rt.contentType, "movie");
-  assert.equal(rt.cost, "rent");
+  assert.deepStrictEqual(rt.costs.sort(), ["free", "rent"]);
   assert.equal(rt.runtime, "60_120");
   assert.deepStrictEqual(rt.genres.sort(), ["Drama", "Thriller"]);
   assert.equal(rt.minRating, 6.8);
@@ -149,10 +149,10 @@ test("serialize emits services= when user opts a service out", () => {
 });
 
 test("deserialize ignores unknown enum values", () => {
-  const params = new URLSearchParams("type=bogus&cost=rent");
+  const params = new URLSearchParams("type=bogus&cost=rent,buy");
   const s = deserialize(params, USER, GENRES, LANGUAGES);
   assert.equal(s.contentType, "all");
-  assert.equal(s.cost, "rent");
+  assert.deepStrictEqual(s.costs.sort(), ["buy", "rent"]);
 });
 
 test("deserialize ignores unknown service ids", () => {

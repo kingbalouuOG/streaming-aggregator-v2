@@ -88,7 +88,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
   const activeFilterCount =
     filters.services.length +
     (filters.contentType !== "all" ? 1 : 0) +
-    (filters.cost !== "all" ? 1 : 0) +
+    (filters.costs.length > 0 ? 1 : 0) +
     (filters.runtime !== "any" ? 1 : 0) +
     filters.genres.length +
     (filters.minRating > 0 ? 1 : 0) +

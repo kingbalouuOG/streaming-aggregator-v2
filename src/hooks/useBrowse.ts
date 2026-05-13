@@ -49,21 +49,21 @@ export function useBrowse(filters: FilterState, providerIds: number[]) {
       params['vote_count.gte'] = 50;
     }
 
-    // Cost filter. Phase Search V2's axis is All / Free / Rent / Buy.
-    // "Free" covers everything no-marginal-cost — flatrate sub already
-    // paid for, plus true free/ads — folded together because the user
-    // experience is identical at point of play. Rent and Buy are the
-    // two paid tiers and each maps to a single TMDb monetization type.
-    if (filters.cost === 'free') {
-      params.with_watch_monetization_types = 'flatrate|free|ads';
-    } else if (filters.cost === 'rent') {
-      params.with_watch_monetization_types = 'rent';
-      // Drop the provider constraint — we want any rent-available
-      // title in GB, then post-filter for the paid-only intent.
-      delete params.with_watch_providers;
-    } else if (filters.cost === 'buy') {
-      params.with_watch_monetization_types = 'buy';
-      delete params.with_watch_providers;
+    // Cost filter — multi-select. Each Cost maps to one or more TMDb
+    // monetization types; OR them with `|`. "Free" folds flatrate +
+    // free + ads (anything no-marginal-cost at point of play). When
+    // only paid tiers are selected (no Free), drop the provider
+    // constraint so the catalogue isn't narrowed before the paid-only
+    // post-filter runs.
+    const costSet = new Set(filters.costs);
+    if (costSet.size > 0) {
+      const tmdbTypes: string[] = [];
+      if (costSet.has('free')) tmdbTypes.push('flatrate', 'free', 'ads');
+      if (costSet.has('rent')) tmdbTypes.push('rent');
+      if (costSet.has('buy')) tmdbTypes.push('buy');
+      params.with_watch_monetization_types = tmdbTypes.join('|');
+      const paidOnly = !costSet.has('free') && (costSet.has('rent') || costSet.has('buy'));
+      if (paidOnly) delete params.with_watch_providers;
     }
 
     return params;
@@ -99,10 +99,14 @@ export function useBrowse(filters: FilterState, providerIds: number[]) {
       // Sort by popularity (interleave movies and TV)
       newItems.sort(() => Math.random() - 0.5);
 
-      // Post-filter for Rent / Buy: exclude titles that already sit on
-      // the user's flatrate (caller wants paid-only candidates, not
-      // things they could already stream for free).
-      if (filters.cost === 'rent' || filters.cost === 'buy') {
+      // Post-filter for paid-only (Rent/Buy selected without Free):
+      // exclude titles that already sit on the user's flatrate so we
+      // don't surface paid versions of things they could already
+      // stream for free.
+      const costSetForFilter = new Set(filters.costs);
+      const paidOnly = !costSetForFilter.has('free')
+        && (costSetForFilter.has('rent') || costSetForFilter.has('buy'));
+      if (paidOnly) {
         const userServiceIds = providerIdsToServiceIds(providerIds);
         const checks = await Promise.all(
           newItems.map(async (item) => {
@@ -135,7 +139,7 @@ export function useBrowse(filters: FilterState, providerIds: number[]) {
   loadRef.current = load;
 
   // Stable key from actual filter values — avoids infinite loop from unstable function refs
-  const filterKey = `${filters.contentType}|${filters.cost}|${filters.services.join(',')}|${filters.genres.join(',')}|${filters.minRating}|${providerStr}`;
+  const filterKey = `${filters.contentType}|${[...filters.costs].sort().join(',')}|${filters.services.join(',')}|${filters.genres.join(',')}|${filters.minRating}|${providerStr}`;
 
   // Reload when filters change
   useEffect(() => {
