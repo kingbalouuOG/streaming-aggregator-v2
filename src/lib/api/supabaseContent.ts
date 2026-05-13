@@ -99,7 +99,8 @@ export async function getRentBuyPrice(
   const serviceKey = restrictToServices && restrictToServices.length > 0
     ? `_s_${[...restrictToServices].sort().join(',')}`
     : '';
-  const cacheKey = `${CACHE_PREFIXES.SA}rentbuy_v2_${tmdbId}_${mediaType}${serviceKey}`;
+  // v3 — labels formatted with `£` glyph instead of `GBP` suffix.
+  const cacheKey = `${CACHE_PREFIXES.SA}rentbuy_v3_${tmdbId}_${mediaType}${serviceKey}`;
   const cached = await getCachedData(cacheKey);
   if (cached) {
     return 'absent' in cached ? null : cached;
@@ -130,7 +131,10 @@ export async function getRentBuyPrice(
     const row: any = data[0];
     const streamType: 'rent' | 'buy' = row.stream_type === 'buy' ? 'buy' : 'rent';
     const verb = streamType === 'buy' ? 'Buy' : 'Rent';
-    const priceText = row.price_formatted || `£${parseFloat(row.price_amount).toFixed(2)}`;
+    // Always format with `£` from price_amount — the upstream
+    // `price_formatted` column carries strings like "3.49 GBP" which
+    // don't match the GB symbol convention we use everywhere else.
+    const priceText = `£${parseFloat(row.price_amount).toFixed(2)}`;
     const result = { fromFormatted: `${verb} from ${priceText}`, streamType };
     await setCachedData(cacheKey, result);
     return result;
