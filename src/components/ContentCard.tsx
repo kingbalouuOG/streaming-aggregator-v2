@@ -57,6 +57,23 @@ interface ContentCardProps {
    */
   userServices?: ServiceId[];
   watched?: boolean;
+  /**
+   * Phase Search V2: when true, the poster + its overlays tint to
+   * grayscale 0.65 / brightness 0.78 — the pre-attentive signal for
+   * "not on your services." Rating and bookmark stay visible and
+   * interactive; service icons show *where* the title lives, not
+   * filtered to the user's stack.
+   *
+   * Default `false` keeps every other surface visually unchanged.
+   */
+  offService?: boolean;
+  /**
+   * Phase Search V2: bottom-right "From £X.XX" pill. Rendered outside
+   * the tinted poster container so the orange chip stays vibrant
+   * against the muted backdrop. Use for off-service titles that are
+   * still actionable via rent/buy. Pair with `offService=true`.
+   */
+  rentBuyPriceLabel?: string;
 }
 
 export function ContentCard({
@@ -67,6 +84,8 @@ export function ContentCard({
   onToggleBookmark,
   userServices,
   watched = false,
+  offService = false,
+  rentBuyPriceLabel,
 }: ContentCardProps) {
   const [justToggled, setJustToggled] = useState(false);
   const [allServices, setAllServices] = useState<ServiceId[]>(item.services);
@@ -80,11 +99,17 @@ export function ContentCard({
     getCachedServices(String(tmdbId), mediaType).then(setAllServices);
   }, [item.id, item.services]);
 
-  // Visible service stack — filtered to the user's connected services
-  // when provided so callers can surface "on your stack" cleanly.
-  const visibleServices = userServices?.length
-    ? allServices.filter((s) => userServices.includes(s))
-    : allServices;
+  // Service stack content depends on the availability state:
+  //   - On a user service → filter to the matching service(s) so the
+  //     card reads "where to watch on YOUR stack."
+  //   - Off-service → show ALL the title's services. The icons carry
+  //     the "where it lives" signal that replaces the dropped "Not on
+  //     yours" label.
+  const visibleServices = offService
+    ? allServices
+    : userServices?.length
+      ? allServices.filter((s) => userServices.includes(s))
+      : allServices;
 
   const handleBookmark = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -106,15 +131,27 @@ export function ContentCard({
     variant === "wide" ? "w-[220px]" :
     "w-[160px]";
 
+  // Tint applies to every descendant of the poster element — service
+  // icons, bookmark, rating pill all dim with the artwork. The rent/
+  // buy pill renders *outside* the tinted poster element so the orange
+  // chip stays vibrant against the muted backdrop (per the design's
+  // "different corners coexist" treatment).
+  const posterStyle: React.CSSProperties = {
+    borderRadius: "var(--r-card)",
+    ...(offService && { filter: "grayscale(0.65) brightness(0.78)" }),
+  };
+
   return (
     <div
       onClick={() => onSelect?.(item)}
       className={`group ${widthClass} ${widthForBlock} cursor-pointer`}
     >
-      {/* Poster */}
+      {/* Poster — wrapped in a position:relative outer so the price
+          pill can sit at BR outside the tinted child. */}
+      <div className={`relative ${posterClass}`}>
       <div
-        className={`relative overflow-hidden ${posterClass}`}
-        style={{ borderRadius: "var(--r-card)" }}
+        className={`relative overflow-hidden w-full h-full`}
+        style={posterStyle}
       >
         <ImageSkeleton
           src={item.image}
@@ -174,9 +211,9 @@ export function ContentCard({
           </motion.button>
         )}
 
-        {/* Rating — bottom-left, dark glass pill so the star + number
-            stay legible on bright posters where plain text on the
-            gradient washes out. */}
+        {/* Rating pill — bottom-left, always rendered when present.
+            Off-service cards keep the rating: tinting handles the
+            availability signal; one corner owns one job. */}
         {item.rating != null && item.rating > 0 && (
           <div
             className="absolute bottom-2 left-2 inline-flex items-center gap-1"
@@ -198,6 +235,31 @@ export function ContentCard({
             <span>{item.rating.toFixed(1)}</span>
           </div>
         )}
+      </div>
+
+      {/* Rent/buy price pill — bottom-right, outside the tint so the
+          orange brand colour stays saturated against the muted
+          backdrop. Phase Search V2 only renders this on off-service
+          rentables; on-service cards never carry it. */}
+      {rentBuyPriceLabel && (
+        <div
+          className="absolute bottom-2 right-2 inline-flex items-center"
+          style={{
+            padding: "3px 9px",
+            background: "var(--primary)",
+            borderRadius: "var(--r-pill)",
+            color: "#fff",
+            fontFamily: "var(--font-ui)",
+            fontSize: 11,
+            fontWeight: 700,
+            lineHeight: 1,
+            letterSpacing: "0.01em",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.30)",
+          }}
+        >
+          {rentBuyPriceLabel}
+        </div>
+      )}
       </div>
 
       {/* Title + meta — below the poster, not overlaid.

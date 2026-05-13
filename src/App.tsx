@@ -14,7 +14,8 @@ import { BottomNav } from "./components/BottomNav";
 import { ContentItem } from "./components/ContentCard";
 import { BrowsePage, BrowseStateSnapshot } from "./components/BrowsePage";
 import { DetailPage } from "./components/DetailPage";
-import { FilterSheet, FilterState, defaultFilters } from "./components/FilterSheet";
+import { FilterSheet } from "./components/FilterSheet";
+import { defaultFor, type FilterState } from "./lib/search/filterState";
 import { WatchlistPage } from "./components/WatchlistPage";
 import { ProfilePage } from "./components/ProfilePage";
 import { OnboardingFlow, OnboardingData } from "./components/OnboardingFlow";
@@ -123,7 +124,7 @@ function AppContent() {
   const [showFilters, setShowFilters] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [watchlistSubTab, setWatchlistSubTab] = useState<"want" | "watched">("want");
-  const [filters, setFilters] = useState<FilterState>(defaultFilters);
+  const [filters, setFilters] = useState<FilterState>(() => defaultFor([]));
   const [showSignUpSuccess, setShowSignUpSuccess] = useState(false);
   const [showSignUpOnboarding, setShowSignUpOnboarding] = useState(false);
   const [authUsername, setAuthUsername] = useState<string | null>(null);
@@ -168,6 +169,26 @@ function AppContent() {
   // --- Taste profile (continuous learning) ---
   const taste = useTasteProfile();
 
+  // Phase Search V2 Cluster B — semantic search feature flag. Read
+  // once when the user resolves; module-level cache in featureFlags.ts
+  // keeps subsequent reads cheap. Defaults to false so production
+  // users don't see Mode C surfaces until Joe flips the flag in
+  // Studio.
+  const [semanticFlagOn, setSemanticFlagOn] = useState(false);
+  useEffect(() => {
+    if (!userId) {
+      setSemanticFlagOn(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { getFlag } = await import('./lib/featureFlags');
+      const on = await getFlag('search_semantic', false);
+      if (!cancelled) setSemanticFlagOn(on);
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
   // --- Derive provider IDs from user's selected services ---
   const connectedServices = userPrefs.preferences?.platforms
     ?.filter((p) => p.selected !== false)
@@ -178,6 +199,21 @@ function AppContent() {
     () => providerIdsToServiceIds(connectedServices),
     [connectedServices.join(',')]
   );
+
+  // Seed the filter's `services` array from the user's connected
+  // services on first resolve. `filters` is initialised with
+  // `defaultFor([])` because connectedServiceIds isn't known at mount
+  // time, so without this the FilterSheet opens with an empty service
+  // set (every tile unselected) until the user manually picks one.
+  // The ref guards against re-seeding if the user later deselects all
+  // services on purpose.
+  const filtersSeededRef = useRef(false);
+  useEffect(() => {
+    if (filtersSeededRef.current) return;
+    if (connectedServiceIds.length === 0) return;
+    filtersSeededRef.current = true;
+    setFilters((prev) => ({ ...prev, services: connectedServiceIds }));
+  }, [connectedServiceIds]);
 
   // --- Warm the For You Edge Function (IN-466 Variant A) ---
   // Fire-and-forget hit on render-foryou-rows itself once auth + prefs
@@ -203,9 +239,9 @@ function AppContent() {
   // --- Build home filters from category pills + FilterSheet ---
   const homeFilters: FilterState = useMemo(() => {
     const base = { ...filters };
-    if (activeCategory === "Movies") base.contentType = "Movies";
-    else if (activeCategory === "TV Shows") base.contentType = "TV";
-    else if (activeCategory === "Docs") base.contentType = "Docs";
+    if (activeCategory === "Movies") base.contentType = "movie";
+    else if (activeCategory === "TV Shows") base.contentType = "tv";
+    else if (activeCategory === "Docs") base.contentType = "doc";
     else if (activeCategory === "Anime") {
       // Anime = Animation genre filter
       base.genres = [...new Set([...base.genres, "Animation"])];
@@ -240,18 +276,11 @@ function AppContent() {
   const upcoming = useUpcoming(connectedServices, home.fetchMovies, home.fetchTV);
   const reorderedUpcoming = upcoming.items;
 
-  const activeFilterCount =
-    filters.services.length +
-    (filters.contentType !== "All" ? 1 : 0) +
-    (filters.cost !== "All" ? 1 : 0) +
-    filters.genres.length +
-    (filters.minRating > 0 ? 1 : 0) +
-    (filters.showWatched ? 1 : 0) +
-    filters.languages.length;
-
-  // Filter out watched items from home content unless showWatched is on
+  // Filter out watched items from home content based on showWatched setting.
+  // 'all' → show everything; 'hide' → drop watched; 'only' → keep just watched.
   const filterWatched = useCallback((items: ContentItem[]) => {
-    if (filters.showWatched || watchedIds.size === 0) return items;
+    if (filters.showWatched === "all" || watchedIds.size === 0) return items;
+    if (filters.showWatched === "only") return items.filter((item) => watchedIds.has(item.id));
     return items.filter((item) => !watchedIds.has(item.id));
   }, [filters.showWatched, watchedIds]);
 
@@ -1059,6 +1088,8 @@ function AppContent() {
                   userServices={connectedServiceIds}
                   watchedIds={watchedIds}
                   savedState={browseStateRef}
+                  tasteVector={taste.profile?.tasteVector ?? null}
+                  semanticFlagOn={semanticFlagOn}
                 />
               )}
 
@@ -1117,7 +1148,7 @@ function AppContent() {
             onClose={() => setShowFilters(false)}
             filters={filters}
             onApply={setFilters}
-            connectedServices={providerIdsToServiceIds(connectedServices)}
+            userServices={connectedServiceIds}
           />
         )}
       </div>

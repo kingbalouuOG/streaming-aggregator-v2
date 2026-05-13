@@ -1,0 +1,55 @@
+name: Semantic search eval
+
+# Phase Search V2 Cluster B (B6). Runs the semantic-search eval rig
+# (scripts/test/search-semantic-eval.ts) against the hand-curated
+# fixture (scripts/test/search-semantic-fixtures.json) and fails the
+# PR if precision@10 or MRR drops below the thresholds in the fixture.
+#
+# Triggered on changes to anything that affects semantic retrieval:
+# the client adapter, the shared ranker, the Edge function, or the
+# fixture itself. Untouched PRs skip this workflow entirely.
+#
+# The fixture authorship is a separate Joe deliverable — the workflow
+# runs against whatever fixture is checked in. Pre-author, the
+# thresholds may be unreachable; the workflow will fail loudly, which
+# is correct (flag-flip is gated on green eval per the kickoff brief).
+#
+# Required GitHub repo secrets:
+#   OPENAI_API_KEY              — to embed queries
+#   SUPABASE_URL                — project API URL
+#   SUPABASE_SERVICE_ROLE_KEY   — bypasses RLS for direct RPC calls
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/recommendations-v2/search/**'
+      - 'supabase/functions/embed-query/**'
+      - 'supabase/functions/_shared/recommendations-v2/search/**'
+      - 'scripts/test/search-semantic-eval.ts'
+      - 'scripts/test/search-semantic-fixtures.json'
+      - '.github/workflows/search-semantic-eval.yml'
+  workflow_dispatch:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Run semantic search eval
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/test/search-semantic-eval.ts

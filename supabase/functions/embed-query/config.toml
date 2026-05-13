@@ -1,0 +1,6 @@
+# Per-function config for embed-query (Phase Search V2 Cluster B).
+# Codifies verify_jwt explicitly so the
+# `.github/workflows/edge-fn-jwt-guard.yml` CI check can fail any PR
+# that flips it to false on a user-callable function.
+
+verify_jwt = true

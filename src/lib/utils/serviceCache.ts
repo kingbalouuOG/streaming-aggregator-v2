@@ -14,8 +14,23 @@ import type { ServiceId } from '@/components/platformLogos';
 // Types
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * Per-tier service split for a title. `free` aggregates TMDb's
+ * `flatrate`, `free`, and `ads` arrays — all no-marginal-cost tiers.
+ * `rent` and `buy` are the two paid tiers.
+ *
+ * Used by useSearch to decide whether a title is on a user service in
+ * a no-cost tier (state 1) versus paid-only (state 1.5). The union of
+ * all three is what `getCachedServices` returns for backward compat.
+ */
+export interface ServiceProviders {
+  free: ServiceId[];
+  rent: ServiceId[];
+  buy: ServiceId[];
+}
+
 interface CacheEntry {
-  services: ServiceId[];
+  providers: ServiceProviders;
   timestamp: number;
 }
 
@@ -25,13 +40,13 @@ interface CacheEntry {
 
 const CACHE_TTL = 1000 * 60 * 30; // 30 minutes
 const MAX_CACHE_SIZE = 500;
-const CACHE_VERSION = 4; // Bump when provider data format changes
+const CACHE_VERSION = 7; // v7 cache shape: per-tier ServiceProviders (was flat ServiceId[])
 
 // In-memory cache
 const serviceCache = new Map<string, CacheEntry>();
 
 // Pending requests to prevent duplicate API calls
-const pendingRequests = new Map<string, Promise<ServiceId[]>>();
+const pendingRequests = new Map<string, Promise<ServiceProviders>>();
 
 // Invalidate stale in-memory cache from pre-fix code (survives HMR)
 const SC_VERSION_KEY = '__sc_version';
@@ -67,85 +82,112 @@ const cleanupCache = (): void => {
 };
 
 /**
- * Get services for a content item with caching.
- * @param itemId - Numeric TMDb ID as string (e.g., "12345")
- * @param mediaType - "movie" or "tv"
- * @param maxServices - Max number of services to return
+ * Get the full per-tier service split for a content item with
+ * caching. Use this when you need to distinguish "title is free on
+ * Prime for me" from "title is rent-only on Prime for me" — the
+ * union you get from `getCachedServices` can't make that call.
  */
-export const getCachedServices = async (
+export const getServiceProviders = async (
   itemId: string,
   mediaType: string,
-  maxServices: number = 10,
-): Promise<ServiceId[]> => {
+): Promise<ServiceProviders> => {
   const cacheKey = getCacheKey(itemId, mediaType);
 
   // Check cache first
   const cached = serviceCache.get(cacheKey);
   if (cached && isEntryValid(cached)) {
-    return cached.services.slice(0, maxServices);
+    return cached.providers;
   }
 
   // Check if request is already pending (prevent duplicate API calls)
   const pending = pendingRequests.get(cacheKey);
   if (pending) {
-    const services = await pending;
-    return services.slice(0, maxServices);
+    return pending;
   }
 
   // Create new request
-  const requestPromise = fetchServicesFromAPI(itemId, mediaType);
+  const requestPromise = fetchProvidersFromAPI(itemId, mediaType);
   pendingRequests.set(cacheKey, requestPromise);
 
   try {
-    const services = await requestPromise;
+    const providers = await requestPromise;
 
     serviceCache.set(cacheKey, {
-      services,
+      providers,
       timestamp: Date.now(),
     });
 
     cleanupCache();
 
-    return services.slice(0, maxServices);
+    return providers;
   } finally {
     pendingRequests.delete(cacheKey);
   }
 };
 
 /**
- * Fetch services from TMDb watch/providers API.
+ * Backward-compatible flat union accessor. Returns every service the
+ * title is available on across all tiers. Use this for renderers
+ * that just want "which services have this title" (ContentCard's
+ * lazy-load fallback, ServiceStack badges, etc).
  */
-const fetchServicesFromAPI = async (
+export const getCachedServices = async (
   itemId: string,
   mediaType: string,
+  maxServices: number = 10,
 ): Promise<ServiceId[]> => {
+  const providers = await getServiceProviders(itemId, mediaType);
+  const seen = new Set<ServiceId>();
+  const out: ServiceId[] = [];
+  for (const s of [...providers.free, ...providers.rent, ...providers.buy]) {
+    if (!seen.has(s)) {
+      seen.add(s);
+      out.push(s);
+    }
+  }
+  return out.slice(0, maxServices);
+};
+
+/**
+ * Fetch + structure services from TMDb watch/providers API.
+ * Flatrate, free, and ads are folded into `free` (all no-marginal-
+ * cost tiers). Rent and buy stay separate.
+ */
+const fetchProvidersFromAPI = async (
+  itemId: string,
+  mediaType: string,
+): Promise<ServiceProviders> => {
+  const empty: ServiceProviders = { free: [], rent: [], buy: [] };
   try {
     const response = await getContentWatchProviders(Number(itemId), mediaType, 'GB');
+    if (!response.success || !response.data) return empty;
 
-    if (response.success && response.data) {
-      const allProviders: any[] = [
-        ...(response.data.flatrate || []),
-        ...(response.data.free || []),
-        ...(response.data.ads || []),
-        ...(response.data.rent || []),
-        ...(response.data.buy || []),
-      ];
+    const collect = (raw: any[] | undefined): ServiceId[] => {
+      if (!raw) return [];
       const seen = new Set<ServiceId>();
-      const services: ServiceId[] = [];
-      for (const p of allProviders) {
+      const out: ServiceId[] = [];
+      for (const p of raw) {
         const id = providerIdToServiceId(p.provider_id);
         if (id !== null && VALID_SERVICES.has(id) && !seen.has(id)) {
           seen.add(id);
-          services.push(id);
+          out.push(id);
         }
       }
-      return services;
-    }
+      return out;
+    };
 
-    return [];
+    return {
+      free: collect([
+        ...(response.data.flatrate || []),
+        ...(response.data.free || []),
+        ...(response.data.ads || []),
+      ]),
+      rent: collect(response.data.rent),
+      buy: collect(response.data.buy),
+    };
   } catch (err) {
-    console.error('[ServiceCache] getCachedServices failed:', err);
-    return [];
+    console.error('[ServiceCache] getServiceProviders failed:', err);
+    return empty;
   }
 };
 

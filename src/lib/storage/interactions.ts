@@ -120,11 +120,29 @@ export function emitDetailView(
   }).catch(() => {});
 }
 
-/** Emit a search event */
-export function emitSearch(query: string, resultCount: number): void {
+/**
+ * Search mode — drives the downstream consumption pipeline (Phase 3
+ * search-as-signal). `lookup` is the default Mode A keyword search.
+ * `filter` is a FilterSheet-only entry with no query string. `semantic`
+ * is reserved for Mode C / Cluster B when the embedding path goes live.
+ */
+export type SearchMode = 'lookup' | 'filter' | 'semantic';
+
+/**
+ * Emit a search event. `session_id` + `mode` were added in Phase Search
+ * V2 — they're optional on the wire (column allows NULL) so older
+ * captures don't break, but every new emission populates them.
+ */
+export function emitSearch(
+  query: string,
+  resultCount: number,
+  options: { mode?: SearchMode; metadata?: Record<string, unknown> } = {},
+): void {
+  const { mode = 'lookup', metadata = {} } = options;
   emitInteraction({
     event_type: 'search',
-    metadata: { query, result_count: resultCount },
+    session_id: getCurrentSessionId(),
+    metadata: { query, result_count: resultCount, mode, ...metadata },
   }).catch(() => {});
 }
 

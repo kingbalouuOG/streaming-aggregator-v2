@@ -11,6 +11,12 @@ interface BrowseCardProps {
   onToggleBookmark?: (item: ContentItem) => void;
   userServices?: ServiceId[];
   watched?: boolean;
+  /** Forwarded to ContentCard — tints the poster + shows "where it
+   *  lives" service icons when the title isn't on the user's stack. */
+  offService?: boolean;
+  /** Forwarded to ContentCard — renders the bottom-right "From £X.XX"
+   *  pill for rentable/buyable off-service titles. */
+  rentBuyPriceLabel?: string;
 }
 
 /**
