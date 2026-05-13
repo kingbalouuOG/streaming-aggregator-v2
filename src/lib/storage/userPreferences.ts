@@ -170,6 +170,14 @@ export const clearAllData = async () => {
   } catch {
     // dynamic import shouldn't fail in this codebase, but be defensive
   }
+  // Per-user feature-flag cache lives in module memory; the next
+  // user shouldn't see the previous user's flag values.
+  try {
+    const { resetFlagCache } = await import('@/lib/featureFlags');
+    resetFlagCache();
+  } catch {
+    // ignore
+  }
   // v1 clearTasteProfile removed — v2 taste data lives in Supabase (cascade on profile delete)
   if (DEBUG) console.log('[Storage] All user data cleared');
 };
