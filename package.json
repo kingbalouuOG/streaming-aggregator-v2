@@ -25,7 +25,8 @@
     "backfill:tmdb-providers": "npx tsx scripts/fingerprints/backfill-tmdb-providers.ts",
     "test:fingerprints": "npx tsx scripts/fingerprints/__tests__/centroidMath.test.ts",
     "test:search": "npx tsx src/lib/search/__tests__/filterState.test.ts",
-    "test:search-recents": "npx tsx src/lib/search/__tests__/recentSearches.test.ts"
+    "test:search-recents": "npx tsx src/lib/search/__tests__/recentSearches.test.ts",
+    "test:contentcard-search-props": "npx tsx src/lib/search/__tests__/contentCardSearchProps.test.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.2",
