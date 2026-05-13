@@ -7,7 +7,7 @@ import type { ContentItem } from '@/components/ContentCard';
 import type { ServiceId } from '@/components/platformLogos';
 import { API_CONFIG } from '@/lib/constants/config';
 import { emitSearch } from '@/lib/storage/interactions';
-import { searchTitlesByText } from '@/lib/api/supabaseContent';
+import { searchTitlesByText, getRentBuyPrice } from '@/lib/api/supabaseContent';
 
 const BADGE_FLUSH_INTERVAL_MS = 200;
 
@@ -23,6 +23,10 @@ interface UseSearchOptions {
    *  `BrowseStateSnapshot`, this prop carries the matching off-services
    *  decisions so a tap-into-detail-then-back doesn't drop them. */
   initialUnavailableIds?: readonly string[];
+  /** Same role as `initialUnavailableIds` but for rent/buy price
+   *  labels. Pass as a list of `[contentId, label]` tuples so the
+   *  snapshot stays JSON-safe. */
+  initialRentBuyPrices?: ReadonlyArray<readonly [string, string]>;
 }
 
 export function useSearch(
@@ -31,11 +35,14 @@ export function useSearch(
   initialResults?: ContentItem[],
   options: UseSearchOptions = {},
 ) {
-  const { onlyOnMyServices = true, initialUnavailableIds } = options;
+  const { onlyOnMyServices = true, initialUnavailableIds, initialRentBuyPrices } = options;
   const [query, setQuery] = useState(initialQuery || '');
   const [results, setResults] = useState<ContentItem[]>(initialResults || []);
   const [unavailableIds, setUnavailableIds] = useState<Set<string>>(() =>
     initialUnavailableIds ? new Set(initialUnavailableIds) : new Set()
+  );
+  const [rentBuyPrices, setRentBuyPrices] = useState<Map<string, string>>(() =>
+    initialRentBuyPrices ? new Map(initialRentBuyPrices) : new Map()
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +59,8 @@ export function useSearch(
   const offServicesRef = useRef<Set<string>>(new Set());
   /** Items confirmed with no UK availability OR off-services + drop mode. */
   const removeRef = useRef<Set<string>>(new Set());
+  /** Rent/buy "From £X.XX" labels resolved per-item from streaming_availability. */
+  const pendingRentBuyRef = useRef<Map<string, string>>(new Map());
   /** Mirror of `onlyOnMyServices` so the background per-item flow sees
    *  the live value without a stale closure. */
   const onlyOnMyServicesRef = useRef(onlyOnMyServices);
@@ -79,14 +88,17 @@ export function useSearch(
     const pending = pendingBadgesRef.current;
     const offServices = offServicesRef.current;
     const remove = removeRef.current;
-    if (pending.size === 0 && offServices.size === 0 && remove.size === 0) return;
+    const rentBuy = pendingRentBuyRef.current;
+    if (pending.size === 0 && offServices.size === 0 && remove.size === 0 && rentBuy.size === 0) return;
 
     const badgeUpdates = new Map(pending);
     const offSet = new Set(offServices);
     const removeSet = new Set(remove);
+    const rentBuyUpdates = new Map(rentBuy);
     pending.clear();
     offServices.clear();
     remove.clear();
+    rentBuy.clear();
 
     setResults(prev => {
       const filtered = removeSet.size > 0
@@ -106,12 +118,20 @@ export function useSearch(
         return next;
       });
     }
+    if (rentBuyUpdates.size > 0) {
+      setRentBuyPrices(prev => {
+        const next = new Map(prev);
+        rentBuyUpdates.forEach((label, id) => next.set(id, label));
+        return next;
+      });
+    }
   }, []);
 
   const fetchAvailabilityAndBadges = useCallback((items: ContentItem[], q: string, connectedServices: ServiceId[]) => {
     pendingBadgesRef.current.clear();
     offServicesRef.current.clear();
     removeRef.current.clear();
+    pendingRentBuyRef.current.clear();
     if (badgeFlushRef.current) clearTimeout(badgeFlushRef.current);
 
     let completed = 0;
@@ -137,14 +157,31 @@ export function useSearch(
         }
         const matching = allItemServices.filter((s) => connectedServices.includes(s));
         if (matching.length > 0) {
+          // On-service — service icons filtered to matches; no rent/
+          // buy pill (state 1).
           pendingBadgesRef.current.set(item.id, matching);
         } else if (dropOffServices) {
           removeRef.current.add(item.id);
         } else {
-          // onlyOnMyServices=false: keep visible, tag as off-services
-          // so the renderer applies the "Not on yours" pill + 0.75 opacity.
+          // Off-service (state 2 or 3). Tag for tinting + populate the
+          // "where it lives" icons (all the title's services, not
+          // filtered). Fire the rent/buy price check; if it returns a
+          // label we'll upgrade to state 3.
           offServicesRef.current.add(item.id);
           pendingBadgesRef.current.set(item.id, allItemServices.slice(0, 3));
+          getRentBuyPrice(tmdbId, mediaType).then((price) => {
+            if (price && currentQueryRef.current === q) {
+              pendingRentBuyRef.current.set(item.id, price.fromFormatted);
+              // Nudge a flush so the pill paints without waiting for
+              // the next batch tick.
+              if (!badgeFlushRef.current) {
+                badgeFlushRef.current = setTimeout(() => {
+                  badgeFlushRef.current = undefined;
+                  flushPendingUpdates(q);
+                }, BADGE_FLUSH_INTERVAL_MS);
+              }
+            }
+          }).catch(() => { /* silently skip */ });
         }
       } catch {
         // Silently skip failed lookups — item stays visible.
@@ -175,6 +212,7 @@ export function useSearch(
       if (!append) {
         setResults([]);
         setUnavailableIds(new Set());
+        setRentBuyPrices(new Map());
         setLoading(false);
       }
       return;
@@ -244,6 +282,7 @@ export function useSearch(
       } else {
         setResults(ranked);
         setUnavailableIds(new Set());
+        setRentBuyPrices(new Map());
         emitSearch(cleanQuery, ranked.length);
       }
       setPage(searchPage);
@@ -259,6 +298,7 @@ export function useSearch(
       if (!append) {
         setResults([]);
         setUnavailableIds(new Set());
+        setRentBuyPrices(new Map());
       }
     } finally {
       if (currentQueryRef.current === q) {
@@ -351,6 +391,7 @@ export function useSearch(
     setQuery('');
     setResults([]);
     setUnavailableIds(new Set());
+    setRentBuyPrices(new Map());
     setError(null);
     setPage(1);
     setHasMore(false);
@@ -370,8 +411,13 @@ export function useSearch(
     hasMore, loadMore, activeCategory, setActiveCategory, tooShort,
     /** Content IDs that aren't available on any of the user's services.
      *  Empty when `onlyOnMyServices` is true (items get filtered out
-     *  instead). Renderer uses this to tag off-services cards with the
-     *  "Not on yours" pill + 0.75 opacity. */
+     *  instead). Renderer uses this to tint the poster + show "where
+     *  it lives" service icons (state 2/3). */
     unavailableIds,
+    /** Per-item "From £X.XX" labels for off-service titles that are
+     *  rentable/buyable. Renderer passes the value through to
+     *  ContentCard's `rentBuyPriceLabel` prop (state 3). Items absent
+     *  from this map are state 2 (off-service, no rent/buy). */
+    rentBuyPrices,
   };
 }

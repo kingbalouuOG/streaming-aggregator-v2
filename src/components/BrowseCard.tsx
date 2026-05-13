@@ -11,9 +11,12 @@ interface BrowseCardProps {
   onToggleBookmark?: (item: ContentItem) => void;
   userServices?: ServiceId[];
   watched?: boolean;
-  /** Forwarded to ContentCard — when true, rating pill is replaced by
-   *  the "Not on yours" pill and the card drops to 0.75 opacity. */
-  notOnYours?: boolean;
+  /** Forwarded to ContentCard — tints the poster + shows "where it
+   *  lives" service icons when the title isn't on the user's stack. */
+  offService?: boolean;
+  /** Forwarded to ContentCard — renders the bottom-right "From £X.XX"
+   *  pill for rentable/buyable off-service titles. */
+  rentBuyPriceLabel?: string;
 }
 
 /**

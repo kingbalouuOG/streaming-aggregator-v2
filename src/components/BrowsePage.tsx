@@ -17,8 +17,11 @@ export interface BrowseStateSnapshot {
   activeCategory: string;
   /** IDs of items the per-item /watch/providers check tagged as off-
    *  services. Saved across navigation so a tap-into-detail-then-back
-   *  doesn't drop the "Not on yours" treatment. */
+   *  doesn't drop the off-service tint treatment. */
   unavailableIds: string[];
+  /** [contentId, "From £X.XX"] tuples for rentable/buyable off-
+   *  service items. Also preserved across navigation. */
+  rentBuyPrices: [string, string][];
 }
 
 interface BrowsePageProps {
@@ -41,6 +44,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
   const search = useSearch(userServices, initial?.query, initial?.results, {
     onlyOnMyServices: filters.onlyOnMyServices,
     initialUnavailableIds: initial?.unavailableIds,
+    initialRentBuyPrices: initial?.rentBuyPrices,
   });
 
   // Mirror filter state to the URL hash so deep links and back-button
@@ -72,6 +76,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
           results: searchRef.current.results,
           activeCategory: searchRef.current.activeCategory,
           unavailableIds: Array.from(searchRef.current.unavailableIds),
+          rentBuyPrices: Array.from(searchRef.current.rentBuyPrices.entries()),
         };
       }
     };
@@ -315,7 +320,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
         {displayItems.length > 0 && (
           <div className="grid grid-cols-2 gap-3">
             {displayItems.map((item, index) => (
-              <BrowseCard key={item.id} item={item} index={index} onSelect={onItemSelect} bookmarked={bookmarkedIds?.has(item.id)} onToggleBookmark={onToggleBookmark} userServices={userServices} watched={watchedIds?.has(item.id)} notOnYours={search.unavailableIds.has(item.id)} />
+              <BrowseCard key={item.id} item={item} index={index} onSelect={onItemSelect} bookmarked={bookmarkedIds?.has(item.id)} onToggleBookmark={onToggleBookmark} userServices={userServices} watched={watchedIds?.has(item.id)} offService={search.unavailableIds.has(item.id)} rentBuyPriceLabel={search.rentBuyPrices.get(item.id)} />
             ))}
           </div>
         )}

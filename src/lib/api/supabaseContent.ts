@@ -73,6 +73,59 @@ export async function getStreamingLinks(
 }
 
 /**
+ * Cheapest rent/buy price for a title, formatted as "From £X.XX".
+ *
+ * Queries `streaming_availability` for any rent/buy entries with a
+ * known price and returns the lowest, formatted. Returns null when
+ * the title has no rent/buy availability OR no price data (some
+ * SA rows record availability without a concrete price).
+ *
+ * Used on the search results grid to surface the "From £X.XX" pill
+ * for off-service titles that are still actionable. Caching follows
+ * the existing SA prefix (24h TTL) so a re-search of the same title
+ * doesn't re-query.
+ */
+export async function getRentBuyPrice(
+  tmdbId: number,
+  mediaType: 'movie' | 'tv'
+): Promise<{ fromFormatted: string } | null> {
+  const cacheKey = `${CACHE_PREFIXES.SA}rentbuy_${tmdbId}_${mediaType}`;
+  const cached = await getCachedData(cacheKey);
+  // The cache stores `{ fromFormatted: string } | { absent: true }`;
+  // both branches are cache hits and skip the Supabase round-trip.
+  if (cached) {
+    return 'absent' in cached ? null : cached;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('streaming_availability')
+      .select('price_amount, price_formatted, price_currency, stream_type')
+      .eq('tmdb_id', tmdbId)
+      .eq('media_type', mediaType)
+      .in('stream_type', ['rent', 'buy'])
+      .not('price_amount', 'is', null)
+      .order('price_amount', { ascending: true })
+      .limit(1);
+
+    if (error || !data || data.length === 0) {
+      await setCachedData(cacheKey, { absent: true });
+      return null;
+    }
+
+    const row: any = data[0];
+    const label = row.price_formatted
+      ? `From ${row.price_formatted}`
+      : `From £${parseFloat(row.price_amount).toFixed(2)}`;
+    const result = { fromFormatted: label };
+    await setCachedData(cacheKey, result);
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Substring search against the Postgres `titles` cache.
  *
  * Companion to TMDb `/search/movie` + `/search/tv`. TMDb tokenises the
