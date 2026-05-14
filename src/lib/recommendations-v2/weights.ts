@@ -200,16 +200,10 @@ export const CONTEXTUAL_TIME_GENRE_BOOSTS: Record<
 export const CONTEXTUAL_LATE_NIGHT_RUNTIME_THRESHOLD = 90;
 export const CONTEXTUAL_LATE_NIGHT_RUNTIME_BOOST = 0.20;
 
-/** Viewing-context values stored in profiles.viewing_context.
- *  Strategy v1.8 §3.x. */
-export type ViewingContext =
-  | 'solo'
-  | 'with_partner'
-  | 'with_family'
-  | 'with_friends'
-  | 'wind_down'
-  | 'background'
-  | 'focused';
+// ViewingContext moved to types.ts (IN-PX-27); re-exported for existing
+// import paths that read it from weights.ts.
+export type { ViewingContext } from './types';
+import type { ViewingContext } from './types';
 
 /** Per-context genre boosts. Same shape and clamping as the time table.
  *  `solo` and `background` are intentionally absent — neutral baseline.

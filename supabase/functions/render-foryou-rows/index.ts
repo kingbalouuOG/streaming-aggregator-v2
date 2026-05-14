@@ -387,19 +387,35 @@ async function buildEdgePipelineContext(
   // viewing_context from the user's profile row. profiles is keyed on
   // `id`, not `user_id`, so withUserScope's select helper doesn't fit
   // (it auto-applies .eq('user_id', userId)). Use the service-role
-  // client directly with an explicit .eq('id', userId).
+  // client directly with an explicit .eq('id', userId). Narrow against
+  // the ViewingContext union so unknown DB values land at null
+  // (matches client behaviour — IN-PX-27).
   try {
     const { data } = await (client.from('profiles') as any)
       .select('viewing_context')
       .eq('id', userId)
       .maybeSingle();
     const vc = (data as { viewing_context?: string | null } | null)?.viewing_context;
-    if (vc) ctx.viewingContext = vc;
+    const narrowed = narrowViewingContext(vc);
+    if (narrowed) ctx.viewingContext = narrowed;
   } catch {
     // Leave viewingContext unset on any error — scorer falls back to neutral.
   }
 
   return ctx;
+}
+
+const VIEWING_CONTEXT_VALUES = [
+  'solo', 'with_partner', 'with_family', 'with_friends',
+  'wind_down', 'background', 'focused',
+] as const;
+type ViewingContext = typeof VIEWING_CONTEXT_VALUES[number];
+
+function narrowViewingContext(raw: unknown): ViewingContext | null {
+  if (typeof raw !== 'string') return null;
+  return (VIEWING_CONTEXT_VALUES as readonly string[]).includes(raw)
+    ? (raw as ViewingContext)
+    : null;
 }
 
 // ── Because You Watched ──────────────────────────────────────────────

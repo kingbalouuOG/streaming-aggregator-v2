@@ -62,6 +62,20 @@ export type TitleRow = Omit<ExtendedTitleRow, 'cast_top_5' | 'director' | 'rt_sc
 /** Pipeline surface context */
 export type Surface = 'home' | 'foryou';
 
+/** Viewing-context values stored in profiles.viewing_context.
+ *  Strategy v1.8 §3.x. Lives here (not weights.ts) so PipelineContext
+ *  can reference it without a circular import, and so the
+ *  profiles.viewing_context boundary narrows against this union before
+ *  it reaches scoring (IN-PX-27). */
+export type ViewingContext =
+  | 'solo'
+  | 'with_partner'
+  | 'with_family'
+  | 'with_friends'
+  | 'wind_down'
+  | 'background'
+  | 'focused';
+
 /** Full pipeline input */
 export interface PipelineInput {
   tasteVector: number[];
@@ -92,10 +106,11 @@ export interface PipelineContext {
   dayOfWeek?: number;
   /** Capacitor `Device.getInfo().platform`. 'web' for desktop dev. */
   devicePlatform?: 'android' | 'ios' | 'web';
-  /** profiles.viewing_context — one of solo/with_partner/with_family/
-   *  with_friends/wind_down/background/focused, or null for legacy
-   *  users who completed onboarding before migration 012. */
-  viewingContext?: string | null;
+  /** profiles.viewing_context narrowed against the ViewingContext union.
+   *  Null for legacy users who completed onboarding before migration 012,
+   *  and for any DB value that doesn't match the union (defensive narrowing
+   *  in pipelineContext.ts — IN-PX-27). */
+  viewingContext?: ViewingContext | null;
 }
 
 /** Cached candidate pool from Stage 1 retrieval */

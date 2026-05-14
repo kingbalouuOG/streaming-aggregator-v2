@@ -111,14 +111,10 @@ export const CONTEXTUAL_TIME_GENRE_BOOSTS: Record<
 export const CONTEXTUAL_LATE_NIGHT_RUNTIME_THRESHOLD = 90;
 export const CONTEXTUAL_LATE_NIGHT_RUNTIME_BOOST = 0.20;
 
-export type ViewingContext =
-  | 'solo'
-  | 'with_partner'
-  | 'with_family'
-  | 'with_friends'
-  | 'wind_down'
-  | 'background'
-  | 'focused';
+// ViewingContext moved to types.ts (IN-PX-27); re-exported for existing
+// import paths that read it from weights.ts.
+export type { ViewingContext } from './types.ts';
+import type { ViewingContext } from './types.ts';
 
 export const CONTEXTUAL_VIEWING_GENRE_BOOSTS: Partial<
   Record<ViewingContext, Record<number, number>>

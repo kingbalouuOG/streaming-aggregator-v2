@@ -24,7 +24,24 @@
 import { Device } from '@capacitor/device';
 import { supabase } from '../supabase';
 import { getAuthUserId, isSupabaseActive } from '../storage';
-import type { PipelineContext } from './types';
+import type { PipelineContext, ViewingContext } from './types';
+
+const VIEWING_CONTEXT_VALUES: readonly ViewingContext[] = [
+  'solo',
+  'with_partner',
+  'with_family',
+  'with_friends',
+  'wind_down',
+  'background',
+  'focused',
+];
+
+function narrowViewingContext(raw: unknown): ViewingContext | null {
+  if (typeof raw !== 'string') return null;
+  return (VIEWING_CONTEXT_VALUES as readonly string[]).includes(raw)
+    ? (raw as ViewingContext)
+    : null;
+}
 
 export async function buildPipelineContext(): Promise<PipelineContext> {
   const ctx: PipelineContext = {};
@@ -49,7 +66,9 @@ export async function buildPipelineContext(): Promise<PipelineContext> {
 
   // viewing_context from the user's profile row. Onboarding writes it
   // (OnboardingFlow.tsx:198); legacy users pre-migration 012 may have
-  // null. Either way, missing → neutral viewing sub-score.
+  // null. Either way, missing → neutral viewing sub-score. Narrow the
+  // raw DB string against the ViewingContext union; unknown values fall
+  // through to null rather than poisoning the scorer (IN-PX-27).
   if (isSupabaseActive()) {
     const userId = getAuthUserId();
     if (userId) {
@@ -59,7 +78,8 @@ export async function buildPipelineContext(): Promise<PipelineContext> {
           .select('viewing_context')
           .eq('id', userId)
           .maybeSingle();
-        if (data?.viewing_context) ctx.viewingContext = data.viewing_context;
+        const narrowed = narrowViewingContext(data?.viewing_context);
+        if (narrowed) ctx.viewingContext = narrowed;
       } catch {
         // Network or RLS error — leave viewingContext unset.
       }
