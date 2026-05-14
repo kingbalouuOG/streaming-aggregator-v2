@@ -305,3 +305,27 @@ Skipping step 2 means new clients call the un-deployed function. Already address
 ## Phase Search V2 closed.
 
 Browse is now a real filtered-search surface for all prototype users; Joe has a working semantic-search loop on his own profile to test as a flag-gated opt-in. Foundation laid for Phase 3 (search-as-signal). Phase 5.5 picks up next.
+
+---
+
+## Addendum — Search-as-signal Level 1 (search-attribution boost) — 2026-05-14
+
+Filed as **IN-PX-43** after Joe asked which search signals were actually feeding the taste vector. The honest answer at Phase Search V2 close-out: **none directly** — Phase 3 search-as-signal was explicitly out of scope, so search-confirmed engagements (search → bookmark) contributed only at the bookmark's existing weight, with no boost for the search context.
+
+Level 1 closes the smallest version of that gap as a follow-up branch (`phase-search-v2-attribution-boost`):
+
+- **Window**: 60s (`SEARCH_ATTRIBUTION_WINDOW_SECONDS`).
+- **Boost**: 1.3× the base weight (`SEARCH_ATTRIBUTION_BOOST`).
+- **Boosted events**: `watched`, `watchlist_add`, `deep_link_click`, `thumbs_up`. Negative events are deliberately not boosted at Level 1 — "search → hated everything" is real signal but more nuanced; deferred to Level 2 (IN-PX-44).
+- **Two surfaces**:
+  - Incremental update (`applyInteractionIncremental`) — module-scope cache in `src/lib/taste-v2/searchAttribution.ts` populated by `emitSearch` at search-emit time. Zero DB round-trips on the hot path.
+  - Batch recompute (`recomputeFromInteractions`) — fetches `search` rows from `user_interactions` in parallel with the existing taste-event query, walks the merged timeline per-session.
+- **No new schema**, **no new event_type**, **no new privacy surface** (raw query text already persists in `user_interactions.metadata` as Phase 0 behaviour).
+- **Test coverage**: 13 pure-fn assertions in `src/lib/taste-v2/__tests__/searchAttribution.test.ts` (cache record/retrieve, session isolation, overwrite semantics, window boundary inclusive/exclusive, lower-bound guard against out-of-order replay).
+- **Constants mirrored** to `supabase/functions/_shared/taste-v2/types.ts` per ADR-011, even though the helper module itself is client-only (Edge Functions never run incremental updates).
+
+**Levels 2 and 3 stay deferred**:
+- **Level 2 (IN-PX-44)** — embed the query directly into the taste vector. Deferred until the 20-query semantic-eval fixture (IN-PX-40) gives subjective ground truth on query-embedding quality; embedding noisy queries amplifies noise rather than signal.
+- **Level 3 (IN-PX-45)** — full Phase 3 search-as-signal pipeline. Its own phase. Pickup post family-tester engagement data.
+
+This addendum is the canonical record of the Level 1 follow-up. Wiki page [phase-search-v2](../../../videx-wiki/wiki/concepts/operations/phase-search-v2.md) and parking-lot are kept in sync.

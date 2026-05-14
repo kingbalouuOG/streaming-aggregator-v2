@@ -196,6 +196,9 @@ Surfaced during the close-out three-agent review (`security-sentinel` SAFE-TO-ME
 | IN-PX-40 | 20-query semantic-eval fixture authorship (`scripts/test/search-semantic-fixtures.json`). Gates `search_semantic` flag-flip from Joe-only → prototype users. B6 commit landed a 2-query stub. | ⏳ Filed (Joe — author at own pace, then verify `search-semantic-eval` workflow goes green) |
 | IN-PX-41 | Per-user feature flag UI — Studio SQL is fine for Joe, but flipping flags for prototype users (post-eval-green) wants either an admin UI surface or a documented runbook. | ⏳ Filed (decide pre-rollout) |
 | IN-PX-42 | Consider extracting `<SearchInput>`, `<CategoryPills>`, segmented control, toggle row, slider, sheet primitive when a 2nd consumer appears. Kickoff §7 H6 risk note kept primitives narrow this phase. | 🅿 Parked (revisit when a 2nd consumer materialises) |
+| IN-PX-43 | **Search-as-signal Level 1 — search-attribution boost.** When a positive interaction (`watched`, `watchlist_add`, `deep_link_click`, `thumbs_up`) lands within 60s of a `search` in the same session, multiply its taste-vector weight by 1.3. In-memory cache on the incremental path, two-query DB read on the 24h batch recompute. Filed 2026-05-14 as a Phase Search V2 follow-up after Joe asked what search data was feeding taste; the original Phase Search V2 plan deferred consumption to "Phase 3 search-as-signal" — Level 1 is the cheap fast-follow before the full Phase 3 work. | ✅ Incorporated (2026-05-14, `phase-search-v2-attribution-boost` branch) |
+| IN-PX-44 | **Search-as-signal Level 2 — embed query into taste vector directly.** Add `'search'` to `TASTE_RELEVANT_EVENTS` with a small positive weight (~0.15), embed the query via `embed-query`, nudge the vector toward the embedding. Gate on "at least one result tapped within session" to suppress fruitless queries. Privacy: queries already persist to `user_interactions.metadata`; expansion needs surfacing in the GDPR Article 20 export work (IN-PX-35). | ⏳ Filed — defer until 20-query semantic-eval fixture (IN-PX-40) gives subjective ground truth on query-embedding quality. |
+| IN-PX-45 | **Search-as-signal Level 3 — full Phase 3 search-as-signal pipeline.** Co-clustering queries, attribution windows beyond 60s, weight calibration against held-out engagement, query-pattern detection (e.g. recurring "for the kids" queries → soft-context flag). Roadmapped per `videx-wiki/raw/forward-planning/roadmap-search-v2-entity-and-signal.md`. Phase, not commit. | ⏳ Filed (post family-tester engagement data) |
 
 ## v3 editorial-redesign follow-ups (filed 2026-05-09 from end-to-end review)
 
@@ -209,9 +212,9 @@ Surfaced during the end-to-end visual review against the design reference. UI sh
 
 ## Counts
 
-- Total entries: **88** (Pre-PRE 1 + P0 13 + P0.5 7 + P0/0.5 cross 6 + P1 5 + P2 3 + P3 3 + P4 4 + P4.5 16 + OB 6 + XPS 13 + PX-21..35 15 + PX-36..38 3 + PX-39..42 4 + V3-001..003 3).
-- ✅ Incorporated: **42**.
-- ⏳ Pending / Not yet incorporated: **36** (IN-V3-002 IN YOUR PLAN portion ✅ shipped; the match%/mood portion remains pending).
+- Total entries: **91** (Pre-PRE 1 + P0 13 + P0.5 7 + P0/0.5 cross 6 + P1 5 + P2 3 + P3 3 + P4 4 + P4.5 16 + OB 6 + XPS 13 + PX-21..35 15 + PX-36..38 3 + PX-39..45 7 + V3-001..003 3).
+- ✅ Incorporated: **43** (IN-PX-43 search-attribution boost shipped 2026-05-14).
+- ⏳ Pending / Not yet incorporated: **38** (IN-V3-002 IN YOUR PLAN portion ✅ shipped; the match%/mood portion remains pending).
 - ⚠ Partial: **3** (IN-104, IN-XPS-001, IN-XPS-004).
 - 🛑 Discharged: **1** (IN-260).
 - 🅿 Parked: **6** (IN-PX-06, IN-261, IN-XPS-008, IN-XPS-009, IN-OB-006, IN-PX-42).

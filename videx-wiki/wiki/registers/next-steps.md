@@ -41,6 +41,7 @@ Bundles the deferred-from-Phase-5 cluster plus Phase Search V2 follow-ups. None 
 |---|---|---|
 | Regenerate `database.types.ts` + drop remaining `as any` casts | IN-PX-21 | New dependent surfaced in Phase Search V2 (`src/lib/featureFlags.ts:47` for `user_feature_flags`). Pre-existing dependents: `AuthContext.tsx`, `anchorRoomLabels.ts`, `interactionUpdate.ts`. |
 | `catch (err: any)` cleanup in `useSearch.ts:138, 223` | IN-PX-39 | Trivial — replace with `unknown` + narrowing helper. Flagged by `kieran-typescript-reviewer` on Phase Search V2 close. |
+| Search-as-signal Level 2 — embed query into taste vector directly | IN-PX-44 | Add `'search'` to `TASTE_RELEVANT_EVENTS` (weight ~0.15), embed via `embed-query`. Defer until IN-PX-40 fixture lands so we have ground truth on embedding quality first. |
 | Embedding fetch caching for MMR (24h TTL) | IN-PX-22 | Phase 5 added ~3MB embedding fetch per For You load — dominant new latency cost. |
 | MMR partial-coverage fallback (>50% missing → genre-spread) | IN-PX-23 | Graceful degradation when embedding map is patchy. |
 | Float32Array + cosine-norm precompute in MMR | IN-PX-24 | After IN-PX-22. |
@@ -88,7 +89,7 @@ Built on top of v2 infrastructure. Phase Search V2 laid the groundwork — `card
 
 | Step | Notes |
 |---|---|
-| Search-as-signal (Phase 3) | Consume `card_impressions.metadata` Search V2 schema. Out of scope for Search V2 itself. |
+| Search-as-signal Level 3 (Phase 3 pipeline) | IN-PX-45 — co-cluster queries, longer attribution windows, weight calibration vs held-out engagement, query-pattern detection. Level 1 (IN-PX-43, 60s/1.3× attribution boost) shipped 2026-05-14; Level 2 (IN-PX-44, query embedding directly into vector) is the intermediate step. |
 | Entity search (Phase 2 / Mode B) | Out of Search V2 scope per `videx-wiki/raw/forward-planning/roadmap-search-v2-entity-and-signal.md`. |
 | Spike Graphiti + Kuzu (embedded) | Validates OSS approach with zero infrastructure cost. |
 | Build batch ingestion job (matches mood rooms GitHub Actions cron pattern) | Re-uses Phase 4.5 cron infrastructure. |

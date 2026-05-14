@@ -17,7 +17,13 @@ import {
   EXPLICIT_HALF_LIFE_DAYS,
   BEHAVIOURAL_HALF_LIFE_DAYS,
   BEHAVIOURAL_EVENTS,
+  SEARCH_ATTRIBUTION_BOOST,
+  SEARCH_ATTRIBUTION_BOOSTED_EVENTS,
 } from './types';
+import {
+  getMostRecentSearchAt,
+  isWithinAttributionWindow,
+} from './searchAttribution';
 import type { TasteVectorV2 } from './types';
 
 const LEARNING_RATE = 0.05;
@@ -34,6 +40,7 @@ export async function applyInteractionIncremental(
   mediaType: 'movie' | 'tv',
   eventType: string,
   interactionCount: number,
+  sessionId?: string | null,
 ): Promise<{ vector: TasteVectorV2; newCount: number } | null> {
   const weight = INTERACTION_WEIGHTS[eventType];
   if (weight === undefined) return null;
@@ -62,7 +69,17 @@ export async function applyInteractionIncremental(
     ? CONFIDENCE_FLOOR_MULTIPLIER
     : 1.0;
 
-  const effectiveWeight = Math.abs(weight) * LEARNING_RATE * confidenceMultiplier;
+  // Search-attribution boost — if this engagement followed a search
+  // emitted in the same session within the attribution window, treat
+  // it as higher-intent than passive scroll. Negative events are not
+  // boosted (Level 2 of the search-as-signal roadmap will address them).
+  const searchBoost =
+    SEARCH_ATTRIBUTION_BOOSTED_EVENTS.has(eventType) &&
+    isWithinAttributionWindow(Date.now(), getMostRecentSearchAt(sessionId))
+      ? SEARCH_ATTRIBUTION_BOOST
+      : 1.0;
+
+  const effectiveWeight = Math.abs(weight) * LEARNING_RATE * confidenceMultiplier * searchBoost;
   const isNegative = NEGATIVE_EVENTS.has(eventType);
 
   const updated = isNegative
@@ -97,15 +114,27 @@ export async function recomputeFromInteractions(
   const userId = getAuthUserId();
   if (!userId) return null;
 
-  // Fetch all taste-relevant interactions
-  const { data: interactions, error } = await supabase
-    .from('user_interactions')
-    .select('content_id, media_type, event_type, metadata, created_at')
-    .eq('user_id', userId)
-    .in('event_type', [...TASTE_RELEVANT_EVENTS])
-    .not('content_id', 'is', null)
-    .order('created_at', { ascending: true });
+  // Fetch all taste-relevant interactions + the search rows we need for
+  // attribution boosting. Two queries because the taste set filters on
+  // `content_id IS NOT NULL` and search rows have content_id NULL.
+  const [interactionsResult, searchesResult] = await Promise.all([
+    supabase
+      .from('user_interactions')
+      .select('content_id, media_type, event_type, metadata, created_at, session_id')
+      .eq('user_id', userId)
+      .in('event_type', [...TASTE_RELEVANT_EVENTS])
+      .not('content_id', 'is', null)
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('user_interactions')
+      .select('created_at, session_id')
+      .eq('user_id', userId)
+      .eq('event_type', 'search')
+      .not('session_id', 'is', null)
+      .order('created_at', { ascending: true }),
+  ]);
 
+  const { data: interactions, error } = interactionsResult;
   if (error) {
     console.error('[InteractionUpdate] Failed to fetch interactions:', error.message);
     return null;
@@ -113,6 +142,18 @@ export async function recomputeFromInteractions(
 
   if (!interactions || interactions.length === 0) {
     return bootstrapVector;
+  }
+
+  // Build a per-session ordered list of search timestamps (ms). When
+  // we hit a taste-relevant event during the replay, we pick the most
+  // recent search timestamp in the same session and test the window.
+  const searchesBySession = new Map<string, number[]>();
+  for (const row of searchesResult.data ?? []) {
+    if (!row.session_id || !row.created_at) continue;
+    const ts = new Date(row.created_at).getTime();
+    const arr = searchesBySession.get(row.session_id) ?? [];
+    arr.push(ts);
+    searchesBySession.set(row.session_id, arr);
   }
 
   // Collect unique content IDs for batch embedding fetch
@@ -191,7 +232,32 @@ export async function recomputeFromInteractions(
       ? CONFIDENCE_FLOOR_MULTIPLIER
       : 1.0;
 
-    const effectiveWeight = Math.abs(weight) * decay * LEARNING_RATE * confidenceMultiplier;
+    // Search-attribution boost — replay-side. For every event in the
+    // search-attribution allow-list, look up the most recent prior
+    // search in the same session and apply the boost if it landed
+    // within the window. Linear scan of a session's small search list
+    // is cheap; per-session arrays are already sorted ascending.
+    let searchBoost = 1.0;
+    if (
+      SEARCH_ATTRIBUTION_BOOSTED_EVENTS.has(interaction.event_type) &&
+      interaction.session_id
+    ) {
+      const eventAtMs = new Date(interaction.created_at).getTime();
+      const sessionSearches = searchesBySession.get(interaction.session_id);
+      if (sessionSearches && sessionSearches.length > 0) {
+        // Pick the latest search at or before the event timestamp.
+        let lastSearchAt: number | null = null;
+        for (const ts of sessionSearches) {
+          if (ts > eventAtMs) break;
+          lastSearchAt = ts;
+        }
+        if (isWithinAttributionWindow(eventAtMs, lastSearchAt)) {
+          searchBoost = SEARCH_ATTRIBUTION_BOOST;
+        }
+      }
+    }
+
+    const effectiveWeight = Math.abs(weight) * decay * LEARNING_RATE * confidenceMultiplier * searchBoost;
     const isNegative = NEGATIVE_EVENTS.has(interaction.event_type) || weight < 0;
 
     vector = isNegative

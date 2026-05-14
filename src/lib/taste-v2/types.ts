@@ -73,3 +73,26 @@ export const BEHAVIOURAL_HALF_LIFE_DAYS = 90;
 
 /** Behavioural event types (shorter half-life) */
 export const BEHAVIOURAL_EVENTS = new Set(['deep_link_click']);
+
+/**
+ * Search-attribution boost — Phase Search V2 follow-up (Level 1).
+ *
+ * A positive interaction that happens within
+ * SEARCH_ATTRIBUTION_WINDOW_SECONDS of a `search` event in the SAME
+ * session is treated as higher-intent than a passive-scroll engagement.
+ * Its weight is multiplied by SEARCH_ATTRIBUTION_BOOST before decay /
+ * confidence floor / learning rate are applied.
+ *
+ * Only positive boosted events qualify — negative signals (thumbs_down,
+ * watchlist_remove) are not boosted because "search → hated everything"
+ * is more nuanced and is deferred to Level 2 of the search-as-signal
+ * roadmap.
+ */
+export const SEARCH_ATTRIBUTION_WINDOW_SECONDS = 60;
+export const SEARCH_ATTRIBUTION_BOOST = 1.3;
+export const SEARCH_ATTRIBUTION_BOOSTED_EVENTS = new Set([
+  'watched',
+  'watchlist_add',
+  'deep_link_click',
+  'thumbs_up',
+]);

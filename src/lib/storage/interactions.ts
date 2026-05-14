@@ -11,6 +11,7 @@ import { supabase } from '../supabase';
 import type { Json } from '../database.types';
 import { invalidateDismissedIdsCache } from './recommendations';
 import { getCurrentSessionId } from '../instrumentation/sessionId';
+import { recordSearchTimestamp } from '../taste-v2/searchAttribution';
 
 // — Event types ——————————————————————————————————————————————————
 
@@ -139,9 +140,15 @@ export function emitSearch(
   options: { mode?: SearchMode; metadata?: Record<string, unknown> } = {},
 ): void {
   const { mode = 'lookup', metadata = {} } = options;
+  const sessionId = getCurrentSessionId();
+  // Mark the session as "recently searched" so the next content
+  // interaction within SEARCH_ATTRIBUTION_WINDOW_SECONDS gets a taste-
+  // vector boost. The incremental path reads from this cache; the
+  // 24h recompute reads search rows from the DB instead.
+  recordSearchTimestamp(sessionId);
   emitInteraction({
     event_type: 'search',
-    session_id: getCurrentSessionId(),
+    session_id: sessionId,
     metadata: { query, result_count: resultCount, mode, ...metadata },
   }).catch(() => {});
 }
