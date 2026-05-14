@@ -25,6 +25,8 @@ import { supabase } from "@/lib/supabase";
 import type { SliderState } from "@/lib/taste-v2/types";
 import { DEFAULT_SLIDERS } from "@/lib/taste-v2/types";
 import { useAuth } from "./AuthContext";
+import { PrivacyPolicyPage } from "./PrivacyPolicyPage";
+import { TermsPage } from "./TermsPage";
 
 // ── Service definitions ──────────────────────────────────
 export type { PlatformDef as StreamingServiceDef };
@@ -555,6 +557,10 @@ function StepAccount({
   const [submitting, setSubmitting] = useState(false);
   const [ageRange, setAgeRange] = useState<string | null>(null);
   const [viewingCtx, setViewingCtx] = useState<string | null>(null);
+  // Phase 5.5 C14: legal-doc overlays. Spans below the email field
+  // become buttons that open the respective sheet.
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const latestUsernameRef = useRef('');
 
@@ -735,9 +741,27 @@ function StepAccount({
       {/* Legal */}
       <p className="text-muted-foreground text-[11px] text-center mb-3">
         By creating an account, you agree to our{' '}
-        <span className="text-primary">Terms of Service</span> and{' '}
-        <span className="text-primary">Privacy Policy</span>
+        <button
+          type="button"
+          onClick={() => setShowTerms(true)}
+          className="text-primary underline-offset-2 hover:underline"
+        >
+          Terms of Service
+        </button>{' '}and{' '}
+        <button
+          type="button"
+          onClick={() => setShowPrivacy(true)}
+          className="text-primary underline-offset-2 hover:underline"
+        >
+          Privacy Policy
+        </button>
       </p>
+
+      {/* Phase 5.5 C14 — legal overlays */}
+      <AnimatePresence>
+        {showPrivacy && <PrivacyPolicyPage onClose={() => setShowPrivacy(false)} />}
+        {showTerms && <TermsPage onClose={() => setShowTerms(false)} />}
+      </AnimatePresence>
 
       {/* Error */}
       <AnimatePresence>

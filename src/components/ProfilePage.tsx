@@ -13,6 +13,7 @@ import {
   Bookmark,
   Eye,
   Film,
+  FileText,
   RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -27,6 +28,8 @@ import { GenreIconTile, CLUSTER_GLYPHS, PROFILE_GLYPHS, type GlyphName } from ".
 import { getSliderState, saveSliderState } from "@/lib/taste-v2/tasteProfileV2";
 import { DEFAULT_SLIDERS, type SliderState } from "@/lib/taste-v2/types";
 import { SpendDashboard } from "./SpendDashboard";
+import { PrivacyPolicyPage } from "./PrivacyPolicyPage";
+import { TermsPage } from "./TermsPage";
 
 const allServices = PLATFORMS;
 
@@ -796,6 +799,8 @@ function MonthlySpendPage({ connectedServices, onBack }: { connectedServices: st
 function PrivacyDataPage({ onBack }: { onBack: () => void }) {
   const [showLearnMore, setShowLearnMore] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
   return (
     <SubPageShell kicker="SETTINGS" title="Privacy & data." onBack={onBack}>
@@ -811,6 +816,28 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
         <Eye className="w-5 h-5 shrink-0" style={{ color: "var(--fg-soft)" }} />
         <span className="text-foreground text-[14px] flex-1 text-left" style={{ fontWeight: 500 }}>
           What Videx learns about you
+        </span>
+      </button>
+
+      {/* Privacy Policy (Phase 5.5 C14) */}
+      <button
+        onClick={() => setShowPrivacy(true)}
+        className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-secondary/60 hover:bg-secondary/80 transition-colors mb-2"
+      >
+        <FileText className="w-5 h-5 shrink-0" style={{ color: "var(--fg-soft)" }} />
+        <span className="text-foreground text-[14px] flex-1 text-left" style={{ fontWeight: 500 }}>
+          Privacy Policy
+        </span>
+      </button>
+
+      {/* Terms of Service (Phase 5.5 C14) */}
+      <button
+        onClick={() => setShowTerms(true)}
+        className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-secondary/60 hover:bg-secondary/80 transition-colors mb-2"
+      >
+        <FileText className="w-5 h-5 shrink-0" style={{ color: "var(--fg-soft)" }} />
+        <span className="text-foreground text-[14px] flex-1 text-left" style={{ fontWeight: 500 }}>
+          Terms of Service
         </span>
       </button>
 
@@ -841,6 +868,12 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
           Delete my account
         </span>
       </button>
+
+      {/* Phase 5.5 C14 — legal overlays */}
+      <AnimatePresence>
+        {showPrivacy && <PrivacyPolicyPage onClose={() => setShowPrivacy(false)} />}
+        {showTerms && <TermsPage onClose={() => setShowTerms(false)} />}
+      </AnimatePresence>
 
       {/* "What Videx learns" info modal */}
       <AnimatePresence>
