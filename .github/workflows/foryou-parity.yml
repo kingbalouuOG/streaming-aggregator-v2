@@ -38,6 +38,15 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      # Phase 5.5 C9 / IN-PX-33 — narrow the trigger to ranking-pipeline
+      # changes + the probe itself. Other PRs skip the probe entirely.
+      - 'src/lib/recommendations-v2/**'
+      - 'supabase/functions/_shared/recommendations-v2/**'
+      - 'supabase/functions/render-foryou-rows/**'
+      - 'scripts/_inspect_foryou_parity.mjs'
+      - 'scripts/test/foryou-parity-golden.json'
+      - '.github/workflows/foryou-parity.yml'
 
 jobs:
   parity:

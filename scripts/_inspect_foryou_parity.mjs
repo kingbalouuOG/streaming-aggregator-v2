@@ -29,11 +29,27 @@
  *   USER_ID="<auth.uid()>" \
  *   SERVICES="netflix,prime,disney,apple,itvx,all4,now,iplayer" \
  *   node scripts/_inspect_foryou_parity.mjs
+ *
+ * Phase 5.5 C9 / IN-PX-33 — property-level golden probe:
+ *   - Default mode compares run 1 against the committed golden at
+ *     `scripts/test/foryou-parity-golden.json` (item-level: id +
+ *     matchPercentage per row, plus anchor room IDs and tiers). Any
+ *     divergence is reported and the probe exits 1.
+ *   - `--update-golden` flag captures the current run 1 output to the
+ *     golden file (used when ranking weights / strategy intentionally
+ *     change, or when the test-user state genuinely drifted).
+ *   - Soft-skip only when the workflow has no secrets at all (forked
+ *     PRs). With secrets present, divergence is a hard fail.
  */
 
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { mkdirSync } from 'fs';
 import { createClient } from '@supabase/supabase-js';
+
+const GOLDEN_PATH = resolve(process.cwd(), 'scripts/test/foryou-parity-golden.json');
+const ARGV = new Set(process.argv.slice(2));
+const UPDATE_GOLDEN = ARGV.has('--update-golden');
 
 function loadEnv() {
   const envPath = resolve(process.cwd(), '.env');
@@ -187,6 +203,95 @@ function fmt(n) {
   return `${(n / 1024 / 1024).toFixed(2)} MB`;
 }
 
+// ── Phase 5.5 C9 / IN-PX-33: property-level golden ──
+
+/**
+ * Snapshot the rendered payload into the smallest stable shape we can
+ * compare across runs. Anything time-dependent (renderMs, latency
+ * arrays) is excluded so two captures from different days still match
+ * when the ranking output is identical.
+ */
+function snapshotPayload(payload) {
+  const rowSnapshot = (items) =>
+    (items ?? []).map((item) => ({
+      id: item.id,
+      matchPercentage: item.matchPercentage ?? null,
+    }));
+  return {
+    recommendedForYou: rowSnapshot(payload.recommendedForYou),
+    hiddenGems: rowSnapshot(payload.hiddenGems),
+    outsideYourUsual: rowSnapshot(payload.outsideYourUsual),
+    fromYourWatchlist: rowSnapshot(payload.fromYourWatchlist),
+    becauseYouWatched: (payload.becauseYouWatched ?? []).map((row) => ({
+      anchorId: row.anchor?.id ?? null,
+      items: rowSnapshot(row.items),
+    })),
+    moreFromPerson: payload.moreFromPerson
+      ? {
+          personName: payload.moreFromPerson.personName,
+          personType: payload.moreFromPerson.personType,
+          items: rowSnapshot(payload.moreFromPerson.items),
+        }
+      : null,
+    anchorRooms: (payload.anchorRooms ?? [])
+      .map((room) => ({
+        id: room.id,
+        anchorTitle: room.anchorTitle,
+        tier: room.anchor?.tier ?? null,
+        titleCount: room.titleCount ?? null,
+      }))
+      .sort((a, b) => String(a.id).localeCompare(String(b.id))),
+    sliders: payload.sliders,
+  };
+}
+
+function loadGolden() {
+  if (!existsSync(GOLDEN_PATH)) return null;
+  try {
+    return JSON.parse(readFileSync(GOLDEN_PATH, 'utf-8'));
+  } catch (err) {
+    console.error(`Failed to parse golden at ${GOLDEN_PATH}:`, err.message);
+    return null;
+  }
+}
+
+function saveGolden(snapshot) {
+  mkdirSync(dirname(GOLDEN_PATH), { recursive: true });
+  writeFileSync(GOLDEN_PATH, JSON.stringify(snapshot, null, 2) + '\n', 'utf-8');
+}
+
+/**
+ * Property-level diff. Returns an array of human-readable strings —
+ * empty when actual matches expected.
+ */
+function diffSnapshots(expected, actual, path = '') {
+  const issues = [];
+  if (expected === actual) return issues;
+  if (expected === null || actual === null || typeof expected !== typeof actual) {
+    issues.push(`${path || '<root>'}: ${JSON.stringify(expected)} → ${JSON.stringify(actual)}`);
+    return issues;
+  }
+  if (Array.isArray(expected)) {
+    if (!Array.isArray(actual) || expected.length !== actual.length) {
+      issues.push(`${path}: length ${expected.length} → ${actual?.length ?? 'n/a'}`);
+      return issues;
+    }
+    for (let i = 0; i < expected.length; i++) {
+      issues.push(...diffSnapshots(expected[i], actual[i], `${path}[${i}]`));
+    }
+    return issues;
+  }
+  if (typeof expected === 'object') {
+    const keys = new Set([...Object.keys(expected), ...Object.keys(actual)]);
+    for (const k of keys) {
+      issues.push(...diffSnapshots(expected[k], actual[k], path ? `${path}.${k}` : k));
+    }
+    return issues;
+  }
+  issues.push(`${path}: ${JSON.stringify(expected)} → ${JSON.stringify(actual)}`);
+  return issues;
+}
+
 // ── Main ──
 
 async function main() {
@@ -272,13 +377,44 @@ async function main() {
     for (const issue of dedupIssues) console.log(`    - ${issue}`);
   }
 
-  const totalIssues = leakIssues.length + dedupIssues.length;
+  // Phase 5.5 C9: property-level golden compare. Runs against the run-1
+  // snapshot since determinism is already verified above.
+  console.log('\n── Property-level golden compare ──');
+  const snapshot = snapshotPayload(run1.data);
+  let goldenIssues = [];
+  if (UPDATE_GOLDEN) {
+    saveGolden(snapshot);
+    console.log(`  --update-golden: wrote ${GOLDEN_PATH}`);
+  } else {
+    const golden = loadGolden();
+    if (!golden) {
+      console.log('  WARN: no golden file at scripts/test/foryou-parity-golden.json.');
+      console.log('  Run with --update-golden to generate it (first time only).');
+    } else {
+      goldenIssues = diffSnapshots(golden, snapshot);
+      if (goldenIssues.length === 0) {
+        console.log('  OK: snapshot matches golden.');
+      } else {
+        console.log(`  ${goldenIssues.length} property-level differences vs golden:`);
+        for (const issue of goldenIssues.slice(0, 40)) console.log(`    - ${issue}`);
+        if (goldenIssues.length > 40) {
+          console.log(`    ... (+${goldenIssues.length - 40} more)`);
+        }
+        console.log('');
+        console.log('  If this is intentional (strategy retune, test-user content change),');
+        console.log('  regenerate the golden with:');
+        console.log('    node scripts/_inspect_foryou_parity.mjs --update-golden');
+      }
+    }
+  }
+
+  const totalIssues = leakIssues.length + dedupIssues.length + goldenIssues.length;
   console.log(`\n── Verdict ──`);
   if (totalIssues === 0) {
-    console.log('  PASS: structural soundness checks passed.');
+    console.log('  PASS: structural + golden checks passed.');
     console.log('  Next step: load the app on device, eyeball the Edge-vs-fallback rows.');
   } else {
-    console.log(`  FAIL: ${totalIssues} structural issues found. Fix before wiring the client.`);
+    console.log(`  FAIL: ${totalIssues} issues found.`);
     process.exit(1);
   }
 }
