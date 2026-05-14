@@ -129,6 +129,21 @@ export function applyGenreSpread(
 // ── Phase 5: Maximal Marginal Relevance (MMR) ──
 
 /**
+ * MMR partial-coverage bail thresholds (IN-PX-23). When MMR runs against
+ * a candidate pool with mostly-missing embeddings (e.g. Hidden Gems or
+ * Outside Your Usual, where unembedded back-catalogue titles outnumber
+ * embedded ones), the algorithm degenerates: redundancy collapses to 0
+ * for most pairs and selection devolves to pure-finalScore order, which
+ * silently produces same-genre clusters. Bailing out lets the caller
+ * fall through to applyGenreSpread for these low-coverage rows.
+ *
+ * Tuning: if observability data shows over- or under-bailing during the
+ * first week of prototype use, adjust here (one-line change).
+ */
+const MMR_NULL_RATIO_BAIL = 0.5;
+const MMR_MIN_SAMPLE = 4;
+
+/**
  * Cosine similarity between two embedding vectors. Both must be the
  * same dimensionality. Returns 0 if either vector has zero norm.
  */
@@ -167,14 +182,21 @@ function cosineSimilarity(a: number[], b: number[]): number {
  * Replaces applyGenreSpread for intra-row diversity (brief §3.5 +
  * §4.4). Cross-service de-clustering still runs as a post-MMR pass.
  */
+export interface MMRResult {
+  selected: ScoredCandidate[];
+  /** True when MMR exited early due to too many null-embedding picks
+   *  (IN-PX-23). Caller should fall through to applyGenreSpread. */
+  bailedOut: boolean;
+}
+
 export function applyMMR(
   candidates: ScoredCandidate[],
   embeddingMap: Map<string, number[]>,
   opts: { lambda: number; k: number },
-): ScoredCandidate[] {
-  if (candidates.length === 0) return [];
+): MMRResult {
+  if (candidates.length === 0) return { selected: [], bailedOut: false };
   const k = Math.min(opts.k, candidates.length);
-  if (k === 0) return [];
+  if (k === 0) return { selected: [], bailedOut: false };
 
   // Start from the highest-finalScore candidate.
   const remaining = [...candidates].sort((a, b) => b.finalScore - a.finalScore);
@@ -186,8 +208,23 @@ export function applyMMR(
   const selectedEmbeddings: Array<number[] | null> = [
     embeddingMap.get(selected[0].contentKey) ?? null,
   ];
+  let nullCount = selectedEmbeddings[0] === null ? 1 : 0;
 
   while (selected.length < k && remaining.length > 0) {
+    // IN-PX-23 partial-coverage bail. Once we have enough samples to be
+    // confident, exit early if too many picks have null embeddings —
+    // MMR loses its diversity signal in that regime.
+    if (
+      selected.length >= MMR_MIN_SAMPLE &&
+      nullCount / selected.length > MMR_NULL_RATIO_BAIL
+    ) {
+      console.debug(
+        `[MMR] partial-coverage bail at ${selected.length} picks ` +
+        `(${nullCount} null embeddings); caller will fall through to applyGenreSpread.`,
+      );
+      return { selected, bailedOut: true };
+    }
+
     let bestIdx = -1;
     let bestScore = -Infinity;
 
@@ -216,10 +253,12 @@ export function applyMMR(
     if (bestIdx === -1) break;
     const picked = remaining.splice(bestIdx, 1)[0];
     selected.push(picked);
-    selectedEmbeddings.push(embeddingMap.get(picked.contentKey) ?? null);
+    const pickedEmb = embeddingMap.get(picked.contentKey) ?? null;
+    selectedEmbeddings.push(pickedEmb);
+    if (pickedEmb === null) nullCount++;
   }
 
-  return selected;
+  return { selected, bailedOut: false };
 }
 
 // ── Cross-Service De-clustering ──

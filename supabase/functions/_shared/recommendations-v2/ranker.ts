@@ -138,9 +138,17 @@ export function buildRowFromPool(
   candidates = applyContentMixRatio(candidates, movieRatio);
 
   // Phase 5: MMR when embeddings available, applyGenreSpread fallback.
+  // MMR also bails out to applyGenreSpread on partial-coverage rows
+  // (IN-PX-23 — mirror of src/lib/recommendations-v2/ranker.ts).
   if (embeddingMap && embeddingMap.size > 0) {
     const lambda = getMMRLambda(sliders.variety);
-    candidates = applyMMR(candidates, embeddingMap, { lambda, k: limit });
+    const mmr = applyMMR(candidates, embeddingMap, { lambda, k: limit });
+    if (mmr.bailedOut) {
+      const genreWindow = getVarietyGenreWindow(sliders.variety);
+      candidates = applyGenreSpread(candidates, genreWindow, maxPerGenre, limit);
+    } else {
+      candidates = mmr.selected;
+    }
   } else {
     const genreWindow = getVarietyGenreWindow(sliders.variety);
     candidates = applyGenreSpread(candidates, genreWindow, maxPerGenre, limit);

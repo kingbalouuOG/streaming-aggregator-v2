@@ -75,6 +75,11 @@ export function applyGenreSpread(
 
 // ── Phase 5: Maximal Marginal Relevance (MMR) ──
 
+// MMR partial-coverage bail thresholds (IN-PX-23) — mirror of
+// src/lib/recommendations-v2/diversity.ts.
+const MMR_NULL_RATIO_BAIL = 0.5;
+const MMR_MIN_SAMPLE = 4;
+
 function cosineSimilarity(a: number[], b: number[]): number {
   let dot = 0;
   let normA = 0;
@@ -89,22 +94,39 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return denom === 0 ? 0 : dot / denom;
 }
 
+export interface MMRResult {
+  selected: ScoredCandidate[];
+  bailedOut: boolean;
+}
+
 export function applyMMR(
   candidates: ScoredCandidate[],
   embeddingMap: Map<string, number[]>,
   opts: { lambda: number; k: number },
-): ScoredCandidate[] {
-  if (candidates.length === 0) return [];
+): MMRResult {
+  if (candidates.length === 0) return { selected: [], bailedOut: false };
   const k = Math.min(opts.k, candidates.length);
-  if (k === 0) return [];
+  if (k === 0) return { selected: [], bailedOut: false };
 
   const remaining = [...candidates].sort((a, b) => b.finalScore - a.finalScore);
   const selected: ScoredCandidate[] = [remaining.shift()!];
   const selectedEmbeddings: Array<number[] | null> = [
     embeddingMap.get(selected[0].contentKey) ?? null,
   ];
+  let nullCount = selectedEmbeddings[0] === null ? 1 : 0;
 
   while (selected.length < k && remaining.length > 0) {
+    if (
+      selected.length >= MMR_MIN_SAMPLE &&
+      nullCount / selected.length > MMR_NULL_RATIO_BAIL
+    ) {
+      console.debug(
+        `[MMR] partial-coverage bail at ${selected.length} picks ` +
+        `(${nullCount} null embeddings); caller will fall through to applyGenreSpread.`,
+      );
+      return { selected, bailedOut: true };
+    }
+
     let bestIdx = -1;
     let bestScore = -Infinity;
 
@@ -131,10 +153,12 @@ export function applyMMR(
     if (bestIdx === -1) break;
     const picked = remaining.splice(bestIdx, 1)[0];
     selected.push(picked);
-    selectedEmbeddings.push(embeddingMap.get(picked.contentKey) ?? null);
+    const pickedEmb = embeddingMap.get(picked.contentKey) ?? null;
+    selectedEmbeddings.push(pickedEmb);
+    if (pickedEmb === null) nullCount++;
   }
 
-  return selected;
+  return { selected, bailedOut: false };
 }
 
 export function deClusterByService(

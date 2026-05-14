@@ -196,10 +196,18 @@ export function buildRowFromPool(
   candidates = applyContentMixRatio(candidates, movieRatio);
 
   // Stage 2b: intra-row diversity. MMR when embeddings are available,
-  // applyGenreSpread fallback otherwise (Phase 4 behaviour).
+  // applyGenreSpread fallback otherwise (Phase 4 behaviour). MMR also
+  // bails out to applyGenreSpread when partial-coverage erodes its
+  // diversity signal (IN-PX-23).
   if (embeddingMap && embeddingMap.size > 0) {
     const lambda = getMMRLambda(sliders.variety);
-    candidates = applyMMR(candidates, embeddingMap, { lambda, k: limit });
+    const mmr = applyMMR(candidates, embeddingMap, { lambda, k: limit });
+    if (mmr.bailedOut) {
+      const genreWindow = getVarietyGenreWindow(sliders.variety);
+      candidates = applyGenreSpread(candidates, genreWindow, maxPerGenre, limit);
+    } else {
+      candidates = mmr.selected;
+    }
   } else {
     const genreWindow = getVarietyGenreWindow(sliders.variety);
     candidates = applyGenreSpread(candidates, genreWindow, maxPerGenre, limit);
