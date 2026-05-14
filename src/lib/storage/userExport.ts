@@ -14,16 +14,6 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { supabase } from '../supabase';
 
-// Workaround: migration 043 (export_user_data) lives in the repo but
-// is not yet applied to remote, so `database.types.ts` (regenerated
-// at C1 time) doesn't list this RPC. Drop this cast after the next
-// gen-types run post-apply; the typegen-check CI will flag the stale
-// types on any PR that touches migrations until then.
-type SupabaseRpc = typeof supabase.rpc;
-const rpc = supabase.rpc as unknown as (
-  fn: 'export_user_data',
-) => ReturnType<SupabaseRpc>;
-
 export interface ExportResult {
   /** Friendly description of where the file landed. Use in toast. */
   destination: string;
@@ -40,7 +30,7 @@ export interface ExportResult {
  * makes the C16 privacy smoke test meaningful.
  */
 export async function exportUserData(): Promise<ExportResult> {
-  const { data, error } = await rpc('export_user_data');
+  const { data, error } = await supabase.rpc('export_user_data');
   if (error) {
     throw new Error(error.message || 'Export failed');
   }

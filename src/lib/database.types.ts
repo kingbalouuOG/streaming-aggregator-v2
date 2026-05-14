@@ -1722,6 +1722,7 @@ export type Database = {
         Args: { p_ignore_template_table?: boolean; p_parent_table: string }
         Returns: string
       }
+      export_user_data: { Args: never; Returns: Json }
       get_available_tmdb_ids: { Args: { service_ids: string[] }; Returns: Json }
       get_mood_room_detail: {
         Args: { available_tmdb_ids: number[]; room_id: string }
