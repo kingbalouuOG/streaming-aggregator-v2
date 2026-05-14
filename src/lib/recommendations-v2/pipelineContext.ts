@@ -55,12 +55,11 @@ export async function buildPipelineContext(): Promise<PipelineContext> {
     if (userId) {
       try {
         const { data } = await supabase
-          .from('profiles' as any)
+          .from('profiles')
           .select('viewing_context')
           .eq('id', userId)
           .maybeSingle();
-        const vc = (data as { viewing_context?: string | null } | null)?.viewing_context;
-        if (vc) ctx.viewingContext = vc;
+        if (data?.viewing_context) ctx.viewingContext = data.viewing_context;
       } catch {
         // Network or RLS error — leave viewingContext unset.
       }

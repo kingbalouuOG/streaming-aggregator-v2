@@ -25,13 +25,6 @@ export interface AnchorRoomLabel {
   description: string | null;
 }
 
-interface AnchorLabelRow {
-  anchor_tmdb_id: number;
-  anchor_media_type: 'movie' | 'tv';
-  label: string;
-  description: string | null;
-}
-
 function anchorKey(a: { tmdbId: number; mediaType: 'movie' | 'tv' }): string {
   return `${a.mediaType}-${a.tmdbId}`;
 }
@@ -48,16 +41,15 @@ export async function getCachedAnchorLabels(
   if (anchors.length === 0) return out;
 
   const tmdbIds = [...new Set(anchors.map((a) => a.tmdbId))];
-  // mood_room_anchor_labels was added by migration 034 but database.types.ts
-  // hasn't been regenerated yet; cast via any until the types are refreshed.
-  const { data, error } = await (supabase.from as any)('mood_room_anchor_labels')
+  const { data, error } = await supabase
+    .from('mood_room_anchor_labels')
     .select('anchor_tmdb_id, anchor_media_type, label, description')
     .in('anchor_tmdb_id', tmdbIds);
 
   if (error || !data) return out;
 
   const wanted = new Set(anchors.map(anchorKey));
-  for (const row of data as AnchorLabelRow[]) {
+  for (const row of data) {
     const key = `${row.anchor_media_type}-${row.anchor_tmdb_id}`;
     if (!wanted.has(key)) continue;
     out.set(key, { label: row.label, description: row.description });

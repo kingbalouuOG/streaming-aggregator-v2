@@ -115,17 +115,20 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
       const allTmdbIds = [tmdbId, ...candidateIds];
 
       const { data: embeddingRows } = await supabase
-        .from('titles' as any)
+        .from('titles')
         .select('tmdb_id, media_type, embedding')
         .in('tmdb_id', allTmdbIds)
         .not('embedding', 'is', null);
 
-      // Build embedding lookup: JSON.parse(row.embedding as string) — Phase 1 locked pattern
+      // Build embedding lookup: JSON.parse(row.embedding as string) — Phase 1 locked pattern.
+      // The .not('embedding', 'is', null) filter on the query guarantees embedding is non-null
+      // at runtime; the schema column is nullable so TS still widens to `unknown | null`.
       const embeddingMap = new Map<string, number[]>();
-      for (const row of ((embeddingRows as any[]) || [])) {
+      for (const row of embeddingRows ?? []) {
+        if (row.embedding == null) continue;
         const emb: number[] = typeof row.embedding === 'string'
           ? JSON.parse(row.embedding)
-          : row.embedding;
+          : (row.embedding as number[]);
         embeddingMap.set(`${row.media_type}-${row.tmdb_id}`, emb);
       }
 

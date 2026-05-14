@@ -1,0 +1,50 @@
+name: Typegen Check
+
+# Regenerates database.types.ts from the remote Supabase schema and fails the
+# PR if the committed file is out of date. Prevents drift on every migration
+# PR (IN-PX-21 / Phase 5.5 C1).
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/config.toml'
+      - 'src/lib/database.types.ts'
+      - '.github/workflows/typegen-check.yml'
+
+jobs:
+  typegen-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Regenerate database.types.ts
+        run: |
+          npx supabase gen types typescript --project-id fmusugdcnnwiuzkbjquo --schema public > src/lib/database.types.ts.fresh
+
+      - name: Strip CLI plugin hint (workaround for supabase CLI 2.x trailer)
+        run: |
+          sed -i '/<claude-code-hint /d' src/lib/database.types.ts.fresh
+
+      - name: Diff against committed types
+        run: |
+          if ! diff -u src/lib/database.types.ts src/lib/database.types.ts.fresh > /tmp/types.diff; then
+            echo "::error::src/lib/database.types.ts is out of date relative to the remote Supabase schema."
+            echo ""
+            echo "To fix: run"
+            echo "  npx supabase gen types typescript --project-id fmusugdcnnwiuzkbjquo --schema public > src/lib/database.types.ts"
+            echo "(strip any trailing '<claude-code-hint .../>' line emitted by the CLI), commit the result, and push again."
+            echo ""
+            echo "Diff (first 200 lines):"
+            head -200 /tmp/types.diff
+            exit 1
+          fi
+          echo "OK: database.types.ts matches the remote schema."

@@ -39,43 +39,37 @@ export async function getV2TasteProfile(): Promise<TasteProfileV2 | null> {
   if (!userId) return null;
 
   const { data, error } = await supabase
-    .from('taste_profiles' as any)
-    .select(
-      'taste_vector_v2, taste_vector_updated_at, taste_vector_interaction_count, ' +
-      'taste_vector_bootstrapped_from, selected_clusters, ' +
-      'slider_catalogue_age, slider_comfort_zone, slider_content_mix, slider_variety'
-    )
+    .from('taste_profiles')
+    .select('taste_vector_v2, taste_vector_updated_at, taste_vector_interaction_count, taste_vector_bootstrapped_from, selected_clusters, slider_catalogue_age, slider_comfort_zone, slider_content_mix, slider_variety')
     .eq('user_id', userId)
     .maybeSingle();
 
   if (error) {
-    console.error('[TasteV2] getV2TasteProfile failed:', (error as any).message);
+    console.error('[TasteV2] getV2TasteProfile failed:', error.message);
     return null;
   }
 
   if (!data) return null;
 
-  const row = data as any;
-
   // PostgREST returns pgvector as a JSON string — parse it
   let tasteVector: TasteVectorV2 | null = null;
-  if (row.taste_vector_v2) {
-    tasteVector = typeof row.taste_vector_v2 === 'string'
-      ? JSON.parse(row.taste_vector_v2)
-      : row.taste_vector_v2;
+  if (data.taste_vector_v2) {
+    tasteVector = typeof data.taste_vector_v2 === 'string'
+      ? JSON.parse(data.taste_vector_v2)
+      : data.taste_vector_v2 as TasteVectorV2;
   }
 
   const result: TasteProfileV2 = {
     tasteVector,
-    updatedAt: row.taste_vector_updated_at || null,
-    interactionCount: row.taste_vector_interaction_count ?? 0,
-    bootstrappedFrom: row.taste_vector_bootstrapped_from as BootstrapSource | null,
-    selectedClusters: Array.isArray(row.selected_clusters) ? row.selected_clusters : [],
+    updatedAt: data.taste_vector_updated_at || null,
+    interactionCount: data.taste_vector_interaction_count ?? 0,
+    bootstrappedFrom: data.taste_vector_bootstrapped_from as BootstrapSource | null,
+    selectedClusters: Array.isArray(data.selected_clusters) ? data.selected_clusters as string[] : [],
     sliders: {
-      catalogueAge: row.slider_catalogue_age ?? DEFAULT_SLIDERS.catalogueAge,
-      comfortZone: row.slider_comfort_zone ?? DEFAULT_SLIDERS.comfortZone,
-      contentMix: row.slider_content_mix ?? DEFAULT_SLIDERS.contentMix,
-      variety: row.slider_variety ?? DEFAULT_SLIDERS.variety,
+      catalogueAge: data.slider_catalogue_age ?? DEFAULT_SLIDERS.catalogueAge,
+      comfortZone: data.slider_comfort_zone ?? DEFAULT_SLIDERS.comfortZone,
+      contentMix: data.slider_content_mix ?? DEFAULT_SLIDERS.contentMix,
+      variety: data.slider_variety ?? DEFAULT_SLIDERS.variety,
     },
   };
 
@@ -102,7 +96,7 @@ export async function saveV2TasteVector(
   const vectorStr = `[${vector.join(',')}]`;
 
   const { error } = await supabase
-    .from('taste_profiles' as any)
+    .from('taste_profiles')
     .upsert({
       user_id: userId,
       taste_vector_v2: vectorStr,
@@ -112,7 +106,7 @@ export async function saveV2TasteVector(
     }, { onConflict: 'user_id' });
 
   if (error) {
-    console.error('[TasteV2] saveV2TasteVector failed:', (error as any).message);
+    console.error('[TasteV2] saveV2TasteVector failed:', error.message);
     throw error;
   }
 }
@@ -134,7 +128,7 @@ export async function updateV2TasteVector(
   const vectorStr = `[${vector.join(',')}]`;
 
   const { error } = await supabase
-    .from('taste_profiles' as any)
+    .from('taste_profiles')
     .update({
       taste_vector_v2: vectorStr,
       taste_vector_updated_at: new Date().toISOString(),
@@ -143,7 +137,7 @@ export async function updateV2TasteVector(
     .eq('user_id', userId);
 
   if (error) {
-    console.error('[TasteV2] updateV2TasteVector failed:', (error as any).message);
+    console.error('[TasteV2] updateV2TasteVector failed:', error.message);
     throw error;
   }
 }
@@ -156,19 +150,18 @@ export async function getSliderState(): Promise<SliderState> {
   if (!userId) return { ...DEFAULT_SLIDERS };
 
   const { data, error } = await supabase
-    .from('taste_profiles' as any)
+    .from('taste_profiles')
     .select('slider_catalogue_age, slider_comfort_zone, slider_content_mix, slider_variety')
     .eq('user_id', userId)
     .maybeSingle();
 
   if (error || !data) return { ...DEFAULT_SLIDERS };
 
-  const row = data as any;
   return {
-    catalogueAge: row.slider_catalogue_age ?? DEFAULT_SLIDERS.catalogueAge,
-    comfortZone: row.slider_comfort_zone ?? DEFAULT_SLIDERS.comfortZone,
-    contentMix: row.slider_content_mix ?? DEFAULT_SLIDERS.contentMix,
-    variety: row.slider_variety ?? DEFAULT_SLIDERS.variety,
+    catalogueAge: data.slider_catalogue_age ?? DEFAULT_SLIDERS.catalogueAge,
+    comfortZone: data.slider_comfort_zone ?? DEFAULT_SLIDERS.comfortZone,
+    contentMix: data.slider_content_mix ?? DEFAULT_SLIDERS.contentMix,
+    variety: data.slider_variety ?? DEFAULT_SLIDERS.variety,
   };
 }
 
@@ -180,7 +173,7 @@ export async function saveSliderState(sliders: SliderState): Promise<void> {
   if (!userId) return;
 
   const { error } = await supabase
-    .from('taste_profiles' as any)
+    .from('taste_profiles')
     .upsert({
       user_id: userId,
       slider_catalogue_age: sliders.catalogueAge,
@@ -190,7 +183,7 @@ export async function saveSliderState(sliders: SliderState): Promise<void> {
     }, { onConflict: 'user_id' });
 
   if (error) {
-    console.error('[TasteV2] saveSliderState failed:', (error as any).message);
+    console.error('[TasteV2] saveSliderState failed:', error.message);
     throw error;
   }
 }

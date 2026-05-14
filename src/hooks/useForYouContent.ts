@@ -357,14 +357,14 @@ async function fetchBecauseYouWatched(
 
     const [engagementRes, thumbsRes] = await Promise.all([
       supabase
-        .from('user_interactions' as any)
+        .from('user_interactions')
         .select('content_id, media_type, created_at')
         .eq('user_id', userId)
         .in('event_type', ['watchlist_add', 'watched'])
         .gte('created_at', sixtyDaysAgo)
         .order('created_at', { ascending: false }),
       supabase
-        .from('user_interactions' as any)
+        .from('user_interactions')
         .select('content_id, media_type')
         .eq('user_id', userId)
         .eq('event_type', 'thumbs_up')
@@ -377,14 +377,23 @@ async function fetchBecauseYouWatched(
     }
 
 
-    // Client-side intersection: titles with positive engagement AND thumbs_up
+    // Client-side intersection: titles with positive engagement AND thumbs_up.
+    // The schema permits null content_id/media_type for non-content events
+    // (slider adjustments, dismiss-by-cluster, etc.); filter those out before
+    // building the key so we never produce a "null-X" pseudo-id.
+    const isContentEvent = <T extends { content_id: number | null; media_type: string | null }>(
+      r: T,
+    ): r is T & { content_id: number; media_type: 'movie' | 'tv' } =>
+      r.content_id != null && (r.media_type === 'movie' || r.media_type === 'tv');
+
     const thumbsUpSet = new Set(
-      (thumbsRes.data as any[]).map((r: any) => `${r.media_type}-${r.content_id}`)
+      thumbsRes.data.filter(isContentEvent).map((r) => `${r.media_type}-${r.content_id}`)
     );
     // Deduplicate by content key (a title may have both watchlist_add and watched)
     const seen = new Set<string>();
-    const qualifying = (engagementRes.data as any[])
-      .filter((r: any) => {
+    const qualifying = engagementRes.data
+      .filter(isContentEvent)
+      .filter((r) => {
         const key = `${r.media_type}-${r.content_id}`;
         if (seen.has(key)) return false;
         seen.add(key);
@@ -401,14 +410,14 @@ async function fetchBecauseYouWatched(
     // For each anchor, fetch neighbours
     // Fetch all anchors in parallel (each does embedding lookup + RPC)
     const rowResults = await Promise.all(
-      qualifying.map(async (anchor: any) => {
+      qualifying.map(async (anchor) => {
         const anchorKey = `${anchor.media_type}-${anchor.content_id}`;
         let anchorMeta = pool.metadata.get(anchorKey);
 
         // Anchor may be excluded from pool (watchlist hard filter). Fetch from titles table.
         if (!anchorMeta) {
           const { data: anchorRows } = await supabase
-            .from('titles' as any)
+            .from('titles')
             .select(EXTENDED_TITLE_SELECT)
             .eq('tmdb_id', anchor.content_id)
             .eq('media_type', anchor.media_type)
@@ -454,27 +463,29 @@ async function fetchMoreFromPerson(
   try {
     // Get user's thumbs_up titles
     const { data: thumbsData } = await supabase
-      .from('user_interactions' as any)
+      .from('user_interactions')
       .select('content_id, media_type')
       .eq('user_id', userId)
       .eq('event_type', 'thumbs_up');
 
     if (!thumbsData || thumbsData.length < 2) return null;
 
-    const thumbsIds = (thumbsData as any[]).map((r: any) => r.content_id as number);
+    const thumbsIds = thumbsData
+      .map((r) => r.content_id)
+      .filter((id): id is number => id != null);
 
     // Fetch director/cast for these titles
     const { data: titleData } = await supabase
-      .from('titles' as any)
+      .from('titles')
       .select('tmdb_id, media_type, director, cast_top_5')
       .in('tmdb_id', thumbsIds);
 
     if (!titleData || titleData.length === 0) return null;
 
-    const titles = titleData as any[];
+    const titles = titleData;
 
     // Determine media type distribution for director vs actor preference
-    const movieCount = titles.filter((t: any) => t.media_type === 'movie').length;
+    const movieCount = titles.filter((t) => t.media_type === 'movie').length;
     const preferDirector = movieCount >= titles.length * 0.6;
 
     // Count person occurrences
@@ -519,7 +530,7 @@ async function fetchMoreFromPerson(
 
     // Query their other work
     let query = supabase
-      .from('titles' as any)
+      .from('titles')
       .select(EXTENDED_TITLE_SELECT);
 
     if (bestPerson.type === 'director') {
@@ -533,8 +544,8 @@ async function fetchMoreFromPerson(
 
     // Filter by availability and exclude watched
     const items: ContentItem[] = [];
-    for (const row of personTitles as any[]) {
-      const typed = row as ExtendedTitleRow;
+    for (const row of personTitles) {
+      const typed = row as unknown as ExtendedTitleRow;
       if (filterSets.availableTmdbIds.size > 0 && !filterSets.availableTmdbIds.has(typed.tmdb_id)) continue;
       const key = `${typed.media_type}-${typed.tmdb_id}`;
       if (filterSets.dismissedIds.has(key)) continue;
@@ -564,14 +575,14 @@ async function fetchFromWatchlist(): Promise<ContentItem[]> {
 
     if (userId && isSupabaseActive()) {
       const { data } = await supabase
-        .from('user_interactions' as any)
+        .from('user_interactions')
         .select('content_id, media_type')
         .eq('user_id', userId)
         .eq('event_type', 'watched')
         .limit(500);
 
       if (data) {
-        for (const row of data as any[]) {
+        for (const row of data) {
           watchedSet.add(`${row.media_type}-${row.content_id}`);
         }
       }

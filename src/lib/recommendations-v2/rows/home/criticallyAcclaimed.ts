@@ -29,7 +29,7 @@ export async function fetchCriticallyAcclaimed(
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const { data, error } = await supabase
-      .from('titles' as any)
+      .from('titles')
       .select(EXTENDED_TITLE_SELECT)
       .gte('release_date', ninetyDaysAgo)
       .gte('imdb_rating', 7.5)
@@ -40,8 +40,8 @@ export async function fetchCriticallyAcclaimed(
     if (error || !data) return [];
 
     const items: ContentItem[] = [];
-    for (const row of data as any[]) {
-      const typed = row as ExtendedTitleRow;
+    for (const row of data) {
+      const typed = row as unknown as ExtendedTitleRow;
 
       // Availability filter
       if (availableTmdbIds.size > 0 && !availableTmdbIds.has(typed.tmdb_id)) continue;

@@ -65,7 +65,7 @@ async function getServiceOrder(userServiceIds: string[]): Promise<string[]> {
 
   try {
     const { data } = await supabase
-      .from('user_interactions' as any)
+      .from('user_interactions')
       .select('metadata')
       .eq('user_id', userId)
       .eq('event_type', 'deep_link_click')
@@ -76,8 +76,9 @@ async function getServiceOrder(userServiceIds: string[]): Promise<string[]> {
 
     // Count clicks per service
     const counts = new Map<string, number>();
-    for (const row of data as any[]) {
-      const sid = row.metadata?.service_id as string | undefined;
+    for (const row of data) {
+      const meta = row.metadata as { service_id?: string } | null;
+      const sid = meta?.service_id;
       if (sid && userServiceIds.includes(sid)) {
         counts.set(sid, (counts.get(sid) ?? 0) + 1);
       }
@@ -129,7 +130,7 @@ async function fetchServiceRow(serviceId: string): Promise<PerServiceChartRow> {
     // on that service. Filtering to subscription-only suppressed BBC /
     // Channel 4 / Sky Go (free-tier UK broadcasters) entirely.
     const { data: saData } = await supabase
-      .from('streaming_availability' as any)
+      .from('streaming_availability')
       .select('tmdb_id')
       .eq('service_id', serviceId)
       .in('stream_type', ['subscription', 'free', 'addon'])
@@ -139,14 +140,14 @@ async function fetchServiceRow(serviceId: string): Promise<PerServiceChartRow> {
       return { serviceId, serviceName, items: [] };
     }
 
-    const tmdbIds = [...new Set((saData as any[]).map((r: any) => r.tmdb_id as number))];
+    const tmdbIds = [...new Set(saData.map((r) => r.tmdb_id))];
 
     // Over-fetch by popularity DESC, then re-rank by hybrid score
     // (popularity × recencyFactor) and take top 15. The over-fetch is
     // 60 (4× target) so the recency re-rank has enough headroom to
     // promote newer content over very-popular-but-old titles.
     const { data: titleData } = await supabase
-      .from('titles' as any)
+      .from('titles')
       .select(EXTENDED_TITLE_SELECT)
       .in('tmdb_id', tmdbIds)
       .order('popularity', { ascending: false })
@@ -154,9 +155,9 @@ async function fetchServiceRow(serviceId: string): Promise<PerServiceChartRow> {
 
     if (!titleData) return { serviceId, serviceName, items: [] };
 
-    const ranked = (titleData as any[])
+    const ranked = titleData
       .map((row) => {
-        const typed = row as ExtendedTitleRow;
+        const typed = row as unknown as ExtendedTitleRow;
         const pop = typed.popularity ?? 0;
         const score = pop * recencyFactor(typed.release_year);
         return { typed, score };

@@ -116,7 +116,7 @@ export async function getRankedMoodRoomsWithThumbnails(
   const vector = tasteVector ?? new Array(1536).fill(0);
   const vectorStr = `[${vector.join(',')}]`;
 
-  const { data: rankedRaw, error: rankErr } = await supabase.rpc('get_mood_rooms_for_user' as any, {
+  const { data: rankedRaw, error: rankErr } = await supabase.rpc('get_mood_rooms_for_user', {
     user_taste_vector: vectorStr,
     available_tmdb_ids: Array.from(availableTmdbIds),
     min_available_titles: minAvailableTitles,
@@ -124,10 +124,10 @@ export async function getRankedMoodRoomsWithThumbnails(
   });
 
   if (rankErr || !rankedRaw) return [];
-  const ranked = rankedRaw as RankedRoomRow[];
+  const ranked = rankedRaw as unknown as RankedRoomRow[];
   if (ranked.length === 0) return [];
 
-  const { data: thumbsRaw, error: thumbsErr } = await supabase.rpc('get_mood_room_thumbnails' as any, {
+  const { data: thumbsRaw, error: thumbsErr } = await supabase.rpc('get_mood_room_thumbnails', {
     room_ids: ranked.map((r) => r.room_id),
     available_tmdb_ids: Array.from(availableTmdbIds),
     per_room_limit: 4,
@@ -171,13 +171,13 @@ export async function getMoodRoomDetail(
 ): Promise<MoodRoomDetail | null> {
   if (availableTmdbIds.size === 0) return null;
 
-  const { data: dataRaw, error } = await supabase.rpc('get_mood_room_detail' as any, {
+  const { data: dataRaw, error } = await supabase.rpc('get_mood_room_detail', {
     room_id: roomId,
     available_tmdb_ids: Array.from(availableTmdbIds),
   });
 
   if (error || !dataRaw) return null;
-  const data = dataRaw as DetailRow[];
+  const data = dataRaw as unknown as DetailRow[];
   if (data.length === 0) return null;
 
   // Every row carries the same label/description/total. Pull from first.

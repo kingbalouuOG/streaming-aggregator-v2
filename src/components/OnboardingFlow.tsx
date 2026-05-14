@@ -177,7 +177,7 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
 
     try {
       const [movieRes, tvRes] = await Promise.all([
-        supabase.from('titles' as any)
+        supabase.from('titles')
           .select('tmdb_id, media_type, title, poster_path, release_year, vote_count')
           .eq('media_type', 'movie')
           .gte('vote_count', 5000)
@@ -185,7 +185,7 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
           .not('embedding', 'is', null)
           .order('vote_count', { ascending: false })
           .limit(36),
-        supabase.from('titles' as any)
+        supabase.from('titles')
           .select('tmdb_id, media_type, title, poster_path, release_year, vote_count')
           .eq('media_type', 'tv')
           .gte('vote_count', 1500)
@@ -196,15 +196,22 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
           .limit(36),
       ]);
 
-      const toGridTitle = (t: any): WatchedGridTitle => ({
+      type TitleRow = {
+        tmdb_id: number;
+        media_type: string;
+        title: string;
+        poster_path: string | null;
+        release_year: number | null;
+      };
+      const toGridTitle = (t: TitleRow): WatchedGridTitle => ({
         tmdbId: t.tmdb_id,
-        mediaType: t.media_type,
+        mediaType: t.media_type as 'movie' | 'tv',
         title: t.title,
         posterPath: t.poster_path,
         year: t.release_year,
       });
-      const movies = ((movieRes.data as any[]) || []).map(toGridTitle);
-      const tvShows = ((tvRes.data as any[]) || []).map(toGridTitle);
+      const movies = (movieRes.data ?? []).map(toGridTitle);
+      const tvShows = (tvRes.data ?? []).map(toGridTitle);
 
       // Interleave movies and TV 1:1 so each round shows a mix of both media.
       const balanced: WatchedGridTitle[] = [];
@@ -265,8 +272,8 @@ export function OnboardingFlow({ onComplete, skipAuth }: OnboardingFlowProps) {
       if (context) updates.viewing_context = context;
       supabase.auth.getUser().then(({ data }) => {
         if (data.user) {
-          supabase.from('profiles' as any).update(updates).eq('id', data.user.id)
-            .then(({ error }: any) => {
+          supabase.from('profiles').update(updates).eq('id', data.user.id)
+            .then(({ error }) => {
               if (error) console.error('[Onboarding] Failed to save demographics:', error.message);
             });
         }

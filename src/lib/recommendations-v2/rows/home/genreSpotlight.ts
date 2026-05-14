@@ -140,7 +140,7 @@ export async function fetchGenreSpotlight(
 
   try {
     let query = supabase
-      .from('titles' as any)
+      .from('titles')
       .select(EXTENDED_TITLE_SELECT);
     query = requiredGenres
       ? query.contains('genre_ids', requiredGenres)
@@ -154,8 +154,8 @@ export async function fetchGenreSpotlight(
     }
 
     const items: ContentItem[] = [];
-    for (const row of data as any[]) {
-      const typed = row as ExtendedTitleRow;
+    for (const row of data) {
+      const typed = row as unknown as ExtendedTitleRow;
 
       if (availableTmdbIds.size > 0 && !availableTmdbIds.has(typed.tmdb_id)) continue;
       const item = titleRowToContentItem(typed);

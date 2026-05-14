@@ -237,14 +237,14 @@ async function selectTier1(ctx: Tier1Context): Promise<Tier1Result> {
   // Two parallel reads: thumbs_up events + (watched ∪ watchlist_add) events.
   const [thumbsRes, engageRes] = await Promise.all([
     supabase
-      .from('user_interactions' as any)
+      .from('user_interactions')
       .select('content_id, media_type, created_at')
       .eq('user_id', ctx.userId)
       .eq('event_type', 'thumbs_up')
       .gte('created_at', cutoff)
       .order('created_at', { ascending: false }),
     supabase
-      .from('user_interactions' as any)
+      .from('user_interactions')
       .select('content_id, media_type, created_at')
       .eq('user_id', ctx.userId)
       .in('event_type', ['watched', 'watchlist_add'])
@@ -254,8 +254,11 @@ async function selectTier1(ctx: Tier1Context): Promise<Tier1Result> {
 
   if (!thumbsRes.data || !engageRes.data) return { anchors: [], embedMap: new Map() };
 
+  // user_interactions.content_id / media_type are nullable in the schema for
+  // non-content events (slider tweaks, etc.); skip those rows.
   const thumbsByKey = new Map<string, { tmdbId: number; mediaType: 'movie' | 'tv'; createdAt: string }>();
-  for (const r of thumbsRes.data as any[]) {
+  for (const r of thumbsRes.data) {
+    if (r.content_id == null || (r.media_type !== 'movie' && r.media_type !== 'tv') || r.created_at == null) continue;
     const key = `${r.media_type}-${r.content_id}`;
     if (!thumbsByKey.has(key)) {
       thumbsByKey.set(key, {
@@ -267,7 +270,9 @@ async function selectTier1(ctx: Tier1Context): Promise<Tier1Result> {
   }
 
   const engagedKeys = new Set(
-    (engageRes.data as any[]).map((r) => `${r.media_type}-${r.content_id}`),
+    engageRes.data
+      .filter((r) => r.content_id != null && r.media_type != null)
+      .map((r) => `${r.media_type}-${r.content_id}`),
   );
 
   // (G1) Combined-signal: keep only thumbs_up that ALSO have watched/watchlist_add.
@@ -470,7 +475,7 @@ async function fetchTitleEmbeddingsBatch(
     .in('tmdb_id', ids);
   if (error || !data) return out;
 
-  for (const row of data as any[]) {
+  for (const row of data) {
     const key = `${row.media_type}-${row.tmdb_id}`;
     if (!wanted.has(key)) continue;
     const embed = parseEmbedding(row.embedding);

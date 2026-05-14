@@ -71,14 +71,11 @@ function writeCachedEditorNote(note: EditorNote | null) {
 }
 
 async function fetchEditorNote(): Promise<EditorNote | null> {
-  // Read the most recent currently-published note. Migration 040
-  // created the table, the index, and the publish-window RLS, so this
-  // query is index-only and returns 0 or 1 row.
-  //
-  // The `as any` cast on `.from()` and the result row mirrors the
-  // workaround in `AuthContext.tsx` / `anchorRoomLabels.ts`: until
-  // `database.types.ts` is regenerated post-migration-040 (parking-lot
-  // IN-PX-21), the type system doesn't know `editor_notes` exists.
+  // Migration 040 (editor_notes) lives in the repo but is not applied to
+  // the remote project — `database.types.ts` therefore has no entry for
+  // this table, and the .from('editor_notes') call needs to bypass the
+  // type system. Retained as `as any` until the migration is applied;
+  // gracefully no-ops via the catch block below when the table is absent.
   const { data, error } = await (supabase.from as any)('editor_notes')
     .select('id, kicker, teaser, body, published_at')
     .order('published_at', { ascending: false })

@@ -43,17 +43,14 @@ export async function getFlag(
 
   const promise = (async () => {
     try {
-      // Cast through `any` — database.types.ts hasn't been
-      // regenerated since migration 041 landed. Drop the cast on the
-      // next types refresh.
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('user_feature_flags')
         .select('enabled')
         .eq('user_id', userId)
         .eq('flag_name', flagName)
         .maybeSingle();
       if (error || !data) return fallback;
-      return (data as { enabled: boolean }).enabled === true;
+      return data.enabled === true;
     } catch {
       return fallback;
     }
