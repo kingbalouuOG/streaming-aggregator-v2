@@ -148,8 +148,11 @@ const MMR_MIN_SAMPLE = 4;
  * Cosine similarity between two cached embeddings. Norms are precomputed
  * at cache-population time so the inner loop skips a per-call
  * Math.sqrt — Phase 5.5 IN-PX-24 perf change (~3× MMR hot loop speedup).
+ *
+ * Exported only for `__tests__/diversity.test.ts`; not part of the
+ * module's public ranking API.
  */
-function cosineSimilarity(a: CachedEmbedding, b: CachedEmbedding): number {
+export function cosineSimilarity(a: CachedEmbedding, b: CachedEmbedding): number {
   const denom = a.norm * b.norm;
   if (denom === 0) return 0;
   let dot = 0;

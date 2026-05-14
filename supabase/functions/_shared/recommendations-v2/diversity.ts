@@ -81,7 +81,7 @@ export function applyGenreSpread(
 const MMR_NULL_RATIO_BAIL = 0.5;
 const MMR_MIN_SAMPLE = 4;
 
-function cosineSimilarity(a: CachedEmbedding, b: CachedEmbedding): number {
+export function cosineSimilarity(a: CachedEmbedding, b: CachedEmbedding): number {
   const denom = a.norm * b.norm;
   if (denom === 0) return 0;
   let dot = 0;
