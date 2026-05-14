@@ -23,7 +23,6 @@ import { CalendarPage } from "./components/CalendarPage";
 // ComingSoonCard — Home no longer mounts these directly; the
 // CalendarList primitive renders them internally.
 import { MagazineHero } from "./components/MagazineHero";
-import { TopAppBar } from "./components/TopAppBar";
 import { EditorsNote } from "./components/EditorsNote";
 import { CalendarList } from "./components/CalendarList";
 import { FreeTonight } from "./components/FreeTonight";
@@ -687,8 +686,6 @@ function AppContent() {
     );
   }
 
-  const showTopAppBar = !selectedItem && !selectedAnchorRoom && !showCalendar;
-
   return (
     <div className="size-full bg-background text-foreground overflow-hidden flex justify-center">
       <div className="w-full max-w-md h-full flex flex-col relative">
@@ -708,21 +705,17 @@ function AppContent() {
           </div>
         )}
 
-        {/* Scrollable content. TopAppBar lives INSIDE the scroller so
-            it scrolls away with the rest of the page (no longer
-            sticky). When the bar isn't shown (detail / calendar /
-            mood-room overlays), the scroller adds its own safe-top so
-            content clears the notification bar. */}
+        {/* Scrollable content. `safe-top` clears the notification bar
+            inset since the page no longer carries a wordmark header. */}
         <div
           ref={scrollRef}
           onScroll={handleScroll}
           onTouchStart={(e) => handlePullStart(e.touches[0].clientY)}
           onTouchMove={(e) => handlePullMove(e.touches[0].clientY)}
           onTouchEnd={handlePullEnd}
-          className={`flex-1 overflow-y-auto pb-4 no-scrollbar${showTopAppBar ? "" : " safe-top"}`}
+          className="flex-1 overflow-y-auto pb-4 no-scrollbar safe-top"
           style={{ overflowX: 'hidden', overscrollBehaviorX: 'none', transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined, transition: isPulling.current ? 'none' : 'transform 0.3s ease' }}
         >
-          {showTopAppBar && <TopAppBar />}
           <AnimatePresence mode="wait">
           {showCalendar ? (
             <motion.div
@@ -817,7 +810,7 @@ function AppContent() {
                       (it) => it.image && !watchedIds.has(it.id),
                     );
                     return heroItem ? (
-                      <div className="mb-8 mt-2">
+                      <div className="mb-4">
                         <MagazineHero
                           item={heroItem}
                           kicker="TODAY'S PICK"
@@ -835,7 +828,7 @@ function AppContent() {
                         />
                       </div>
                     ) : home.loading ? (
-                      <div className="mb-8 mt-2">
+                      <div className="mb-4">
                         <div
                           className="w-full overflow-hidden"
                           style={{
@@ -851,7 +844,7 @@ function AppContent() {
                       reads from the editor_notes table once-per-day and
                       falls back to a baked-in sample when the table
                       isn't yet populated. */}
-                  <div className="editorial mb-8">
+                  <div className="editorial mb-4">
                     <EditorsNote
                       kicker={home.editorNote.kicker}
                       teaser={home.editorNote.teaser}
