@@ -422,7 +422,7 @@ function selectTier3(ctx: Tier3Context): SelectedAnchor[] {
   // Run the standard row-build to apply diversity (so Tier 3 anchors
   // don't all collapse onto a single genre at the bottom of a thin row).
   const built = buildRowFromPool(scored, ctx.sliders, {
-    limit: ctx.limit * 5, // overfetch headroom; we still apply our own filter below
+    config: { limit: ctx.limit * 5 }, // overfetch headroom; we still apply our own filter below
   });
 
   // We need finalScore to apply the confidence threshold; scored has it.

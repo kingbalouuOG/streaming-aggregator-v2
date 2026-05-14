@@ -114,13 +114,18 @@ export function scoreCandidates(
   return scored;
 }
 
+export interface BuildRowFromPoolOptions {
+  config?: RowConfig;
+  getServices?: (tmdbId: number, mediaType: string) => string[];
+  embeddingMap?: Map<string, number[]>;
+}
+
 export function buildRowFromPool(
   scored: ScoredCandidate[],
   sliders: SliderState,
-  config: RowConfig = {},
-  getServices?: (tmdbId: number, mediaType: string) => string[],
-  embeddingMap?: Map<string, number[]>,
+  opts: BuildRowFromPoolOptions = {},
 ): ContentItem[] {
+  const { config = {}, getServices, embeddingMap } = opts;
   const { limit = 20, excludeIds, maxPerGenre = DEFAULT_MAX_PER_GENRE } = config;
 
   let candidates = scored;

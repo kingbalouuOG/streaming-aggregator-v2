@@ -215,7 +215,10 @@ Deno.serve(async (req) => {
     // cross-row dedup — same contract as src/hooks/useForYouContent.ts.
     const usedIds = new Set<string>();
 
-    const recommendedForYou = buildRowFromPool(scored, profile.sliders, { limit: 20, excludeIds: usedIds }, undefined, embeddingMap);
+    const recommendedForYou = buildRowFromPool(scored, profile.sliders, {
+      config: { limit: 20, excludeIds: usedIds },
+      embeddingMap,
+    });
     recommendedForYou.forEach((item) => usedIds.add(item.id));
 
     const gemCandidates = scored.filter((c) => {
@@ -229,7 +232,10 @@ Deno.serve(async (req) => {
         && avg >= HIDDEN_GEMS_FILTERS.minVoteAverage
       );
     });
-    const hiddenGems = buildRowFromPool(gemCandidates, profile.sliders, { limit: 15, excludeIds: usedIds }, undefined, embeddingMap);
+    const hiddenGems = buildRowFromPool(gemCandidates, profile.sliders, {
+      config: { limit: 15, excludeIds: usedIds },
+      embeddingMap,
+    });
     hiddenGems.forEach((item) => usedIds.add(item.id));
 
     const outsideYourUsual = buildOutsideYourUsual(scored, profile.sliders, usedIds, embeddingMap);
@@ -299,10 +305,13 @@ function buildOutsideYourUsual(
     : underThreshold;
 
   return buildRowFromPool(outsideCandidates, sliders, {
-    limit: outsideCount,
-    excludeIds: usedIds,
-    maxPerGenre: 4,
-  }, undefined, embeddingMap);
+    config: {
+      limit: outsideCount,
+      excludeIds: usedIds,
+      maxPerGenre: 4,
+    },
+    embeddingMap,
+  });
 }
 
 function nthSmallest(arr: number[], n: number): number {

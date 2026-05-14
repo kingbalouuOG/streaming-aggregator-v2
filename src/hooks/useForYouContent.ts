@@ -137,7 +137,10 @@ export function useForYouContent(
     const usedIds = new Set<string>();
 
     // 1. Recommended For You: top 20 after diversity
-    const recItems = buildRowFromPool(scored, currentSliders, { limit: 20, excludeIds: usedIds }, undefined, embeddingMapRef.current);
+    const recItems = buildRowFromPool(scored, currentSliders, {
+      config: { limit: 20, excludeIds: usedIds },
+      embeddingMap: embeddingMapRef.current,
+    });
     recItems.forEach(item => usedIds.add(item.id));
     setRecommendedForYou(recItems);
 
@@ -153,7 +156,10 @@ export function useForYouContent(
         avg >= HIDDEN_GEMS_FILTERS.minVoteAverage
       );
     });
-    const gemItems = buildRowFromPool(gemCandidates, currentSliders, { limit: 15, excludeIds: usedIds }, undefined, embeddingMapRef.current);
+    const gemItems = buildRowFromPool(gemCandidates, currentSliders, {
+      config: { limit: 15, excludeIds: usedIds },
+      embeddingMap: embeddingMapRef.current,
+    });
     gemItems.forEach(item => usedIds.add(item.id));
     setHiddenGems(gemItems);
 
@@ -184,10 +190,13 @@ export function useForYouContent(
       : underThreshold;
 
     const outsideItems = buildRowFromPool(outsideCandidates, currentSliders, {
-      limit: outsideCount,
-      excludeIds: usedIds,
-      maxPerGenre: 4,
-    }, undefined, embeddingMapRef.current);
+      config: {
+        limit: outsideCount,
+        excludeIds: usedIds,
+        maxPerGenre: 4,
+      },
+      embeddingMap: embeddingMapRef.current,
+    });
     setOutsideYourUsual(outsideItems);
   }, []);
 
