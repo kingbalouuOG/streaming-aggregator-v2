@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="407.402" viewBox="0 0 942.558 240.000">
+  <rect width="942.558" height="240.000" fill="#0a0a0f"></rect>
+  <g transform="translate(0 20.000) scale(2.3256)">
+  <rect x="0" y="0" width="100" height="8" fill="#f5f1e8"></rect>
+  <rect x="7" y="13" width="86" height="8" fill="#f5f1e8" opacity="0.95"></rect>
+  <rect x="14" y="26" width="72" height="8" fill="#f5f1e8" opacity="0.9"></rect>
+  <rect x="21" y="39" width="58" height="8" fill="#f5f1e8" opacity="0.85"></rect>
+  <rect x="28" y="52" width="44" height="8" fill="#f5f1e8" opacity="0.8"></rect>
+  <rect x="35" y="65" width="30" height="8" fill="#f5f1e8" opacity="0.75"></rect>
+  <rect x="42" y="78" width="16" height="8" fill="#f5f1e8"></rect>
+  </g>
+  <text x="302.56" y="188.00" font-family="Fraunces, Georgia, serif" font-size="200" font-weight="600" fill="#f5f1e8" letter-spacing="-6.00" font-variation-settings="&#39;opsz&#39; 96">Videx</text>
+</svg>
