@@ -28,7 +28,9 @@
     "test:search-recents": "npx tsx src/lib/search/__tests__/recentSearches.test.ts",
     "test:contentcard-search-props": "npx tsx src/lib/search/__tests__/contentCardSearchProps.test.ts",
     "test:search-attribution": "npx tsx src/lib/taste-v2/__tests__/searchAttribution.test.ts",
-    "eval:search-semantic": "npx tsx scripts/test/search-semantic-eval.ts"
+    "eval:search-semantic": "npx tsx scripts/test/search-semantic-eval.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.2",
@@ -55,18 +57,22 @@
     "@eslint/js": "^9.39.4",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/vite": "^4.2.2",
+    "@testing-library/jest-dom": "^6.9.1",
     "@types/crypto-js": "^4.2.2",
     "@types/node": "^20.10.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react-swc": "^3.10.2",
+    "@vitest/ui": "^4.1.6",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "globals": "^17.4.0",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4.2.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.58.1",
-    "vite": "^6.4.1"
+    "vite": "^6.4.1",
+    "vitest": "^4.1.6"
   }
 }
