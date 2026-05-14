@@ -125,7 +125,11 @@ export function ProfilePage(props: ProfilePageProps) {
       {subPage === 'privacy' && (
         <motion.div key="privacy" initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 100, opacity: 0 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}>
-          <PrivacyDataPage onBack={goBack} />
+          <PrivacyDataPage
+            onBack={goBack}
+            username={props.username || props.userProfile?.name || null}
+            onDeleteAccount={props.onDeleteAccount}
+          />
         </motion.div>
       )}
     </AnimatePresence>
@@ -797,12 +801,29 @@ function MonthlySpendPage({ connectedServices, onBack }: { connectedServices: st
 // ═════════════════════════════════════════════════════════
 // ── Privacy & Data Sub-Page ─────────────────────────────
 // ═════════════════════════════════════════════════════════
-function PrivacyDataPage({ onBack }: { onBack: () => void }) {
+interface PrivacyDataPageProps {
+  onBack: () => void;
+  username: string | null;
+  onDeleteAccount?: () => Promise<{ error?: string }>;
+}
+
+function PrivacyDataPage({ onBack, username, onDeleteAccount }: PrivacyDataPageProps) {
   const [showLearnMore, setShowLearnMore] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  // Phase 5.5 C12 — type-username-to-confirm. Case-insensitive trimmed
+  // match; `profiles.username` is a plain TEXT UNIQUE (no citext) so
+  // the user's stored case may differ from what they type — comparing
+  // lowercased on both sides handles that without forcing exact casing.
+  const [confirmUsername, setConfirmUsername] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const normalisedTarget = (username ?? '').trim().toLowerCase();
+  const canDelete =
+    onDeleteAccount != null &&
+    normalisedTarget.length > 0 &&
+    confirmUsername.trim().toLowerCase() === normalisedTarget;
 
   // Phase 5.5 C16 — wire "Download my data" to export_user_data RPC.
   const handleExport = useCallback(async () => {
@@ -818,6 +839,22 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
       setIsExporting(false);
     }
   }, [isExporting]);
+
+  // Phase 5.5 C12 — wire the delete CTA to the auth.deleteAccount path.
+  const handleDelete = useCallback(async () => {
+    if (!canDelete || isDeleting || !onDeleteAccount) return;
+    setIsDeleting(true);
+    const result = await onDeleteAccount();
+    if (result.error) {
+      toast.error('Could not delete account', { description: result.error });
+      setIsDeleting(false);
+      return;
+    }
+    // Success: AuthContext.deleteAccount also signs the user out, which
+    // unmounts ProfilePage. No local navigation needed — App.tsx routes
+    // back to the auth flow on session change.
+    toast.success('Your account has been deleted.');
+  }, [canDelete, isDeleting, onDeleteAccount]);
 
   return (
     <SubPageShell kicker="SETTINGS" title="Privacy & data." onBack={onBack}>
@@ -975,32 +1012,50 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
               <h3 className="text-foreground text-[18px] mb-2" style={{ fontWeight: 700 }}>
                 Delete account?
               </h3>
-              <p className="text-muted-foreground text-[14px] mb-2 leading-relaxed">
+              <p className="text-muted-foreground text-[14px] mb-4 leading-relaxed">
                 This will permanently delete your account, all your preferences, watchlist, and ratings. This action cannot be undone.
               </p>
-              <p className="text-primary text-[13px] mb-5 leading-relaxed bg-primary/10 rounded-xl px-3 py-2">
-                Account deletion is not yet available. Contact support to delete your account.
+
+              {/* Phase 5.5 C12 — type-username-to-confirm UX */}
+              <label className="block text-foreground text-[13px] mb-1.5" style={{ fontWeight: 500 }}>
+                Type your username to confirm
+              </label>
+              <input
+                type="text"
+                value={confirmUsername}
+                onChange={e => setConfirmUsername(e.target.value)}
+                placeholder={username ?? ''}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                disabled={isDeleting}
+                className="w-full px-3 py-2.5 rounded-xl bg-secondary/60 text-foreground text-[14px] mb-3 focus:outline-none focus:ring-2 disabled:opacity-60"
+                style={{ ['--tw-ring-color' as never]: 'var(--danger)' }}
+              />
+              <p className="text-muted-foreground text-[12px] mb-5">
+                This action cannot be undone.
               </p>
+
               <div className="flex gap-3">
                 <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-[14px] transition-colors hover:bg-secondary/80"
+                  onClick={() => { setShowDeleteConfirm(false); setConfirmUsername(''); }}
+                  disabled={isDeleting}
+                  className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-[14px] transition-colors hover:bg-secondary/80 disabled:opacity-60"
                   style={{ fontWeight: 600 }}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  disabled
-                  className="flex-1 py-3 text-[14px] cursor-not-allowed"
-                  style={{
-                    background: "color-mix(in srgb, var(--danger) 25%, transparent)",
-                    color: "color-mix(in srgb, var(--danger) 60%, transparent)",
-                    borderRadius: "var(--r-md)",
-                    fontWeight: 600,
-                  }}
+                  onClick={handleDelete}
+                  disabled={!canDelete || isDeleting}
+                  className={canDelete && !isDeleting
+                    ? "flex-1 py-3 rounded-xl bg-red-500 text-white text-[14px] transition-colors hover:bg-red-600"
+                    : "flex-1 py-3 rounded-xl bg-red-500/30 text-red-400/50 text-[14px] cursor-not-allowed"}
+                  style={{ fontWeight: 600 }}
                 >
-                  Delete Account
+                  {isDeleting ? 'Deleting…' : 'Delete Account'}
                 </button>
               </div>
             </motion.div>
