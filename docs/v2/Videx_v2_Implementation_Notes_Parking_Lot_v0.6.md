@@ -1,7 +1,11 @@
 # Videx v2 — Implementation Notes Parking Lot
 
-**Status:** v0.6 — Phase 5 close-out. Phase 5 shipped four migrations (036–039) + CORS + verify_jwt CI guard + Database<> generic + foryou-parity CI workflow + contextual scoring + MMR. Status flips below reflect what landed; the Phase 5 summary at `docs/v2/phase-summaries/phase-5-summary.md` is authoritative for what shipped vs deferred.
-**Version:** 0.6
+**Status:** v0.7 — Phase 5.5 in flight. Entries IN-PX-21/22/23/24/25/26/27/28/31/33/34/35 + IN-XPS-006 + IN-465 in scope. Status flips below for those entries are deferred until Phase 5.5 close-out; current statuses still reflect Phase 5 close.
+**Version:** 0.7 (Phase 5.5 in flight; status flips queued until close)
+
+> v0.6 → v0.7 (2026-05-07): header bump only at branch-cut per pre-cut hygiene H4 of the Phase 5.5 plan. Entry status flips for IN-PX-21/22/23/24/25/26/27/28/31/33/34/35 + IN-XPS-006 + IN-465 land at Phase 5.5 close along with new IN-XPS-014 (UK solicitor review of Privacy + ToS pre-launch).
+
+**Previous status (v0.6):** Phase 5 close-out. Phase 5 shipped four migrations (036–039) + CORS + verify_jwt CI guard + Database<> generic + foryou-parity CI workflow + contextual scoring + MMR. Status flips below reflect what landed; the Phase 5 summary at `docs/v2/phase-summaries/phase-5-summary.md` is authoritative for what shipped vs deferred.
 
 **Changes from v0.5 (Phase 5 kickoff portion):**
 - **IN-463** status flipped from ⏳ → ✅ Incorporated. LLM thematic labels for anchored mood rooms shipped via migration 034 (`mood_room_anchor_labels`) plus the `label-anchor-room` Edge Function. Replaces v1 templated labels for anchored rooms only — global mood rooms keep their cluster-derived labels.
