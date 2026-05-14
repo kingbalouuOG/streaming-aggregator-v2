@@ -91,8 +91,32 @@ Single PR. Two commit clusters: **Cluster A (A1–A11, unflagged)** ships struct
 | IN-PX-40 — 20-query semantic-eval fixture authorship | ⏳ Filed (Joe — gates flag-flip from Joe-only to prototype users) |
 | IN-PX-41 — flag-flip UI surface or documented runbook | ⏳ Filed (decide pre-rollout) |
 | IN-PX-42 — primitive extraction when a 2nd consumer appears | 🅿 Parked |
+| **IN-PX-43 — search-as-signal Level 1 (search-attribution boost)** | **✅ Incorporated (2026-05-14, `phase-search-v2-attribution-boost` branch)** |
+| IN-PX-44 — search-as-signal Level 2 (embed query into vector) | ⏳ Filed (defer until IN-PX-40 lands) |
+| IN-PX-45 — search-as-signal Level 3 (full Phase 3 pipeline) | ⏳ Filed (post family-tester data) |
 
 See [parking-lot register](../../registers/parking-lot.md) for full status.
+
+## Addendum — Search-as-signal Level 1 (2026-05-14)
+
+Filed as IN-PX-43 after Joe asked which search data was actually feeding the taste vector. The Phase Search V2 plan deferred consumption to Phase 3 — at close-out, the honest answer was "none directly." Level 1 is the cheap fast-follow closing the smallest version of that gap.
+
+**What it does:** A positive content interaction (`watched`, `watchlist_add`, `deep_link_click`, `thumbs_up`) within 60s of a `search` in the same session has its taste-vector weight multiplied by 1.3. Negative events are not boosted at Level 1.
+
+**Two paths:**
+
+| Path | Source of recent-search timestamps |
+|---|---|
+| Incremental update (`applyInteractionIncremental`) | Module-scope cache in `src/lib/taste-v2/searchAttribution.ts`, populated by `emitSearch` at emit time. Zero DB round-trips. |
+| Batch recompute (`recomputeFromInteractions`, 24h cycle) | Two parallel `user_interactions` queries (taste events + search events), merged in-memory per session. |
+
+**No new schema, no new event_type, no new privacy surface** — raw query already lives in `user_interactions.metadata` (Phase 0 behaviour).
+
+**Constants live in `types.ts`** (mirrored to `_shared/taste-v2/`): `SEARCH_ATTRIBUTION_WINDOW_SECONDS=60`, `SEARCH_ATTRIBUTION_BOOST=1.3`, `SEARCH_ATTRIBUTION_BOOSTED_EVENTS` set. The helper module `searchAttribution.ts` is client-only — Edge Functions don't run incremental updates.
+
+**Test coverage:** 13 pure-fn assertions at `src/lib/taste-v2/__tests__/searchAttribution.test.ts` — cache record/retrieve, session isolation, overwrite semantics, window boundary inclusive/exclusive, lower-bound guard against out-of-order replay.
+
+**Levels 2 and 3 stay deferred** — see IN-PX-44 (embed query directly, gated on 20-query fixture maturity) and IN-PX-45 (full Phase 3, gated on family-tester engagement data).
 
 ## Decisions resolved (locked during plan-mode)
 

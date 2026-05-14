@@ -55,3 +55,12 @@ export const EXPLICIT_HALF_LIFE_DAYS = 180;
 export const BEHAVIOURAL_HALF_LIFE_DAYS = 90;
 
 export const BEHAVIOURAL_EVENTS = new Set(['deep_link_click']);
+
+export const SEARCH_ATTRIBUTION_WINDOW_SECONDS = 60;
+export const SEARCH_ATTRIBUTION_BOOST = 1.3;
+export const SEARCH_ATTRIBUTION_BOOSTED_EVENTS = new Set([
+  'watched',
+  'watchlist_add',
+  'deep_link_click',
+  'thumbs_up',
+]);

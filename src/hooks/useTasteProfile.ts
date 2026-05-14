@@ -12,6 +12,7 @@ import { applyInteractionIncremental, recomputeFromInteractions, needsRecomputat
 import type { TasteProfileV2 } from '@/lib/taste-v2/types';
 import { invalidateRecommendationCache } from '@/lib/storage/recommendations';
 import { emitContentInteraction } from '@/lib/storage/interactions';
+import { getCurrentSessionId } from '@/lib/instrumentation/sessionId';
 import storage from '@/lib/storage';
 
 const HIDDEN_GEMS_CACHE_KEY = '@app_hidden_gems';
@@ -69,6 +70,7 @@ export function useTasteProfile() {
           contentMeta.contentType,
           action,
           profile.interactionCount,
+          getCurrentSessionId(),
         );
 
         if (result) {
