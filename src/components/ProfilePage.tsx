@@ -30,6 +30,7 @@ import { DEFAULT_SLIDERS, type SliderState } from "@/lib/taste-v2/types";
 import { SpendDashboard } from "./SpendDashboard";
 import { PrivacyPolicyPage } from "./PrivacyPolicyPage";
 import { TermsPage } from "./TermsPage";
+import { exportUserData } from "@/lib/storage/userExport";
 
 const allServices = PLATFORMS;
 
@@ -801,6 +802,22 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Phase 5.5 C16 — wire "Download my data" to export_user_data RPC.
+  const handleExport = useCallback(async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const result = await exportUserData();
+      toast.success('Download ready', { description: result.destination });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Export failed';
+      toast.error('Export failed', { description: msg });
+    } finally {
+      setIsExporting(false);
+    }
+  }, [isExporting]);
 
   return (
     <SubPageShell kicker="SETTINGS" title="Privacy & data." onBack={onBack}>
@@ -841,14 +858,15 @@ function PrivacyDataPage({ onBack }: { onBack: () => void }) {
         </span>
       </button>
 
-      {/* Download my data */}
+      {/* Download my data (Phase 5.5 C16) */}
       <button
-        onClick={() => toast.success("Download started", { description: "Your data export will be ready shortly." })}
-        className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-secondary/60 hover:bg-secondary/80 transition-colors mb-2"
+        onClick={handleExport}
+        disabled={isExporting}
+        className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-secondary/60 hover:bg-secondary/80 transition-colors mb-2 disabled:opacity-60 disabled:cursor-not-allowed"
       >
         <ArrowLeft className="w-5 h-5 shrink-0 rotate-[-90deg]" style={{ color: "var(--fg-soft)" }} />
         <span className="text-foreground text-[14px] flex-1 text-left" style={{ fontWeight: 500 }}>
-          Download my data
+          {isExporting ? 'Preparing your data…' : 'Download my data'}
         </span>
       </button>
 
