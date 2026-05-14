@@ -54,7 +54,19 @@ import {
 } from '../_shared/recommendations-v2/types.ts';
 import { getV2TasteProfile } from '../_shared/taste-v2/tasteProfileV2.ts';
 import type { SliderState } from '../_shared/taste-v2/types.ts';
+import {
+  buildEmbeddingCacheKey,
+  computeNorm,
+  type EmbeddingMap,
+} from '../_shared/recommendations-v2/embeddingCache.ts';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+// Per-instance embedding cache (IN-PX-22 Edge half). Key = same shape
+// as client (userId + taste_profiles.updated_at), value = the loaded
+// embedding map. Module-scoped so multiple requests served by the same
+// warm Edge instance reuse the load. No TTL — instance lifetime is
+// short enough that staleness isn't a concern; a cold start zeroes it.
+const EMBEDDING_CACHE = new Map<string, EmbeddingMap>();
 
 // ── Types matching the wire contract with the client ────────────────
 
@@ -208,8 +220,13 @@ Deno.serve(async (req) => {
     const scored = scoreCandidates(pool, profile.sliders, 'foryou', ctx);
 
     // Phase 5: fetch embeddings for top-200 by finalScore so MMR can
-    // diversify intra-row across all three taste-vector rows.
-    const embeddingMap = await fetchEmbeddingsForCandidates(supabase, scored.slice(0, 200));
+    // diversify intra-row across all three taste-vector rows. Phase 5.5
+    // (C5): per-instance in-memory cache keyed on userId +
+    // taste_profiles.updated_at — warm requests skip the Supabase select.
+    const embeddingMap = await fetchEmbeddingsForCandidates(supabase, scored.slice(0, 200), {
+      userId,
+      tasteProfilesUpdatedAt: profile.updatedAt,
+    });
 
     // Taste-vector rows. usedIds is shared across rec/gems/outside for
     // cross-row dedup — same contract as src/hooks/useForYouContent.ts.
@@ -287,7 +304,7 @@ function buildOutsideYourUsual(
   scored: ScoredCandidate[],
   sliders: SliderState,
   usedIds: Set<string>,
-  embeddingMap: Map<string, number[]>,
+  embeddingMap: EmbeddingMap,
 ): ContentItem[] {
   const outsideCount = getComfortZoneRowCount(sliders.comfortZone);
   const cosineAperture = 0.40 + sliders.comfortZone * 0.40;
@@ -331,26 +348,51 @@ function nthSmallest(arr: number[], n: number): number {
 async function fetchEmbeddingsForCandidates(
   client: SupabaseClient,
   candidates: ScoredCandidate[],
-): Promise<Map<string, number[]>> {
-  const map = new Map<string, number[]>();
-  if (candidates.length === 0) return map;
+  cacheContext: { userId: string; tasteProfilesUpdatedAt: string | null },
+): Promise<EmbeddingMap> {
+  if (candidates.length === 0) return new Map();
 
-  const tmdbIds = [...new Set(candidates.map((c) => c.tmdbId))];
+  // Per-instance cache lookup.
+  const cacheKey = buildEmbeddingCacheKey(
+    cacheContext.userId,
+    cacheContext.tasteProfilesUpdatedAt,
+  );
+  let map = EMBEDDING_CACHE.get(cacheKey) ?? new Map();
+  if (!EMBEDDING_CACHE.has(cacheKey)) {
+    map = new Map<string, { vec: Float32Array; norm: number }>();
+  }
+
+  // Find which candidates need a fresh fetch.
+  const needed: number[] = [];
+  for (const c of candidates) {
+    if (!map.has(c.contentKey)) needed.push(c.tmdbId);
+  }
+  if (needed.length === 0) {
+    EMBEDDING_CACHE.set(cacheKey, map);
+    return map;
+  }
+  const tmdbIds = [...new Set(needed)];
+
   try {
     const { data, error } = await (client.from('titles') as any)
       .select('tmdb_id, media_type, embedding')
       .in('tmdb_id', tmdbIds);
-    if (error || !data) return map;
+    if (error || !data) {
+      EMBEDDING_CACHE.set(cacheKey, map);
+      return map;
+    }
     for (const row of data as Array<{ tmdb_id: number; media_type: string; embedding: string | number[] | null }>) {
       if (row.embedding == null) continue;
       const emb = typeof row.embedding === 'string' ? JSON.parse(row.embedding) : row.embedding;
       if (Array.isArray(emb) && emb.length > 0) {
-        map.set(`${row.media_type}-${row.tmdb_id}`, emb);
+        const vec = new Float32Array(emb);
+        map.set(`${row.media_type}-${row.tmdb_id}`, { vec, norm: computeNorm(vec) });
       }
     }
   } catch {
-    // Network or parse error → empty map → MMR no-op, fallback path.
+    // Network or parse error → return whatever we have.
   }
+  EMBEDDING_CACHE.set(cacheKey, map);
   return map;
 }
 

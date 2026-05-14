@@ -117,7 +117,7 @@ export function scoreCandidates(
 export interface BuildRowFromPoolOptions {
   config?: RowConfig;
   getServices?: (tmdbId: number, mediaType: string) => string[];
-  embeddingMap?: Map<string, number[]>;
+  embeddingMap?: import('./embeddingCache.ts').EmbeddingMap;
 }
 
 export function buildRowFromPool(

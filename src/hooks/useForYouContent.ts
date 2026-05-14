@@ -30,22 +30,53 @@ import type { ContentItem } from '@/components/ContentCard';
 import type { SliderState } from '@/lib/taste-v2/types';
 import type { CandidatePool, PipelineContext, ScoredCandidate, ExtendedTitleRow } from '@/lib/recommendations-v2/types';
 import { EXTENDED_TITLE_SELECT } from '@/lib/recommendations-v2/types';
+import {
+  buildEmbeddingCacheKey,
+  computeNorm,
+  getCachedEmbeddings,
+  setCachedEmbeddings,
+  type EmbeddingMap,
+} from '@/lib/recommendations-v2/embeddingCache';
 
 /**
- * Phase 5: fetch embeddings for the supplied scored candidates so MMR
- * can compute redundancy. Reuses the batch select pattern from
- * anchorSelection.ts:469. Returns a Map keyed by contentKey ("media_type-tmdb_id").
+ * Phase 5 fetch + Phase 5.5 cache: returns the embedding map for the
+ * supplied candidates. Reads from localStorage first (24h TTL, keyed
+ * on userId + taste_profiles.updated_at); on miss, fetches from
+ * Supabase and populates the cache for the next load.
+ *
+ * Returns the new map shape `{ vec: Float32Array; norm: number }` so
+ * MMR can skip the per-call Math.sqrt in its inner loop (IN-PX-24).
+ *
  * Failures degrade to an empty map; MMR then no-ops and buildRowFromPool
  * falls back to applyGenreSpread.
  */
 async function fetchEmbeddingsForCandidates(
   candidates: ScoredCandidate[],
-): Promise<Map<string, number[]>> {
-  const map = new Map<string, number[]>();
-  if (candidates.length === 0) return map;
-  if (!isSupabaseActive()) return map;
+  cacheContext: { userId: string | null; tasteProfilesUpdatedAt: string | null },
+): Promise<EmbeddingMap> {
+  if (candidates.length === 0) return new Map();
+  if (!isSupabaseActive()) return new Map();
 
-  const tmdbIds = [...new Set(candidates.map((c) => c.tmdbId))];
+  // Cache lookup. Cold-start users (no userId) skip caching entirely
+  // since cross-user contamination on a shared device is the worst
+  // failure mode of this layer.
+  const cacheKey = cacheContext.userId
+    ? buildEmbeddingCacheKey(cacheContext.userId, cacheContext.tasteProfilesUpdatedAt)
+    : null;
+  let map: EmbeddingMap = new Map();
+  if (cacheKey) {
+    const cached = getCachedEmbeddings(cacheKey);
+    if (cached) map = cached;
+  }
+
+  // Find which candidates are missing from cache and need a fresh fetch.
+  const needed: number[] = [];
+  for (const c of candidates) {
+    if (!map.has(c.contentKey)) needed.push(c.tmdbId);
+  }
+  if (needed.length === 0) return map;
+  const tmdbIds = [...new Set(needed)];
+
   try {
     const { data, error } = await supabase
       .from('titles')
@@ -56,12 +87,15 @@ async function fetchEmbeddingsForCandidates(
       if (row.embedding == null) continue;
       const emb = typeof row.embedding === 'string' ? JSON.parse(row.embedding) : row.embedding;
       if (Array.isArray(emb) && emb.length > 0) {
-        map.set(`${row.media_type}-${row.tmdb_id}`, emb);
+        const vec = new Float32Array(emb);
+        map.set(`${row.media_type}-${row.tmdb_id}`, { vec, norm: computeNorm(vec) });
       }
     }
   } catch {
-    // Network or parse error → empty map → MMR falls through.
+    // Network or parse error → return whatever we have (possibly empty).
   }
+
+  if (cacheKey) setCachedEmbeddings(cacheKey, map);
   return map;
 }
 
@@ -128,8 +162,9 @@ export function useForYouContent(
   // viewing_context or call Device.getInfo() again.
   const ctxRef = useRef<PipelineContext>({});
   // Phase 5: cache the embedding map built per load. MMR re-runs on
-  // slider drag without refetching from titles.
-  const embeddingMapRef = useRef<Map<string, number[]>>(new Map());
+  // slider drag without refetching from titles. Phase 5.5 (C5): map
+  // shape is { vec: Float32Array; norm: number } for cached-norm MMR.
+  const embeddingMapRef = useRef<EmbeddingMap>(new Map());
   const providerStr = providerIds.join(',');
 
   // ── Build rows from scored candidates ──
@@ -303,8 +338,15 @@ export function useForYouContent(
       // into Hidden Gems / Outside Your Usual rows get neutral 0
       // redundancy (MMR degrades gracefully when an embedding is
       // missing). Top-200 is the headroom that covers all three
-      // taste-vector rows in practice.
-      embeddingMapRef.current = await fetchEmbeddingsForCandidates(scored.slice(0, 200));
+      // taste-vector rows in practice. Phase 5.5 (C5): hits the 24h
+      // localStorage cache first to skip the network fetch entirely.
+      embeddingMapRef.current = await fetchEmbeddingsForCandidates(
+        scored.slice(0, 200),
+        {
+          userId: getAuthUserId(),
+          tasteProfilesUpdatedAt: profile.updatedAt,
+        },
+      );
 
       // Build taste-vector-based rows — show these immediately
       buildRows(scored, sliderState);

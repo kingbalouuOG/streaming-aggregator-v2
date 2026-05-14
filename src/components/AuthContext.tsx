@@ -3,6 +3,7 @@ import type { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { clearAllData } from '@/lib/storage/userPreferences';
 import { setAuthState } from '@/lib/storage';
+import { clearEmbeddingCache } from '@/lib/recommendations-v2/embeddingCache';
 
 interface AuthContextValue {
   user: User | null;
@@ -101,7 +102,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.error('[Auth] signOut error:', e);
     }
-    // Don't clear localStorage — preserve preferences for same-user re-sign-in
+    // Don't clear localStorage — preserve preferences for same-user re-sign-in.
+    // Exception: embedding cache, which is namespaced per-user but
+    // accumulates dead keys across users on a shared device, and could
+    // theoretically be probed via dev tools. Drop on every signOut path.
+    clearEmbeddingCache();
   }, []);
 
   const forgotPassword = useCallback(async (email: string) => {

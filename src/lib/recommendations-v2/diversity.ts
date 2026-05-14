@@ -13,6 +13,7 @@
 
 import { TASTE_CLUSTERS } from '@/lib/taste-v2/tasteClusters';
 import type { ScoredCandidate, ExtendedTitleRow } from './types';
+import type { EmbeddingMap, CachedEmbedding } from './embeddingCache';
 import { MAX_CONSECUTIVE_SAME_SERVICE } from './weights';
 
 // ── Taste Cluster Mapping (precomputed) ──
@@ -144,21 +145,19 @@ const MMR_NULL_RATIO_BAIL = 0.5;
 const MMR_MIN_SAMPLE = 4;
 
 /**
- * Cosine similarity between two embedding vectors. Both must be the
- * same dimensionality. Returns 0 if either vector has zero norm.
+ * Cosine similarity between two cached embeddings. Norms are precomputed
+ * at cache-population time so the inner loop skips a per-call
+ * Math.sqrt — Phase 5.5 IN-PX-24 perf change (~3× MMR hot loop speedup).
  */
-function cosineSimilarity(a: number[], b: number[]): number {
+function cosineSimilarity(a: CachedEmbedding, b: CachedEmbedding): number {
+  const denom = a.norm * b.norm;
+  if (denom === 0) return 0;
   let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  const n = Math.min(a.length, b.length);
+  const n = Math.min(a.vec.length, b.vec.length);
   for (let i = 0; i < n; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
+    dot += a.vec[i] * b.vec[i];
   }
-  const denom = Math.sqrt(normA * normB);
-  return denom === 0 ? 0 : dot / denom;
+  return dot / denom;
 }
 
 /**
@@ -191,7 +190,7 @@ export interface MMRResult {
 
 export function applyMMR(
   candidates: ScoredCandidate[],
-  embeddingMap: Map<string, number[]>,
+  embeddingMap: EmbeddingMap,
   opts: { lambda: number; k: number },
 ): MMRResult {
   if (candidates.length === 0) return { selected: [], bailedOut: false };
@@ -205,7 +204,7 @@ export function applyMMR(
   // Cache embeddings looked up so far to avoid repeated map.get() in
   // the inner loop. Only the SELECTED candidates' embeddings drive
   // redundancy; the candidates being scored just need their own.
-  const selectedEmbeddings: Array<number[] | null> = [
+  const selectedEmbeddings: Array<CachedEmbedding | null> = [
     embeddingMap.get(selected[0].contentKey) ?? null,
   ];
   let nullCount = selectedEmbeddings[0] === null ? 1 : 0;
