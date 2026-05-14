@@ -100,10 +100,8 @@ END;
 $function$;
 
 GRANT EXECUTE ON FUNCTION public.export_user_data() TO authenticated;
+-- See migration 042 for the rationale: Supabase auto-grants undo this
+-- REVOKE, but the function body's auth.uid() check is the actual gate.
 REVOKE EXECUTE ON FUNCTION public.export_user_data() FROM PUBLIC, anon;
 
-COMMENT ON FUNCTION public.export_user_data() IS
-  'GDPR Article 20 / right-to-portability RPC. Returns a JSON object ' ||
-  'with one key per user-scoped table, scoped to auth.uid(). ' ||
-  'card_impressions capped to last 90 days (see migration 014 rollup). ' ||
-  'See migration 043 / Phase 5.5 C15 for the audit trail.';
+COMMENT ON FUNCTION public.export_user_data() IS 'GDPR Article 20 / right-to-portability RPC. Returns a JSON object with one key per user-scoped table, scoped to auth.uid(). card_impressions capped to last 90 days (see migration 014 rollup). See migration 043 / Phase 5.5 C15 for the audit trail.';

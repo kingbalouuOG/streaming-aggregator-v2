@@ -69,10 +69,13 @@ END;
 $function$;
 
 GRANT EXECUTE ON FUNCTION public.delete_own_account() TO authenticated;
+-- The REVOKE below documents intent: anon should not have EXECUTE on
+-- this RPC. Supabase auto-grants EXECUTE to anon/authenticated/service_role
+-- on every public.* function so PostgREST can route to it, and that
+-- auto-grant undoes our REVOKE on the next reapply / session. The
+-- functional auth gate is the `IF v_user_id IS NULL THEN RAISE` check
+-- in the function body — anon calls fail with an exception before any
+-- DELETE runs. Keep the REVOKE for grep-ability.
 REVOKE EXECUTE ON FUNCTION public.delete_own_account() FROM PUBLIC, anon;
 
-COMMENT ON FUNCTION public.delete_own_account() IS
-  'GDPR Article 17 / right-to-erasure RPC. Deletes the caller''s account ' ||
-  'and all associated rows across user-scoped tables. SECURITY DEFINER with ' ||
-  'explicit DELETEs as belt-and-braces against cascade-rule regression. ' ||
-  'See migration 042 / Phase 5.5 C10 for the audit trail.';
+COMMENT ON FUNCTION public.delete_own_account() IS 'GDPR Article 17 / right-to-erasure RPC. Deletes the caller''s account and all associated rows across user-scoped tables. SECURITY DEFINER with explicit DELETEs as belt-and-braces against cascade-rule regression. See migration 042 / Phase 5.5 C10 for the audit trail.';
