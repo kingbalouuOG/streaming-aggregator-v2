@@ -52,20 +52,26 @@ const ARGV = new Set(process.argv.slice(2));
 const UPDATE_GOLDEN = ARGV.has('--update-golden');
 
 function loadEnv() {
-  const envPath = resolve(process.cwd(), '.env');
-  const content = readFileSync(envPath, 'utf-8');
+  // CI passes secrets via process.env; .env file is local-dev only.
+  // Mirror the pattern in scripts/test/refresh-parity-jwt.ts.
   const env = {};
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eqIdx = trimmed.indexOf('=');
-    if (eqIdx === -1) continue;
-    env[trimmed.slice(0, eqIdx)] = trimmed.slice(eqIdx + 1).replace(/^['"]|['"]$/g, '');
+  try {
+    const envPath = resolve(process.cwd(), '.env');
+    const content = readFileSync(envPath, 'utf-8');
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      env[trimmed.slice(0, eqIdx)] = trimmed.slice(eqIdx + 1).replace(/^['"]|['"]$/g, '');
+    }
+  } catch {
+    // No .env (e.g. CI runner) — fall through to process.env.
   }
   return env;
 }
 
-const ENV = loadEnv();
+const ENV = { ...loadEnv(), ...process.env };
 const SUPABASE_URL = ENV.VITE_SUPABASE_URL ?? ENV.SUPABASE_URL;
 const SERVICE_ROLE_KEY = ENV.SUPABASE_SERVICE_ROLE_KEY;
 
