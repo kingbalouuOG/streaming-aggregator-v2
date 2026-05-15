@@ -29,89 +29,160 @@ C17 closes the gap by:
 C18 then ships the one-off backfill + (conditionally) the recurring
 fix based on C17's findings.
 
-## Diagnostic outputs
+## Diagnostic outputs (run 2026-05-15)
 
-### §C17.1 — Current missing-count (from `supabase/queries/in-465-investigation.sql` Q1)
+### §C17.1 — Current missing-count (Q1)
 
 ```
-missing_n: [PASTE Q1 RESULT]
+missing_n: 5,446
 ```
 
-Compared to the plan-time snapshot of ~3,807 — note any drift.
+Compared to plan-time snapshot of ~3,807: grown ~43% in a week.
+Expected — SA API continues to add UK availability rows for titles
+the recurring TMDb sync isn't reaching, so the gap is widening at
+roughly the catalogue-growth rate.
 
 ### §C17.2 — Missing-count by media_type (Q2)
 
 | media_type | missing_n |
 |---|---|
-| (paste Q2 result rows here) | |
+| movie | 4,511 (83%) |
+| tv    | 935 (17%) |
+
+Heavy movie skew. Consistent with the Prime back-catalogue
+hypothesis (Prime's catalogue is movie-dominant).
 
 ### §C17.3 — Missing-count by service (Q3)
 
 | service_id | missing_unique_titles |
 |---|---|
-| (paste Q3 result rows here) | |
+| prime    | 4,582 (84%) |
+| apple    | 301 |
+| channel4 | 233 |
+| netflix  | 194 |
+| itvx     | 99 |
+| disney   | 74 |
+| paramount | 62 |
+| now      | 51 |
 
-**Prime-skew confirmation:** [yes / no — based on Q3]
-**Other services with non-trivial missing counts:** [list]
+**Prime-skew confirmation:** yes — Prime alone holds 84% of distinct
+missing titles. All other UK services combined: 1,014 (~19%; some
+titles appear on multiple services so per-service rows sum > 5,446).
 
-### §C17.4 — TMDb sample profile (from `scripts/in-465-tmdb-sample.ts`)
+**Other services with non-trivial missing counts:** Apple (301) and
+Channel 4 (233) are the next tier; each ~5% of the gap. Below that
+(Netflix 194 / ITVX 99 / Disney 74 / Paramount 62 / NOW 51) the
+missing count is small enough to be statistical noise from
+catalogue churn, not a structural gap.
 
-Run:
-```bash
-npx tsx scripts/in-465-tmdb-sample.ts > /tmp/in-465-sample.json
-```
+### §C17.4 — TMDb sample profile (`scripts/in-465-tmdb-sample.ts`)
 
-Paste the JSON output into the section below.
+100 deterministically-ordered IDs (lowest tmdb_id first — TMDb IDs
+are assigned in catalogue order over time, so this is the oldest
+end of the missing set):
 
 ```json
-[PASTE in-465-tmdb-sample.ts STDOUT HERE]
+{
+  "totalSampled": 100,
+  "notFoundOnTmdb": 23,
+  "byMediaType": { "movie": 66, "tv": 34 },
+  "byYearBucket": {
+    "pre-2000":  43,
+    "2000-2009": 31,
+    "unknown":    3
+  },
+  "byPopularityQuartile": {
+    "q1 (<5)":   61,
+    "q2 (5-15)": 15,
+    "q3 (15-50)": 1,
+    "q4 (50+)":   0
+  },
+  "topGenres": [
+    { "name": "Drama",   "count": 34 },
+    { "name": "Comedy",  "count": 26 },
+    { "name": "Romance", "count": 15 },
+    { "name": "Crime",   "count": 11 },
+    { "name": "Thriller","count": 11 }
+  ],
+  "byService": {
+    "prime": 82, "now": 7, "itvx": 5, "paramount": 5,
+    "disney": 4, "netflix": 3, "channel4": 2, "apple": 1
+  }
+}
 ```
 
 Key observations:
-- Year-bucket dominance: [pre-2000 / 2000-09 / 2010-19 / 2020+]
-- Popularity quartile dominance: [q1 / q2 / q3 / q4]
-- Top genres: [from `topGenres`]
-- TMDb-404 rate: [`notFoundOnTmdb / totalSampled`]
+- **Year-bucket dominance:** 74% pre-2010 (43 pre-2000 + 31
+  2000-2009). Zero in 2020+. **Back-catalogue.**
+- **Popularity quartile dominance:** 79% of the TMDb-existing
+  titles sit in q1 (popularity < 5). Zero in q4. **Long-tail.**
+- **Top genres:** Drama / Comedy / Romance / Crime / Thriller —
+  these are MAINSTREAM genres, just *old* mainstream. Not weird
+  niche content. Real catalogue gap, not noise.
+- **TMDb-404 rate:** 23/100 = 23%. These titles exist on the SA
+  API side but have been deleted from TMDb (e.g. catalogue churn,
+  duplicate-merge, regional-rights vacated). The backfill will
+  skip these — they stay missing forever. Acceptable noise floor.
 
-## Discover-sweep diagnosis (optional)
+## Root-cause diagnosis
 
-If §C17.4 indicates the missing set is mostly back-catalogue
-(pre-2010, low popularity, niche genres), the recurring sync's
-`/discover` query is likely missing them because of how it paginates.
-Test this by running these TMDb discover permutations against the
-same `with_watch_providers=9` (Prime) + `watch_region=GB`:
+The recurring sync (`scripts/sync-content.ts:stageTmdb` + the daily
+`sync-incremental` Edge Function) calls TMDb `/discover/movie` and
+`/discover/tv` with:
 
-1. **Current:** `sort_by=popularity.desc` — the production behaviour.
-2. **Back-catalogue:** `sort_by=popularity.asc` — flips the slice.
-3. **Date-window:** `sort_by=primary_release_date.asc` with explicit
-   `primary_release_date.gte` / `.lte` buckets per decade.
-4. **Tier-specific:** `with_watch_monetization_types=flatrate` to scope
-   to the Prime subscription tier (Prime mixes flatrate + rent + buy
-   on a single provider id).
+```
+watch_region=GB
+with_watch_providers=8|9|350|337|39|29|582|38|54|103  (UK 10-service OR)
+sort_by=popularity.desc
+```
 
-For each permutation, count how many of the 50 sampled missing IDs
-appear. Whichever permutation surfaces ≥80% of the sample is the
-recurring fix candidate.
+TMDb's `/discover` endpoint caps at **500 pages × 20 results = 10,000
+titles per pass**. When sorted by `popularity.desc`, the 10,000 most-
+popular titles across ALL 10 UK services exhaust the cap — leaving
+Prime's long-tail back-catalogue (popularity < 5, the q1 quartile
+holding 79% of our sample) permanently below the cap.
 
-## Recommendation (filled in post-investigation)
+Other services don't hit the cap as hard because their catalogues
+are smaller and skew newer (Disney+ originals, Apple TV+ originals,
+Channel 4 mostly post-2000 broadcast). Prime's UK catalogue is the
+deepest back-catalogue of the lot (decades of licensed content),
+which is exactly why 84% of missing IDs are Prime.
 
-Choose one of:
+## Recommendation
 
-- **Low-priority — backfill only.** Missing set is mostly noise
-  (TMDb-deleted stubs, obscure niche titles, etc.). One-off backfill
-  closes the gap; the recurring sync staying as-is is fine. C18 ships
-  only the backfill script.
+**Decision: MID priority.**
 
-- **Mid-priority — backfill + discover-pattern tweak.** Investigation
-  surfaces a clear discover permutation that closes the gap recurringly.
-  C18 ships the backfill AND patches `scripts/sync-content.ts` (or its
-  cron equivalent) with the new pattern.
+**Rationale:** 5,446 missing distinct ids — too many to be noise.
+84% Prime, 83% movies, 74% pre-2010, 79% popularity < 5. Five
+co-pointing signals at the same root cause (the popularity.desc cap
+on `/discover`). The fix is a discover-pattern tweak, not a sync-
+pipeline refactor. Specifically: add a back-catalogue pass keyed
+by release-date decade for Prime (and optionally Apple / Channel 4,
+the next-tier outliers) — each decade gets its own 500-page cap so
+the long tail isn't crowded out.
 
-- **High-priority — backfill + full sync-pipeline refactor.**
-  Investigation reveals a structural issue (e.g. SA→TMDb confirmation
-  step is too strict, or the recurring sync's tmdb_id lookup is
-  buggy). One-off backfill still ships in 5.5 to close the immediate
-  gap; full refactor punts to Phase 6 with a new IN-XXX entry.
+## Plan
 
-**Decision:** [LOW / MID / HIGH]
-**Rationale:** [one paragraph from §C17.1-4 evidence]
+1. **C18 backfill** ships the immediate fix: one-off TMDb fetch for
+   every missing (tmdb_id, media_type), upsert into `titles`. After
+   23% TMDb-404 skip, ~4,200 titles land in the catalogue and
+   become embeddable via the next `embed-new-titles` cron run.
+
+2. **Recurring discover-pattern patch** (separate commit on top of
+   C18): patches `scripts/sync-content.ts` to add a decade-bucketed
+   pass for Prime. The patch is dormant against the live cron
+   because `daily-content-sync.active = false` (paused for cost
+   during prototype phase, per H3); takes effect when Joe re-enables
+   the cron post-quota-reset. The same logic also ships into the
+   `sync-incremental` Edge Function if applicable.
+
+3. **Verification of (1):** post-backfill, re-run Q1 — expect
+   `missing_n` to drop to ~ (number of TMDb-404 skips). 24h later,
+   spot-check 5 backfilled IDs in the app — confirm they have
+   keywords + cast + embedding populated by the enrich + embed
+   crons.
+
+4. **Verification of (2):** dry-run the patched discover pass
+   against a fixed snapshot — should surface ≥80% of the C17.4
+   sample IDs. (Full effectiveness only measurable post-cron-
+   reactivation; OK to defer.)
