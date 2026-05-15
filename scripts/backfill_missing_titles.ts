@@ -1,18 +1,33 @@
 /**
- * Phase 5.5 C18 / IN-465 — one-off backfill of missing titles.
+ * Phase 5.5 C18 / IN-465 — backfill missing titles from SA + TMDb.
  *
  * For every (tmdb_id, media_type) in streaming_availability that has
  * no joining titles row, fetch TMDb metadata and upsert into titles.
  * Downstream cron jobs (enrich-new-titles 06:30 UTC,
  * embed-new-titles 06:45 UTC) pick up the new rows the next morning.
  *
+ * ── Dual role: one-off backfill AND recurring maintenance ───────────
+ *
+ * C17's IN-465 investigation surfaced that the `titles` table is
+ * created exclusively by `scripts/sync-content.ts:stageTmdb` (a
+ * manual script Joe runs), NOT by the `daily-content-sync` cron
+ * (which only refreshes `streaming_availability` via the
+ * `sync-incremental` Edge Function — see
+ * `docs/v2/investigations/in-465-catalogue-sync-gap.md`).
+ *
+ * This script's query — `streaming_availability LEFT JOIN titles
+ * WHERE titles IS NULL` — IS the recurring catalogue-gap closer.
+ * Every run catches whatever SA has added since the last run. Joe
+ * runs this manually as maintenance (e.g. monthly) until the Phase
+ * 6 follow-up (IN-PX-50) wraps it in a scheduled Edge Function.
+ *
  * Mirrors the upsert shape from scripts/sync-content.ts:stageTmdb so
  * any column drift surfaces here too. Uses onConflict
  * 'tmdb_id,media_type' so re-runs are idempotent — the script can be
  * killed mid-run and re-started without re-doing the work.
  *
- * Rate limit: 260ms / ~4 req/s (matches sync-content.ts). At ~3,800
- * missing IDs from plan-time, total wall time ~17 minutes.
+ * Rate limit: 260ms / ~4 req/s (matches sync-content.ts). At ~5,400
+ * missing IDs (C17 measurement), total wall time ~24 minutes.
  *
  * Usage:
  *   # Dry-run — prints what would happen, no writes.

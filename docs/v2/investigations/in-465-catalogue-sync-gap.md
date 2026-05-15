@@ -161,28 +161,55 @@ by release-date decade for Prime (and optionally Apple / Channel 4,
 the next-tier outliers) — each decade gets its own 500-page cap so
 the long tail isn't crowded out.
 
-## Plan
+## Pipeline split — important finding
 
-1. **C18 backfill** ships the immediate fix: one-off TMDb fetch for
+Investigation surfaced an architectural fact that simplifies the
+recurring fix:
+
+- `daily-content-sync` cron calls the `sync-incremental` Edge
+  Function. That function ONLY writes to `streaming_availability`
+  and `availability_history` — **it never creates `titles` rows**.
+- `titles` rows are created exclusively by
+  `scripts/sync-content.ts:stageTmdb`, which is a **manual** script
+  Joe runs from his laptop.
+
+So the gap accumulation pattern is:
+1. SA API surfaces new Prime back-catalogue
+2. `sync-incremental` cron writes to `streaming_availability`
+3. `titles` row needs `scripts/sync-content.ts` to be re-run
+4. That script's `/discover` popularity-cap excludes back-catalogue
+5. Gap persists indefinitely.
+
+## Plan (revised)
+
+1. **C18 backfill ships the immediate fix.** One-off TMDb fetch for
    every missing (tmdb_id, media_type), upsert into `titles`. After
-   23% TMDb-404 skip, ~4,200 titles land in the catalogue and
-   become embeddable via the next `embed-new-titles` cron run.
+   23% TMDb-404 skip, ~4,200 titles land and become embeddable via
+   the next `embed-new-titles` cron run (06:45 UTC).
 
-2. **Recurring discover-pattern patch** (separate commit on top of
-   C18): patches `scripts/sync-content.ts` to add a decade-bucketed
-   pass for Prime. The patch is dormant against the live cron
-   because `daily-content-sync.active = false` (paused for cost
-   during prototype phase, per H3); takes effect when Joe re-enables
-   the cron post-quota-reset. The same logic also ships into the
-   `sync-incremental` Edge Function if applicable.
+2. **`scripts/backfill_missing_titles.ts` IS the recurring fix.**
+   The script reads from
+   `streaming_availability LEFT JOIN titles WHERE titles IS NULL`,
+   so every run catches whatever SA has added since the last run.
+   No discover-pattern patch is needed because the missing-set is
+   itself the input — there's no risk of "missing what discover
+   missed". Joe re-runs this manually as a maintenance task (e.g.
+   monthly) until the cron-automation work in (3).
 
-3. **Verification of (1):** post-backfill, re-run Q1 — expect
-   `missing_n` to drop to ~ (number of TMDb-404 skips). 24h later,
-   spot-check 5 backfilled IDs in the app — confirm they have
-   keywords + cast + embedding populated by the enrich + embed
-   crons.
+3. **Phase 6 follow-up: wrap the backfill in a scheduled Edge
+   Function.** Filed as new parking-lot entry **IN-PX-50** —
+   "scheduled catalogue-gap backfill". Scope:
+     - New Edge Function `backfill-missing-titles` running the same
+       logic as `scripts/backfill_missing_titles.ts`.
+     - `cron.schedule` registration in a new migration.
+     - Cadence: weekly (catalogue churn at SA is daily but the gap
+       grows slowly enough that weekly catches it; monthly is also
+       acceptable).
+     - TMDb API key threaded via Vault (same pattern as 039).
 
-4. **Verification of (2):** dry-run the patched discover pass
-   against a fixed snapshot — should surface ≥80% of the C17.4
-   sample IDs. (Full effectiveness only measurable post-cron-
-   reactivation; OK to defer.)
+4. **Verification of (1):** post-backfill, re-run Q1 from
+   `supabase/queries/in-465-investigation.sql` — expect `missing_n`
+   to drop to ~ (number of TMDb-404 skips, ~1,250 if the 23% sample
+   rate holds for the full set). 24h later, spot-check 5
+   backfilled IDs in the app to confirm enrich + embed crons
+   picked them up.
