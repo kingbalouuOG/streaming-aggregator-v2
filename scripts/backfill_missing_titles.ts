@@ -149,7 +149,12 @@ async function tmdbFetch(path: string, maxRetries = 3): Promise<TmdbTitle | null
 // ── Title-row builder (mirrors stageTmdb in sync-content.ts) ────────
 
 function buildTitleRow(item: TmdbTitle, mediaType: 'movie' | 'tv') {
-  const releaseDate = mediaType === 'movie' ? item.release_date : item.first_air_date;
+  // TMDb returns release_date / first_air_date as either a YYYY-MM-DD
+  // string OR an empty string "" for titles with unknown dates.
+  // Postgres `date` column rejects empty string as invalid syntax —
+  // coerce falsy values to null on both the date and the derived year.
+  const rawDate = mediaType === 'movie' ? item.release_date : item.first_air_date;
+  const releaseDate = rawDate && rawDate.length > 0 ? rawDate : null;
   const releaseYear = releaseDate ? Number(releaseDate.slice(0, 4)) : null;
   const genreIds = item.genres
     ? item.genres.map((g) => g.id)
@@ -163,7 +168,7 @@ function buildTitleRow(item: TmdbTitle, mediaType: 'movie' | 'tv') {
     media_type: mediaType,
     title: item.title ?? item.name ?? '',
     overview: item.overview ?? null,
-    release_date: releaseDate ?? null,
+    release_date: releaseDate,
     release_year: Number.isFinite(releaseYear) ? releaseYear : null,
     poster_path: item.poster_path ?? null,
     backdrop_path: item.backdrop_path ?? null,
@@ -188,21 +193,42 @@ async function main() {
 
   // 1. Canonical missing-count re-query. Plan v3 step 1 — never trust
   //    the plan-time snapshot.
+  //
+  // PostgREST default page size is 1000 rows. Both streaming_availability
+  // (~60k+ rows for ~20k titles × multiple services × stream_types) and
+  // titles (~20k rows) exceed that, so we paginate via .range(from, to)
+  // until each pull returns fewer than PAGE rows.
+  const PAGE = 1000;
+
+  async function paginatePull<T>(
+    table: 'streaming_availability' | 'titles',
+    cols: string,
+  ): Promise<T[]> {
+    const rows: T[] = [];
+    let from = 0;
+    for (;;) {
+      const { data, error } = await supabase
+        .from(table)
+        .select(cols)
+        .range(from, from + PAGE - 1);
+      if (error || !data) {
+        console.error(`  ${table} page-${from / PAGE} query failed:`, error?.message);
+        process.exit(1);
+      }
+      rows.push(...(data as unknown as T[]));
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    return rows;
+  }
+
   console.log('\n  Pulling missing IDs from streaming_availability…');
-  const { data: saRows, error: saErr } = await supabase
-    .from('streaming_availability')
-    .select('tmdb_id, media_type');
-  if (saErr || !saRows) {
-    console.error('  streaming_availability query failed:', saErr?.message);
-    process.exit(1);
-  }
-  const { data: titleRows, error: titleErr } = await supabase
-    .from('titles')
-    .select('tmdb_id, media_type');
-  if (titleErr || !titleRows) {
-    console.error('  titles query failed:', titleErr?.message);
-    process.exit(1);
-  }
+  type SaRow = { tmdb_id: number; media_type: string };
+  type TitleRow = { tmdb_id: number; media_type: string };
+  const saRows = await paginatePull<SaRow>('streaming_availability', 'tmdb_id, media_type');
+  const titleRows = await paginatePull<TitleRow>('titles', 'tmdb_id, media_type');
+  console.log(`  streaming_availability rows: ${saRows.length}`);
+  console.log(`  titles rows: ${titleRows.length}`);
 
   const knownKeys = new Set(titleRows.map((t) => `${t.media_type}-${t.tmdb_id}`));
   const missing: Array<{ tmdb_id: number; media_type: 'movie' | 'tv' }> = [];
