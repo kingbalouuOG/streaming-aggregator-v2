@@ -2,6 +2,21 @@
 
 A mobile-first streaming aggregator that combines content from multiple UK platforms into a single browsing interface. Built as a web app wrapped with Capacitor for native Android deployment.
 
+## Knowledge Base / Project Wiki
+
+A separate **LLM-maintained knowledge base** lives at `C:\Users\User\Documents\Code\StreamingAggregatorV2\videx-wiki` (sibling to this repo; not version-controlled with the repo itself). It is the **authoritative cross-phase context store** for Videx — covering architecture, decisions (ADRs), phase histories, migrations, RPCs, evaluations, runbooks, glossary, parking lot register, pre-launch blockers, and source-document syntheses. Follow the [Karpathy LLM wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
+
+**Critical for context.** Any agent working on Videx — human or LLM — should consult the wiki first when picking up a thread. The repo's `docs/v2/` directory is the source of truth for active strategy / orchestration / parking-lot / phase-summary documents; the wiki synthesises those plus runbooks and post-mortems into a queryable knowledge graph.
+
+Layout:
+- `videx-wiki/raw/` — immutable source documents (read-only to LLM agents).
+- `videx-wiki/wiki/` — LLM-curated pages (entities, concepts, registers).
+- `videx-wiki/AGENTS.md` — schema and the three workflows (ingest / query / lint). **Read first** before operating in the vault.
+- `videx-wiki/index.md` — content catalogue.
+- `videx-wiki/log.md` — append-only operation log; last entry as of Phase 5 close-out (2026-05-07). Phase 5.5 ingest pending — trigger by asking an agent to ingest `docs/v2/phase-summaries/phase-5.5-summary.md` + parking lot v0.7 + orchestration v0.7 + the IN-465 investigation doc.
+
+Obsidian-compatible: opens directly as an Obsidian vault.
+
 ## Supported Platforms
 
 Netflix, Amazon Prime Video, Apple TV+, Disney+, NOW, Sky Go, Paramount+, BBC iPlayer, ITVX, Channel 4
