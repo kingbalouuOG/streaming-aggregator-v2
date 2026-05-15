@@ -1,9 +1,27 @@
 # Videx v2 — Implementation Notes Parking Lot
 
-**Status:** v0.7 — Phase 5.5 in flight. Entries IN-PX-21/22/23/24/25/26/27/28/31/33/34/35 + IN-XPS-006 + IN-465 in scope. Status flips below for those entries are deferred until Phase 5.5 close-out; current statuses still reflect Phase 5 close.
-**Version:** 0.7 (Phase 5.5 in flight; status flips queued until close)
+**Status:** v0.7 — Phase 5.5 closed 2026-05-15. 14 entry status flips below + 2 new entries filed (IN-XPS-014, IN-PX-50). Phase 5.5 summary at `docs/v2/phase-summaries/phase-5.5-summary.md` is authoritative for what shipped vs deferred.
+**Version:** 0.7
 
-> v0.6 → v0.7 (2026-05-07): header bump only at branch-cut per pre-cut hygiene H4 of the Phase 5.5 plan. Entry status flips for IN-PX-21/22/23/24/25/26/27/28/31/33/34/35 + IN-XPS-006 + IN-465 land at Phase 5.5 close along with new IN-XPS-014 (UK solicitor review of Privacy + ToS pre-launch).
+**Changes from v0.6 (Phase 5.5 close-out, 2026-05-15):**
+- **IN-PX-21** ✅ Incorporated — `database.types.ts` regenerated post-migrations 036–039 + 041; 28 `as any` casts removed across 11 files at the Supabase boundary (plan listed 4; actual sweep larger). `.github/workflows/typegen-check.yml` CI gate added.
+- **IN-PX-22** ✅ Incorporated — embedding fetch cached: 24h localStorage on client + per-instance Map on Edge, keyed `userId + taste_profiles.updated_at`. `clearEmbeddingCache()` wired into every signOut path.
+- **IN-PX-23** ✅ Incorporated — MMR returns `{ selected, bailedOut }`. Bails to `applyGenreSpread` when null-embedding ratio > 0.5 after 4 picks. Named constants at top of `diversity.ts` for one-line tuning.
+- **IN-PX-24** ✅ Incorporated — embedding map shape changed to `Map<string, { vec: Float32Array; norm: number }>`. `cosineSimilarity` uses cached norms, skips per-call `Math.sqrt`. ~3× MMR hot-loop speedup.
+- **IN-PX-25** ✅ Incorporated — vitest rig + 10 pure-function tests (5 for `computeContextualScore`, 5 for `applyMMR` including precision-equivalence guard). `npm test` in `typecheck-lint.yml` CI.
+- **IN-PX-26** ✅ Incorporated — `buildRowFromPool` takes an options object. 6 call sites updated (3 client + 3 Edge).
+- **IN-PX-27** ✅ Incorporated — `ViewingContext` moved to `types.ts`; narrowed at the `profiles.viewing_context` boundary in both client and Edge paths. Cast in `contextual.ts` dropped.
+- **IN-PX-28** ✅ Incorporated — `edge-fn-jwt-guard` workflow adds a second scan over central `supabase/config.toml`.
+- **IN-PX-31** ✅ Incorporated — `supabase/cron/*.sql` mirror files deleted. Migration 039 is the sole source of truth for cron registrations. README replaces the deleted files; orchestration §3.4 updated.
+- **IN-PX-33** ✅ Incorporated — `foryou-parity` golden probe + `--update-golden` flag + JWT refresh script (`scripts/test/refresh-parity-jwt.ts`). Workflow narrowed to ranking-pipeline + probe touch points. Activated 2026-05-15 with all 5 secrets in place + golden seeded for test user `3719d29e-…`.
+- **IN-PX-34** ✅ Incorporated — `docs/legal/privacy-policy.md` (11 sections) + `terms-of-service.md` (12 sections) authored. `PrivacyPolicyPage.tsx` + `TermsPage.tsx` render the markdown via `react-markdown`. Wired into signup-flow legal links + Profile → Settings → Privacy & Data. **Both docs carry the lawyer-vetting caveat at the footer; pre-launch solicitor review filed as new IN-XPS-014 (below).**
+- **IN-PX-35** ✅ Incorporated — `export_user_data` SECURITY DEFINER RPC (migration 043 applied + verified 2026-05-15). Frontend wires `@capacitor/filesystem` on native, Blob download on web. C16 ships with privacy-smoke-test path documented in the commit.
+- **IN-XPS-006** ✅ Incorporated — Phase 5 carry-forward closed. Migration 042 (`042_delete_own_account.sql`) captures the live RPC as belt-and-braces defensive explicit DELETEs across 8 user-scoped tables. C11 smoke test on a throwaway user (113 `card_impressions` + 6 onboarding events + profile/taste/services rows): every count = 0 post-delete; `auth.users` row gone. UI gate flipped + type-username-to-confirm UX live.
+- **IN-465** ✅ Incorporated — catalogue-sync gap closed via `scripts/backfill_missing_titles.ts`. 5,446 distinct missing tmdb_ids at C18-run-time: 2,698 backfilled into `titles`, 2,748 TMDb-404 (deleted stubs — correct to skip), 0 errored. Investigation findings + verdict captured in `docs/v2/investigations/in-465-catalogue-sync-gap.md`. The script's `streaming_availability LEFT JOIN titles WHERE titles IS NULL` query IS the recurring fix — wraps in scheduled Edge Function as Phase 6 work (new IN-PX-50 below).
+
+**New entries filed in Phase 5.5:**
+- **IN-XPS-014** (Phase 6 — hard pre-launch blocker) — UK solicitor review of Privacy Policy + Terms of Service. The Phase 5.5 drafts are descriptive of current Videx behaviour but **have not been reviewed by a qualified UK solicitor**. Review is required before App Store / Play Store submission and before any non-prototype user base accesses the product. Postal address + contact email placeholders (`[your-contact-email-address — TBC]`, `[your-UK-postal-address — TBC]`) are intentional flags that the doc isn't launch-ready; pre-launch fill required per Joe's call on whether to use email-only / registered office service / PO Box.
+- **IN-PX-50** (Phase 6) — Scheduled catalogue-gap backfill as Edge Function. Wraps the logic from `scripts/backfill_missing_titles.ts` in an Edge Function with pg_cron schedule (weekly or monthly). Closes the recurring half of IN-465 — `titles` rows currently only land via manual script runs, so the gap accumulates between runs. Required scope: new Edge Function `backfill-missing-titles`, new migration adding the cron schedule, TMDb API key threaded via Vault (same pattern as migration 039).
 
 **Previous status (v0.6):** Phase 5 close-out. Phase 5 shipped four migrations (036–039) + CORS + verify_jwt CI guard + Database<> generic + foryou-parity CI workflow + contextual scoring + MMR. Status flips below reflect what landed; the Phase 5 summary at `docs/v2/phase-summaries/phase-5-summary.md` is authoritative for what shipped vs deferred.
 
@@ -1760,6 +1778,42 @@ ADR-013 mitigated this on the *bootstrap* side (cluster-dominant weights pull pr
 **Phase target:** Phase 7+ (post-Phase-6 launch, after behavioural data accumulates). Major effort, separate roadmap entry.
 
 **Status:** ⏳ Filed for future planning.
+
+### IN-XPS-014: UK solicitor review of Privacy Policy + Terms of Service
+
+**Source:** Phase 5.5 C13/C14 (IN-PX-34 implementation) — mandatory footer caveat on both `docs/legal/*.md` files. Filed at Phase 5.5 close-out (2026-05-15).
+
+**Detail:** The Phase 5.5 Privacy Policy + Terms of Service drafts (`docs/legal/privacy-policy.md`, `docs/legal/terms-of-service.md`) are descriptive of current Videx behaviour but **have not been reviewed by a qualified UK solicitor**. Both docs render in-app via `react-markdown` and ship to the public GitHub repo. The footer caveat states this explicitly + flags pre-launch review as required.
+
+Two placeholders intentionally left in the drafts (`[your-contact-email-address — TBC]`, `[your-UK-postal-address — TBC]`) to make the not-launch-ready state visible inline. Pre-launch decisions Joe owns:
+1. Contact channel — dedicated email (e.g. `support@<domain>.uk`) sufficient under UK GDPR Article 13(1)(a); postal address not strictly required by law.
+2. Postal address (if required by App Store / Play Store reviewers) — registered office address service (~£30–50/year) OR PO Box OR virtual mailbox. **Do not use personal home address** — public exposure for a small prototype.
+
+**Fix:** Engage UK solicitor pre-launch. Solicitor reviews the existing drafts + the technical accuracy of each disclosure (§2 data tables, §4 third-party flows). Joe makes the postal-address decision. Footer caveat removed once reviewed; "Last updated" + "Effective from" dates set to launch date.
+
+**Phase target:** Phase 6 — hard pre-launch blocker. App Store / Play Store submission cannot ship without it.
+
+**Status:** ⏳ Filed; hard pre-launch blocker.
+
+### IN-PX-50: Scheduled catalogue-gap backfill as Edge Function
+
+**Source:** Phase 5.5 C17/C18 investigation. Filed at Phase 5.5 close-out (2026-05-15).
+
+**Detail:** The Phase 5.5 IN-465 investigation surfaced a pipeline-split fact: `daily-content-sync` cron calls the `sync-incremental` Edge Function, which only writes to `streaming_availability` — never creates `titles` rows. `titles` rows come only from the manual `scripts/sync-content.ts:stageTmdb` script (whose `/discover` popularity-cap is the original source of the gap). Net effect: the gap between SA-side new arrivals and TMDb-side title-creation accumulates indefinitely between manual sync runs.
+
+`scripts/backfill_missing_titles.ts` IS the recurring fix — its `streaming_availability LEFT JOIN titles WHERE titles IS NULL` query catches whatever has accumulated since the last run. Joe runs it manually as monthly maintenance for now.
+
+**Fix:** Wrap the backfill script logic in a new Edge Function `backfill-missing-titles` with a pg_cron schedule (weekly or monthly cadence). Required components:
+- New Edge Function under `supabase/functions/backfill-missing-titles/` (port `scripts/backfill_missing_titles.ts` to Deno + Edge runtime conventions).
+- New migration adding the cron schedule. Reuse the Vault pattern from migration 039 for TMDb API key + Supabase service-role JWT.
+- Logging + summary on completion (rows fetched / upserted / 404-skipped / errored).
+- Idempotent — same `onConflict: 'tmdb_id,media_type'` pattern as the script.
+
+**Why this isn't urgent:** the C18 backfill closed the immediate gap (2,698 titles inserted, 5,446 → 2,748 missing). The 2,748 residual is TMDb-deleted stubs that stay missing forever (acceptable). Phase 6 wraps the automation; until then Joe runs the script monthly.
+
+**Phase target:** Phase 6 — automation work, not launch-gating.
+
+**Status:** ⏳ Filed; monthly manual runs are the interim recurring fix.
 
 ---
 
