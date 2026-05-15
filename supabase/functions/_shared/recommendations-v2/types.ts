@@ -68,6 +68,20 @@ export type TitleRow = Omit<ExtendedTitleRow, 'cast_top_5' | 'director' | 'rt_sc
 
 export type Surface = 'home' | 'foryou';
 
+/** Viewing-context values stored in profiles.viewing_context.
+ *  Strategy v1.8 §3.x. Lives here (not weights.ts) so PipelineContext
+ *  can reference it without a circular import, and so the
+ *  profiles.viewing_context boundary narrows against this union before
+ *  it reaches scoring (IN-PX-27). */
+export type ViewingContext =
+  | 'solo'
+  | 'with_partner'
+  | 'with_family'
+  | 'with_friends'
+  | 'wind_down'
+  | 'background'
+  | 'focused';
+
 export interface PipelineInput {
   tasteVector: number[];
   filterSets: FilterSets;
@@ -93,7 +107,9 @@ export interface PipelineContext {
   hourOfDay?: number;
   dayOfWeek?: number;
   devicePlatform?: 'android' | 'ios' | 'web';
-  viewingContext?: string | null;
+  /** profiles.viewing_context narrowed against the ViewingContext union.
+   *  Null for legacy users or unknown DB values (IN-PX-27). */
+  viewingContext?: ViewingContext | null;
 }
 
 /**

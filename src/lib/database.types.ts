@@ -91,6 +91,7 @@ export type Database = {
         Row: {
           content_id: number
           id: number
+          metadata: Json | null
           position: number
           session_id: string
           shown_at: string
@@ -100,6 +101,7 @@ export type Database = {
         Insert: {
           content_id: number
           id?: never
+          metadata?: Json | null
           position: number
           session_id: string
           shown_at: string
@@ -109,6 +111,7 @@ export type Database = {
         Update: {
           content_id?: number
           id?: never
+          metadata?: Json | null
           position?: number
           session_id?: string
           shown_at?: string
@@ -129,6 +132,7 @@ export type Database = {
         Row: {
           content_id: number
           id: number
+          metadata: Json | null
           position: number
           session_id: string
           shown_at: string
@@ -138,6 +142,7 @@ export type Database = {
         Insert: {
           content_id: number
           id?: never
+          metadata?: Json | null
           position: number
           session_id: string
           shown_at: string
@@ -147,6 +152,7 @@ export type Database = {
         Update: {
           content_id?: number
           id?: never
+          metadata?: Json | null
           position?: number
           session_id?: string
           shown_at?: string
@@ -159,6 +165,7 @@ export type Database = {
         Row: {
           content_id: number
           id: number
+          metadata: Json | null
           position: number
           session_id: string
           shown_at: string
@@ -168,6 +175,7 @@ export type Database = {
         Insert: {
           content_id: number
           id?: never
+          metadata?: Json | null
           position: number
           session_id: string
           shown_at: string
@@ -177,6 +185,7 @@ export type Database = {
         Update: {
           content_id?: number
           id?: never
+          metadata?: Json | null
           position?: number
           session_id?: string
           shown_at?: string
@@ -189,6 +198,7 @@ export type Database = {
         Row: {
           content_id: number
           id: number
+          metadata: Json | null
           position: number
           session_id: string
           shown_at: string
@@ -198,6 +208,7 @@ export type Database = {
         Insert: {
           content_id: number
           id?: never
+          metadata?: Json | null
           position: number
           session_id: string
           shown_at: string
@@ -207,6 +218,7 @@ export type Database = {
         Update: {
           content_id?: number
           id?: never
+          metadata?: Json | null
           position?: number
           session_id?: string
           shown_at?: string
@@ -219,6 +231,7 @@ export type Database = {
         Row: {
           content_id: number
           id: number
+          metadata: Json | null
           position: number
           session_id: string
           shown_at: string
@@ -228,6 +241,7 @@ export type Database = {
         Insert: {
           content_id: number
           id?: never
+          metadata?: Json | null
           position: number
           session_id: string
           shown_at: string
@@ -237,6 +251,7 @@ export type Database = {
         Update: {
           content_id?: number
           id?: never
+          metadata?: Json | null
           position?: number
           session_id?: string
           shown_at?: string
@@ -249,6 +264,7 @@ export type Database = {
         Row: {
           content_id: number
           id: number
+          metadata: Json | null
           position: number
           session_id: string
           shown_at: string
@@ -258,6 +274,7 @@ export type Database = {
         Insert: {
           content_id: number
           id?: never
+          metadata?: Json | null
           position: number
           session_id: string
           shown_at: string
@@ -267,6 +284,7 @@ export type Database = {
         Update: {
           content_id?: number
           id?: never
+          metadata?: Json | null
           position?: number
           session_id?: string
           shown_at?: string
@@ -279,6 +297,7 @@ export type Database = {
         Row: {
           content_id: number
           id: number
+          metadata: Json | null
           position: number
           session_id: string
           shown_at: string
@@ -288,6 +307,7 @@ export type Database = {
         Insert: {
           content_id: number
           id?: never
+          metadata?: Json | null
           position: number
           session_id: string
           shown_at: string
@@ -297,6 +317,40 @@ export type Database = {
         Update: {
           content_id?: number
           id?: never
+          metadata?: Json | null
+          position?: number
+          session_id?: string
+          shown_at?: string
+          source_surface?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      card_impressions_p20260701: {
+        Row: {
+          content_id: number
+          id: number
+          metadata: Json | null
+          position: number
+          session_id: string
+          shown_at: string
+          source_surface: string
+          user_id: string
+        }
+        Insert: {
+          content_id: number
+          id?: never
+          metadata?: Json | null
+          position: number
+          session_id: string
+          shown_at: string
+          source_surface: string
+          user_id: string
+        }
+        Update: {
+          content_id?: number
+          id?: never
+          metadata?: Json | null
           position?: number
           session_id?: string
           shown_at?: string
@@ -332,6 +386,140 @@ export type Database = {
           shown_at?: string
           source_surface?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      clustering_runs: {
+        Row: {
+          catalogue_coverage_pct: number | null
+          cluster_count: number | null
+          cluster_params: Json
+          completed_at: string | null
+          error_message: string | null
+          id: string
+          noise_count: number | null
+          started_at: string
+          status: string
+          version: number
+        }
+        Insert: {
+          catalogue_coverage_pct?: number | null
+          cluster_count?: number | null
+          cluster_params: Json
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          noise_count?: number | null
+          started_at?: string
+          status: string
+          version: number
+        }
+        Update: {
+          catalogue_coverage_pct?: number | null
+          cluster_count?: number | null
+          cluster_params?: Json
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          noise_count?: number | null
+          started_at?: string
+          status?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      mood_room_anchor_labels: {
+        Row: {
+          anchor_media_type: string
+          anchor_tmdb_id: number
+          description: string | null
+          generated_at: string
+          label: string
+          openai_model: string
+        }
+        Insert: {
+          anchor_media_type: string
+          anchor_tmdb_id: number
+          description?: string | null
+          generated_at?: string
+          label: string
+          openai_model: string
+        }
+        Update: {
+          anchor_media_type?: string
+          anchor_tmdb_id?: number
+          description?: string | null
+          generated_at?: string
+          label?: string
+          openai_model?: string
+        }
+        Relationships: []
+      }
+      mood_room_titles: {
+        Row: {
+          centrality: number
+          media_type: string
+          mood_room_id: string
+          tmdb_id: number
+        }
+        Insert: {
+          centrality: number
+          media_type: string
+          mood_room_id: string
+          tmdb_id: number
+        }
+        Update: {
+          centrality?: number
+          media_type?: string
+          mood_room_id?: string
+          tmdb_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mood_room_titles_mood_room_id_fkey"
+            columns: ["mood_room_id"]
+            isOneToOne: false
+            referencedRelation: "mood_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mood_rooms: {
+        Row: {
+          centroid: string
+          cluster_params: Json
+          created_at: string
+          description: string | null
+          id: string
+          is_curated: boolean
+          label: string
+          title_count: number
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          centroid: string
+          cluster_params: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_curated?: boolean
+          label: string
+          title_count: number
+          updated_at?: string
+          version: number
+        }
+        Update: {
+          centroid?: string
+          cluster_params?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_curated?: boolean
+          label?: string
+          title_count?: number
+          updated_at?: string
+          version?: number
         }
         Relationships: []
       }
@@ -1025,6 +1213,30 @@ export type Database = {
         }
         Relationships: []
       }
+      user_feature_flags: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          flag_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          flag_name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          flag_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_genres: {
         Row: {
           created_at: string | null
@@ -1510,10 +1722,60 @@ export type Database = {
         Args: { p_ignore_template_table?: boolean; p_parent_table: string }
         Returns: string
       }
-      get_available_tmdb_ids: {
-        Args: { service_ids: string[] }
+      export_user_data: { Args: never; Returns: Json }
+      get_available_tmdb_ids: { Args: { service_ids: string[] }; Returns: Json }
+      get_mood_room_detail: {
+        Args: { available_tmdb_ids: number[]; room_id: string }
         Returns: {
+          centrality: number
+          description: string
+          genre_ids: number[]
+          label: string
+          media_type: string
+          original_language: string
+          overview: string
+          popularity: number
+          poster_path: string
+          release_year: number
+          runtime: number
+          title: string
           tmdb_id: number
+          total_title_count: number
+          vote_average: number
+          vote_count: number
+        }[]
+      }
+      get_mood_room_thumbnails: {
+        Args: {
+          available_tmdb_ids: number[]
+          per_room_limit?: number
+          room_ids: string[]
+        }
+        Returns: {
+          centrality: number
+          genre_ids: number[]
+          media_type: string
+          mood_room_id: string
+          poster_path: string
+          release_year: number
+          title: string
+          tmdb_id: number
+        }[]
+      }
+      get_mood_rooms_for_user: {
+        Args: {
+          available_tmdb_ids: number[]
+          min_available_titles?: number
+          result_limit?: number
+          user_taste_vector: string
+        }
+        Returns: {
+          available_count: number
+          description: string
+          label: string
+          room_id: string
+          taste_distance: number
+          title_count: number
         }[]
       }
       get_stale_availability: {
@@ -1656,6 +1918,7 @@ export type Database = {
         }
         Returns: Record<string, unknown>
       }
+      username_available: { Args: { check_username: string }; Returns: boolean }
       uuid7_time_decoder: { Args: { uuidv7: string }; Returns: string }
       uuid7_time_encoder: { Args: { ts: string }; Returns: string }
     }

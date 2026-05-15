@@ -54,7 +54,19 @@ import {
 } from '../_shared/recommendations-v2/types.ts';
 import { getV2TasteProfile } from '../_shared/taste-v2/tasteProfileV2.ts';
 import type { SliderState } from '../_shared/taste-v2/types.ts';
+import {
+  buildEmbeddingCacheKey,
+  computeNorm,
+  type EmbeddingMap,
+} from '../_shared/recommendations-v2/embeddingCache.ts';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+// Per-instance embedding cache (IN-PX-22 Edge half). Key = same shape
+// as client (userId + taste_profiles.updated_at), value = the loaded
+// embedding map. Module-scoped so multiple requests served by the same
+// warm Edge instance reuse the load. No TTL — instance lifetime is
+// short enough that staleness isn't a concern; a cold start zeroes it.
+const EMBEDDING_CACHE = new Map<string, EmbeddingMap>();
 
 // ── Types matching the wire contract with the client ────────────────
 
@@ -208,14 +220,22 @@ Deno.serve(async (req) => {
     const scored = scoreCandidates(pool, profile.sliders, 'foryou', ctx);
 
     // Phase 5: fetch embeddings for top-200 by finalScore so MMR can
-    // diversify intra-row across all three taste-vector rows.
-    const embeddingMap = await fetchEmbeddingsForCandidates(supabase, scored.slice(0, 200));
+    // diversify intra-row across all three taste-vector rows. Phase 5.5
+    // (C5): per-instance in-memory cache keyed on userId +
+    // taste_profiles.updated_at — warm requests skip the Supabase select.
+    const embeddingMap = await fetchEmbeddingsForCandidates(supabase, scored.slice(0, 200), {
+      userId,
+      tasteProfilesUpdatedAt: profile.updatedAt,
+    });
 
     // Taste-vector rows. usedIds is shared across rec/gems/outside for
     // cross-row dedup — same contract as src/hooks/useForYouContent.ts.
     const usedIds = new Set<string>();
 
-    const recommendedForYou = buildRowFromPool(scored, profile.sliders, { limit: 20, excludeIds: usedIds }, undefined, embeddingMap);
+    const recommendedForYou = buildRowFromPool(scored, profile.sliders, {
+      config: { limit: 20, excludeIds: usedIds },
+      embeddingMap,
+    });
     recommendedForYou.forEach((item) => usedIds.add(item.id));
 
     const gemCandidates = scored.filter((c) => {
@@ -229,7 +249,10 @@ Deno.serve(async (req) => {
         && avg >= HIDDEN_GEMS_FILTERS.minVoteAverage
       );
     });
-    const hiddenGems = buildRowFromPool(gemCandidates, profile.sliders, { limit: 15, excludeIds: usedIds }, undefined, embeddingMap);
+    const hiddenGems = buildRowFromPool(gemCandidates, profile.sliders, {
+      config: { limit: 15, excludeIds: usedIds },
+      embeddingMap,
+    });
     hiddenGems.forEach((item) => usedIds.add(item.id));
 
     const outsideYourUsual = buildOutsideYourUsual(scored, profile.sliders, usedIds, embeddingMap);
@@ -281,7 +304,7 @@ function buildOutsideYourUsual(
   scored: ScoredCandidate[],
   sliders: SliderState,
   usedIds: Set<string>,
-  embeddingMap: Map<string, number[]>,
+  embeddingMap: EmbeddingMap,
 ): ContentItem[] {
   const outsideCount = getComfortZoneRowCount(sliders.comfortZone);
   const cosineAperture = 0.40 + sliders.comfortZone * 0.40;
@@ -299,10 +322,13 @@ function buildOutsideYourUsual(
     : underThreshold;
 
   return buildRowFromPool(outsideCandidates, sliders, {
-    limit: outsideCount,
-    excludeIds: usedIds,
-    maxPerGenre: 4,
-  }, undefined, embeddingMap);
+    config: {
+      limit: outsideCount,
+      excludeIds: usedIds,
+      maxPerGenre: 4,
+    },
+    embeddingMap,
+  });
 }
 
 function nthSmallest(arr: number[], n: number): number {
@@ -322,26 +348,48 @@ function nthSmallest(arr: number[], n: number): number {
 async function fetchEmbeddingsForCandidates(
   client: SupabaseClient,
   candidates: ScoredCandidate[],
-): Promise<Map<string, number[]>> {
-  const map = new Map<string, number[]>();
-  if (candidates.length === 0) return map;
+  cacheContext: { userId: string; tasteProfilesUpdatedAt: string | null },
+): Promise<EmbeddingMap> {
+  if (candidates.length === 0) return new Map();
 
-  const tmdbIds = [...new Set(candidates.map((c) => c.tmdbId))];
+  // Per-instance cache lookup.
+  const cacheKey = buildEmbeddingCacheKey(
+    cacheContext.userId,
+    cacheContext.tasteProfilesUpdatedAt,
+  );
+  const map: EmbeddingMap = EMBEDDING_CACHE.get(cacheKey) ?? new Map();
+
+  // Find which candidates need a fresh fetch.
+  const needed: number[] = [];
+  for (const c of candidates) {
+    if (!map.has(c.contentKey)) needed.push(c.tmdbId);
+  }
+  if (needed.length === 0) {
+    EMBEDDING_CACHE.set(cacheKey, map);
+    return map;
+  }
+  const tmdbIds = [...new Set(needed)];
+
   try {
     const { data, error } = await (client.from('titles') as any)
       .select('tmdb_id, media_type, embedding')
       .in('tmdb_id', tmdbIds);
-    if (error || !data) return map;
+    if (error || !data) {
+      EMBEDDING_CACHE.set(cacheKey, map);
+      return map;
+    }
     for (const row of data as Array<{ tmdb_id: number; media_type: string; embedding: string | number[] | null }>) {
       if (row.embedding == null) continue;
       const emb = typeof row.embedding === 'string' ? JSON.parse(row.embedding) : row.embedding;
       if (Array.isArray(emb) && emb.length > 0) {
-        map.set(`${row.media_type}-${row.tmdb_id}`, emb);
+        const vec = new Float32Array(emb);
+        map.set(`${row.media_type}-${row.tmdb_id}`, { vec, norm: computeNorm(vec) });
       }
     }
   } catch {
-    // Network or parse error → empty map → MMR no-op, fallback path.
+    // Network or parse error → return whatever we have.
   }
+  EMBEDDING_CACHE.set(cacheKey, map);
   return map;
 }
 
@@ -387,19 +435,35 @@ async function buildEdgePipelineContext(
   // viewing_context from the user's profile row. profiles is keyed on
   // `id`, not `user_id`, so withUserScope's select helper doesn't fit
   // (it auto-applies .eq('user_id', userId)). Use the service-role
-  // client directly with an explicit .eq('id', userId).
+  // client directly with an explicit .eq('id', userId). Narrow against
+  // the ViewingContext union so unknown DB values land at null
+  // (matches client behaviour — IN-PX-27).
   try {
     const { data } = await (client.from('profiles') as any)
       .select('viewing_context')
       .eq('id', userId)
       .maybeSingle();
     const vc = (data as { viewing_context?: string | null } | null)?.viewing_context;
-    if (vc) ctx.viewingContext = vc;
+    const narrowed = narrowViewingContext(vc);
+    if (narrowed) ctx.viewingContext = narrowed;
   } catch {
     // Leave viewingContext unset on any error — scorer falls back to neutral.
   }
 
   return ctx;
+}
+
+const VIEWING_CONTEXT_VALUES = [
+  'solo', 'with_partner', 'with_family', 'with_friends',
+  'wind_down', 'background', 'focused',
+] as const;
+type ViewingContext = typeof VIEWING_CONTEXT_VALUES[number];
+
+function narrowViewingContext(raw: unknown): ViewingContext | null {
+  if (typeof raw !== 'string') return null;
+  return (VIEWING_CONTEXT_VALUES as readonly string[]).includes(raw)
+    ? (raw as ViewingContext)
+    : null;
 }
 
 // ── Because You Watched ──────────────────────────────────────────────

@@ -170,13 +170,18 @@ export function scoreCandidates(
  * — preserves backward compatibility for callers not yet upgraded.
  * applyGenreSpread is removed at Phase 5 close-out (commit 12.5).
  */
+export interface BuildRowFromPoolOptions {
+  config?: RowConfig;
+  getServices?: (tmdbId: number, mediaType: string) => string[];
+  embeddingMap?: import('./embeddingCache').EmbeddingMap;
+}
+
 export function buildRowFromPool(
   scored: ScoredCandidate[],
   sliders: SliderState,
-  config: RowConfig = {},
-  getServices?: (tmdbId: number, mediaType: string) => string[],
-  embeddingMap?: Map<string, number[]>,
+  opts: BuildRowFromPoolOptions = {},
 ): ContentItem[] {
+  const { config = {}, getServices, embeddingMap } = opts;
   const { limit = 20, excludeIds, maxPerGenre = DEFAULT_MAX_PER_GENRE } = config;
 
   let candidates = scored;
@@ -191,10 +196,18 @@ export function buildRowFromPool(
   candidates = applyContentMixRatio(candidates, movieRatio);
 
   // Stage 2b: intra-row diversity. MMR when embeddings are available,
-  // applyGenreSpread fallback otherwise (Phase 4 behaviour).
+  // applyGenreSpread fallback otherwise (Phase 4 behaviour). MMR also
+  // bails out to applyGenreSpread when partial-coverage erodes its
+  // diversity signal (IN-PX-23).
   if (embeddingMap && embeddingMap.size > 0) {
     const lambda = getMMRLambda(sliders.variety);
-    candidates = applyMMR(candidates, embeddingMap, { lambda, k: limit });
+    const mmr = applyMMR(candidates, embeddingMap, { lambda, k: limit });
+    if (mmr.bailedOut) {
+      const genreWindow = getVarietyGenreWindow(sliders.variety);
+      candidates = applyGenreSpread(candidates, genreWindow, maxPerGenre, limit);
+    } else {
+      candidates = mmr.selected;
+    }
   } else {
     const genreWindow = getVarietyGenreWindow(sliders.variety);
     candidates = applyGenreSpread(candidates, genreWindow, maxPerGenre, limit);

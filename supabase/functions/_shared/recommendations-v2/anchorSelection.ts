@@ -298,7 +298,7 @@ interface Tier3Context {
 function selectTier3(ctx: Tier3Context): SelectedAnchor[] {
   const scored = scoreCandidates(ctx.pool, ctx.sliders, 'foryou');
   const built = buildRowFromPool(scored, ctx.sliders, {
-    limit: ctx.limit * 5,
+    config: { limit: ctx.limit * 5 },
   });
 
   const builtKeySet = new Set(built.map((b) => b.id));

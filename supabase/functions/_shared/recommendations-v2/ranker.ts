@@ -114,13 +114,18 @@ export function scoreCandidates(
   return scored;
 }
 
+export interface BuildRowFromPoolOptions {
+  config?: RowConfig;
+  getServices?: (tmdbId: number, mediaType: string) => string[];
+  embeddingMap?: import('./embeddingCache.ts').EmbeddingMap;
+}
+
 export function buildRowFromPool(
   scored: ScoredCandidate[],
   sliders: SliderState,
-  config: RowConfig = {},
-  getServices?: (tmdbId: number, mediaType: string) => string[],
-  embeddingMap?: Map<string, number[]>,
+  opts: BuildRowFromPoolOptions = {},
 ): ContentItem[] {
+  const { config = {}, getServices, embeddingMap } = opts;
   const { limit = 20, excludeIds, maxPerGenre = DEFAULT_MAX_PER_GENRE } = config;
 
   let candidates = scored;
@@ -133,9 +138,17 @@ export function buildRowFromPool(
   candidates = applyContentMixRatio(candidates, movieRatio);
 
   // Phase 5: MMR when embeddings available, applyGenreSpread fallback.
+  // MMR also bails out to applyGenreSpread on partial-coverage rows
+  // (IN-PX-23 — mirror of src/lib/recommendations-v2/ranker.ts).
   if (embeddingMap && embeddingMap.size > 0) {
     const lambda = getMMRLambda(sliders.variety);
-    candidates = applyMMR(candidates, embeddingMap, { lambda, k: limit });
+    const mmr = applyMMR(candidates, embeddingMap, { lambda, k: limit });
+    if (mmr.bailedOut) {
+      const genreWindow = getVarietyGenreWindow(sliders.variety);
+      candidates = applyGenreSpread(candidates, genreWindow, maxPerGenre, limit);
+    } else {
+      candidates = mmr.selected;
+    }
   } else {
     const genreWindow = getVarietyGenreWindow(sliders.variety);
     candidates = applyGenreSpread(candidates, genreWindow, maxPerGenre, limit);

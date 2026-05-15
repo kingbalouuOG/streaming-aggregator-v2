@@ -23,7 +23,7 @@ export async function getThumbsDownIds(): Promise<Set<string>> {
 
   try {
     const { data, error } = await supabase
-      .from('user_interactions' as any)
+      .from('user_interactions')
       .select('content_id, media_type')
       .eq('user_id', userId)
       .eq('event_type', 'thumbs_down');
@@ -31,7 +31,9 @@ export async function getThumbsDownIds(): Promise<Set<string>> {
     if (error || !data) return new Set();
 
     return new Set(
-      (data as any[]).map((r: any) => `${r.media_type}-${r.content_id}`)
+      data
+        .filter((r) => r.content_id != null && r.media_type != null)
+        .map((r) => `${r.media_type}-${r.content_id}`)
     );
   } catch {
     return new Set();

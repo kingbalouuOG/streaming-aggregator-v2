@@ -2,6 +2,21 @@
 
 A mobile-first streaming aggregator that combines content from multiple UK platforms into a single browsing interface. Built as a web app wrapped with Capacitor for native Android deployment.
 
+## Knowledge Base / Project Wiki
+
+A separate **LLM-maintained knowledge base** lives at `C:\Users\User\Documents\Code\StreamingAggregatorV2\videx-wiki` (sibling to this repo; not version-controlled with the repo itself). It is the **authoritative cross-phase context store** for Videx — covering architecture, decisions (ADRs), phase histories, migrations, RPCs, evaluations, runbooks, glossary, parking lot register, pre-launch blockers, and source-document syntheses. Follow the [Karpathy LLM wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
+
+**Critical for context.** Any agent working on Videx — human or LLM — should consult the wiki first when picking up a thread. The repo's `docs/v2/` directory is the source of truth for active strategy / orchestration / parking-lot / phase-summary documents; the wiki synthesises those plus runbooks and post-mortems into a queryable knowledge graph.
+
+Layout:
+- `videx-wiki/raw/` — immutable source documents (read-only to LLM agents).
+- `videx-wiki/wiki/` — LLM-curated pages (entities, concepts, registers).
+- `videx-wiki/AGENTS.md` — schema and the three workflows (ingest / query / lint). **Read first** before operating in the vault.
+- `videx-wiki/index.md` — content catalogue.
+- `videx-wiki/log.md` — append-only operation log; last entry as of Phase 5 close-out (2026-05-07). Phase 5.5 ingest pending — trigger by asking an agent to ingest `docs/v2/phase-summaries/phase-5.5-summary.md` + parking lot v0.7 + orchestration v0.7 + the IN-465 investigation doc.
+
+Obsidian-compatible: opens directly as an Obsidian vault.
+
 ## Supported Platforms
 
 Netflix, Amazon Prime Video, Apple TV+, Disney+, NOW, Sky Go, Paramount+, BBC iPlayer, ITVX, Channel 4
@@ -16,6 +31,8 @@ Netflix, Amazon Prime Video, Apple TV+, Disney+, NOW, Sky Go, Paramount+, BBC iP
 - **Motion** (`motion/react`) for animations
 - **Sonner** for toast notifications
 - **Lucide React** for icons
+- **react-markdown** for rendering the in-app Privacy Policy + Terms of Service from `docs/legal/*.md`
+- **Vitest + jsdom** for pure-function unit tests (`npm test`, `npm run test:watch`). CI runs `tsc --noEmit` + `npm test` + the `typegen-check` workflow (regenerates `database.types.ts` and diffs against the committed copy on every migration PR).
 
 ### APIs
 
@@ -219,10 +236,22 @@ videx/
       rank-eval.ts               Offline pipeline evaluation harness
   android/                     Capacitor native Android project
   supabase/                    Supabase infrastructure
-    migrations/                  SQL schema migrations (content cache tables)
+    migrations/                  SQL schema migrations (content cache + user-data RPCs)
     functions/
       sync-incremental/          Edge Function for daily incremental sync
-  docs/                        Design references, plans, and solutions
+      render-foryou-rows/        Server-side For You first paint (ADR-011/012)
+      embed-new-titles/          Daily title-embedding cron (06:45 UTC)
+      embed-query/               JWT-protected query-embedding for semantic search
+      enrich-new-titles/         Daily metadata enrichment cron (06:30 UTC)
+      label-anchor-room/         LLM thematic labels for anchored mood rooms
+      refresh-service-fingerprints/  Weekly fingerprint recomputation
+      _shared/                   Mirror of recommendations-v2 + taste-v2 (drift-checked in CI)
+    cron/                        Intentionally empty post-Phase-5.5 — migration 039 is sole source for cron registrations
+    queries/                     Ad-hoc diagnostic SQL (in-465 investigation, dashboard)
+  scripts/test/                  Foryou-parity golden probe + JWT refresh helper
+  docs/                          Design references, plans, and solutions
+    legal/                         Privacy Policy + Terms of Service (rendered via react-markdown)
+    v2/                            v2 strategy / orchestration / parking lot / phase summaries
 ```
 
 ## Features
@@ -252,7 +281,7 @@ Upcoming releases for connected services with date pills, service filter, and bo
 Personalised surface with up to 7 rows: Recommended For You, Hidden Gems, Because You Watched [Title], More From [Director/Actor], Outside Your Usual, and From Your Watchlist. All rows are driven by a multi-stage ranking pipeline with slider-tunable parameters. A "Tune" button opens a bottom-sheet slider tray for real-time recommendation adjustment.
 
 ### Profile
-Username/email display, manage streaming services, taste cluster preferences, tune recommendation sliders, dark/light/system theme toggle, spend dashboard, and account deletion.
+Username/email display, manage streaming services, taste cluster preferences, tune recommendation sliders, dark/light/system theme toggle, spend dashboard, plus **Privacy & Data**: in-app Privacy Policy + Terms of Service, **Download my data** (GDPR Article 20 — exports watchlist, taste profile, preferences, and 90 days of impressions as a JSON file via the `export_user_data` SECURITY DEFINER RPC; saved to `Documents/` on Android via `@capacitor/filesystem`, Blob download on web), and **Delete my account** (GDPR Article 17 — type-username-to-confirm UX backed by the `delete_own_account` SECURITY DEFINER RPC with defensive explicit DELETEs across every user-scoped table before `auth.users` cascade; see migrations 042 and 043).
 
 ### Spend Dashboard
 Monthly subscription cost tracker on the Profile page. Shows per-service breakdown with tier selection, annual projection, and daily rate.

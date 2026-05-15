@@ -3,6 +3,7 @@ import type { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { clearAllData } from '@/lib/storage/userPreferences';
 import { setAuthState } from '@/lib/storage';
+import { clearEmbeddingCache } from '@/lib/recommendations-v2/embeddingCache';
 
 interface AuthContextValue {
   user: User | null;
@@ -70,6 +71,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (event === 'PASSWORD_RECOVERY') {
           setIsPasswordRecovery(true);
         }
+        // Phase 5.5 IN-PX-51 — clear the embedding cache on every
+        // sign-out path, not just the manual signOut callback. Covers
+        // JWT expiry, multi-tab signOut from another tab, server-side
+        // session invalidation, and the deleteAccount → signOut chain.
+        if (event === 'SIGNED_OUT') {
+          clearEmbeddingCache();
+        }
       }
     );
 
@@ -101,7 +109,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.error('[Auth] signOut error:', e);
     }
-    // Don't clear localStorage — preserve preferences for same-user re-sign-in
+    // Don't clear localStorage — preserve preferences for same-user re-sign-in.
+    // Exception: embedding cache, which is namespaced per-user but
+    // accumulates dead keys across users on a shared device, and could
+    // theoretically be probed via dev tools. Drop on every signOut path.
+    clearEmbeddingCache();
   }, []);
 
   const forgotPassword = useCallback(async (email: string) => {
@@ -142,16 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [signOut]);
 
   const checkUsernameAvailable = useCallback(async (username: string) => {
-    // Calls the username_available RPC (migration 038) instead of
-    // SELECT'ing from profiles directly. The RPC is SECURITY DEFINER
-    // and returns just a boolean, so anon callers no longer need
-    // unrestricted SELECT on the profiles table.
-    //
-    // Cast: database.types.ts pre-dates migration 038 and doesn't list
-    // username_available in the Database type. Regenerating the types
-    // is a Phase 5/6 follow-up; cast `as any` for the RPC name only
-    // and rely on the runtime API contract.
-    const { data, error } = await (supabase.rpc as any)('username_available', {
+    const { data, error } = await supabase.rpc('username_available', {
       check_username: username,
     });
     if (error) {

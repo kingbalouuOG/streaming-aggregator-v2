@@ -12,7 +12,6 @@ import {
   CONTEXTUAL_TIME_WEIGHT,
   CONTEXTUAL_VIEWING_GENRE_BOOSTS,
   CONTEXTUAL_VIEWING_WEIGHT,
-  type ViewingContext,
   getContextualTimeBucket,
 } from './weights.ts';
 
@@ -60,7 +59,7 @@ function scoreViewingContext(
 ): number {
   if (!ctx.viewingContext) return NEUTRAL;
 
-  const boosts = CONTEXTUAL_VIEWING_GENRE_BOOSTS[ctx.viewingContext as ViewingContext];
+  const boosts = CONTEXTUAL_VIEWING_GENRE_BOOSTS[ctx.viewingContext];
   if (!boosts) return NEUTRAL;
 
   const genres = candidate.meta.genre_ids ?? [];

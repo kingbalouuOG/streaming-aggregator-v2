@@ -15,6 +15,7 @@ import { buildFilterSets } from '@/lib/recommendations-v2/hardFilters';
 import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import { recordImpression } from '@/lib/instrumentation/impressionBatcher';
 import type { ImpressionSurface } from '@/lib/instrumentation/impressionBatcher';
+import type { Json } from '@/lib/database.types';
 import { getCurrentSessionId, onSessionReset } from '@/lib/instrumentation/sessionId';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import { buildAnchoredRoom } from '@/lib/recommendations-v2/anchoredRoom';
@@ -395,7 +396,7 @@ async function fetchAnchoredRoomDetail(
 
 function buildAnchorImpressionMetadata(
   anchor: SelectedAnchor,
-): Record<string, unknown> {
+): { [key: string]: Json | undefined } {
   // Snake_case keys to match the SQL convention; Postgres jsonb is
   // case-sensitive and analytics queries on `metadata->>'anchor_tier'`
   // will read these as written.

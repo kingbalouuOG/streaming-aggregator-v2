@@ -18,6 +18,7 @@ on:
   pull_request:
     paths:
       - 'supabase/functions/**/config.toml'
+      - 'supabase/config.toml'
       - '.github/workflows/edge-fn-jwt-guard.yml'
 
 jobs:
@@ -62,3 +63,20 @@ jobs:
           echo "  supabase/functions/_no_auth_/<name>/"
           echo "and add a brief justification in the PR description."
           exit 1
+
+      - name: Detect verify_jwt = false in central supabase/config.toml
+        run: |
+          set -e
+          # IN-PX-28 / Phase 5.5 C7. The per-function check above doesn't
+          # catch a `[functions.<name>] verify_jwt = false` block in the
+          # central supabase/config.toml; this guard does.
+          if [ -f supabase/config.toml ] && grep -nE '^\s*verify_jwt\s*=\s*false' supabase/config.toml; then
+            echo "::error::verify_jwt = false detected in central supabase/config.toml."
+            echo ""
+            echo "Use a per-function config.toml under a supabase/functions/_no_auth_/"
+            echo "namespace if a public function is genuinely needed. Editing the central"
+            echo "config to disable JWT verification on a user-callable function is the"
+            echo "exact regression IN-PX-28 was filed to prevent."
+            exit 1
+          fi
+          echo "OK: central supabase/config.toml has no verify_jwt = false."

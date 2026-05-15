@@ -3,6 +3,7 @@
 
 import { TASTE_CLUSTERS } from '../taste-v2/tasteClusters.ts';
 import type { ScoredCandidate, ExtendedTitleRow } from './types.ts';
+import type { EmbeddingMap, CachedEmbedding } from './embeddingCache.ts';
 import { MAX_CONSECUTIVE_SAME_SERVICE } from './weights.ts';
 
 const genreToClusterMap = buildGenreToClusterMap();
@@ -75,36 +76,55 @@ export function applyGenreSpread(
 
 // ── Phase 5: Maximal Marginal Relevance (MMR) ──
 
-function cosineSimilarity(a: number[], b: number[]): number {
+// MMR partial-coverage bail thresholds (IN-PX-23) — mirror of
+// src/lib/recommendations-v2/diversity.ts.
+const MMR_NULL_RATIO_BAIL = 0.5;
+const MMR_MIN_SAMPLE = 4;
+
+export function cosineSimilarity(a: CachedEmbedding, b: CachedEmbedding): number {
+  const denom = a.norm * b.norm;
+  if (denom === 0) return 0;
   let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  const n = Math.min(a.length, b.length);
+  const n = Math.min(a.vec.length, b.vec.length);
   for (let i = 0; i < n; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
+    dot += a.vec[i] * b.vec[i];
   }
-  const denom = Math.sqrt(normA * normB);
-  return denom === 0 ? 0 : dot / denom;
+  return dot / denom;
+}
+
+export interface MMRResult {
+  selected: ScoredCandidate[];
+  bailedOut: boolean;
 }
 
 export function applyMMR(
   candidates: ScoredCandidate[],
-  embeddingMap: Map<string, number[]>,
+  embeddingMap: EmbeddingMap,
   opts: { lambda: number; k: number },
-): ScoredCandidate[] {
-  if (candidates.length === 0) return [];
+): MMRResult {
+  if (candidates.length === 0) return { selected: [], bailedOut: false };
   const k = Math.min(opts.k, candidates.length);
-  if (k === 0) return [];
+  if (k === 0) return { selected: [], bailedOut: false };
 
   const remaining = [...candidates].sort((a, b) => b.finalScore - a.finalScore);
   const selected: ScoredCandidate[] = [remaining.shift()!];
-  const selectedEmbeddings: Array<number[] | null> = [
+  const selectedEmbeddings: Array<CachedEmbedding | null> = [
     embeddingMap.get(selected[0].contentKey) ?? null,
   ];
+  let nullCount = selectedEmbeddings[0] === null ? 1 : 0;
 
   while (selected.length < k && remaining.length > 0) {
+    if (
+      selected.length >= MMR_MIN_SAMPLE &&
+      nullCount / selected.length > MMR_NULL_RATIO_BAIL
+    ) {
+      console.debug(
+        `[MMR] partial-coverage bail at ${selected.length} picks ` +
+        `(${nullCount} null embeddings); caller will fall through to applyGenreSpread.`,
+      );
+      return { selected, bailedOut: true };
+    }
+
     let bestIdx = -1;
     let bestScore = -Infinity;
 
@@ -131,10 +151,12 @@ export function applyMMR(
     if (bestIdx === -1) break;
     const picked = remaining.splice(bestIdx, 1)[0];
     selected.push(picked);
-    selectedEmbeddings.push(embeddingMap.get(picked.contentKey) ?? null);
+    const pickedEmb = embeddingMap.get(picked.contentKey) ?? null;
+    selectedEmbeddings.push(pickedEmb);
+    if (pickedEmb === null) nullCount++;
   }
 
-  return selected;
+  return { selected, bailedOut: false };
 }
 
 export function deClusterByService(

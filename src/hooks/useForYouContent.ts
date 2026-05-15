@@ -30,22 +30,53 @@ import type { ContentItem } from '@/components/ContentCard';
 import type { SliderState } from '@/lib/taste-v2/types';
 import type { CandidatePool, PipelineContext, ScoredCandidate, ExtendedTitleRow } from '@/lib/recommendations-v2/types';
 import { EXTENDED_TITLE_SELECT } from '@/lib/recommendations-v2/types';
+import {
+  buildEmbeddingCacheKey,
+  computeNorm,
+  getCachedEmbeddings,
+  setCachedEmbeddings,
+  type EmbeddingMap,
+} from '@/lib/recommendations-v2/embeddingCache';
 
 /**
- * Phase 5: fetch embeddings for the supplied scored candidates so MMR
- * can compute redundancy. Reuses the batch select pattern from
- * anchorSelection.ts:469. Returns a Map keyed by contentKey ("media_type-tmdb_id").
+ * Phase 5 fetch + Phase 5.5 cache: returns the embedding map for the
+ * supplied candidates. Reads from localStorage first (24h TTL, keyed
+ * on userId + taste_profiles.updated_at); on miss, fetches from
+ * Supabase and populates the cache for the next load.
+ *
+ * Returns the new map shape `{ vec: Float32Array; norm: number }` so
+ * MMR can skip the per-call Math.sqrt in its inner loop (IN-PX-24).
+ *
  * Failures degrade to an empty map; MMR then no-ops and buildRowFromPool
  * falls back to applyGenreSpread.
  */
 async function fetchEmbeddingsForCandidates(
   candidates: ScoredCandidate[],
-): Promise<Map<string, number[]>> {
-  const map = new Map<string, number[]>();
-  if (candidates.length === 0) return map;
-  if (!isSupabaseActive()) return map;
+  cacheContext: { userId: string | null; tasteProfilesUpdatedAt: string | null },
+): Promise<EmbeddingMap> {
+  if (candidates.length === 0) return new Map();
+  if (!isSupabaseActive()) return new Map();
 
-  const tmdbIds = [...new Set(candidates.map((c) => c.tmdbId))];
+  // Cache lookup. Cold-start users (no userId) skip caching entirely
+  // since cross-user contamination on a shared device is the worst
+  // failure mode of this layer.
+  const cacheKey = cacheContext.userId
+    ? buildEmbeddingCacheKey(cacheContext.userId, cacheContext.tasteProfilesUpdatedAt)
+    : null;
+  let map: EmbeddingMap = new Map();
+  if (cacheKey) {
+    const cached = getCachedEmbeddings(cacheKey);
+    if (cached) map = cached;
+  }
+
+  // Find which candidates are missing from cache and need a fresh fetch.
+  const needed: number[] = [];
+  for (const c of candidates) {
+    if (!map.has(c.contentKey)) needed.push(c.tmdbId);
+  }
+  if (needed.length === 0) return map;
+  const tmdbIds = [...new Set(needed)];
+
   try {
     const { data, error } = await supabase
       .from('titles')
@@ -56,12 +87,15 @@ async function fetchEmbeddingsForCandidates(
       if (row.embedding == null) continue;
       const emb = typeof row.embedding === 'string' ? JSON.parse(row.embedding) : row.embedding;
       if (Array.isArray(emb) && emb.length > 0) {
-        map.set(`${row.media_type}-${row.tmdb_id}`, emb);
+        const vec = new Float32Array(emb);
+        map.set(`${row.media_type}-${row.tmdb_id}`, { vec, norm: computeNorm(vec) });
       }
     }
   } catch {
-    // Network or parse error → empty map → MMR falls through.
+    // Network or parse error → return whatever we have (possibly empty).
   }
+
+  if (cacheKey) setCachedEmbeddings(cacheKey, map);
   return map;
 }
 
@@ -128,8 +162,9 @@ export function useForYouContent(
   // viewing_context or call Device.getInfo() again.
   const ctxRef = useRef<PipelineContext>({});
   // Phase 5: cache the embedding map built per load. MMR re-runs on
-  // slider drag without refetching from titles.
-  const embeddingMapRef = useRef<Map<string, number[]>>(new Map());
+  // slider drag without refetching from titles. Phase 5.5 (C5): map
+  // shape is { vec: Float32Array; norm: number } for cached-norm MMR.
+  const embeddingMapRef = useRef<EmbeddingMap>(new Map());
   const providerStr = providerIds.join(',');
 
   // ── Build rows from scored candidates ──
@@ -137,7 +172,10 @@ export function useForYouContent(
     const usedIds = new Set<string>();
 
     // 1. Recommended For You: top 20 after diversity
-    const recItems = buildRowFromPool(scored, currentSliders, { limit: 20, excludeIds: usedIds }, undefined, embeddingMapRef.current);
+    const recItems = buildRowFromPool(scored, currentSliders, {
+      config: { limit: 20, excludeIds: usedIds },
+      embeddingMap: embeddingMapRef.current,
+    });
     recItems.forEach(item => usedIds.add(item.id));
     setRecommendedForYou(recItems);
 
@@ -153,7 +191,10 @@ export function useForYouContent(
         avg >= HIDDEN_GEMS_FILTERS.minVoteAverage
       );
     });
-    const gemItems = buildRowFromPool(gemCandidates, currentSliders, { limit: 15, excludeIds: usedIds }, undefined, embeddingMapRef.current);
+    const gemItems = buildRowFromPool(gemCandidates, currentSliders, {
+      config: { limit: 15, excludeIds: usedIds },
+      embeddingMap: embeddingMapRef.current,
+    });
     gemItems.forEach(item => usedIds.add(item.id));
     setHiddenGems(gemItems);
 
@@ -184,10 +225,13 @@ export function useForYouContent(
       : underThreshold;
 
     const outsideItems = buildRowFromPool(outsideCandidates, currentSliders, {
-      limit: outsideCount,
-      excludeIds: usedIds,
-      maxPerGenre: 4,
-    }, undefined, embeddingMapRef.current);
+      config: {
+        limit: outsideCount,
+        excludeIds: usedIds,
+        maxPerGenre: 4,
+      },
+      embeddingMap: embeddingMapRef.current,
+    });
     setOutsideYourUsual(outsideItems);
   }, []);
 
@@ -294,8 +338,15 @@ export function useForYouContent(
       // into Hidden Gems / Outside Your Usual rows get neutral 0
       // redundancy (MMR degrades gracefully when an embedding is
       // missing). Top-200 is the headroom that covers all three
-      // taste-vector rows in practice.
-      embeddingMapRef.current = await fetchEmbeddingsForCandidates(scored.slice(0, 200));
+      // taste-vector rows in practice. Phase 5.5 (C5): hits the 24h
+      // localStorage cache first to skip the network fetch entirely.
+      embeddingMapRef.current = await fetchEmbeddingsForCandidates(
+        scored.slice(0, 200),
+        {
+          userId: getAuthUserId(),
+          tasteProfilesUpdatedAt: profile.updatedAt,
+        },
+      );
 
       // Build taste-vector-based rows — show these immediately
       buildRows(scored, sliderState);
@@ -357,14 +408,14 @@ async function fetchBecauseYouWatched(
 
     const [engagementRes, thumbsRes] = await Promise.all([
       supabase
-        .from('user_interactions' as any)
+        .from('user_interactions')
         .select('content_id, media_type, created_at')
         .eq('user_id', userId)
         .in('event_type', ['watchlist_add', 'watched'])
         .gte('created_at', sixtyDaysAgo)
         .order('created_at', { ascending: false }),
       supabase
-        .from('user_interactions' as any)
+        .from('user_interactions')
         .select('content_id, media_type')
         .eq('user_id', userId)
         .eq('event_type', 'thumbs_up')
@@ -377,14 +428,23 @@ async function fetchBecauseYouWatched(
     }
 
 
-    // Client-side intersection: titles with positive engagement AND thumbs_up
+    // Client-side intersection: titles with positive engagement AND thumbs_up.
+    // The schema permits null content_id/media_type for non-content events
+    // (slider adjustments, dismiss-by-cluster, etc.); filter those out before
+    // building the key so we never produce a "null-X" pseudo-id.
+    const isContentEvent = <T extends { content_id: number | null; media_type: string | null }>(
+      r: T,
+    ): r is T & { content_id: number; media_type: 'movie' | 'tv' } =>
+      r.content_id != null && (r.media_type === 'movie' || r.media_type === 'tv');
+
     const thumbsUpSet = new Set(
-      (thumbsRes.data as any[]).map((r: any) => `${r.media_type}-${r.content_id}`)
+      thumbsRes.data.filter(isContentEvent).map((r) => `${r.media_type}-${r.content_id}`)
     );
     // Deduplicate by content key (a title may have both watchlist_add and watched)
     const seen = new Set<string>();
-    const qualifying = (engagementRes.data as any[])
-      .filter((r: any) => {
+    const qualifying = engagementRes.data
+      .filter(isContentEvent)
+      .filter((r) => {
         const key = `${r.media_type}-${r.content_id}`;
         if (seen.has(key)) return false;
         seen.add(key);
@@ -401,14 +461,14 @@ async function fetchBecauseYouWatched(
     // For each anchor, fetch neighbours
     // Fetch all anchors in parallel (each does embedding lookup + RPC)
     const rowResults = await Promise.all(
-      qualifying.map(async (anchor: any) => {
+      qualifying.map(async (anchor) => {
         const anchorKey = `${anchor.media_type}-${anchor.content_id}`;
         let anchorMeta = pool.metadata.get(anchorKey);
 
         // Anchor may be excluded from pool (watchlist hard filter). Fetch from titles table.
         if (!anchorMeta) {
           const { data: anchorRows } = await supabase
-            .from('titles' as any)
+            .from('titles')
             .select(EXTENDED_TITLE_SELECT)
             .eq('tmdb_id', anchor.content_id)
             .eq('media_type', anchor.media_type)
@@ -454,27 +514,29 @@ async function fetchMoreFromPerson(
   try {
     // Get user's thumbs_up titles
     const { data: thumbsData } = await supabase
-      .from('user_interactions' as any)
+      .from('user_interactions')
       .select('content_id, media_type')
       .eq('user_id', userId)
       .eq('event_type', 'thumbs_up');
 
     if (!thumbsData || thumbsData.length < 2) return null;
 
-    const thumbsIds = (thumbsData as any[]).map((r: any) => r.content_id as number);
+    const thumbsIds = thumbsData
+      .map((r) => r.content_id)
+      .filter((id): id is number => id != null);
 
     // Fetch director/cast for these titles
     const { data: titleData } = await supabase
-      .from('titles' as any)
+      .from('titles')
       .select('tmdb_id, media_type, director, cast_top_5')
       .in('tmdb_id', thumbsIds);
 
     if (!titleData || titleData.length === 0) return null;
 
-    const titles = titleData as any[];
+    const titles = titleData;
 
     // Determine media type distribution for director vs actor preference
-    const movieCount = titles.filter((t: any) => t.media_type === 'movie').length;
+    const movieCount = titles.filter((t) => t.media_type === 'movie').length;
     const preferDirector = movieCount >= titles.length * 0.6;
 
     // Count person occurrences
@@ -519,7 +581,7 @@ async function fetchMoreFromPerson(
 
     // Query their other work
     let query = supabase
-      .from('titles' as any)
+      .from('titles')
       .select(EXTENDED_TITLE_SELECT);
 
     if (bestPerson.type === 'director') {
@@ -533,8 +595,8 @@ async function fetchMoreFromPerson(
 
     // Filter by availability and exclude watched
     const items: ContentItem[] = [];
-    for (const row of personTitles as any[]) {
-      const typed = row as ExtendedTitleRow;
+    for (const row of personTitles) {
+      const typed = row as unknown as ExtendedTitleRow;
       if (filterSets.availableTmdbIds.size > 0 && !filterSets.availableTmdbIds.has(typed.tmdb_id)) continue;
       const key = `${typed.media_type}-${typed.tmdb_id}`;
       if (filterSets.dismissedIds.has(key)) continue;
@@ -564,14 +626,14 @@ async function fetchFromWatchlist(): Promise<ContentItem[]> {
 
     if (userId && isSupabaseActive()) {
       const { data } = await supabase
-        .from('user_interactions' as any)
+        .from('user_interactions')
         .select('content_id, media_type')
         .eq('user_id', userId)
         .eq('event_type', 'watched')
         .limit(500);
 
       if (data) {
-        for (const row of data as any[]) {
+        for (const row of data) {
           watchedSet.add(`${row.media_type}-${row.content_id}`);
         }
       }

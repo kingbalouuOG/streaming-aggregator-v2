@@ -48,6 +48,7 @@ import { subscribe as appStateSubscribe } from '../lifecycle/appState';
 import { getCurrentSessionId } from './sessionId';
 import { supabase } from '../supabase';
 import { isSupabaseActive, getAuthUserId } from '../storage';
+import type { Json } from '../database.types';
 
 const FLUSH_INTERVAL_MS = 10 * 1000;
 const BUFFER_FLUSH_THRESHOLD = 100;
@@ -73,7 +74,7 @@ export interface RecordImpressionInput {
    *    tier_1_inside_stated_cluster }`. Null/omitted for other surfaces
    * today; reserved for future per-impression context.
    */
-  metadata?: Record<string, unknown> | null;
+  metadata?: { [key: string]: Json | undefined } | null;
 }
 
 // Internal buffered shape — matches the card_impressions table
@@ -85,7 +86,7 @@ interface BufferedImpression {
   position: number;
   session_id: string;
   shown_at: string; // ISO8601
-  metadata: Record<string, unknown> | null;
+  metadata: Json;
 }
 
 // ── Module state ────────────────────────────────────────────────
