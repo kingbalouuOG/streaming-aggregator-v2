@@ -234,8 +234,10 @@ async function main() {
 
   async function flushBuffer() {
     if (buffer.length === 0) return;
+    const n = buffer.length;
     if (DRY_RUN) {
-      console.log(`  [DRY-RUN] would upsert ${buffer.length} rows`);
+      console.log(`  [DRY-RUN] would upsert ${n} rows`);
+      upserted += n;
       buffer = [];
       return;
     }
@@ -243,10 +245,10 @@ async function main() {
       .from('titles')
       .upsert(buffer, { onConflict: 'tmdb_id,media_type' });
     if (error) {
-      console.error(`  upsert error (${buffer.length} rows):`, error.message);
-      errored += buffer.length;
+      console.error(`  upsert error (${n} rows):`, error.message);
+      errored += n;
     } else {
-      upserted += buffer.length;
+      upserted += n;
     }
     buffer = [];
   }
