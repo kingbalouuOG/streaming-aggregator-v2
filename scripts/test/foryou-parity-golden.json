@@ -1,0 +1,333 @@
+{
+  "recommendedForYou": [
+    {
+      "id": "movie-1265063",
+      "matchPercentage": 71
+    },
+    {
+      "id": "tv-228305",
+      "matchPercentage": 70
+    },
+    {
+      "id": "movie-1233413",
+      "matchPercentage": 67
+    },
+    {
+      "id": "movie-1481319",
+      "matchPercentage": 68
+    },
+    {
+      "id": "movie-11324",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-1042834",
+      "matchPercentage": 67
+    },
+    {
+      "id": "movie-302156",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-335984",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-668489",
+      "matchPercentage": 67
+    },
+    {
+      "id": "movie-22825",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-146233",
+      "matchPercentage": 65
+    },
+    {
+      "id": "tv-220056",
+      "matchPercentage": 65
+    },
+    {
+      "id": "movie-940139",
+      "matchPercentage": 65
+    },
+    {
+      "id": "movie-242582",
+      "matchPercentage": 65
+    },
+    {
+      "id": "movie-1082195",
+      "matchPercentage": 66
+    },
+    {
+      "id": "movie-77",
+      "matchPercentage": 64
+    },
+    {
+      "id": "movie-1083968",
+      "matchPercentage": 66
+    },
+    {
+      "id": "movie-331592",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-442094",
+      "matchPercentage": 62
+    },
+    {
+      "id": "movie-207932",
+      "matchPercentage": 62
+    }
+  ],
+  "hiddenGems": [
+    {
+      "id": "movie-210577",
+      "matchPercentage": 64
+    },
+    {
+      "id": "movie-63",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-697843",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-320",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-97367",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-458723",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-180",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-156022",
+      "matchPercentage": 62
+    },
+    {
+      "id": "movie-49530",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-8681",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-23168",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-340666",
+      "matchPercentage": 64
+    },
+    {
+      "id": "movie-489999",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-419430",
+      "matchPercentage": 63
+    }
+  ],
+  "outsideYourUsual": [
+    {
+      "id": "movie-664341",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-1620",
+      "matchPercentage": 62
+    },
+    {
+      "id": "movie-716258",
+      "matchPercentage": 62
+    },
+    {
+      "id": "tv-46648",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-461130",
+      "matchPercentage": 63
+    },
+    {
+      "id": "movie-154400",
+      "matchPercentage": 62
+    },
+    {
+      "id": "movie-12201",
+      "matchPercentage": 62
+    },
+    {
+      "id": "movie-225574",
+      "matchPercentage": 62
+    }
+  ],
+  "fromYourWatchlist": [
+    {
+      "id": "tv-262848",
+      "matchPercentage": null
+    },
+    {
+      "id": "tv-76479",
+      "matchPercentage": null
+    }
+  ],
+  "becauseYouWatched": [
+    {
+      "anchorId": "tv-67468",
+      "items": [
+        {
+          "id": "tv-233787",
+          "matchPercentage": 77
+        },
+        {
+          "id": "tv-245256",
+          "matchPercentage": 77
+        },
+        {
+          "id": "tv-41889",
+          "matchPercentage": 76
+        },
+        {
+          "id": "tv-215253",
+          "matchPercentage": 76
+        },
+        {
+          "id": "tv-61828",
+          "matchPercentage": 76
+        },
+        {
+          "id": "tv-202851",
+          "matchPercentage": 76
+        },
+        {
+          "id": "tv-64631",
+          "matchPercentage": 76
+        },
+        {
+          "id": "movie-84342",
+          "matchPercentage": 76
+        },
+        {
+          "id": "tv-74316",
+          "matchPercentage": 76
+        },
+        {
+          "id": "tv-44641",
+          "matchPercentage": 75
+        },
+        {
+          "id": "tv-64489",
+          "matchPercentage": 75
+        },
+        {
+          "id": "tv-84929",
+          "matchPercentage": 75
+        }
+      ]
+    },
+    {
+      "anchorId": "movie-1054867",
+      "items": [
+        {
+          "id": "movie-1081012",
+          "matchPercentage": 82
+        },
+        {
+          "id": "movie-726209",
+          "matchPercentage": 81
+        },
+        {
+          "id": "movie-399361",
+          "matchPercentage": 81
+        },
+        {
+          "id": "movie-668489",
+          "matchPercentage": 81
+        },
+        {
+          "id": "movie-1371151",
+          "matchPercentage": 81
+        },
+        {
+          "id": "movie-1289601",
+          "matchPercentage": 81
+        },
+        {
+          "id": "movie-865019",
+          "matchPercentage": 81
+        },
+        {
+          "id": "movie-969492",
+          "matchPercentage": 81
+        },
+        {
+          "id": "movie-1356039",
+          "matchPercentage": 80
+        },
+        {
+          "id": "movie-696007",
+          "matchPercentage": 80
+        },
+        {
+          "id": "movie-39514",
+          "matchPercentage": 80
+        },
+        {
+          "id": "movie-1233413",
+          "matchPercentage": 80
+        }
+      ]
+    }
+  ],
+  "moreFromPerson": null,
+  "anchorRooms": [
+    {
+      "id": "anchor:movie-1054867",
+      "anchorTitle": "One Battle After Another",
+      "tier": 1,
+      "titleCount": 30
+    },
+    {
+      "id": "anchor:movie-1265063",
+      "anchorTitle": "After the Hunt",
+      "tier": 3,
+      "titleCount": 30
+    },
+    {
+      "id": "anchor:movie-146233",
+      "anchorTitle": "Prisoners",
+      "tier": 2,
+      "titleCount": 30
+    },
+    {
+      "id": "anchor:movie-27205",
+      "anchorTitle": "Inception",
+      "tier": 2,
+      "titleCount": 30
+    },
+    {
+      "id": "anchor:tv-64439",
+      "anchorTitle": "Making a Murderer",
+      "tier": 2,
+      "titleCount": 30
+    }
+  ],
+  "sliders": {
+    "catalogueAge": 0.5,
+    "comfortZone": 0.25,
+    "contentMix": 0.5,
+    "variety": 0.5
+  }
+}
