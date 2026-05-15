@@ -357,10 +357,7 @@ async function fetchEmbeddingsForCandidates(
     cacheContext.userId,
     cacheContext.tasteProfilesUpdatedAt,
   );
-  let map = EMBEDDING_CACHE.get(cacheKey) ?? new Map();
-  if (!EMBEDDING_CACHE.has(cacheKey)) {
-    map = new Map<string, { vec: Float32Array; norm: number }>();
-  }
+  const map: EmbeddingMap = EMBEDDING_CACHE.get(cacheKey) ?? new Map();
 
   // Find which candidates need a fresh fetch.
   const needed: number[] = [];

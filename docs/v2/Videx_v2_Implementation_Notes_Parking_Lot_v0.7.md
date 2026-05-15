@@ -1815,6 +1815,54 @@ Two placeholders intentionally left in the drafts (`[your-contact-email-address 
 
 **Status:** ⏳ Filed; monthly manual runs are the interim recurring fix.
 
+### IN-PX-51: Hook `clearEmbeddingCache` into `onAuthStateChange` SIGNED_OUT
+
+**Source:** Phase 5.5 close-out kieran-typescript-reviewer pass — landed pre-merge.
+
+**Detail:** `embeddingCache.ts` docstring claims `clearEmbeddingCache()` fires on "every signOut path (manual signOut, account deletion, JWT expiry)". Original C5 implementation only wired it into the manual `AuthContext.signOut` callback, missing JWT expiry / multi-tab signOut from another tab / server-side session invalidation / `deleteAccount` → supabase auto-revoke chain. UserId namespacing in the cache key prevents cross-user *correctness* contamination, but the docstring contract was unmet.
+
+**Fix:** Added `if (event === 'SIGNED_OUT') clearEmbeddingCache();` to the `onAuthStateChange` listener in `AuthContext.tsx`.
+
+**Phase target:** Phase 5.5 close-out — landed pre-merge in the same review fixup commit.
+
+**Status:** ✅ Incorporated (Phase 5.5 close-out, 2026-05-15).
+
+### IN-PX-52: Regenerate Edge `_shared/database.types.ts` for typed RPC calls
+
+**Source:** Phase 5.5 close-out kieran-typescript-reviewer pass.
+
+**Detail:** The Edge `_shared/` tree mirrors `src/lib/` but doesn't have a generated `database.types.ts`. As a result `supabase/functions/render-foryou-rows/index.ts:377` still uses `(client.from('titles') as any).select(...)` — the kind of cast C1 was meant to remove. Other Edge files have similar shapes. The `<Database>` generic isn't applied to the Edge `createClient` either.
+
+**Fix:** Generate `supabase/functions/_shared/database.types.ts` (or import from `src/lib/database.types.ts` via the path the Edge build allows). Apply the `<Database>` generic to `createServiceRoleClient`. Drop all `as any` casts on `client.from(...)` calls inside Edge code.
+
+**Phase target:** Phase 6 — non-launch-blocking; current `as any` casts are correctness-equivalent, just type-unsafe.
+
+**Status:** ⏳ Filed.
+
+### IN-PX-53: Compress embedding cache or cap to top-100 for Safari mobile
+
+**Source:** Phase 5.5 close-out kieran-typescript-reviewer pass.
+
+**Detail:** `embeddingCache.ts` serialises Float32Array vectors to JSON arrays via `Array.from(vec)`. At 200 candidates × 1536 dims, the localStorage write hits ~5MB, which is exactly Safari mobile's quota ceiling. The current `try { ... } catch { /* swallow */ }` is correct (cache falls through to network fetch on quota error), but cache hit rate degrades silently on mobile Safari users.
+
+**Fix:** Either (a) cap stored map at top-100 by `finalScore` (currently top-200), or (b) compress via base64 encoding of the underlying ArrayBuffer (~50% size reduction), or (c) store in IndexedDB instead of localStorage (no quota issue but async API; need to thread through).
+
+**Phase target:** Phase 6+ — only impacts mobile Safari prototype users, of which there are zero today. Revisit if Joe ever opens a Safari/iOS build.
+
+**Status:** ⏳ Filed.
+
+### IN-PX-54: CI check that every user-scoped table is referenced in `delete_own_account` + `export_user_data`
+
+**Source:** Phase 5.5 close-out kieran-typescript-reviewer pass.
+
+**Detail:** Migrations 042 (`delete_own_account`) and 043 (`export_user_data`) both enumerate user-scoped tables explicitly. The list was correct as of Phase 5.5 (8 tables) but if a future migration adds a new table with a `user_id` column, the RPCs silently leak that user's data (export doesn't include it; delete doesn't remove it). The FK CASCADE chain plus the explicit DELETE on `profiles` would catch most cases for `delete_own_account` — but only if the new table FKs to `profiles(id)` rather than `auth.users(id)`, and `export_user_data` has no cascade analogue.
+
+**Fix:** Add a CI workflow that queries `information_schema.columns` for every public-schema table with a `user_id UUID` column (or `id UUID` referencing `auth.users`), and diffs against the table list in `delete_own_account` + `export_user_data`. Fail any PR that adds a new user-scoped table without updating both RPCs.
+
+**Phase target:** Phase 6 — defensive against future schema drift; no immediate risk because Phase 5.5 audit was clean.
+
+**Status:** ⏳ Filed.
+
 ---
 
 ## Onboarding implementation notes

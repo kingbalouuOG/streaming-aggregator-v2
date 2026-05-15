@@ -71,6 +71,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (event === 'PASSWORD_RECOVERY') {
           setIsPasswordRecovery(true);
         }
+        // Phase 5.5 IN-PX-51 — clear the embedding cache on every
+        // sign-out path, not just the manual signOut callback. Covers
+        // JWT expiry, multi-tab signOut from another tab, server-side
+        // session invalidation, and the deleteAccount → signOut chain.
+        if (event === 'SIGNED_OUT') {
+          clearEmbeddingCache();
+        }
       }
     );
 
