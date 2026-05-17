@@ -101,6 +101,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Phase 3 — User taste vector v2 + hook rewrites](wiki/concepts/operations/phase-3.md)
 - [Phase 4 — Ranking pipeline & row composition](wiki/concepts/operations/phase-4.md)
 - [Phase 5 — Contextual signals, MMR, pre-launch hardening](wiki/concepts/operations/phase-5.md)
+- [Phase 5.5 — Quality, legal & catalogue hardening](wiki/concepts/operations/phase-5-5.md)
 - [Sync pipeline runbook](wiki/concepts/operations/sync-pipeline.md)
 - [Embedding backfill runbook](wiki/concepts/operations/embedding-backfill.md)
 - [Edge Function deployment runbook](wiki/concepts/operations/edge-function-deployment.md)
