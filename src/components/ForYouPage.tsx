@@ -19,9 +19,10 @@
  * follow-up PR.
  */
 
-import { useState, useCallback, useMemo } from 'react';
-import { Sliders, Loader2 } from 'lucide-react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { Loader2, Lock, LockOpen } from 'lucide-react';
 import { motion } from 'motion/react';
+import { TasteSlider } from './TasteSlider';
 import { ContentRow } from './ContentRow';
 import { NumberedChart } from './NumberedChart';
 import { SectionHead } from './SectionHead';
@@ -31,7 +32,6 @@ import { GenreIconTile, MOOD_GLYPH_NAMES } from './genreIcons';
 import { MagazineHero } from './MagazineHero';
 import { CalendarList } from './CalendarList';
 import { WideCard } from './WideCard';
-import { SliderTray } from './SliderTray';
 import { MoodRoomCard, FeaturedMoodRoomCard } from './MoodRoomCard';
 import { useAuth } from './AuthContext';
 import { useForYouContent } from '@/hooks/useForYouContent';
@@ -235,18 +235,95 @@ export function ForYouPage({
     content.sliders,
     content.prebuiltAnchorRooms,
   );
-  const [showSliderTray, setShowSliderTray] = useState(false);
   const [activeMood, setActiveMood] = useState<string | null>(null);
+
+  // Inline taste-fingerprint editing. Locked by default — tap the lock
+  // icon to unlock; sliders become draggable. Auto-relocks 5s after
+  // the last interaction so the surface doesn't sit exposed if the
+  // user wanders. Drafts are local during a drag; on pointer-release
+  // we commit via `content.rerank` which updates the engine's slider
+  // state and re-scores the cached pool.
+  const [slidersUnlocked, setSlidersUnlocked] = useState(false);
+  const [draftSliders, setDraftSliders] = useState<Partial<SliderState>>({});
+  const lockTimerRef = useRef<number | null>(null);
+  // Mirror of draftSliders so handleSliderCommit can read the latest
+  // in-flight drafts without listing draftSliders as a dep (which would
+  // rebuild the callback every drag tick).
+  const draftSlidersRef = useRef(draftSliders);
+  draftSlidersRef.current = draftSliders;
+
+  const cancelLockTimer = useCallback(() => {
+    if (lockTimerRef.current !== null) {
+      window.clearTimeout(lockTimerRef.current);
+      lockTimerRef.current = null;
+    }
+  }, []);
+
+  const armLockTimer = useCallback(() => {
+    cancelLockTimer();
+    lockTimerRef.current = window.setTimeout(() => {
+      setSlidersUnlocked(false);
+      setDraftSliders({});
+      lockTimerRef.current = null;
+    }, 5000);
+  }, [cancelLockTimer]);
+
+  useEffect(() => () => cancelLockTimer(), [cancelLockTimer]);
+
+  // Pointer down on any slider — kill the relock timer outright so it
+  // cannot fire while a thumb is held (even if the user pauses mid-drag
+  // without moving). It is re-armed on commit. This is the fix for the
+  // "held the slider for 5s, it relocked and threw the edit away" bug.
+  const handleSliderDragStart = useCallback(() => {
+    cancelLockTimer();
+  }, [cancelLockTimer]);
+
+  const handleSliderDraft = useCallback(
+    (key: keyof SliderState, value: number) => {
+      setDraftSliders((prev) => ({ ...prev, [key]: value }));
+    },
+    [],
+  );
+
+  const handleSliderCommit = useCallback(
+    (key: keyof SliderState, value: number) => {
+      if (!content.sliders) return;
+      // Merge against any OTHER still-in-flight drafts (concurrent
+      // multi-touch on a second slider) so a second commit reading a
+      // pre-merge content.sliders snapshot can't clobber the first.
+      content.rerank({ ...content.sliders, ...draftSlidersRef.current, [key]: value });
+      setDraftSliders((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      armLockTimer();
+    },
+    // Deliberately narrow: content.rerank is a stable useCallback and
+    // content.sliders only changes on commit. Depending on the whole
+    // `content` object would rebuild this every render (it re-identifies
+    // each load/rerank) for no behavioural gain.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [content.sliders, content.rerank, armLockTimer],
+  );
+
+  const handleLockToggle = useCallback(() => {
+    setSlidersUnlocked((wasUnlocked) => {
+      if (wasUnlocked) {
+        cancelLockTimer();
+        setDraftSliders({});
+        return false;
+      }
+      armLockTimer();
+      return true;
+    });
+  }, [armLockTimer, cancelLockTimer]);
 
   const applyFilters = useCallback(
     (items: ContentItem[]) => filterLanguage(filterWatched(items)),
     [filterLanguage, filterWatched],
   );
 
-  const handleSlidersChange = useCallback(
-    (newSliders: SliderState) => content.rerank(newSliders),
-    [content],
-  );
 
   const recs = useMemo(() => applyFilters(content.recommendedForYou), [applyFilters, content.recommendedForYou]);
   const topPick = recs[0];
@@ -420,19 +497,24 @@ export function ForYouPage({
             {content.sliders && (
               <button
                 type="button"
-                onClick={() => setShowSliderTray(true)}
-                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5"
+                onClick={handleLockToggle}
+                aria-label={slidersUnlocked ? 'Lock taste sliders' : 'Unlock taste sliders to edit'}
+                aria-pressed={slidersUnlocked}
+                className="shrink-0 inline-flex items-center justify-center w-9 h-9 transition-colors"
                 style={{
-                  background: 'var(--surface-tint)',
-                  color: 'var(--fg)',
+                  background: slidersUnlocked
+                    ? 'color-mix(in srgb, var(--primary) 14%, transparent)'
+                    : 'var(--surface-tint)',
+                  color: slidersUnlocked ? 'var(--primary)' : 'var(--fg-soft)',
+                  border: slidersUnlocked
+                    ? '1px solid color-mix(in srgb, var(--primary) 50%, transparent)'
+                    : '1px solid transparent',
                   borderRadius: 'var(--r-pill)',
-                  fontFamily: 'var(--font-ui)',
-                  fontSize: 13,
-                  fontWeight: 500,
                 }}
               >
-                <Sliders className="w-3.5 h-3.5" />
-                <span>Tune</span>
+                {slidersUnlocked
+                  ? <LockOpen className="w-4 h-4" />
+                  : <Lock className="w-4 h-4" />}
               </button>
             )}
           </div>
@@ -443,58 +525,24 @@ export function ForYouPage({
               { key: 'contentMix',   left: 'TV',      right: 'FILM',       label: 'Content mix' },
               { key: 'variety',      left: 'FOCUSED', right: 'VARIETY',    label: 'Focus' },
             ] as const).map(({ key, left, right, label }) => {
-              const value = content.sliders?.[key] ?? 0.5;
+              // Drafts override the engine's value while the user is
+              // actively dragging; otherwise we read the committed
+              // engine state. Falling back to 0.5 keeps the thumb
+              // centred until taste-v2 finishes loading.
+              const liveValue =
+                draftSliders[key] ?? content.sliders?.[key] ?? 0.5;
               return (
-                <div key={key} className="flex flex-col gap-1 min-w-0">
-                  <div
-                    className="flex items-center justify-between gap-2"
-                    style={{
-                      fontFamily: 'var(--font-ui)',
-                      fontSize: 10,
-                      fontWeight: 700,
-                      letterSpacing: '0.08em',
-                      textTransform: 'uppercase',
-                      color: 'var(--fg-faint)',
-                    }}
-                  >
-                    <span className="truncate">{left}</span>
-                    <span className="truncate">{right}</span>
-                  </div>
-                  <div
-                    className="relative w-full"
-                    style={{
-                      height: 2,
-                      background: 'var(--surface-tint)',
-                      borderRadius: 'var(--r-pill)',
-                      marginTop: 6,
-                    }}
-                  >
-                    <span
-                      aria-hidden
-                      className="absolute"
-                      style={{
-                        left: `calc(${value * 100}% - 7px)`,
-                        top: -6,
-                        width: 14,
-                        height: 14,
-                        borderRadius: '50%',
-                        background: 'var(--primary)',
-                        boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
-                      }}
-                    />
-                  </div>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-ui)',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: 'var(--fg)',
-                      marginTop: 6,
-                    }}
-                  >
-                    {label}
-                  </span>
-                </div>
+                <TasteSlider
+                  key={key}
+                  value={liveValue}
+                  editable={slidersUnlocked}
+                  onDragStart={handleSliderDragStart}
+                  onChange={(v) => handleSliderDraft(key, v)}
+                  onCommit={(v) => handleSliderCommit(key, v)}
+                  left={left}
+                  right={right}
+                  label={label}
+                />
               );
             })}
           </div>
@@ -749,14 +797,6 @@ export function ForYouPage({
           />
         )}
       </motion.div>
-
-      {/* Slider Tray (bottom sheet) */}
-      <SliderTray
-        isOpen={showSliderTray}
-        onClose={() => setShowSliderTray(false)}
-        onSlidersChange={handleSlidersChange}
-        initialSliders={content.sliders}
-      />
     </div>
   );
 }
