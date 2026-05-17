@@ -291,3 +291,38 @@ Conflict resolutions captured this pass:
 - `supabase/cron/*.sql` files overlap with migration 039 (both manage same registrations). Phase 5.5 IN-PX-31 will resolve via deletion or "MANAGED BY MIGRATION 039" header.
 
 Page count delta: 118 → 119 (+1 phase-5.md).
+
+## [2026-05-15] ingest | Phase 5.5 close-out (PR #11 + parking lot v0.7 + phase-5.5-summary + IN-465 investigation)
+Wiki refreshed to align with Phase 5.5 reality (closed 2026-05-15, PR #11 awaiting merge to main).
+
+Raw additions:
+- `raw/phase-summaries/phase-5.5-summary.md` — 10-section close-out doc.
+- `raw/research/in-465-catalogue-sync-gap.md` — diagnostic findings + MID-priority verdict.
+
+New pages:
+- `wiki/concepts/operations/phase-5-5.md` — full Phase 5.5 page following the Phase 5 template, three clusters (A: quality / type / performance, B: legal disclosures, C: catalogue gap closure), plan-vs-reality deviations, post-merge review pass (kieran-typescript-reviewer + repo-research-analyst), follow-ups filed for Phase 6.
+
+Updated pages:
+- `wiki/concepts/operations/phase-history.md` — Phase 5.5 row replaces placeholder. 30 commits across three clusters; closed 2026-05-15.
+- `wiki/entities/codebase/migrations.md` — rows 042 (`delete_own_account` belt-and-braces) + 043 (`export_user_data` GDPR Article 20) added. **Source-of-truth gap on `delete_own_account` closed.** Migration numbering footnote: plan v3 named 041 + 042, live shifted to 042 + 043 (041 was Phase Search V2's `user_feature_flags`). Studio implicit-transaction quirk noted (`||`-concatenated COMMENT rolls back the whole migration).
+- `wiki/entities/codebase/rpcs.md` — `delete_own_account` flag flipped from ⚠ source-of-truth gap → ✅ captured Phase 5.5; full body shape documented (8 explicit DELETEs in dependency order). New `export_user_data` section. Conventions section updated with NULL `auth.uid()` raise pattern (the Supabase auto-grant means body's null check is the actual auth gate). Filed Phase 6 follow-ups IN-PX-52 (Edge typegen) + IN-PX-54 (CI check for user-scoped tables in delete + export RPCs).
+- `wiki/concepts/architecture/recommendation-pipeline.md` — new "Phase 5.5 update" section covering embedding cache (24h client localStorage + per-Edge-instance Map keyed `userId + taste_profiles.updated_at`), Float32Array map shape + cached cosine norms (~3× MMR hot-loop speedup), MMR partial-coverage fallback (`bailedOut` signal at > 50% null after MMR_MIN_SAMPLE picks), `buildRowFromPool` options-object refactor, `ViewingContext` narrowing at the DB boundary, vitest rig + 10 pure-function tests, foryou-parity golden probe activation.
+- `wiki/registers/parking-lot.md` — sources bumped to v0.7. **14 in-scope IN-PX entries flipped ✅** (IN-PX-21..28 except 29/30/32, IN-PX-31, IN-PX-33, IN-PX-34, IN-PX-35), plus IN-XPS-001 ✅ (privacy disclosure alignment closed by IN-PX-34's functional pages), IN-XPS-006 ✅ (delete account), IN-XPS-012 ✅ (parity probe activated 2026-05-15), IN-465 ✅ (catalogue gap closed). **Two new entries filed at Phase 5.5 close: IN-XPS-014** (UK solicitor review — hard pre-launch blocker) + **IN-PX-50** (scheduled Edge backfill automation — Phase 6). **Four review-pass follow-ups filed:** IN-PX-51 ✅ (clearEmbeddingCache on SIGNED_OUT — fixed in commit e9c8560), IN-PX-52 ⏳ (Edge `_shared/database.types.ts` regen — Phase 6), IN-PX-53 ⏳ (Safari mobile 5MB cache quota — Phase 6+), IN-PX-54 ⏳ (CI check for user-scoped tables — Phase 6). Counts refreshed: 97 total, 59 ✅, 27 ⏳, 2 ⚠, 1 🛑, 6 🅿.
+- `wiki/registers/pre-launch-blockers.md` — items **5 ✅ (delete account), 6 ✅ (data export), 9 ✅ (privacy alignment), 26 ✅ (Privacy + ToS pages), 27 ✅ (parity probe activation), 30 ✅ (Phase 5.5 summary doc)** closed. Items 7 + 8 (counsel review + controller details) consolidated into **new item 29: UK solicitor review of Privacy Policy + ToS** (parking-lot IN-XPS-014; hard pre-launch blocker). Counts refreshed: 14 open / 13 done (was 19 / 6 at Phase 5 close).
+- `index.md` — `phase-5-5.md` reference added under operations.
+
+Source-of-truth pointers:
+- Phase 5.5 summary: `docs/v2/phase-summaries/phase-5.5-summary.md`.
+- Parking lot v0.7: `docs/v2/Videx_v2_Implementation_Notes_Parking_Lot_v0.7.md`.
+- IN-465 investigation: `docs/v2/investigations/in-465-catalogue-sync-gap.md`.
+
+Conflict resolutions captured this pass:
+- `delete_own_account` source-of-truth gap (open since Phase 3) **closed** in migration 042. Live RPC body was minimal — relied on FK CASCADE chains. Cascade audit confirmed all 8 user-scoped tables CASCADE properly; migration ships the same behaviour with belt-and-braces explicit DELETEs.
+- Plan v3 named Phase 5.5 migrations 041 (delete) + 042 (export). Live shifted to 042 + 043 because `041_user_feature_flags.sql` already shipped in Phase Search V2. `040_editor_notes.sql` lives in the repo unapplied — accounts for the retained `editor_notes` `as any` cast in `useHomeContent.ts`.
+- Plan v1 cache key had 4 components (userId + tasteVectorHash + filterSetsSizesHash + tasteProfiles.updated_at); review pass collapsed to 2 (userId + taste_profiles.updated_at). Hash-derivation surface eliminated.
+- Original C5 implementation only wired `clearEmbeddingCache` into the manual `signOut` callback. Post-review fixup hooked into `onAuthStateChange` SIGNED_OUT to cover JWT expiry / multi-tab / server-side invalidation. UserId namespacing in the key prevented correctness contamination; this closed the docstring contract gap.
+- IN-465 plan v3 anticipated a discover-pattern patch on `scripts/sync-content.ts` or its cron equivalent. Investigation surfaced **there is no cron equivalent for the titles-creation side** — `daily-content-sync` only refreshes `streaming_availability`, never creates `titles` rows. So `scripts/backfill_missing_titles.ts` (its `LEFT JOIN ... WHERE titles IS NULL` query) IS the recurring fix. Phase 6 IN-PX-50 wraps it in scheduled Edge automation.
+- Migration 042 + 043 first apply failed on `||`-concatenated COMMENT strings. Studio's SQL editor wraps the paste in an implicit transaction; the trailing COMMENT failure rolled back function creation. Fixup collapsed both to single-line literals; re-applied cleanly.
+- Supabase auto-grants EXECUTE to anon / authenticated / service_role on every `public.*` function so PostgREST can route to it. The migration's `REVOKE FROM PUBLIC, anon` doesn't persist — the body's NULL `auth.uid()` raise is the actual auth gate. Documented inline in both 042 and 043.
+
+Page count delta: 119 → 120 (+1 `phase-5-5.md`).

@@ -3,9 +3,10 @@ title: Supabase RPC Catalogue
 type: entity
 tags: [supabase, rpc, postgres]
 created: 2026-04-26
-updated: 2026-05-07
+updated: 2026-05-15
 sources:
   - raw/codebase-snapshots/rpc-catalogue.md
+  - raw/phase-summaries/phase-5.5-summary.md
 related:
   - wiki/entities/codebase/database-schema.md
   - wiki/entities/codebase/migrations.md
@@ -73,11 +74,22 @@ Every Supabase function callable via `supabase.rpc()`. Source of truth: `supabas
 - Caller: `AuthContext.checkUsernameAvailable` (signup flow username availability indicator).
 - Notes: SECURITY DEFINER + STABLE, granted to `anon` and `authenticated`. **Phase 5 (IN-XPS-002, migration 038):** replaces the wide-open `"Allow public username lookup"` policy on `profiles` with this scoped boolean RPC. Anon SELECT on profiles is now denied entirely. Trade-off: anon callers can still enumerate usernames one-at-a-time; rate-limit tracked as Phase 6 follow-up (IN-PX-29).
 
-### `delete_own_account()` — ⚠ source-of-truth gap
+### `delete_own_account()` — ✅ captured Phase 5.5
 
 - Caller: `AuthContext.deleteAccount` via `supabase.rpc('delete_own_account')`.
-- Notes: **Exists in production but NOT in any version-controlled migration.** Only `027_function_search_path_pin.sql:28` references it (pinning its `search_path`). Was created via Studio at some point during Phase 3.
-- **Status (Phase 5 close-out re-audit):** RPC is deployed, client wiring is in place, but the UI button at `ProfilePage.tsx:887-893` is intentionally disabled with a "not yet available" notice. Phase 5.5 IN-XPS-006 plan: audit RPC body via `\df+`, capture in new migration `041_delete_own_account.sql`, test on a throwaway account, flip the UI gate, add type-username-to-confirm flow.
+- **Source-of-truth gap closed Phase 5.5 (migration 042, 2026-05-15).** Live RPC body was captured pre-cut (H5 audit) — original body was a minimal single-line `DELETE FROM auth.users WHERE id = auth.uid();` relying entirely on FK cascade chains.
+- **Body (migration 042):** SECURITY DEFINER + `SET search_path = public, pg_temp`. Raises `'delete_own_account called without auth.uid()'` if `auth.uid()` returns NULL. Then explicit DELETEs across 8 user-scoped tables in this order: `card_impressions` → `user_interactions` → `taste_profiles` → `user_services` → `user_genres` → `watchlist` → `onboarding_events` → `user_feature_flags` → `profiles` → `auth.users`. Belt-and-braces against future cascade-rule regression.
+- **Supabase auto-grant gotcha:** the migration's `REVOKE EXECUTE FROM PUBLIC, anon` doesn't persist — Supabase auto-grants EXECUTE to anon / authenticated / service_role on every `public.*` function so PostgREST can route to it. The functional auth gate is the body's NULL `auth.uid()` raise, not the grant. Documented inline in the migration.
+- **C11 throwaway-account smoke test (validated 2026-05-15):** throwaway user with 113 `card_impressions` + 6 `onboarding_events` + profile / taste / services rows. Post-`delete_own_account()`: every count = 0; `auth.users` row gone. The 113 → 0 specifically validates the partitioned `card_impressions` FK CASCADE.
+- UI gate flipped at the same time (`ProfilePage.tsx` `PrivacyDataPage` modal): type-username-to-confirm UX, case-insensitive trimmed match against `currentUsername`.
+
+### `export_user_data()` — NEW Phase 5.5
+
+- Returns: `jsonb` object keyed by user-scoped table.
+- Caller: `src/lib/storage/userExport.ts` via `supabase.rpc('export_user_data')`, which then branches on `Capacitor.isNativePlatform()` to either `@capacitor/filesystem` `writeFile` (Documents directory) or browser Blob download.
+- Notes: GDPR Article 20 (data portability) + Article 15 (access). SECURITY DEFINER + search_path pinned. Raises if `auth.uid()` is NULL. Scoped to caller's user_id on every internal `SELECT ... WHERE user_id = v_user_id`.
+- **Payload shape:** keys `profiles`, `taste_profiles`, `user_services`, `user_genres`, `watchlist`, `user_interactions`, `card_impressions` (capped to last 90 days — matches migration 014's daily-aggregate rollup), `onboarding_events`. Plus `_export_metadata` with `{ version: '1.0', generated_at: now(), user_id: auth.uid() }`. Empty tables return `'[]'::jsonb` via `COALESCE`.
+- Migration: 043 (applied 2026-05-15). Verified `prosecdef = true`, `search_path = public,pg_temp`.
 
 ## Edge Functions (RPC-shaped HTTP endpoints)
 
@@ -103,5 +115,11 @@ These are not pg-callable RPCs but follow the same client-side pattern (`supabas
 ## Conventions
 
 - All functions have `search_path` pinned (`SET search_path = public, pg_temp`) per migration 027 to neutralise role-default redirection attacks.
-- All functions are `SECURITY DEFINER` only where strictly needed (mood room and ranking RPCs, `username_available`, `delete_own_account`); data-quality functions are `SECURITY INVOKER`.
-- New RPCs added in Phase 5.5+ must have their definition in a version-controlled migration from the start. Don't repeat the `delete_own_account` source-of-truth gap.
+- All functions are `SECURITY DEFINER` only where strictly needed (mood room and ranking RPCs, `username_available`, `delete_own_account`, `export_user_data`); data-quality functions are `SECURITY INVOKER`.
+- New RPCs must have their definition in a version-controlled migration from the start. Don't repeat the `delete_own_account` source-of-truth gap (closed Phase 5.5).
+- Auth-gated RPCs should raise on NULL `auth.uid()` inside the function body. The Supabase auto-grant on `public.*` functions means `REVOKE FROM PUBLIC, anon` doesn't stick — the body's null check is the actual gate. See migrations 042 and 043 for the pattern.
+
+## Phase 5.5 follow-ups filed for Phase 6
+
+- **IN-PX-52** — Regenerate Edge `_shared/database.types.ts` for typed RPC calls. The Edge tree currently uses `(client.from('titles') as any)` in `supabase/functions/render-foryou-rows/index.ts` and similar shapes — the kind of cast C1 cleaned up on the client side. The `<Database>` generic isn't applied to the Edge `createClient` either. Non-launch-blocking; current `as any` casts are correctness-equivalent, just type-unsafe.
+- **IN-PX-54** — CI check that every public-schema table with a `user_id` column is referenced in both `delete_own_account` and `export_user_data`. Defensive against future schema drift adding a new user-scoped table without updating the RPCs.
