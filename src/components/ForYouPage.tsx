@@ -22,6 +22,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Loader2, Lock, LockOpen } from 'lucide-react';
 import { motion } from 'motion/react';
+import { TasteSlider } from './TasteSlider';
 import { ContentRow } from './ContentRow';
 import { NumberedChart } from './NumberedChart';
 import { SectionHead } from './SectionHead';
@@ -31,7 +32,6 @@ import { GenreIconTile, MOOD_GLYPH_NAMES } from './genreIcons';
 import { MagazineHero } from './MagazineHero';
 import { CalendarList } from './CalendarList';
 import { WideCard } from './WideCard';
-import { SliderTray } from './SliderTray';
 import { MoodRoomCard, FeaturedMoodRoomCard } from './MoodRoomCard';
 import { useAuth } from './AuthContext';
 import { useForYouContent } from '@/hooks/useForYouContent';
@@ -76,143 +76,6 @@ const MOOD_GLYPHS: Record<(typeof MOOD_CHIPS)[number], { title: string; subtitle
   'Funny':        { title: 'Funny',       subtitle: 'Belly laugh' },
   'Romance':      { title: 'Romance',     subtitle: 'Heart swell' },
 };
-
-/**
- * TasteSlider — single slider row inside the taste fingerprint card.
- * Renders read-only when `editable=false` (current behaviour); switches
- * to a draggable variant when unlocked, with a larger pointer hit-area
- * so the thin 2px track is comfortable to grab on touch.
- *
- * `onChange` fires on every drag tick (cheap visual update); `onCommit`
- * fires once on pointer release with the final value (kicks the
- * recommender re-rank). Same split keeps the rerank from churning at
- * 60fps while the thumb is moving.
- */
-function TasteSlider({
-  value,
-  editable,
-  onChange,
-  onCommit,
-  left,
-  right,
-  label,
-}: {
-  value: number;
-  editable: boolean;
-  onChange: (v: number) => void;
-  onCommit: (v: number) => void;
-  left: string;
-  right: string;
-  label: string;
-}) {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const draggingRef = useRef(false);
-  const latestValueRef = useRef(value);
-  latestValueRef.current = value;
-
-  const valueFromEvent = (clientX: number): number => {
-    if (!trackRef.current) return value;
-    const rect = trackRef.current.getBoundingClientRect();
-    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-  };
-
-  const handlePointerDown = (e: React.PointerEvent) => {
-    if (!editable) return;
-    draggingRef.current = true;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    onChange(valueFromEvent(e.clientX));
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!draggingRef.current) return;
-    onChange(valueFromEvent(e.clientX));
-  };
-
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (!draggingRef.current) return;
-    draggingRef.current = false;
-    try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-    onCommit(latestValueRef.current);
-  };
-
-  return (
-    <div className="flex flex-col gap-1 min-w-0">
-      <div
-        className="flex items-center justify-between gap-2"
-        style={{
-          fontFamily: 'var(--font-ui)',
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: '0.08em',
-          textTransform: 'uppercase',
-          color: 'var(--fg-faint)',
-        }}
-      >
-        <span className="truncate">{left}</span>
-        <span className="truncate">{right}</span>
-      </div>
-      {/* Hit-area wraps the visible track. When editable we expand the
-          touch target to 24px tall so the 2px line is easy to grab; the
-          line itself stays thin via the inner element. `touch-action:
-          none` prevents the page from picking the gesture up as a
-          vertical scroll. */}
-      <div
-        ref={trackRef}
-        className="relative w-full"
-        style={{
-          height: editable ? 24 : 2,
-          marginTop: editable ? -5 : 6,
-          marginBottom: editable ? -5 : 0,
-          touchAction: editable ? 'none' : 'auto',
-          cursor: editable ? 'pointer' : 'default',
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-      >
-        <div
-          className="absolute left-0 right-0"
-          style={{
-            top: '50%',
-            transform: 'translateY(-50%)',
-            height: 2,
-            background: 'var(--surface-tint)',
-            borderRadius: 'var(--r-pill)',
-          }}
-        />
-        <span
-          aria-hidden
-          className="absolute"
-          style={{
-            left: `calc(${value * 100}% - 7px)`,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            width: editable ? 16 : 14,
-            height: editable ? 16 : 14,
-            borderRadius: '50%',
-            background: 'var(--primary)',
-            boxShadow: editable
-              ? '0 0 0 4px color-mix(in srgb, var(--primary) 25%, transparent), 0 1px 4px rgba(0,0,0,0.25)'
-              : '0 1px 4px rgba(0,0,0,0.25)',
-            transition: 'width 120ms var(--ease-out), height 120ms var(--ease-out), box-shadow 120ms var(--ease-out)',
-          }}
-        />
-      </div>
-      <span
-        style={{
-          fontFamily: 'var(--font-ui)',
-          fontSize: 12,
-          fontWeight: 600,
-          color: 'var(--fg)',
-          marginTop: 6,
-        }}
-      >
-        {label}
-      </span>
-    </div>
-  );
-}
 
 function getGreeting(now = new Date()): string {
   const h = now.getHours();
@@ -372,7 +235,6 @@ export function ForYouPage({
     content.sliders,
     content.prebuiltAnchorRooms,
   );
-  const [showSliderTray, setShowSliderTray] = useState(false);
   const [activeMood, setActiveMood] = useState<string | null>(null);
 
   // Inline taste-fingerprint editing. Locked by default — tap the lock
@@ -384,6 +246,11 @@ export function ForYouPage({
   const [slidersUnlocked, setSlidersUnlocked] = useState(false);
   const [draftSliders, setDraftSliders] = useState<Partial<SliderState>>({});
   const lockTimerRef = useRef<number | null>(null);
+  // Mirror of draftSliders so handleSliderCommit can read the latest
+  // in-flight drafts without listing draftSliders as a dep (which would
+  // rebuild the callback every drag tick).
+  const draftSlidersRef = useRef(draftSliders);
+  draftSlidersRef.current = draftSliders;
 
   const cancelLockTimer = useCallback(() => {
     if (lockTimerRef.current !== null) {
@@ -403,18 +270,28 @@ export function ForYouPage({
 
   useEffect(() => () => cancelLockTimer(), [cancelLockTimer]);
 
+  // Pointer down on any slider — kill the relock timer outright so it
+  // cannot fire while a thumb is held (even if the user pauses mid-drag
+  // without moving). It is re-armed on commit. This is the fix for the
+  // "held the slider for 5s, it relocked and threw the edit away" bug.
+  const handleSliderDragStart = useCallback(() => {
+    cancelLockTimer();
+  }, [cancelLockTimer]);
+
   const handleSliderDraft = useCallback(
     (key: keyof SliderState, value: number) => {
       setDraftSliders((prev) => ({ ...prev, [key]: value }));
-      armLockTimer();
     },
-    [armLockTimer],
+    [],
   );
 
   const handleSliderCommit = useCallback(
     (key: keyof SliderState, value: number) => {
       if (!content.sliders) return;
-      content.rerank({ ...content.sliders, [key]: value });
+      // Merge against any OTHER still-in-flight drafts (concurrent
+      // multi-touch on a second slider) so a second commit reading a
+      // pre-merge content.sliders snapshot can't clobber the first.
+      content.rerank({ ...content.sliders, ...draftSlidersRef.current, [key]: value });
       setDraftSliders((prev) => {
         const next = { ...prev };
         delete next[key];
@@ -422,7 +299,12 @@ export function ForYouPage({
       });
       armLockTimer();
     },
-    [content, armLockTimer],
+    // Deliberately narrow: content.rerank is a stable useCallback and
+    // content.sliders only changes on commit. Depending on the whole
+    // `content` object would rebuild this every render (it re-identifies
+    // each load/rerank) for no behavioural gain.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [content.sliders, content.rerank, armLockTimer],
   );
 
   const handleLockToggle = useCallback(() => {
@@ -442,10 +324,6 @@ export function ForYouPage({
     [filterLanguage, filterWatched],
   );
 
-  const handleSlidersChange = useCallback(
-    (newSliders: SliderState) => content.rerank(newSliders),
-    [content],
-  );
 
   const recs = useMemo(() => applyFilters(content.recommendedForYou), [applyFilters, content.recommendedForYou]);
   const topPick = recs[0];
@@ -658,6 +536,7 @@ export function ForYouPage({
                   key={key}
                   value={liveValue}
                   editable={slidersUnlocked}
+                  onDragStart={handleSliderDragStart}
                   onChange={(v) => handleSliderDraft(key, v)}
                   onCommit={(v) => handleSliderCommit(key, v)}
                   left={left}
@@ -918,14 +797,6 @@ export function ForYouPage({
           />
         )}
       </motion.div>
-
-      {/* Slider Tray (bottom sheet) */}
-      <SliderTray
-        isOpen={showSliderTray}
-        onClose={() => setShowSliderTray(false)}
-        onSlidersChange={handleSlidersChange}
-        initialSliders={content.sliders}
-      />
     </div>
   );
 }
