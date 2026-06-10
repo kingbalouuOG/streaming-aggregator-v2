@@ -32,6 +32,17 @@ export interface TasteProfileV2 {
   selectedClusters: string[];
 }
 
+export const MAX_INTEREST_CENTROIDS = 3;
+
+export const INTEREST_WEIGHT_FLOOR = 0.15;
+
+export interface InterestCentroid {
+  slot: number;
+  centroid: TasteVectorV2;
+  weight: number;
+  updatedAt: string;
+}
+
 export const INTERACTION_WEIGHTS: Record<string, number> = {
   thumbs_up: 1.0,
   watched: 0.5,

@@ -44,6 +44,30 @@ export interface TasteProfileV2 {
   selectedClusters: string[];
 }
 
+/** Maximum interest centroids per user — fixed at 3 for ENG-1 (E&P brief §9 D3) */
+export const MAX_INTEREST_CENTROIDS = 3;
+
+/**
+ * Floor for an interest's retrieval weight (ENG-1). A minority interest must
+ * never starve retrieval — at 0.15 it keeps ~30 of the ~600 pre-dedupe
+ * per-centroid retrieval slots. Weights are floored, then renormalised to
+ * sum 1 across the user's slots.
+ */
+export const INTEREST_WEIGHT_FLOOR = 0.15;
+
+/**
+ * One interest centroid (user_interest_centroids, migration 044).
+ * Zero rows for a user = single-centroid fallback path via
+ * taste_profiles.taste_vector_v2 — which continues to be maintained as
+ * the summary vector regardless (mood-room affinity, semantic search).
+ */
+export interface InterestCentroid {
+  slot: number;            // 0–2
+  centroid: TasteVectorV2;
+  weight: number;          // share of recent positive interactions, floored + normalised
+  updatedAt: string;       // ISO timestamp
+}
+
 /** Interaction weight table — maps event_type to taste vector weight */
 export const INTERACTION_WEIGHTS: Record<string, number> = {
   thumbs_up: 1.0,
