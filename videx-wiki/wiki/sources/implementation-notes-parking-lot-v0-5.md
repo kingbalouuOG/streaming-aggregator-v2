@@ -7,13 +7,15 @@ updated: 2026-04-30
 supersedes:
   - wiki/sources/implementation-notes-parking-lot-v0-3-4.md
 sources:
-  - raw/v2-strategy/Videx_v2_Implementation_Notes_Parking_Lot_v0.5.md
+  - raw/v2-strategy/Videx_v2_Implementation_Notes_Parking_Lot_v0.5.md # never snapshotted to raw/ — page written from the docs/ copy; v0.5 deltas preserved in the v0.7 changelog
 related:
   - wiki/concepts/decisions/adr-012-server-side-foryou-render.md
   - wiki/concepts/architecture/for-you-surface.md
 ---
 
 # Source: Implementation Notes Parking Lot v0.5
+
+> **Superseded by [Implementation Notes Parking Lot v0.7 (+ ENG-1 section)](implementation-notes-parking-lot-v0-7.md)** (2026-06-10 snapshot). v0.6 was never snapshotted to raw/.
 
 Running list of implementation-level notes that need to make it into CC briefs when the relevant phase comes up.
 

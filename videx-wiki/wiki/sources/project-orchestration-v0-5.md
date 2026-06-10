@@ -7,7 +7,7 @@ updated: 2026-04-30
 supersedes:
   - wiki/sources/project-orchestration-v0-3-3.md
 sources:
-  - raw/v2-strategy/Videx_v2_Project_Orchestration_v0.5.md
+  - raw/v2-strategy/Videx_v2_Project_Orchestration_v0.5.md # never snapshotted to raw/ — page written from the docs/ copy; v0.5 deltas preserved in the v0.8 changelog
 related:
   - wiki/concepts/operations/edge-function-deployment.md
   - wiki/concepts/decisions/adr-011-edge-function-shared-modules.md
@@ -15,6 +15,8 @@ related:
 ---
 
 # Source: Project Orchestration v0.5
+
+> **Superseded by [Project Orchestration v0.8](project-orchestration-v0-8.md)** (E&P track kickoff, 2026-06-10). v0.6/v0.7 were never snapshotted to raw/.
 
 Versioned working doc for v2 build orchestration: branching model, environment setup, migration management, daily workflow, CI, scheduled jobs, backups.
 
