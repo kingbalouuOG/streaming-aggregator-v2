@@ -27,6 +27,7 @@ import { hash as hashFilters, hashString, isDefault as isDefaultFilters } from "
 import { recordImpression } from "@/lib/instrumentation/impressionBatcher";
 import { getCurrentSessionId } from "@/lib/instrumentation/sessionId";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
+import { setCardClickContext } from "@/lib/instrumentation/clickContext";
 import { emitSearch } from "@/lib/storage/interactions";
 import type { ServiceId } from "./platformLogos";
 
@@ -953,7 +954,15 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                     key={item.id}
                     item={renderItem}
                     index={index}
-                    onSelect={onItemSelect}
+                    onSelect={(selected) => {
+                      // ENG-1 Workstream D: stash the ranked origin for
+                      // position-at-click on downstream outcome events.
+                      const { tmdbId } = parseContentItemId(selected.id);
+                      if (!Number.isNaN(tmdbId)) {
+                        setCardClickContext({ contentId: tmdbId, position: index, surface: 'search' });
+                      }
+                      onItemSelect?.(selected);
+                    }}
                     bookmarked={bookmarkedIds?.has(item.id)}
                     onToggleBookmark={onToggleBookmark}
                     userServices={userServices}
