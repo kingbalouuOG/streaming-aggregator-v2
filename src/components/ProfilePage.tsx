@@ -720,18 +720,19 @@ function TuneRecommendationsPage({ onBack }: { onBack: () => void }) {
     { key: 'variety' as const, left: 'Finish what I start', right: 'Try lots of things' },
   ];
 
-  // Lowercase the first word only, preserving proper nouns like "TV"
+  // Lowercase the first word only, preserving acronyms like "TV"
   const softLower = (s: string): string => {
-    if (s.length === 0) return s;
+    if (s.length === 0 || /^[A-Z]{2}/.test(s)) return s;
     return s[0].toLowerCase() + s.slice(1);
   };
 
-  // Dynamic slider position label
+  // Dynamic slider position label. "Balanced" = the midpoint POSITION,
+  // not the default — comfortZone defaults to 0.25 by design and must
+  // not be labelled Balanced there.
   const getSliderLabel = (key: keyof SliderState, value: number): string => {
-    const defaultVal = key === 'comfortZone' ? DEFAULT_SLIDERS.comfortZone : 0.5;
     const cfg = sliderConfig.find(s => s.key === key);
     if (!cfg) return '';
-    if (Math.abs(value - defaultVal) < 0.04) return 'Balanced';
+    if (Math.abs(value - 0.5) < 0.04) return 'Balanced';
     if (value < 0.25) return `Strongly prefer ${softLower(cfg.left)}`;
     if (value < 0.5) return `Slightly prefer ${softLower(cfg.left)}`;
     if (value < 0.75) return `Slightly prefer ${softLower(cfg.right)}`;
