@@ -23,6 +23,9 @@ import { useTheme } from "./ThemeContext";
 import { PLATFORMS, type ServiceId } from "./platformLogos";
 import { ServiceStack } from "./ServiceBadge";
 import { Kicker } from "./Kicker";
+
+/** React.CSSProperties + the --slider-fill custom property used by .videx-slider */
+type SliderFillStyle = React.CSSProperties & { '--slider-fill': string };
 import { TASTE_CLUSTERS, MIN_CLUSTERS, MAX_CLUSTERS } from "@/lib/taste-v2/tasteClusters";
 import { GenreIconTile, CLUSTER_GLYPHS, PROFILE_GLYPHS, type GlyphName } from "./genreIcons";
 import { getSliderState, saveSliderState } from "@/lib/taste-v2/tasteProfileV2";
@@ -766,7 +769,7 @@ function TuneRecommendationsPage({ onBack }: { onBack: () => void }) {
                 value={Math.round(sliders[key] * 100)}
                 onChange={e => updateSlider(key, parseInt(e.target.value, 10) / 100)}
                 className="videx-slider"
-                style={{ ['--slider-fill' as any]: `${Math.round(sliders[key] * 100)}%` }}
+                style={{ '--slider-fill': `${Math.round(sliders[key] * 100)}%` } as SliderFillStyle}
               />
               <p className="text-center text-[11px] text-primary" style={{ fontWeight: 500, marginTop: '0.25rem' }}>
                 {getSliderLabel(key, sliders[key])}

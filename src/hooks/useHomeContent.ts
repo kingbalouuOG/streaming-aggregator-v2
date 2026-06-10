@@ -74,9 +74,19 @@ async function fetchEditorNote(): Promise<EditorNote | null> {
   // Migration 040 (editor_notes) lives in the repo but is not applied to
   // the remote project — `database.types.ts` therefore has no entry for
   // this table, and the .from('editor_notes') call needs to bypass the
-  // type system. Retained as `as any` until the migration is applied;
-  // gracefully no-ops via the catch block below when the table is absent.
-  const { data, error } = await (supabase.from as any)('editor_notes')
+  // generated schema types. A structural stub of the exact call chain is
+  // used until the migration is applied; gracefully no-ops via the error
+  // check below when the table is absent.
+  const untypedFrom = supabase.from as unknown as (table: string) => {
+    select: (columns: string) => {
+      order: (column: string, opts: { ascending: boolean }) => {
+        limit: (count: number) => {
+          maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>;
+        };
+      };
+    };
+  };
+  const { data, error } = await untypedFrom('editor_notes')
     .select('id, kicker, teaser, body, published_at')
     .order('published_at', { ascending: false })
     .limit(1)

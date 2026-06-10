@@ -15,7 +15,7 @@
 
 import axios from 'axios';
 import { getCachedData, setCachedData, CACHE_PREFIXES, CACHE_TTL } from './cache';
-import { logError, ErrorType } from '../utils/errorHandler';
+import { logError, ErrorType, type ErrorTypeValue } from '../utils/errorHandler';
 import md5 from 'crypto-js/md5';
 
 const SA_API_HOST = 'streaming-availability.p.rapidapi.com';
@@ -56,8 +56,21 @@ saClient.interceptors.response.use(
   }
 );
 
-const handleSAError = (error: any) => {
-  let enhancedError: any;
+/** Minimal axios-error shape — only the fields this handler reads. */
+interface SAAxiosError {
+  response?: { status: number; data?: { message?: string } };
+  request?: unknown;
+  message?: string;
+}
+
+/** Error enriched with classification code + HTTP status for errorHandler. */
+interface EnhancedSAError extends Error {
+  code?: ErrorTypeValue;
+  status?: number;
+}
+
+const handleSAError = (error: SAAxiosError) => {
+  let enhancedError: EnhancedSAError;
 
   if (error.response) {
     const { status, data } = error.response;
@@ -127,9 +140,10 @@ async function cachedRequest<T>(
     }
 
     return { success: true, data };
-  } catch (error: any) {
-    console.error('SA API Error:', error.message);
-    return { success: false, error: error.message, data: fallbackData };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('SA API Error:', message);
+    return { success: false, error: message, data: fallbackData };
   }
 }
 

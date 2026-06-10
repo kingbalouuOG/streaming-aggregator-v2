@@ -23,6 +23,9 @@ import { logOnboardingEvent } from "@/lib/analytics/logger";
 import { ONBOARDING_EVENTS } from "@/lib/analytics/events";
 import { supabase } from "@/lib/supabase";
 import type { SliderState } from "@/lib/taste-v2/types";
+
+/** React.CSSProperties + the --slider-fill custom property used by .videx-slider */
+type SliderFillStyle = React.CSSProperties & { '--slider-fill': string };
 import { DEFAULT_SLIDERS } from "@/lib/taste-v2/types";
 import { useAuth } from "./AuthContext";
 import { PrivacyPolicyPage } from "./PrivacyPolicyPage";
@@ -1247,7 +1250,7 @@ function StepTasteSummary({
                   value={Math.round(sliders[key] * 100)}
                   onChange={e => onSlidersChange({ ...sliders, [key]: parseInt(e.target.value, 10) / 100 })}
                   className="videx-slider"
-                  style={{ ['--slider-fill' as any]: `${Math.round(sliders[key] * 100)}%` }}
+                  style={{ '--slider-fill': `${Math.round(sliders[key] * 100)}%` } as SliderFillStyle}
                 />
                 <p
                   className="text-center"

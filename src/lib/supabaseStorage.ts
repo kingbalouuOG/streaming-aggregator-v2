@@ -8,12 +8,13 @@
 
 import { supabase } from './supabase';
 import { getAuthUserId } from './storage';
+import type { Database } from './database.types';
 import { providerIdToServiceId, serviceIdToProviderId } from './adapters/platformAdapter';
 import { UK_PROVIDERS_ARRAY } from './constants/platforms';
 import type { ServiceId } from '@/components/platformLogos';
 
 // Re-use app types
-import type { WatchlistItem } from './storage/watchlist';
+import type { WatchlistItem, WatchlistMetadataInput } from './storage/watchlist';
 import type { UserProfile, UserPreferences } from './storage/userPreferences';
 
 // ── Rating conversion ───────────────────────────────────────────
@@ -40,14 +41,16 @@ function isoToMs(iso: string): number {
 //  WATCHLIST
 // ═══════════════════════════════════════════════════════════════
 
-function supaRowToWatchlistItem(row: any): WatchlistItem {
+type WatchlistRow = Database['public']['Tables']['watchlist']['Row'];
+
+function supaRowToWatchlistItem(row: WatchlistRow): WatchlistItem {
   return {
     id: row.tmdb_id,
     type: row.media_type as 'movie' | 'tv',
     status: row.status as 'want_to_watch' | 'watched',
     rating: ratingFromSupabase(row.rating),
-    addedAt: isoToMs(row.added_at),
-    updatedAt: row.updated_at ? isoToMs(row.updated_at) : isoToMs(row.added_at),
+    addedAt: isoToMs(row.added_at!),
+    updatedAt: row.updated_at ? isoToMs(row.updated_at) : isoToMs(row.added_at!),
     watchedAt: null, // Not stored in Supabase
     metadata: {
       title: row.title || 'Unknown Title',
@@ -107,7 +110,7 @@ export async function supaGetWatchlistItem(id: number, type: string): Promise<Wa
 export async function supaAddToWatchlist(
   id: number,
   type: 'movie' | 'tv',
-  metadata: any,
+  metadata: WatchlistMetadataInput,
   status: 'want_to_watch' | 'watched' = 'want_to_watch'
 ): Promise<WatchlistItem> {
   const userId = getAuthUserId();
@@ -150,7 +153,7 @@ export async function supaUpdateWatchlistItem(
   if (!userId) return null;
   const now = new Date().toISOString();
 
-  const row: Record<string, any> = { updated_at: now };
+  const row: Database['public']['Tables']['watchlist']['Update'] = { updated_at: now };
 
   if (updates.status !== undefined) row.status = updates.status;
   if (updates.rating !== undefined) row.rating = ratingToSupabase(updates.rating);
@@ -473,7 +476,7 @@ export async function supaSaveUserPreferences(preferences: UserPreferences): Pro
 
   // Update homeGenres and selectedClusters in taste_profiles (if they exist)
   if (preferences.homeGenres || preferences.selectedClusters) {
-    const tasteUpdate: Record<string, any> = { last_updated: new Date().toISOString() };
+    const tasteUpdate: Database['public']['Tables']['taste_profiles']['Update'] = { last_updated: new Date().toISOString() };
     if (preferences.homeGenres) tasteUpdate.home_genres = preferences.homeGenres;
     if (preferences.selectedClusters) tasteUpdate.selected_clusters = preferences.selectedClusters;
 

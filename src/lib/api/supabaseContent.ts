@@ -48,17 +48,17 @@ export async function getStreamingLinks(
     if (error || !data) return [];
 
     const result = data
-      .map((row: any) => {
+      .map((row) => {
         const serviceId = saServiceToServiceId(row.sa_service_id) || row.service_id;
         return {
           serviceId: serviceId as ServiceId,
           saServiceId: row.sa_service_id,
-          streamType: row.stream_type,
+          streamType: row.stream_type as StreamingLink['streamType'],
           deepLinkUrl: row.deep_link_url,
           videoLinkUrl: row.video_link_url || undefined,
-          quality: row.quality === 'default' ? undefined : row.quality,
+          quality: (row.quality === 'default' ? undefined : row.quality) as string | undefined,
           priceFormatted: row.price_amount != null
-            ? `£${parseFloat(row.price_amount).toFixed(2)}`
+            ? `£${parseFloat(String(row.price_amount)).toFixed(2)}`
             : undefined,
           expiresSoon: row.expires_soon || false,
         };
@@ -128,13 +128,13 @@ export async function getRentBuyPrice(
       return null;
     }
 
-    const row: any = data[0];
+    const row = data[0];
     const streamType: 'rent' | 'buy' = row.stream_type === 'buy' ? 'buy' : 'rent';
     const verb = streamType === 'buy' ? 'Buy' : 'Rent';
     // Always format with `£` from price_amount — the upstream
     // `price_formatted` column carries strings like "3.49 GBP" which
     // don't match the GB symbol convention we use everywhere else.
-    const priceText = `£${parseFloat(row.price_amount).toFixed(2)}`;
+    const priceText = `£${parseFloat(String(row.price_amount)).toFixed(2)}`;
     const result = { fromFormatted: `${verb} from ${priceText}`, streamType };
     await setCachedData(cacheKey, result);
     return result;
@@ -179,8 +179,8 @@ export async function searchTitlesByText(
     if (error || !data) return [];
 
     return data
-      .filter((row: any) => row.media_type === 'movie' || row.media_type === 'tv')
-      .map((row: any) => {
+      .filter((row) => row.media_type === 'movie' || row.media_type === 'tv')
+      .map((row) => {
         const genreIds: number[] = Array.isArray(row.genre_ids) ? row.genre_ids : [];
         const isDoc = row.media_type === 'movie' && genreIds.includes(99);
         return {

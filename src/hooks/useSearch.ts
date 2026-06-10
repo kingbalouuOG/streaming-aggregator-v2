@@ -135,9 +135,9 @@ export function useSearch(
           mode: 'semantic',
           metadata: { cached: result.cached },
         });
-      } catch (err: any) {
+      } catch (err) {
         if (currentQueryRef.current !== q) return;
-        setError(err?.message ?? 'Semantic search failed');
+        setError(err instanceof Error ? err.message : 'Semantic search failed');
         if (!append) setResults([]);
       } finally {
         if (currentQueryRef.current === q) setLoading(false);
@@ -220,9 +220,9 @@ export function useSearch(
       }
       setPage(searchPage);
       setHasMore(searchPage < maxTotalPages);
-    } catch (err: any) {
+    } catch (err) {
       if (currentQueryRef.current !== q) return;
-      setError(err.message || 'Search failed');
+      setError(err instanceof Error && err.message ? err.message : 'Search failed');
       if (!append) setResults([]);
     } finally {
       if (currentQueryRef.current === q) {

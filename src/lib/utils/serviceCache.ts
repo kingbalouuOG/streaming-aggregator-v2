@@ -50,10 +50,11 @@ const pendingRequests = new Map<string, Promise<ServiceProviders>>();
 
 // Invalidate stale in-memory cache from pre-fix code (survives HMR)
 const SC_VERSION_KEY = '__sc_version';
-if ((globalThis as any)[SC_VERSION_KEY] !== CACHE_VERSION) {
+const globalWithVersion = globalThis as typeof globalThis & { __sc_version?: number };
+if (globalWithVersion[SC_VERSION_KEY] !== CACHE_VERSION) {
   serviceCache.clear();
   pendingRequests.clear();
-  (globalThis as any)[SC_VERSION_KEY] = CACHE_VERSION;
+  globalWithVersion[SC_VERSION_KEY] = CACHE_VERSION;
 }
 
 // Valid service types for UK market
@@ -162,7 +163,7 @@ const fetchProvidersFromAPI = async (
     const response = await getContentWatchProviders(Number(itemId), mediaType, 'GB');
     if (!response.success || !response.data) return empty;
 
-    const collect = (raw: any[] | undefined): ServiceId[] => {
+    const collect = (raw: Array<{ provider_id: number }> | undefined): ServiceId[] => {
       if (!raw) return [];
       const seen = new Set<ServiceId>();
       const out: ServiceId[] = [];

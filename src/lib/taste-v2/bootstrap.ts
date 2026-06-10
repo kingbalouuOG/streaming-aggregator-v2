@@ -38,7 +38,7 @@ export async function fetchServiceCentroids(
     .eq('region', 'GB');
 
   if (error || !data) {
-    console.error('[Bootstrap] Failed to fetch service fingerprints:', (error as any)?.message);
+    console.error('[Bootstrap] Failed to fetch service fingerprints:', error?.message);
     return [];
   }
 
@@ -67,7 +67,7 @@ export async function fetchTitleEmbeddings(
     .not('embedding', 'is', null);
 
   if (error || !data) {
-    console.error('[Bootstrap] Failed to fetch title embeddings:', (error as any)?.message);
+    console.error('[Bootstrap] Failed to fetch title embeddings:', error?.message);
     return [];
   }
 
@@ -204,7 +204,7 @@ async function fetchTitleEmbeddingMap(
     .not('embedding', 'is', null);
 
   if (error || !data) {
-    console.error('[Bootstrap] Failed to fetch title embedding map:', (error as any)?.message);
+    console.error('[Bootstrap] Failed to fetch title embedding map:', error?.message);
     return map;
   }
 
