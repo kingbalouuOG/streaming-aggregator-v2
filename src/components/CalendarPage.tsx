@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowLeft, Calendar, Film, Tv, SlidersHorizontal, Bookmark, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
@@ -43,6 +44,14 @@ function formatDatePill(dateStr: string): { day: string; num: string; isToday: b
   };
 }
 
+/** Flattened row model for the virtualized upcoming list — one row
+ *  per date-group header, one row per release. `gapBelow` bakes the
+ *  original flex-gap spacing (8px between items, 24px between
+ *  groups, 0 after the final item) into the measured row height. */
+type CalendarRow =
+  | { kind: "header"; date: string }
+  | { kind: "item"; item: UpcomingRelease; gapBelow: number };
+
 export function CalendarPage({ items, loading, onBack, onItemSelect, userServices, bookmarkedIds, onToggleBookmark }: CalendarPageProps) {
   const [serviceFilter, setServiceFilter] = useState<ServiceId | "all">("all");
   const [dateFilter, setDateFilter] = useState<string | "all">("all");
@@ -76,6 +85,73 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
     });
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
   }, [filtered]);
+
+  // ── PLAT-1 §3: upcoming-list virtualization (E&P brief §5) ──────
+  // Long lists flatten the date groups into header/item rows rendered
+  // through a virtualizer attached to the App-level scroll container.
+  // Short lists keep the original grouped markup untouched.
+  const VIRTUALIZE_MIN = 21;
+  const virtualize = filtered.length >= VIRTUALIZE_MIN;
+
+  const rows = useMemo<CalendarRow[]>(() => {
+    if (!virtualize) return [];
+    const out: CalendarRow[] = [];
+    grouped.forEach(([date, releases], groupIndex) => {
+      out.push({ kind: "header", date });
+      releases.forEach((item, releaseIndex) => {
+        const lastInGroup = releaseIndex === releases.length - 1;
+        const lastGroup = groupIndex === grouped.length - 1;
+        out.push({
+          kind: "item",
+          item,
+          gapBelow: lastInGroup ? (lastGroup ? 0 : 24) : 8,
+        });
+      });
+    });
+    return out;
+  }, [grouped, virtualize]);
+
+  const listWrapRef = useRef<HTMLDivElement | null>(null);
+  const scrollParentRef = useRef<HTMLElement | null>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  // Resolve the nearest scrollable ancestor and the list's offset
+  // within it. Deps cover the state that changes the height of the
+  // sticky header block above the list (filter pills, date scroller);
+  // the guarded setState only re-renders when the offset moved.
+  useLayoutEffect(() => {
+    const el = listWrapRef.current;
+    if (!el) return;
+    if (!scrollParentRef.current) {
+      let p: HTMLElement | null = el.parentElement;
+      while (p) {
+        const { overflowY } = window.getComputedStyle(p);
+        if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") break;
+        p = p.parentElement;
+      }
+      scrollParentRef.current = p;
+    }
+    const sp = scrollParentRef.current;
+    if (!sp) return;
+    const margin = Math.round(
+      el.getBoundingClientRect().top - sp.getBoundingClientRect().top + sp.scrollTop,
+    );
+    setScrollMargin((prev) => (Math.abs(prev - margin) > 1 ? margin : prev));
+  }, [filtered.length, uniqueDates.length, showServiceFilter, userServices, serviceFilter, dateFilter, loading]);
+
+  const rowVirtualizer = useVirtualizer<HTMLElement, HTMLDivElement>({
+    count: rows.length,
+    getScrollElement: () => scrollParentRef.current,
+    // Header rows: kicker line + 10px margin. Item rows: 96px thumb +
+    // 20px card padding + 8px row gap. measureElement corrects.
+    estimateSize: (index) => (rows[index].kind === "header" ? 30 : 124),
+    overscan: 6,
+    scrollMargin,
+    getItemKey: (index) => {
+      const row = rows[index];
+      return row.kind === "header" ? `header:${row.date}` : row.item.id;
+    },
+  });
 
   // Auto-scroll date pills to today
   useEffect(() => {
@@ -283,131 +359,193 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
               No new titles found in the next 30 days for your services
             </p>
           </div>
+        ) : virtualize ? (
+          /* Virtualized path — flattened header/item rows, absolutely
+             positioned inside a total-height container. Group spacing
+             (header margin, 8px item gap, 24px group gap) is baked
+             into each row so the rendered layout is identical to the
+             grouped markup below. */
+          <div className="pb-6">
+            <div
+              ref={listWrapRef}
+              className="relative w-full"
+              style={{ height: rowVirtualizer.getTotalSize() }}
+            >
+              {rowVirtualizer.getVirtualItems().map((vRow) => {
+                const row = rows[vRow.index];
+                return (
+                  <div
+                    key={vRow.key}
+                    data-index={vRow.index}
+                    ref={rowVirtualizer.measureElement}
+                    className="absolute top-0 left-0 w-full"
+                    style={{ transform: `translateY(${vRow.start - rowVirtualizer.options.scrollMargin}px)` }}
+                  >
+                    {row.kind === "header" ? (
+                      <GroupDateLabel date={row.date} />
+                    ) : (
+                      <div style={{ paddingBottom: row.gapBelow }}>
+                        <ReleaseRow
+                          item={row.item}
+                          isBookmarked={bookmarkedIds?.has(row.item.id)}
+                          onSelect={() => onItemSelect(row.item)}
+                          onToggleBookmark={onToggleBookmark}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         ) : (
           <div className="flex flex-col gap-6 pb-6">
             {grouped.map(([date, releases]) => (
               <div key={date}>
-                <span
-                  className="t-kicker mb-2.5 inline-block"
-                  style={{ color: "var(--fg-faint)" }}
-                >
-                  {formatGroupDate(date)}
-                </span>
+                <GroupDateLabel date={date} />
                 <div className="flex flex-col gap-2">
-                  {releases.map((item) => {
-                    const isBookmarked = bookmarkedIds?.has(item.id);
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() => onItemSelect(item)}
-                        className="flex items-start gap-3 p-2.5 text-left w-full cursor-pointer"
-                        style={{
-                          borderRadius: "var(--r-md)",
-                          background: "var(--surface-tint)",
-                          color: "var(--fg)",
-                          transition: "background var(--d-fast) var(--ease-out)",
-                        }}
-                      >
-                        {/* Thumbnail */}
-                        <div
-                          className="relative w-16 h-24 overflow-hidden shrink-0"
-                          style={{ borderRadius: "var(--r-sm)" }}
-                        >
-                          <ImageSkeleton
-                            src={item.image}
-                            alt={item.title}
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute bottom-1 left-1">
-                            <div
-                              className="w-4 h-4 flex items-center justify-center"
-                              style={{
-                                borderRadius: 4,
-                                background: "var(--scrim-glass)",
-                                backdropFilter: "blur(6px) saturate(160%)",
-                                WebkitBackdropFilter: "blur(6px) saturate(160%)",
-                                color: "#fff",
-                              }}
-                            >
-                              {item.type === "movie" ? (
-                                <Film className="w-2.5 h-2.5" />
-                              ) : (
-                                <Tv className="w-2.5 h-2.5" />
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        {/* Info */}
-                        <div className="flex-1 min-w-0 py-0.5">
-                          <h4
-                            className="truncate"
-                            style={{
-                              fontFamily: "var(--font-display)",
-                              fontSize: 16,
-                              fontWeight: 700,
-                              fontVariationSettings: '"opsz" 24',
-                              letterSpacing: "-0.01em",
-                              color: "var(--fg)",
-                              lineHeight: 1.2,
-                            }}
-                          >
-                            {item.title}
-                          </h4>
-                          <div className="flex items-center gap-1.5 mt-1">
-                            {item.services.slice(0, 3).map((s) => (
-                              <ServiceBadge key={s} service={s} size="sm" />
-                            ))}
-                            {item.genre ? <span
-                                style={{
-                                  fontFamily: "var(--font-ui)",
-                                  fontSize: 11,
-                                  fontWeight: 500,
-                                  letterSpacing: "0.06em",
-                                  textTransform: "uppercase",
-                                  color: "var(--fg-faint)",
-                                }}
-                              >
-                                {item.genre}
-                              </span> : null}
-                          </div>
-                          {item.overview ? <p
-                              className="mt-1 line-clamp-2"
-                              style={{
-                                fontFamily: "var(--font-ui)",
-                                fontSize: 11,
-                                color: "var(--fg-soft)",
-                                lineHeight: 1.5,
-                              }}
-                            >
-                              {item.overview}
-                            </p> : null}
-                        </div>
-                        {/* Bookmark */}
-                        {onToggleBookmark ? <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onToggleBookmark(item);
-                            }}
-                            className="shrink-0 w-7 h-7 flex items-center justify-center transition-all mt-0.5"
-                            style={{
-                              borderRadius: "var(--r-md)",
-                              background: isBookmarked ? "var(--primary)" : "var(--surface-elev)",
-                              color: isBookmarked ? "var(--primary-foreground)" : "var(--fg-soft)",
-                            }}
-                            aria-label={isBookmarked ? "Remove bookmark" : "Add bookmark"}
-                          >
-                            <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? "fill-current" : ""}`} />
-                          </button> : null}
-                      </div>
-                    );
-                  })}
+                  {releases.map((item) => (
+                    <ReleaseRow
+                      key={item.id}
+                      item={item}
+                      isBookmarked={bookmarkedIds?.has(item.id)}
+                      onSelect={() => onItemSelect(item)}
+                      onToggleBookmark={onToggleBookmark}
+                    />
+                  ))}
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ---- Date-group kicker (shared by virtual + grouped paths) ---- */
+function GroupDateLabel({ date }: { date: string }) {
+  return (
+    <span
+      className="t-kicker mb-2.5 inline-block"
+      style={{ color: "var(--fg-faint)" }}
+    >
+      {formatGroupDate(date)}
+    </span>
+  );
+}
+
+/* ---- Release row card (shared by virtual + grouped paths) ---- */
+interface ReleaseRowProps {
+  item: UpcomingRelease;
+  isBookmarked?: boolean;
+  onSelect: () => void;
+  onToggleBookmark?: (item: UpcomingRelease) => void;
+}
+
+function ReleaseRow({ item, isBookmarked, onSelect, onToggleBookmark }: ReleaseRowProps) {
+  return (
+    <div
+      onClick={onSelect}
+      className="flex items-start gap-3 p-2.5 text-left w-full cursor-pointer"
+      style={{
+        borderRadius: "var(--r-md)",
+        background: "var(--surface-tint)",
+        color: "var(--fg)",
+        transition: "background var(--d-fast) var(--ease-out)",
+      }}
+    >
+      {/* Thumbnail */}
+      <div
+        className="relative w-16 h-24 overflow-hidden shrink-0"
+        style={{ borderRadius: "var(--r-sm)" }}
+      >
+        <ImageSkeleton
+          src={item.image}
+          alt={item.title}
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute bottom-1 left-1">
+          <div
+            className="w-4 h-4 flex items-center justify-center"
+            style={{
+              borderRadius: 4,
+              background: "var(--scrim-glass)",
+              backdropFilter: "blur(6px) saturate(160%)",
+              WebkitBackdropFilter: "blur(6px) saturate(160%)",
+              color: "#fff",
+            }}
+          >
+            {item.type === "movie" ? (
+              <Film className="w-2.5 h-2.5" />
+            ) : (
+              <Tv className="w-2.5 h-2.5" />
+            )}
+          </div>
+        </div>
+      </div>
+      {/* Info */}
+      <div className="flex-1 min-w-0 py-0.5">
+        <h4
+          className="truncate"
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 16,
+            fontWeight: 700,
+            fontVariationSettings: '"opsz" 24',
+            letterSpacing: "-0.01em",
+            color: "var(--fg)",
+            lineHeight: 1.2,
+          }}
+        >
+          {item.title}
+        </h4>
+        <div className="flex items-center gap-1.5 mt-1">
+          {item.services.slice(0, 3).map((s) => (
+            <ServiceBadge key={s} service={s} size="sm" />
+          ))}
+          {item.genre ? <span
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                fontWeight: 500,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "var(--fg-faint)",
+              }}
+            >
+              {item.genre}
+            </span> : null}
+        </div>
+        {item.overview ? <p
+            className="mt-1 line-clamp-2"
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 11,
+              color: "var(--fg-soft)",
+              lineHeight: 1.5,
+            }}
+          >
+            {item.overview}
+          </p> : null}
+      </div>
+      {/* Bookmark */}
+      {onToggleBookmark ? <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleBookmark(item);
+          }}
+          className="shrink-0 w-7 h-7 flex items-center justify-center transition-all mt-0.5"
+          style={{
+            borderRadius: "var(--r-md)",
+            background: isBookmarked ? "var(--primary)" : "var(--surface-elev)",
+            color: isBookmarked ? "var(--primary-foreground)" : "var(--fg-soft)",
+          }}
+          aria-label={isBookmarked ? "Remove bookmark" : "Add bookmark"}
+        >
+          <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? "fill-current" : ""}`} />
+        </button> : null}
     </div>
   );
 }
