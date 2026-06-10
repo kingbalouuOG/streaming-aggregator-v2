@@ -138,7 +138,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
     return (
       <div className="flex flex-col min-h-full">
         <div className="relative w-full aspect-[4/3] shrink-0 bg-secondary">
-          {itemImage ? <ImageSkeleton src={itemImage} alt={itemTitle || ''} className="w-full h-full object-cover" /> : null}
+          {itemImage ? <ImageSkeleton src={itemImage} alt={itemTitle || ''} className="w-full h-full object-cover" priority /> : null}
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
           <button
             onClick={onBack}
@@ -194,6 +194,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
           src={detail.heroImage}
           alt={detail.title}
           className="absolute inset-0 w-full h-full object-cover"
+          priority
         />
         {/* Bottom gradient — reads the title block */}
         <div
