@@ -52,7 +52,7 @@ import {
   type PipelineContext,
   type ScoredCandidate,
 } from '../_shared/recommendations-v2/types.ts';
-import { getV2TasteProfile } from '../_shared/taste-v2/tasteProfileV2.ts';
+import { getV2TasteProfile, getInterestCentroids } from '../_shared/taste-v2/tasteProfileV2.ts';
 import type { SliderState } from '../_shared/taste-v2/types.ts';
 import {
   buildEmbeddingCacheKey,
@@ -119,6 +119,8 @@ interface ResponsePayload {
     matched: CandidatePool['matched'];
     metadata: Record<string, ExtendedTitleRow>;
     fetchedAt: number;
+    /** ENG-1: true when the multi-interest path built this pool. */
+    interleaved?: boolean;
   };
   renderMs: number;
 }
@@ -202,7 +204,12 @@ Deno.serve(async (req) => {
       return jsonResponse(200, emptyPayload(profile?.sliders ?? null, t_start));
     }
 
-    const filterSets = await buildFilterSets(supabase, scope, body.services);
+    // ENG-1: interest centroids fetched in parallel with filter sets —
+    // 3-row PK scan, no latency cost on the critical path.
+    const [filterSets, interestCentroids] = await Promise.all([
+      buildFilterSets(supabase, scope, body.services),
+      getInterestCentroids(scope),
+    ]);
 
     // Phase 5: build PipelineContext for the contextual scorer.
     // hourOfDay / dayOfWeek prefer the body fields (client local time,
@@ -215,6 +222,9 @@ Deno.serve(async (req) => {
       filterSets,
       sliders: profile.sliders,
       surface: 'foryou',
+      interests: interestCentroids.length > 0
+        ? interestCentroids.map((c) => ({ centroid: c.centroid, weight: c.weight, slot: c.slot }))
+        : undefined,
     });
 
     const scored = scoreCandidates(pool, profile.sliders, 'foryou', ctx);
@@ -282,6 +292,7 @@ Deno.serve(async (req) => {
         // Map → Record at the wire boundary (Map serialises to "{}").
         metadata: Object.fromEntries(pool.metadata),
         fetchedAt: pool.fetchedAt,
+        interleaved: pool.interleaved,
       },
       renderMs: Date.now() - t_start,
     };

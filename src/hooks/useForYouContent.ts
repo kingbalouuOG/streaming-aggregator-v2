@@ -14,8 +14,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchCandidatePool, scoreCandidates, buildRowFromPool } from '@/lib/recommendations-v2/ranker';
 import { buildAnchoredRoom } from '@/lib/recommendations-v2/anchoredRoom';
 import { buildFilterSets, type FilterSets } from '@/lib/recommendations-v2/hardFilters';
-import { getV2TasteProfile } from '@/lib/taste-v2/tasteProfileV2';
-import { getSliderState } from '@/lib/taste-v2/tasteProfileV2';
+import { getV2TasteProfile, getSliderState, getInterestCentroids } from '@/lib/taste-v2/tasteProfileV2';
 import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import { supabase } from '@/lib/supabase';
 import { getAuthUserId, isSupabaseActive } from '@/lib/storage';
@@ -293,12 +292,13 @@ export function useForYouContent(
     setPrebuiltAnchorRooms(null);
 
     try {
-      // Fetch taste profile + slider state in parallel.
+      // Fetch taste profile + slider state + interest centroids in parallel.
       // (ctx already built and stored in ctxRef.current before the
       // Edge attempt above — reuse it for the client pipeline.)
-      const [profile, sliderState] = await Promise.all([
+      const [profile, sliderState, interestCentroids] = await Promise.all([
         getV2TasteProfile(),
         getSliderState(),
+        getInterestCentroids(),
       ]);
 
       if (!profile?.tasteVector) {
@@ -321,11 +321,16 @@ export function useForYouContent(
       filterSetsRef.current = filterSets;
 
       // ── Pipeline: fetch shared pool + score candidates ──
+      // ENG-1: centroid rows present → per-interest retrieval; none →
+      // legacy single-vector path (fallback ladder, identical to today).
       const pool = await fetchCandidatePool({
         tasteVector: profile.tasteVector,
         filterSets,
         sliders: sliderState,
         surface: 'foryou',
+        interests: interestCentroids.length > 0
+          ? interestCentroids.map(c => ({ centroid: c.centroid, weight: c.weight, slot: c.slot }))
+          : undefined,
       });
       poolRef.current = pool;
       setPool(pool);

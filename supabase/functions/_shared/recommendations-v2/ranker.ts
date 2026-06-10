@@ -17,8 +17,10 @@ import {
   distanceToSimilarity,
   scoreToMatchPercentage,
   DEFAULT_CANDIDATE_LIMIT,
+  PER_CENTROID_CANDIDATE_LIMIT,
   DEFAULT_MAX_PER_GENRE,
 } from './weights.ts';
+import { mergeInterestPools } from './interestPools.ts';
 import type {
   MatchedTitle,
   ExtendedTitleRow,
@@ -26,6 +28,7 @@ import type {
   PipelineContext,
   ScoredCandidate,
   PipelineInput,
+  InterestRetrievalInput,
   ContentItem,
   RowConfig,
 } from './types.ts';
@@ -37,7 +40,16 @@ export async function fetchCandidatePool(
   client: SupabaseClient,
   input: PipelineInput,
 ): Promise<CandidatePool> {
-  const { tasteVector, filterSets, candidateLimit = DEFAULT_CANDIDATE_LIMIT } = input;
+  const { tasteVector, filterSets, candidateLimit = DEFAULT_CANDIDATE_LIMIT, interests } = input;
+
+  // ENG-1 multi-interest path: one RPC per centroid, dedupe keep-closest,
+  // weight-proportional interleave. Empty retrieval falls through to the
+  // legacy single-vector path below.
+  if (interests && interests.length > 0) {
+    const multi = await fetchMultiInterestPool(client, interests, filterSets);
+    if (multi) return multi;
+    console.warn('[Pipeline] multi-interest retrieval empty; falling back to single-vector');
+  }
 
   const vectorStr = `[${tasteVector.join(',')}]`;
 
@@ -73,6 +85,51 @@ export async function fetchCandidatePool(
   return { matched: filtered, metadata, fetchedAt: Date.now() };
 }
 
+/**
+ * ENG-1 Stage 1, multi-interest: K parallel match_titles_by_vector calls
+ * merged via dedupe + smooth weighted round-robin. Each candidate's
+ * `distance` is to its SOURCE centroid. Returns null when every
+ * per-centroid RPC failed or returned nothing.
+ */
+async function fetchMultiInterestPool(
+  client: SupabaseClient,
+  interests: InterestRetrievalInput[],
+  filterSets: FilterSets,
+): Promise<CandidatePool | null> {
+  const results = await Promise.all(interests.map(async (interest) => {
+    const vectorStr = `[${interest.centroid.join(',')}]`;
+    const { data, error } = await client.rpc('match_titles_by_vector', {
+      query_vector: vectorStr,
+      match_limit: PER_CENTROID_CANDIDATE_LIMIT,
+    });
+
+    if (error || !data) {
+      console.error(`[Pipeline] match_titles_by_vector (slot ${interest.slot}) failed:`, error?.message);
+      return { slot: interest.slot, weight: interest.weight, matched: [] as MatchedTitle[] };
+    }
+    return { slot: interest.slot, weight: interest.weight, matched: data as MatchedTitle[] };
+  }));
+
+  const interleaved = mergeInterestPools(results);
+  if (interleaved.length === 0) return null;
+
+  const filtered = applyHardFilters(interleaved, filterSets);
+
+  console.log(
+    '[Pipeline] multi-interest RPCs returned:', interleaved.length,
+    '→ after hard filters:', filtered.length,
+  );
+
+  if (filtered.length === 0) {
+    return { matched: filtered, metadata: new Map(), fetchedAt: Date.now(), interleaved: true };
+  }
+
+  const metadataIds = [...new Set(filtered.slice(0, 100).map((t) => t.tmdb_id))];
+  const metadata = await fetchExtendedMetadata(client, metadataIds);
+
+  return { matched: filtered, metadata, fetchedAt: Date.now(), interleaved: true };
+}
+
 export function scoreCandidates(
   pool: CandidatePool,
   sliders: SliderState,
@@ -106,6 +163,7 @@ export function scoreCandidates(
       scores: { taste, recency, contextual },
       finalScore,
       meta,
+      sourceSlot: match.sourceSlot,
     });
   }
 

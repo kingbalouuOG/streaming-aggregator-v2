@@ -40,6 +40,8 @@ interface EdgePoolWire {
   matched: MatchedTitle[];
   metadata: Record<string, ExtendedTitleRow>;
   fetchedAt: number;
+  /** ENG-1: true when the Edge built the pool via the multi-interest path. */
+  interleaved?: boolean;
 }
 
 export interface EdgeRenderPayload {
@@ -140,5 +142,6 @@ function reconstructPool(wire: EdgePoolWire): CandidatePool | null {
     matched: wire.matched,
     metadata: new Map(metaEntries),
     fetchedAt: wire.fetchedAt,
+    interleaved: wire.interleaved,
   };
 }

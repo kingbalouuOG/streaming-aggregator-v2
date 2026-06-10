@@ -29,6 +29,14 @@ export interface MatchedTitle {
   title: string;
   media_type: 'movie' | 'tv';
   distance: number;
+  /**
+   * ENG-1 multi-interest path: the user_interest_centroids slot whose
+   * centroid retrieved this candidate (closest source wins on dedupe).
+   * `distance` is then the cosine distance to THAT centroid, so the
+   * taste score is "cosine to source centroid" by construction.
+   * Absent on the single-vector path.
+   */
+  sourceSlot?: number;
 }
 
 // ── Phase 4 extended types ──
@@ -76,6 +84,13 @@ export type ViewingContext =
   | 'background'
   | 'focused';
 
+/** Per-interest retrieval input — one row of user_interest_centroids (ENG-1) */
+export interface InterestRetrievalInput {
+  centroid: number[];
+  weight: number;
+  slot: number;
+}
+
 /** Full pipeline input */
 export interface PipelineInput {
   tasteVector: number[];
@@ -84,6 +99,14 @@ export interface PipelineInput {
   surface: Surface;
   /** Override candidate limit (default 500) */
   candidateLimit?: number;
+  /**
+   * ENG-1: interest centroids for multi-interest retrieval. Non-empty →
+   * one RPC per centroid (PER_CENTROID_CANDIDATE_LIMIT each), deduped +
+   * weight-interleaved. Absent/empty → legacy single-vector retrieval
+   * using tasteVector (the fallback ladder for users without centroid
+   * rows).
+   */
+  interests?: InterestRetrievalInput[];
 }
 
 /**
@@ -115,12 +138,17 @@ export interface PipelineContext {
 
 /** Cached candidate pool from Stage 1 retrieval */
 export interface CandidatePool {
-  /** Raw matched titles from RPC (sorted by cosine distance ASC) */
+  /** Raw matched titles from RPC (sorted by cosine distance ASC on the
+   *  single-vector path; weight-interleaved across source pools on the
+   *  multi-interest path) */
   matched: MatchedTitle[];
   /** Extended metadata keyed by "media_type-tmdb_id" */
   metadata: Map<string, ExtendedTitleRow>;
   /** Timestamp for cache invalidation */
   fetchedAt: number;
+  /** True when the ENG-1 multi-interest path built this pool (eval rig
+   *  asserts which path ran). Absent/false = single-vector path. */
+  interleaved?: boolean;
 }
 
 /** Per-component scores for a single candidate (all normalized 0.0–1.0) */
@@ -138,6 +166,9 @@ export interface ScoredCandidate {
   scores: CandidateScores;
   finalScore: number;    // weighted sum of component scores
   meta: ExtendedTitleRow;
+  /** Source interest slot on the multi-interest path (ENG-1) — threads
+   *  through to the coverage eval and impression tagging. */
+  sourceSlot?: number;
 }
 
 /** Stage 2 scoring weights (3 components, sum to 1.0) */

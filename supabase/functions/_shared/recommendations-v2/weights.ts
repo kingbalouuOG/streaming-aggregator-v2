@@ -158,6 +158,8 @@ export const CONTEXTUAL_MOBILE_LONG_RUNTIME_PENALTY = 0.12;
 // ── Pipeline Constants ──
 
 export const DEFAULT_CANDIDATE_LIMIT = 500;
+/** ENG-1: per-centroid retrieval limit on the multi-interest path (K <= 3 x 200). */
+export const PER_CENTROID_CANDIDATE_LIMIT = 200;
 export const DEFAULT_MAX_PER_GENRE = 4;
 export const MAX_CONSECUTIVE_SAME_SERVICE = 2;
 

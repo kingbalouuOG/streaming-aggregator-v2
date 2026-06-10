@@ -256,6 +256,13 @@ export const CONTEXTUAL_MOBILE_LONG_RUNTIME_PENALTY = 0.12;
 /** Default candidate retrieval limit for shared pool */
 export const DEFAULT_CANDIDATE_LIMIT = 500;
 
+/**
+ * Per-centroid retrieval limit on the ENG-1 multi-interest path.
+ * K ≤ 3 centroids × 200 ≈ the single-vector 500 after dedupe — same
+ * pool volume, proportionally interleaved by interest weight.
+ */
+export const PER_CENTROID_CANDIDATE_LIMIT = 200;
+
 /** Max genre occurrences per row (default, modulated by variety slider) */
 export const DEFAULT_MAX_PER_GENRE = 4;
 

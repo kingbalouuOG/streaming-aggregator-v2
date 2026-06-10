@@ -41,6 +41,8 @@ export interface MatchedTitle {
   title: string;
   media_type: 'movie' | 'tv';
   distance: number;
+  /** ENG-1: source interest slot (distance is to THAT centroid). Absent on single-vector path. */
+  sourceSlot?: number;
 }
 
 export interface ExtendedTitleRow {
@@ -82,12 +84,22 @@ export type ViewingContext =
   | 'background'
   | 'focused';
 
+/** Per-interest retrieval input — one row of user_interest_centroids (ENG-1) */
+export interface InterestRetrievalInput {
+  centroid: number[];
+  weight: number;
+  slot: number;
+}
+
 export interface PipelineInput {
   tasteVector: number[];
   filterSets: FilterSets;
   sliders: SliderState;
   surface: Surface;
   candidateLimit?: number;
+  /** ENG-1: non-empty → per-centroid retrieval + weighted interleave;
+   *  absent/empty → legacy single-vector retrieval (fallback ladder). */
+  interests?: InterestRetrievalInput[];
 }
 
 /**
@@ -121,6 +133,8 @@ export interface CandidatePool {
   matched: MatchedTitle[];
   metadata: Map<string, ExtendedTitleRow>;
   fetchedAt: number;
+  /** True when the ENG-1 multi-interest path built this pool. */
+  interleaved?: boolean;
 }
 
 export interface CandidateScores {
@@ -136,6 +150,8 @@ export interface ScoredCandidate {
   scores: CandidateScores;
   finalScore: number;
   meta: ExtendedTitleRow;
+  /** Source interest slot on the multi-interest path (ENG-1). */
+  sourceSlot?: number;
 }
 
 export interface Stage2Weights {
