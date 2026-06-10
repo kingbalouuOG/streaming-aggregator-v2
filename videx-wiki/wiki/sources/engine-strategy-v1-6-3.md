@@ -3,7 +3,7 @@ title: Source — Recommendation Engine v2 Strategy v1.6.3
 type: source
 tags: [strategy, recommendation-engine, v2]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-06-10
 sources:
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
 related:
@@ -23,6 +23,8 @@ related:
 ---
 
 # Source: Recommendation Engine v2 Strategy (v1.6.3)
+
+> Superseded by [Recommendation Engine v2 Strategy v1.8](engine-strategy-v1-8.md) (2026-04-30).
 
 Author: Head of Strategy & Engineering with Joe. Date: April 2026. Most cross-referenced doc in the v2 set.
 

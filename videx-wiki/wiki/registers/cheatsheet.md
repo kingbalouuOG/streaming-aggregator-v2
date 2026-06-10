@@ -3,12 +3,16 @@ title: Cheatsheet — phases, branches, migrations, features at a glance
 type: register
 tags: [register, cheatsheet, phases, migrations, branches]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-06-10
 sources:
   - raw/v2-strategy/Videx_v2_Project_Orchestration_v0.3.3.md
   - raw/codebase-snapshots/migration-changelog.md
   - raw/reference/phase-timeline.md
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
+  - docs/v2/phase-summaries/phase-5-summary.md
+  - docs/v2/phase-summaries/phase-search-v2-summary.md
+  - raw/phase-summaries/phase-5.5-summary.md
+  - docs/v2/phase-summaries/phase-eng-1-summary.md
 related:
   - wiki/concepts/operations/phase-history.md
   - wiki/entities/codebase/migrations.md
@@ -31,9 +35,14 @@ Single-page lookup table for "which phase, which branch, which migration, what s
 | 2.6 | `phase-2.6-fingerprint-signal-refinement` | merged | 2026-04-13 → 16 | 022 | v2 exclusivity-weighted centroids tested. Bottom-half variance gate FAIL (5/13). Decision: ship v1_popularity. |
 | 3 | `phase-3-taste-vector` | merged | 2026-04-14 → 17 | 023, 024, 025, **028** | 1536D taste vector. Auth integrated into onboarding Step 1. Bootstrap dynamic 4-band weights. Quiz subsystem deleted (15 files). |
 | 4 | `main` (direct commits) | merged | 2026-04-17 → 19 | 0 | Full multi-stage pipeline. 7 Home + 7 For You rows. 4 sliders + bottom-sheet tray + haptics. ~260ms time-to-first-render. |
-| 4.5 | (no end-of-phase summary) | merged | 2026-04-19 → 22 | 029, 030, 031, 032 | UMAP+HDBSCAN ships 68 mood rooms at 53.5% coverage. Gate 4 hotfix RPCs. |
-| 5 | (planned) | not started | — | — | Replace `contextual.ts` placeholder. Re-evaluate 62.5/25/12.5 weight split. |
-| 6 | (planned) | not started | — | 033+ planned (taste_profiles RLS) | APK build, install, end-to-end verify. |
+| 4.5 | `phase-4.5-mood-rooms` | merged | 2026-04-19 → 27 | 029, 030, 031, 032, **033**, **034**, **035** | UMAP+HDBSCAN ships 68 mood rooms at 53.5% coverage. Gate 4 hotfix RPCs. Mid-phase redirect: title-anchored rooms (033), LLM thematic labels (034, IN-463), cold-start JSONB fix (035). IN-466 server-side For You render. |
+| 5 | `phase-5-contextual-signals` (PR #4) | merged | 2026-05-06 | 036, 037, 038, 039 | Real `contextual.ts` (time 40 / viewing 40 / device 20) replaces 0.5 placeholder. MMR over embeddings replaces `applyGenreSpread` (retained as fallback). Security: taste_profiles RLS, `marked_watched` drop, `username_available` RPC, Vault-backed cron JWT. `<Database>` generic re-enabled. |
+| v3 redesign | `v3design-system-exploration` (PR #7) | merged | 2026-05-09 | 040 (`editor_notes` — **in repo, NOT applied**) | Editorial-magazine redesign: tokens, MagazineHero / EditorsNote / LongRead / WideCard etc.; all major pages migrated. |
+| Search V2 | `phase-search-v2` (PR #8) | merged | 2026-05-13 | 041 | Typed FilterState + URL sync, FilterSheet rewrite, 3-source Mode A retrieval, semantic Mode C behind `search_semantic` per-user flag (`user_feature_flags`). |
+| 5.5 | `claude/zealous-dijkstra-0fe0d7` (PR #11) | merged | 2026-05-15 | 042, 043 | Quality/type/perf cluster (typegen, MMR fallback, embedding cache, vitest rig), legal cluster (delete account 042, data export 043, Privacy/ToS pages), catalogue gap closure (IN-465 backfill: titles 20,140 → 22,838). |
+| ENG-1 | `phase-eng-1-multi-interest` | closed | 2026-06-10 | 044, 045 | Multi-interest centroids (K ≤ 3) + retrieval fan-out, avoid-set negative scoring (vectors positive-only), exploration slots (positions 6 + 14), training extract view. First E&P Hardening track phase. |
+| REPO-1 | `phase-repo-1-hygiene` | in progress | 2026-06-10 | 046 (written, **NOT yet applied**) | Repo hygiene: docs reorganisation (`docs/v3-design/` → `docs/design/`, eval docs → `docs/v2/phase-summaries/`), script moves (`scripts/test/`, `scripts/enrichment/`), `npm test` single test entry, eslint `no-explicit-any` → error, drop `title_genres`/`title_credits` (046). |
+| 6 | (planned) | not started | — | — | Launch: APK release build, pre-launch blocker review, solicitor-reviewed legal docs, cryptographic JWT rotation if tooling allows. |
 | 7 (post-v2) | — | not started | — | — | Conversational discovery on top of v2. See [v3 forward-planning](../concepts/forward-planning/v3-conversational-discovery.md). |
 
 ## Migration → phase
@@ -72,6 +81,20 @@ Single-page lookup table for "which phase, which branch, which migration, what s
 | 030 | `030_mood_room_titles_table.sql` | 4.5 | Membership table. |
 | 031 | `031_mood_rooms_rpcs.sql` | 4.5 (Gate 4 hotfix) | 3 RPCs (PostgREST 1000-row cap fix). |
 | 032 | `032_card_impressions_mood_room_surface.sql` | 4.5 (Gate 4 hotfix) | Adds `'mood_room'` to source_surface CHECK. |
+| 033 | `033_card_impressions_anchor_room_metadata.sql` | 4.5 (anchored-rooms redirect) | `'anchor_room'` surface + `metadata jsonb`. |
+| 034 | `034_mood_room_anchor_labels.sql` | 4.5 (IN-463) | LLM thematic label columns. |
+| 035 | `035_available_tmdb_ids_rpc_array_return.sql` | 4.5 (cold-start fix) | TABLE → JSONB array return. |
+| 036 | `036_taste_profiles_rls.sql` | 5 | RLS on `taste_profiles`. |
+| 037 | `037_drop_marked_watched_from_check.sql` | 5 | Drops `'marked_watched'` event_type. |
+| 038 | `038_profiles_username_lookup_rpc.sql` | 5 | `username_available` SECURITY DEFINER RPC. |
+| 039 | `039_cron_jobs_vault_jwt.sql` | 5 | Vault-backed cron JWT (storage only, not rotation). Sole source for cron jobs since 5.5. |
+| 040 | `040_editor_notes.sql` | v3 redesign | **In repo, NOT applied.** `editor_notes` table. |
+| 041 | `041_user_feature_flags.sql` | Search V2 | Per-user feature flag store (`search_semantic`). |
+| 042 | `042_delete_own_account.sql` | 5.5 | GDPR delete RPC captured in source control. |
+| 043 | `043_export_user_data.sql` | 5.5 | GDPR Article 20 export RPC. |
+| 044 | `044_user_interest_centroids.sql` | ENG-1 | K ≤ 3 interest centroids; extends delete/export RPCs. |
+| 045 | `045_training_extract_view.sql` | ENG-1 | `v_training_examples` view (ENG-2 dataset shape). |
+| 046 | `046_drop_title_genres_credits.sql` | REPO-1 | **Written, NOT yet applied.** Drops `title_genres` + `title_credits`. |
 
 ## Service slug ↔ TMDb ↔ SA API ↔ deep links
 
@@ -103,21 +126,23 @@ Single-page lookup table for "which phase, which branch, which migration, what s
 
 ## Stage 2 weights (current)
 
-| Component | Phase 4 ship | Strategy intent |
+| Component | Shipped | Strategy intent |
 |---|---|---|
-| Taste-vector similarity | 62.5% | 50% |
+| Taste-vector similarity | 62.5% (cosine to source interest centroid since ENG-1) | 50% |
 | Recency (modulated by Catalogue Age slider 10-30%) | 25% | 20% |
-| Contextual fit (placeholder 0.5; Phase 5 replaces) | 12.5% | 10% |
-| Genre spread | post-processing | 10% as scoring |
+| Contextual fit (real scorer since Phase 5: time 40 / viewing 40 / device 20) | 12.5% | 10% |
+| Genre spread | post-processing — MMR over embeddings since Phase 5 (genre-spread fallback) | 10% as scoring |
 | Cross-service spread | post-processing | 10% as scoring |
+
+ENG-1 additions outside the formula: avoid-set penalty (`finalScore −= 0.15 · max(0, maxCos)` vs last 50 `thumbs_down`/`not_interested`) and 2 exploration slots (positions 6 + 14 of Recommended For You).
 
 ## Daily / weekly / monthly schedules
 
 | Cadence | Job | When | Where |
 |---|---|---|---|
 | Daily | `sync-incremental` | 06:00 UTC | Edge Function via pg_cron + pg_net (migration 006) |
-| Daily | `enrich_new_titles` | 06:30 UTC | `supabase/cron/enrich_new_titles.sql` |
-| Daily | `embed_new_titles` | 06:45 UTC | `supabase/cron/embed_new_titles.sql` |
+| Daily | `enrich_new_titles` | 06:30 UTC | pg_cron, defined in migration 039 (the `supabase/cron/*.sql` files were deleted in Phase 5.5 — 039 is sole source) |
+| Daily | `embed_new_titles` | 06:45 UTC | pg_cron, defined in migration 039 |
 | Daily | `card_impression_daily_totals` rollup | (set in migration 014) | pg_cron |
 | Weekly | `refresh-service-fingerprints` | Sunday 07:00 UTC | Edge Function + pg_cron |
 | Weekly | "Mood Rooms for Tonight" rotation | Mondays | App-side selection from `mood_rooms` |
@@ -132,12 +157,13 @@ Single-page lookup table for "which phase, which branch, which migration, what s
 - **`card_impressions` dedicated partitioned table** (pg_partman monthly), RLS via event trigger.
 - **HDBSCAN runs in Python + GitHub Actions monthly cron**, psycopg2 direct connection.
 - **`dismiss` → `not_interested`** event type rename (Phase 0).
-- **Static genre mapping** retained over `title_genres` backfill.
+- **Static genre mapping** retained over `title_genres` backfill (`title_genres` + `title_credits` dropped by migration 046, REPO-1 — apply pending).
 - **Two surfaces**: Home (discovery, 15-20% taste) + For You (heavy personalisation, sliders, mood rooms).
 - **Sliders Option C dual-access**: Profile + For You modal/tray, shared state.
 - **Detail view alone is NOT positive** (anchor only).
 - **Negative dwell session cap −1.0**.
-- **Edge Function shared modules** in `supabase/functions/_shared/`.
+- **Edge Function shared modules** in `supabase/functions/_shared/` (mirror tax paid one final time in ENG-1; PLAT-3 deletes the apparatus).
+- **Multi-interest centroids K ≤ 3** (ENG-1, E&P D3); negative events feed the avoid set, taste vectors are positive-only.
 
 ## Cross-links
 

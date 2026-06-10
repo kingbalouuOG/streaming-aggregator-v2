@@ -3,7 +3,7 @@ title: Database Schema (Supabase)
 type: entity
 tags: [supabase, postgres, schema, pgvector, pg_partman]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-06-10
 sources:
   - raw/codebase-snapshots/database-schema-snapshot.md
   - raw/codebase-snapshots/migration-changelog.md
@@ -38,8 +38,8 @@ Snapshot of the Videx Supabase schema as of migration 032. Source of truth: `sup
 | `titles` | Cached TMDb titles (~20K rows). One row per title regardless of media type. | `tmdb_id`, `media_type`, `imdb_id`, `embedding vector(1536)`, `runtime`, `keywords`, `cast_top_5`, `director`, `content_rating`, `popularity`, `release_date`, `available_since` |
 | `streaming_availability` | Cached SA API deep links and pricing (~40K rows). One row per title-service-type-quality combo. | `tmdb_id`, `media_type`, `service_id`, `link`, `type`, `quality`, `price_amount`, `price_currency`, `last_verified_at`, `expires_soon` |
 | `streaming_history` | Append-only log of availability changes (added/removed). | `tmdb_id`, `service_id`, `event_type`, `event_time` |
-| `title_genres` | Schema exists, intentionally not populated. Static genre mapping used instead (see [ADR-008](../../concepts/decisions/adr-008-static-genre-mapping.md)). | `tmdb_id`, `genre_id` |
-| `title_credits` | Schema exists, intentionally not populated; covered by `cast_top_5`/`director` columns on `titles`. | `tmdb_id`, `person_id`, `role` |
+| `title_genres` | **Being dropped — migration 046 (REPO-1, written 2026-06-10, not yet applied).** Was never populated; static genre mapping used instead (see [ADR-008](../../concepts/decisions/adr-008-static-genre-mapping.md)). | `tmdb_id`, `genre_id` |
+| `title_credits` | **Being dropped — migration 046 (REPO-1, written 2026-06-10, not yet applied).** Was never populated; covered by `cast_top_5`/`director` columns on `titles`. | `tmdb_id`, `person_id`, `role` |
 | `sync_log` | Sync run audit. | `started_at`, `stage`, `status`, `rows_processed` |
 
 ### User layer
@@ -84,5 +84,6 @@ Every user-scoped or content table has policies for three roles: `anon` (SELECT 
 ## Deviations and gaps
 
 - Migration 021 intentionally skipped (numbering reserved for a Phase 2.5 step that was rolled into 022).
-- `title_genres` and `title_credits` exist as empty tables for forward compatibility; current paths use static genre mapping and `cast_top_5`/`director` columns on `titles`.
+- `title_genres` and `title_credits` were created in 001 but intentionally never populated; current paths use static genre mapping and `cast_top_5`/`director` columns on `titles`. Migration 046 (REPO-1, 2026-06-10, **not yet applied**) drops both. The "reserved for future use" framing is retired.
 - `service_fingerprints.variant` added in migration 022 to support synthetic cold-start evaluation.
+- **This page is a snapshot as of migration 032.** Post-032 schema changes not yet reflected in the tables above (see [migrations](migrations.md) for detail): 033 `card_impressions.metadata` + `'anchor_room'` surface; 034 `mood_rooms` anchor-label columns; 036 `taste_profiles` RLS; 040 `editor_notes` (unapplied); 041 `user_feature_flags`; 044 `user_interest_centroids` (K ≤ 3 multi-interest, ENG-1); 045 `v_training_examples` view; 046 drop of `title_genres`/`title_credits` (pending). Full re-snapshot pending the next human refresh of `raw/codebase-snapshots/database-schema-snapshot.md`.

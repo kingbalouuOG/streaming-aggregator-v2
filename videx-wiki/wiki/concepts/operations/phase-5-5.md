@@ -3,7 +3,7 @@ title: Phase 5.5 — Quality, legal & catalogue hardening
 type: concept
 tags: [phase, phase-5-5, quality, legal, gdpr, catalogue, hardening, mmr, embedding-cache]
 created: 2026-05-15
-updated: 2026-05-15
+updated: 2026-06-10
 sources:
   - raw/phase-summaries/phase-5.5-summary.md
   - raw/research/in-465-catalogue-sync-gap.md
@@ -56,7 +56,7 @@ Closed 2026-05-15. Branch `claude/zealous-dijkstra-0fe0d7` (PR #11, awaiting mer
 
 **C6a — Vitest rig setup.**
 - Added `vitest` + `jsdom` + `@vitest/ui` + `@testing-library/jest-dom` as devDeps.
-- `vitest.config.ts` with `@ → src` alias, jsdom environment. Excludes pre-existing tsx-script-style tests under `src/lib/search/__tests__` and `src/lib/taste-v2/__tests__` (those keep their dedicated `npm run test:search-*` invocations).
+- `vitest.config.ts` with `@ → src` alias, jsdom environment. Excludes pre-existing tsx-script-style tests under `src/lib/search/__tests__` and `src/lib/taste-v2/__tests__` (those keep their dedicated `npm run test:search-*` invocations). *(No longer current: REPO-1, 2026-06-10, retired the bespoke `npx tsx` `test:*` scripts — `npm test` via vitest is now the single test entry.)*
 - `npm test` and `npm run test:watch` scripts. CI runs `npm test` after typecheck + lint in `typecheck-lint.yml`.
 
 **C6b — 10 pure-function tests.**

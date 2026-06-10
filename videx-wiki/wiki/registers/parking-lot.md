@@ -3,7 +3,7 @@ title: Parking lot — all IN-XXX entries
 type: register
 tags: [register, parking-lot, in-xxx, status]
 created: 2026-04-26
-updated: 2026-05-15
+updated: 2026-06-10
 sources:
   - raw/v2-strategy/Videx_v2_Implementation_Notes_Parking_Lot_v0.3.4.md
   - docs/v2/Videx_v2_Implementation_Notes_Parking_Lot_v0.7.md
@@ -50,11 +50,11 @@ Status legend: ✅ Incorporated · ⏳ Pending · ⚠ Partial · 🛑 Discharged
 | ID | Subject | Status |
 |---|---|---|
 | IN-101 | Validate row counts after backfill, not just schema | ✅ Incorporated |
-| IN-102 | Investigate existing `title_credits` sync scripts before rewriting | ✅ Incorporated (confirmed empty; left untouched) |
+| IN-102 | Investigate existing `title_credits` sync scripts before rewriting | ✅ Incorporated (confirmed empty; left untouched — table dropped by migration 046, REPO-1 2026-06-10, apply pending) |
 | IN-103 | Use existing TMDb append_to_response pattern for backfill | ✅ Incorporated |
 | IN-104 | Embedding input template must match eval template exactly | ⚠ Partial (Phase 1 task; columns now populated) |
 | IN-105 | Runtime backfill added to Phase 0.5 enrichment scope | ✅ Incorporated (81.4% post-fix for `runtime: 0` sentinel) |
-| IN-106 | `title_genres` via static TMDb genre mapping | ✅ Incorporated (table left empty) |
+| IN-106 | `title_genres` via static TMDb genre mapping | ✅ Incorporated (table left empty — dropped by migration 046, REPO-1 2026-06-10, apply pending) |
 | IN-107 | Phase 0.5 sync split — backfill script + enrichment Edge Function | ✅ Incorporated |
 
 ### Cross-phase deviations from Phase 0/0.5
@@ -173,7 +173,7 @@ Quality / hardening items (IN-PX-21..33) and pre-launch legal blockers (IN-PX-34
 | IN-PX-30 | Defence-in-depth in `extractUserIdFromJwt` | ⏳ Filed (Phase 6 — pre-public-launch) |
 | IN-PX-31 | Trim `supabase/cron/*.sql` source-of-truth confusion | ✅ Incorporated (Phase 5.5). Three SQL files deleted; migration 039 is sole source; `supabase/cron/README.md` documents the now-empty directory. |
 | IN-PX-32 | Mirror tree consolidation (`_shared/` as source-of-truth for leaf modules) | ⏳ Filed (Phase 6 — no drift incidents recorded; refactor warrants its own phase) |
-| IN-PX-33 | Property-level parity probe (golden output) | ✅ Incorporated (Phase 5.5). `--update-golden` flag on `_inspect_foryou_parity.mjs` + JWT refresh script + activation (5 secrets + golden seeded for test user). |
+| IN-PX-33 | Property-level parity probe (golden output) | ✅ Incorporated (Phase 5.5). `--update-golden` flag on the parity probe (now `scripts/test/foryou-parity-probe.mjs` — renamed from `scripts/_inspect_foryou_parity.mjs` in REPO-1) + JWT refresh script + activation (5 secrets + golden seeded for test user). |
 | IN-PX-34 | Privacy Policy text + functional legal links | ✅ Incorporated (Phase 5.5). `docs/legal/privacy-policy.md` + `terms-of-service.md` authored with mandatory lawyer-vetting caveat footer. Rendered via `react-markdown` from `?raw` Vite imports. Signup-flow spans → buttons. Pre-launch solicitor review filed as new IN-XPS-014. |
 | IN-PX-35 | Functional "Download my data" — GDPR Article 20 | ✅ Incorporated (Phase 5.5). Migration 043 `export_user_data` SECURITY DEFINER RPC. Frontend wires `@capacitor/filesystem` Documents directory write on native, Blob download on web. |
 
@@ -222,11 +222,21 @@ Surfaced during the end-to-end visual review against the design reference. UI sh
 | IN-V3-002 | Taste-v2 surface for hero match% + per-title mood signals — match% wires to ranker output when present, mood is hardcoded "contemplative" | ⏳ Filed (IN YOUR PLAN client-side signal: ✅ wired) |
 | IN-V3-003 | Wire "Refine by feeling" mood refiner to taste-v2 — UI complete and hidden behind `MOOD_REFINER_ENABLED=false` flag in `ForYouPage.tsx` pending the data-layer work | ⏳ Filed |
 
+## Phase ENG-1 follow-ups (filed 2026-06-10 at close-out)
+
+Recorded in the docs parking lot v0.7 ENG-1 section; see `docs/v2/phase-summaries/phase-eng-1-summary.md` §5.
+
+| ID | Subject | Status |
+|---|---|---|
+| IN-PX-55 | Cluster rep-list curation breadth — 13/16 onboarding clusters define only 2–4 representatives; tmdb 273481 missing. Bounds the synthetic recall eval. | ⏳ Filed (Joe-owned) |
+| IN-PX-56 | `card_impressions` lacks `media_type` — movie/TV `content_id` collision class affects the `v_training_examples` join (migration 045). Pairs with IN-458. | ⏳ Filed |
+| IN-PX-57 | Exploration-slot seen-set recent-1000 cap — revisit; likely absorbed by PLAT-3. | ⏳ Filed |
+
 ## Counts
 
-- Total entries: **97** (Pre-PRE 1 + P0 13 + P0.5 7 + P0/0.5 cross 6 + P1 5 + P2 3 + P3 3 + P4 4 + P4.5 16 + OB 6 + XPS 14 + PX-21..35 15 + PX-36..38 3 + PX-39..45 7 + PX-50..54 5 + V3-001..003 3).
+- Total entries: **100** (Pre-PRE 1 + P0 13 + P0.5 7 + P0/0.5 cross 6 + P1 5 + P2 3 + P3 3 + P4 4 + P4.5 16 + OB 6 + XPS 14 + PX-21..35 15 + PX-36..38 3 + PX-39..45 7 + PX-50..54 5 + PX-55..57 3 + V3-001..003 3).
 - ✅ Incorporated: **59** (Phase 5.5 close 2026-05-15 added: IN-PX-21..28 except 29/30/32, IN-PX-31, IN-PX-33, IN-PX-34, IN-PX-35, IN-PX-51, IN-XPS-001, IN-XPS-006, IN-465; bumped IN-XPS-012 from partial → ✅ on parity activation).
-- ⏳ Pending / Not yet incorporated: **27** (Phase 5.5 added: IN-XPS-014, IN-PX-50, IN-PX-52, IN-PX-53, IN-PX-54; reclassified IN-458, IN-462 to Phase 6).
+- ⏳ Pending / Not yet incorporated: **30** (Phase 5.5 added: IN-XPS-014, IN-PX-50, IN-PX-52, IN-PX-53, IN-PX-54; reclassified IN-458, IN-462 to Phase 6; ENG-1 close 2026-06-10 added IN-PX-55, IN-PX-56, IN-PX-57).
 - ⚠ Partial: **2** (IN-104, IN-XPS-004 — IN-XPS-001 closed Phase 5.5).
 - 🛑 Discharged: **1** (IN-260).
 - 🅿 Parked: **6** (IN-PX-06, IN-261, IN-XPS-008, IN-XPS-009, IN-OB-006, IN-PX-42).

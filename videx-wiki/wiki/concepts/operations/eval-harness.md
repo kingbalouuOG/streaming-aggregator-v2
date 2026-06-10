@@ -3,7 +3,7 @@ title: Evaluation harness reference
 type: concept
 tags: [evaluation, harness, ndcg, cluster-coherence, service-discrimination, rank-eval]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-06-10
 sources:
   - raw/reference/eval-harness-reference.md
 related:
@@ -58,6 +58,10 @@ Thresholds (per source; values that gate any release are in script header):
 | Mean service spread per row | ≥ 0.5 |
 | Mean novelty | ≥ 0.2 |
 
+## ENG-1 eval harness
+
+**Script**: `scripts/evaluation/eng1-eval.ts` (`npm run eval:eng1`, Phase ENG-1). Self-contained: in-memory centroids via the production pure modules + live `match_titles_by_vector` RPC. Sections: τ-matrix (pairwise cluster-rep cosines), synthetic recall/coverage, γ sweep for the avoid-set penalty, real-profile checks. Cold-HNSW warmup + retry built in. ENG-1 outcomes: coverage PASS, parity PASS, τ = 0.80 and γ = 0.15 confirmed; recall@500 carried forward (synthetic holdout too small). Report: `docs/v2/phase-summaries/eng1-eval-2026-06-10.md`.
+
 ## When to run each
 
 | Trigger | Eval(s) |
@@ -67,8 +71,9 @@ Thresholds (per source; values that gate any release are in script header):
 | Ranking weight change | rank-eval |
 | New row builder added | rank-eval |
 | Slider mapping change | rank-eval |
-| Pre-release of any phase touching the engine | All three |
+| Multi-interest grouping / avoid-set / exploration change | eng1-eval |
+| Pre-release of any phase touching the engine | All of the above |
 
 ## Output convention
 
-Markdown report to `docs/v2/`. Naming: `phase-{N}-{eval-name}.md`. Include parameters, metrics, pass/fail per threshold, qualitative notes.
+Markdown report to `docs/v2/phase-summaries/` (eval and baseline reports were consolidated there from the `docs/v2/` root in REPO-1, 2026-06-10). Naming: `phase-{N}-{eval-name}.md`. Include parameters, metrics, pass/fail per threshold, qualitative notes.

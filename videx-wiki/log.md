@@ -333,3 +333,34 @@ Page count delta: 119 → 120 (+1 `phase-5-5.md`).
 - Updated: wiki/entities/codebase/migrations.md (rows 044 + 045; corrected the 040 row — number consumed by unapplied editor_notes, IN-458 renumbers; new note: ledger has gaps, never `db push`, orchestration §3.4 is authoritative)
 - No new pages; index.md unchanged
 - Sources cited at docs/v2/phase-summaries/ (raw/ snapshots pending Joe's next drop per AGENTS.md)
+
+## [2026-06-10] lint | REPO-1 hygiene pass
+Link audit: 326 relative markdown links checked across index.md + wiki/** (127 pages). 1 broken link found and fixed; 0 broken after pass.
+
+Broken links fixed:
+- wiki/concepts/operations/phase-history.md — Phase 4.5 row linked `../../../docs/v2/phase-summaries/phase-4-and-4.5-summary.md` (one `../` short, resolved inside the vault); corrected to `../../../../`. The REPO-1 renames (docs/v3-design → docs/design, Phase_Search_V2 briefs → docs/design/search/, parity probe → scripts/test/foryou-parity-probe.mjs, backfill script → scripts/enrichment/, eval docs → docs/v2/phase-summaries/) broke NO markdown link targets — they appear only in prose, almost entirely in read-only raw/ snapshots and historical phase pages.
+
+Contradictions resolved (pages edited):
+- wiki/entities/codebase/database-schema.md — title_genres/title_credits rows no longer claim "forward compatibility"; both marked as dropped by migration 046 (REPO-1, written 2026-06-10, NOT yet applied). Added a post-032 changes note (033/034/036/040/041/044/045/046) so the as-of-032 snapshot stops silently misrepresenting current schema.
+- wiki/entities/codebase/migrations.md — row 046 added (drop title_genres + title_credits; in repo, not applied; explicit-Joe apply). db-push warning extended to cover 046. REPO-1 note added.
+- wiki/registers/deferred-items.md — "Drop title_genres and title_credits" flipped to done (migration 046 written; apply pending).
+- wiki/concepts/decisions/adr-008-static-genre-mapping.md — "remains as a future hook" consequence struck and superseded by the 046 drop; decision itself (static genre mapping) stands.
+- wiki/registers/parking-lot.md — IN-102/IN-106 annotated with the 046 drop; IN-PX-33 path updated to scripts/test/foryou-parity-probe.mjs (REPO-1 rename); NEW ENG-1 section added (IN-PX-55/56/57 were missing from the register despite being filed at ENG-1 close); counts refreshed 97 → 100 total, ⏳ 27 → 30.
+- wiki/registers/cheatsheet.md — was frozen at 2026-04-26 ("Phase 5 not started", migrations ending at 032). Phase map now covers 4.5 (full migration set), 5, v3 redesign, Search V2, 5.5, ENG-1, REPO-1 (in progress); migration→phase table extended 033–046; Stage 2 weights table updated (real contextual scorer since Phase 5, MMR, ENG-1 avoid-set + exploration slots); cron schedule rows no longer cite the deleted supabase/cron/*.sql files (migration 039 sole source since 5.5); locked decisions updated (046 drop, multi-interest K ≤ 3).
+- wiki/concepts/operations/phase-history.md — ENG-1 row added (multi-interest centroids / avoid set / exploration slot / training extract; migrations 044+045; closed 2026-06-10).
+- wiki/entities/codebase/rpcs.md — delete_own_account and export_user_data sections updated: migration 044 extended both to cover the new user_interest_centroids table (9 user-scoped tables, not 8).
+- wiki/concepts/operations/eval-harness.md — output convention now points at docs/v2/phase-summaries/ (REPO-1 consolidation); ENG-1 eval harness section added (npm run eval:eng1).
+- wiki/concepts/operations/phase-5-5.md — dated correction note on the vitest-rig claim that bespoke `npm run test:search-*` invocations were kept: REPO-1 retired the npx-tsx test:* scripts; `npm test` is the single test entry.
+
+Orphan pages: 3 found, all wiki/sources/ successor pages with zero inbound links (index.md still lists only their predecessors): engine-strategy-v1-8.md, implementation-notes-parking-lot-v0-5.md, project-orchestration-v0-5.md. Fixed without touching index.md (per pass constraints) by adding "Superseded by …" forward links on the three predecessor pages. Consider adding the successors to index.md at the next ingest.
+
+Flagged for human (not fixed — register-wide refreshes are ingest-scale, not lint-scale):
+- wiki/registers/next-steps.md — still framed as "post Phase Search V2 / Phase 5.5 not started"; superseded by the E&P Hardening track approved 2026-06-10 (ENG-1 → REPO-1 → PLAT-1/2/3 → launch → ENG-2). Needs a rebuild against the track brief.
+- wiki/registers/deferred-items.md — beyond the 046 row fixed above, the "Phase 5 (locked but not started)" section is stale (contextual scorer + MMR shipped in Phase 5; IN-458/IN-462 re-targeted to Phase 6) and counts predate Phases 5–ENG-1.
+- wiki/registers/open-questions.md, wiki/registers/acceptance-gates.md, wiki/registers/README.md — untouched since 2026-04-26; need a refresh pass against Phases 5 → ENG-1.
+- wiki/entities/codebase/database-schema.md — interim post-032 note added, but the page wants a full re-snapshot (human refresh of raw/codebase-snapshots/database-schema-snapshot.md, then re-ingest).
+- wiki/concepts/operations/phase-history.md "Realistic timeline note" still says "Actuals through Phase Search V2" — left as-is (narrative), refresh at next ingest if desired.
+
+raw/ staleness: expected and out of scope — raw/ snapshots lag docs/ (no ENG-1/REPO-1 snapshots yet; old paths in raw/ prose); re-snapshot is human-owned.
+
+Pages edited (13, all `updated:` bumped to 2026-06-10): database-schema.md, migrations.md, rpcs.md, deferred-items.md, parking-lot.md, cheatsheet.md, adr-008-static-genre-mapping.md, phase-history.md, eval-harness.md, phase-5-5.md, sources/engine-strategy-v1-6-3.md, sources/implementation-notes-parking-lot-v0-3-4.md, sources/project-orchestration-v0-3-3.md. index.md NOT touched (no broken links there).

@@ -2,20 +2,13 @@
 
 A mobile-first streaming aggregator that combines content from multiple UK platforms into a single browsing interface. Built as a web app wrapped with Capacitor for native Android deployment.
 
+**Conventions:** [docs/CONVENTIONS.md](docs/CONVENTIONS.md) — where things live, tests vs evals, lint rules, doc lifecycle, migration process, the ADR-011 mirror rule. Read it before contributing.
+
 ## Knowledge Base / Project Wiki
 
-An **LLM-maintained knowledge base** lives at `videx-wiki/` in this repo (tracked by Git, committed alongside phase work). It is the **authoritative cross-phase context store** for Videx — covering architecture, decisions (ADRs), phase histories, migrations, RPCs, evaluations, runbooks, glossary, parking lot register, pre-launch blockers, and source-document syntheses. Follow the [Karpathy LLM wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
+An **LLM-maintained knowledge base** lives at `videx-wiki/` in this repo (tracked by Git, committed alongside phase work). It is the **authoritative cross-phase context store** for Videx — architecture, decisions (ADRs), phase histories, migrations, RPCs, evaluations, runbooks, glossary, and registers (parking lot, pre-launch blockers, deferred items). Follows the [Karpathy LLM wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
 
-**Critical for context.** Any agent working on Videx — human or LLM — should consult the wiki first when picking up a thread. The repo's `docs/v2/` directory is the source of truth for active strategy / orchestration / parking-lot / phase-summary documents; the wiki synthesises those plus runbooks and post-mortems into a queryable knowledge graph.
-
-Layout:
-- `videx-wiki/raw/` — immutable source documents (read-only to LLM agents).
-- `videx-wiki/wiki/` — LLM-curated pages (entities, concepts, registers).
-- `videx-wiki/AGENTS.md` — schema and the three workflows (ingest / query / lint). **Read first** before operating in the vault.
-- `videx-wiki/index.md` — content catalogue.
-- `videx-wiki/log.md` — append-only operation log; last entry Phase 5.5 close-out (2026-05-15).
-
-Obsidian-compatible: opens directly as an Obsidian vault.
+**Critical for context.** Any agent working on Videx — human or LLM — should consult the wiki first when picking up a thread. `docs/v2/` is the source of truth for active strategy / orchestration / parking-lot / phase-summary documents; the wiki synthesises those into a queryable knowledge graph. Read `videx-wiki/AGENTS.md` before operating in the vault. Obsidian-compatible.
 
 ## Supported Platforms
 
@@ -23,35 +16,25 @@ Netflix, Amazon Prime Video, Apple TV+, Disney+, NOW, Sky Go, Paramount+, BBC iP
 
 ## Tech Stack
 
-- **React 18** with TypeScript
-- **Vite 6** for build tooling
-- **Tailwind CSS v4** for styling
-- **Supabase** for authentication, database, and cloud sync
-- **Capacitor 8** for native Android deployment
-- **Motion** (`motion/react`) for animations
-- **Sonner** for toast notifications
-- **Lucide React** for icons
-- **react-markdown** for rendering the in-app Privacy Policy + Terms of Service from `docs/legal/*.md`
-- **Vitest + jsdom** for pure-function unit tests (`npm test`, `npm run test:watch`). CI runs `tsc --noEmit` + `npm test` + the `typegen-check` workflow (regenerates `database.types.ts` and diffs against the committed copy on every migration PR).
+- **React 18** with TypeScript · **Vite 6** · **Tailwind CSS v4** · **Capacitor 8** (Android)
+- **Supabase** — authentication, database (pgvector), Edge Functions, cloud sync
+- **Motion** (`motion/react`), **Sonner**, **Lucide React**, **react-markdown** (in-app legal docs)
+- **Vitest + jsdom** — `npm test` is the single test entry (146 tests; suites live in `__tests__/` beside source in both `src/` and `scripts/`). CI: `tsc --noEmit` + lint + `npm test` on phase branches; build verification on main; `typegen-check`, `shared-tree-drift`, and the `foryou-parity` golden probe on ranking-related PRs.
 
 ### APIs
 
-- **TMDb** - Content metadata, discover/search, streaming service detection (all 10 UK services)
-- **OMDB** - Rotten Tomatoes and IMDb ratings
-- **Streaming Availability API** (Movie of the Night) - Deep link URLs, rent/buy pricing (9 of 10 UK services; server-side only)
-- **Supabase** - Authentication, user data sync, content cache, analytics, availability reports
+- **TMDb** — content metadata, discover/search, streaming service detection (all 10 UK services)
+- **OMDB** — Rotten Tomatoes and IMDb ratings
+- **Streaming Availability API** (Movie of the Night) — deep link URLs, rent/buy pricing (9 of 10 UK services; server-side only)
+- **OpenAI** `text-embedding-3-small` — 1536D content + taste embeddings (server-side / scripts only)
 
 ### Content Cache (Supabase)
 
-Streaming availability and deep link URLs are cached in Supabase, populated by a sync pipeline:
-- **Initial population**: `npx tsx scripts/sync-content.ts` (TMDb → SA API → OMDB, 3-stage pipeline)
-  - `--stage tmdb` — fetch titles and metadata from TMDb discover (also computes and stores `content_vector`)
-  - `--stage sa` — fetch streaming availability and deep links from SA API
-  - `--stage omdb` — fetch IMDb/RT ratings from OMDB
-  - `--stage vectors` — backfill `content_vector` for any existing titles where it is NULL
-- **Daily incremental sync**: Supabase Edge Function at `supabase/functions/sync-incremental/` using SA API `/changes` endpoint; writes availability changes to `streaming_history` (append-only log) for historical tracking
-- Shared logic used across Edge Functions lives in `supabase/functions/_shared/` as self-contained modules (required for remote CLI deployment without Docker, which cannot resolve paths outside the `supabase/functions/` tree)
-- The app reads from Supabase (fast, no API quota per user) — TMDb remains the primary source for service detection
+Streaming availability, deep links, and metadata live in a Supabase content cache (~22K UK-available titles, embedded):
+- **Bulk sync**: `npx tsx scripts/sync-content.ts` (stages: `tmdb`, `imdb`, `sa`, `omdb`)
+- **Daily incremental sync**: `supabase/functions/sync-incremental/` Edge Function (06:00 UTC) via the SA API `/changes` endpoint; daily embedding + enrichment crons follow at 06:30/06:45
+- **Catalogue-gap backfill**: `scripts/enrichment/backfill_missing_titles.ts` (recurring fix — the daily sync writes availability only; see Phase 5.5 C17)
+- The app reads from Supabase (fast, no per-user API quota); TMDb remains primary for service detection
 
 ## Getting Started
 
@@ -63,42 +46,18 @@ Streaming availability and deep link URLs are cached in Supabase, populated by a
 
 ### Setup
 
-1. Install dependencies:
 ```bash
 npm install
-```
-
-2. Create your `.env` file from the template:
-```bash
-cp .env.example .env
-```
-
-3. Add your API keys and Supabase credentials to `.env`
-
-4. Start the dev server:
-```bash
+cp .env.example .env   # then add your API keys + Supabase credentials
 npm run dev
 ```
 
 ### Android Deployment
 
-1. Build the web app:
 ```bash
 npm run build
-```
-
-2. Sync with Capacitor:
-```bash
 npx cap sync android
-```
-
-3. Build the APK:
-```bash
 cd android && ./gradlew assembleDebug
-```
-
-4. Install on device:
-```bash
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -115,226 +74,74 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 ## Project Structure
 
+Top-level map — the full module inventory is wiki-owned (`videx-wiki/wiki/entities/codebase/`), and [docs/CONVENTIONS.md](docs/CONVENTIONS.md) defines what belongs where:
+
 ```
-videx/
-  src/
-    App.tsx                    Main app shell (routing, global state)
-    main.tsx                   Entry point
-    index.css                  Tailwind + custom styles
-    assets/                    Platform logo PNGs (10 services)
-    components/
-      auth/                    Authentication screens
-        AuthScreen.tsx           Auth view router with slide transitions
-        SignInScreen.tsx          Email/password sign-in
-        SignUpScreen.tsx          Registration with username validation
-        ForgotPasswordScreen.tsx  Password reset request (send email)
-        ResetPasswordScreen.tsx   Set new password (from recovery link)
-        SignUpSuccess.tsx         Auto-advancing success interstitial
-        NoConnectionScreen.tsx    Offline state for authenticated users
-      AuthContext.tsx           Supabase auth provider + useAuth hook
-      OnboardingFlow.tsx       5-step onboarding (account, services, watched grid, clusters, sliders)
-      ForYouPage.tsx           For You surface (7 personalised rows + slider tray)
-      BrowsePage.tsx           Search + filter + grid browse
-      DetailPage.tsx           Content detail with ratings, cast, availability
-      WatchlistPage.tsx        Want to Watch / Watched tabs with rating system
-      ProfilePage.tsx          User settings, service management, account deletion
-      CalendarPage.tsx         Coming Soon calendar with date/service filters
-      SpendDashboard.tsx       Monthly spend tracker with tier selection
-      FeaturedHero.tsx         Hero carousel (3-5 cards, auto-rotate, scroll-snap)
-      SliderTray.tsx           Bottom sheet slider tray for recommendation tuning
-      FilterSheet.tsx          Bottom sheet with service/genre/rating filters
-      ReportSheet.tsx          Report incorrect availability bottom sheet
-      LazyGenreSection.tsx     Lazy-loaded genre-based content rows
-      ComingSoonCard.tsx       Upcoming release card with date badge
-      BottomNav.tsx            Tab navigation bar
-      ContentCard.tsx          Poster card component + ContentItem interface
-      BrowseCard.tsx           Grid browse card variant
-      ContentRow.tsx           Horizontal scrollable content row
-      CategoryFilter.tsx       Category pill bar
-      ImageSkeleton.tsx        Image loading placeholder
-      ServiceBadge.tsx         Platform logo badge
-      ThemeContext.tsx          Dark/light theme provider
-      platformLogos.ts         Platform metadata and logo mapping
-      icons.tsx                Custom SVG icons (TickIcon, EyeIcon)
-    hooks/                     React hooks (service layer)
-      useHomeContent.ts        Home surface data orchestration
-      useForYouContent.ts      For You surface data orchestration (pipeline + conditional rows)
-      useBrowse.ts             Browse/discover logic
-      useContentDetail.ts      Detail page data fetching
-      useContentService.ts     Core content service (trending, popular, etc.)
-      useTasteProfile.ts       Taste profile state + continuous learning
-      useSectionData.ts        TMDb discover section data with pagination
-      useSearch.ts             Search with debounce
-      useUpcoming.ts           Coming Soon / Calendar data
-      useWatchlist.ts          Watchlist CRUD with memoized derived state
-      useUserPreferences.ts    User preferences management
-      useNetworkStatus.ts      Online/offline detection (Capacitor Network)
-      useIntersectionObserver.ts  Viewport intersection for lazy loading
-    lib/                       Business logic
-      supabase.ts              Supabase client singleton
-      supabaseStorage.ts       Supabase CRUD operations (cloud sync layer)
-      storage.ts               localStorage adapter with auth-aware routing
-      debugLogger.ts           Debug logging (Supabase POST in dev)
-      sectionSessionCache.ts   In-memory session cache for home sections
-      adapters/                Data model bridges (TMDb + SA API → UI interfaces)
-        contentAdapter.ts        ContentItem <-> WatchlistItem conversion
-        detailAdapter.ts         TMDb detail + streaming links -> DetailData
-        platformAdapter.ts       TMDb provider IDs <-> ServiceId strings + SA API slug mapping
-      deepLinks.ts             Deep link URL resolution (exact SA API link or search fallback)
-      openDeepLink.ts          Platform-aware link opener (AppLauncher on native / window.open on web)
-      api/                     API clients + caching
-        tmdb.ts                  TMDb API client (discover, search, details, providers)
-        omdb.ts                  OMDB API client (IMDb/RT ratings)
-        streamingAvailability.ts  SA API types + client (server-side only)
-        supabaseContent.ts       Supabase content cache queries (streaming links, deep links)
-        cache.ts                 HTTP response cache layer (TMDb, OMDB, SA prefixes)
-      analytics/               Onboarding funnel instrumentation
-        events.ts                Event type definitions and metadata
-        logger.ts                Supabase event logging
-      constants/               Configuration
-        config.ts                App-wide constants
-        genres.ts                Genre ID mappings (TMDb, taste vector keys)
-        platforms.ts             UK provider definitions, variant ID maps
-      data/
-        platformPricing.ts       UK subscription pricing data (10 services)
-      recommendations-v2/      Ranking pipeline (Phase 4)
-        types.ts                 Pipeline types (CandidatePool, ScoredCandidate, etc.)
-        weights.ts               Scoring weights, slider mappings, feature flags
-        ranker.ts                Pipeline orchestrator (retrieval, scoring, row building)
-        recency.ts               Recency scoring (piecewise linear + exponential decay)
-        contextual.ts            Contextual scoring (Phase 5: time-of-day + viewing-context + device sub-scorers)
-        pipelineContext.ts       Builds runtime PipelineContext from Capacitor Device + Date + profile (Phase 5)
-        diversity.ts             MMR (Phase 5), genre-spread fallback, service de-clustering, content-mix ratio
-        hardFilters.ts           Hard filter construction (dismissed, thumbs-down, availability)
-        titleAdapter.ts          Database row -> ContentItem mapper
-        rows/home/               Home surface row builders
-          perServiceChart.ts       Per-service popularity rows
-          criticallyAcclaimed.ts   RT/IMDb filtered row (gated)
-          genreSpotlight.ts        Weekly rotating genre cluster row
-      reports/                 User feedback
-        reportService.ts         Availability report submission (Supabase)
-      taste-v2/                Taste vector v2 system (1536D embedding-space)
-        types.ts                 Vector types, slider state, interaction weights
-        tasteClusters.ts         16 taste archetype definitions
-        tasteProfileV2.ts        Profile CRUD, slider state, cache management
-        bootstrap.ts             Taste vector bootstrap from onboarding signals
-        interactionUpdate.ts     Incremental + full recompute from interactions
-        vectorOps.ts             Vector math (cosine similarity, weighted average)
-      storage/                 Persistence (localStorage + Supabase routing)
-        interactions.ts          User interactions event log (fire-and-forget Supabase emitter)
-        watchlist.ts             Watchlist CRUD with recommendation auto-invalidation
-        userPreferences.ts       User preferences and onboarding state
-        recommendations.ts       Recommendation cache management
-      utils/                   Shared utilities
-        serviceCache.ts          Streaming provider lazy-loading cache
-        searchUtils.ts           Search query normalisation
-        providerClassifier.ts    TMDb provider monetisation classification
-        errorHandler.ts          Error handling utilities
-  scripts/                     Development and sync scripts
-    sync-content.ts              Bulk content sync (TMDb → SA API → OMDB)
-    evaluation/
-      rank-eval.ts               Offline pipeline evaluation harness
-  android/                     Capacitor native Android project
-  supabase/                    Supabase infrastructure
-    migrations/                  SQL schema migrations (content cache + user-data RPCs)
-    functions/
-      sync-incremental/          Edge Function for daily incremental sync
-      render-foryou-rows/        Server-side For You first paint (ADR-011/012)
-      embed-new-titles/          Daily title-embedding cron (06:45 UTC)
-      embed-query/               JWT-protected query-embedding for semantic search
-      enrich-new-titles/         Daily metadata enrichment cron (06:30 UTC)
-      label-anchor-room/         LLM thematic labels for anchored mood rooms
-      refresh-service-fingerprints/  Weekly fingerprint recomputation
-      _shared/                   Mirror of recommendations-v2 + taste-v2 (drift-checked in CI)
-    cron/                        Intentionally empty post-Phase-5.5 — migration 039 is sole source for cron registrations
-    queries/                     Ad-hoc diagnostic SQL (in-465 investigation, dashboard)
-  scripts/test/                  Foryou-parity golden probe + JWT refresh helper
-  docs/                          Design references, plans, and solutions
-    legal/                         Privacy Policy + Terms of Service (rendered via react-markdown)
-    v2/                            v2 strategy / orchestration / parking lot / phase summaries
+src/
+  App.tsx                  App shell (tab routing, global state)
+  components/              ~55 components + auth/ screens; ContentCard owns the ContentItem interface
+  hooks/                   React service layer (useForYouContent, useHomeContent, useTasteProfile, …)
+  lib/
+    api/                   TMDb / OMDB / SA clients + Supabase content queries + cache layer
+    adapters/              External shapes → UI interfaces (content, detail, platform)
+    recommendations-v2/    Ranking pipeline — mirrored to supabase/functions/_shared/ (ADR-011, until PLAT-3)
+    taste-v2/              Taste system: interest centroids, bootstrap, EMA + k-means updates
+    storage/               Persistence (watchlist, preferences, interactions event log)
+    instrumentation/       card_impressions batcher, session ids, click context
+scripts/                   Node tooling in named subfolders (evaluation/, enrichment/, embeddings/,
+                           fingerprints/, mood_rooms/, test/); root holds only sync-content.ts,
+                           debug-server.js, gen-android-icons.py
+workers/api/               Cloudflare Worker home — lands in PLAT-2 (README stub for now)
+supabase/
+  migrations/              Numbered schema migrations (apply process: see CONVENTIONS.md)
+  functions/               Edge Functions + _shared/ engine mirror (drift-checked in CI)
+  queries/                 Operational SQL (dashboard, funnel, reports)
+android/                   Capacitor native project
+docs/                      CONVENTIONS, design/ (design system + search briefs), legal/, plans/,
+                           solutions/ (post-mortems), v2/ (strategy, orchestration, phase-summaries/)
+videx-wiki/                The knowledge base (see above)
 ```
 
 ## Features
 
 ### Authentication
-Email/password sign-up/sign-in via Supabase, password reset (email link to set new password screen), account deletion, session persistence. User preferences and watchlist data are preserved in localStorage across sign-out/sign-in and synced to Supabase for authenticated users.
+Email/password via Supabase, password reset, account deletion, session persistence. Preferences and watchlist survive sign-out/sign-in; authenticated users sync to Supabase under RLS.
 
 ### Onboarding
-Five-step flow: account creation, streaming service selection, watched title grid (3 rounds of 6 titles), taste cluster selection (16 archetypes), and recommendation slider tuning. Progress is tracked and can be resumed if interrupted.
+Five steps: account, streaming services, watched-title grid, taste clusters (16 archetypes), recommendation sliders. Resumable; instrumented end-to-end.
 
 ### Home
-Hero carousel (3-5 cards, auto-rotating, swipeable) at the top, followed by Recently Added, Trending Across Your Services, Coming Soon, per-service popularity charts (up to 3 services), and a weekly Genre Spotlight row. Critically Acclaimed row is gated behind OMDB data coverage.
+Hero carousel, Recently Added, Trending, Coming Soon, per-service charts, weekly Genre Spotlight; Critically Acclaimed gated on OMDB coverage.
 
 ### Browse & Search
-Full-text search with debounced auto-suggestions (recent + trending), category pills (All/Movies/TV Shows), and a filter sheet with streaming service, genre, and rating filters. Results display in a 2-column poster grid filtered to UK availability.
+Debounced search with suggestions and recents, category pills, filter sheet (services, genres, cost, language) with URL-synced filter state; semantic search (Mode C) behind a per-user flag. Results filtered to UK availability with on/off-service treatment.
 
 ### Detail View
-Hero image, IMDb/Rotten Tomatoes ratings, genre tags, streaming availability with tappable service pills (deep links open the streaming app directly via Android App Links, or fall back to the service's search/browse page). Rent/buy pricing with exact £ amounts where available, or "check price" labels when pricing data is unavailable. Cast carousel and "More Like This" recommendations. Includes report button for incorrect availability data.
+Ratings, genre tags, availability with tappable deep links (Android App Links where reliable, search fallback elsewhere), rent/buy pricing, cast, "More Like This", availability reporting.
 
 ### Watchlist
-Want to Watch / Watched tabs with category filters, sort options, and grid layout. Thumbs up/down rating on watched content feeds into the recommendation engine. Watchlist changes auto-invalidate recommendation and hidden gems caches.
-
-### Coming Soon / Calendar
-Upcoming releases for connected services with date pills, service filter, and bookmark buttons. Calendar view groups releases by date.
+Want to Watch / Watched with thumbs ratings feeding the engine; changes invalidate recommendation caches.
 
 ### For You
-Personalised surface with up to 7 rows: Recommended For You, Hidden Gems, Because You Watched [Title], More From [Director/Actor], Outside Your Usual, and From Your Watchlist. All rows are driven by a multi-stage ranking pipeline with slider-tunable parameters. A "Tune" button opens a bottom-sheet slider tray for real-time recommendation adjustment.
+Personalised surface: Recommended For You (with two daily-rotating exploration slots), Hidden Gems, Outside Your Usual, Because You Watched, More From [Person], From Your Watchlist, plus title-anchored mood rooms. First paint is served by the `render-foryou-rows` Edge Function with a client-pipeline fallback (ADR-012). The taste-fingerprint card re-ranks instantly on slider drags from the cached candidate pool.
 
 ### Profile
-Username/email display, manage streaming services, taste cluster preferences, tune recommendation sliders, dark/light/system theme toggle, spend dashboard, plus **Privacy & Data**: in-app Privacy Policy + Terms of Service, **Download my data** (GDPR Article 20 — exports watchlist, taste profile, preferences, and 90 days of impressions as a JSON file via the `export_user_data` SECURITY DEFINER RPC; saved to `Documents/` on Android via `@capacitor/filesystem`, Blob download on web), and **Delete my account** (GDPR Article 17 — type-username-to-confirm UX backed by the `delete_own_account` SECURITY DEFINER RPC with defensive explicit DELETEs across every user-scoped table before `auth.users` cascade; see migrations 042 and 043).
-
-### Spend Dashboard
-Monthly subscription cost tracker on the Profile page. Shows per-service breakdown with tier selection, annual projection, and daily rate.
-
-### Report Incorrect Availability
-Users can flag content that isn't actually available on a listed service. Reports are submitted to Supabase with rate limiting (one report per title per 24 hours).
-
-### Cloud Sync
-Authenticated users get automatic cloud sync via Supabase. Watchlist, preferences, taste profile, and quiz results are persisted server-side with Row Level Security. The storage layer routes reads/writes to either localStorage (anonymous) or Supabase (authenticated) transparently.
-
-### Onboarding Analytics
-Funnel instrumentation tracks progression through each onboarding step (services, clusters, quiz start/complete/skip, first home view) via Supabase event logging.
+Service management, cluster retake, slider tuning, theme, spend dashboard, and **Privacy & Data**: in-app Privacy Policy + ToS, GDPR data export (`export_user_data` RPC → JSON download), and type-to-confirm account deletion (`delete_own_account` RPC).
 
 ## Taste & Recommendation System
 
-### 1536D Embedding-Space Taste Vector
+Short version — the wiki's `recommendation-pipeline` and `taste-vector` concept pages are the deep references:
 
-User preferences are modelled as a 1536-dimensional vector in the same embedding space as content (OpenAI text-embedding-3-small). The vector is bootstrapped from onboarding signals (selected clusters, watched titles, service fingerprints) and refined incrementally with every user interaction (thumbs up/down, watchlist changes, deep link clicks).
-
-### Taste Clusters
-
-During onboarding, users select from 16 taste archetypes (e.g. "Feel-Good & Funny", "Dark Thrillers", "Mind-Bending"). Each cluster maps to TMDb genre IDs and representative titles whose embeddings seed the taste vector.
-
-### Ranking Pipeline
-
-Multi-stage pipeline producing scored, diversified, service-spread results:
-
-1. **Stage 1 — Retrieval**: pgvector cosine similarity via `match_titles_by_vector` RPC (500 candidates)
-2. **Stage 2 — Scoring**: Weighted sum of taste similarity (62.5%), recency (25%), and contextual fit (12.5%). Contextual is composed of time-of-day, viewing-context, and device sub-scorers (Phase 5; was placeholder 0.5 in Phase 4). Catalogue-age slider modulates recency weight (10-30%).
-3. **Stage 2b — Diversity**: MMR over 1536D embeddings (Phase 5; λ from Variety slider). Embedding-absent fallback path uses genre-spread with taste-cluster secondary signal.
-4. **Stage 2c — De-clustering**: Positional constraint ensuring no more than 2 consecutive titles from the same streaming service.
-
-### Delivery Sliders
-
-Four sliders allow real-time recommendation tuning:
-- **Catalogue Age**: New releases vs best match regardless of age
-- **Comfort Zone**: Stick with what I like vs surprise me (modulates Outside Your Usual row size)
-- **Content Mix**: Focus on films vs focus on TV series (modulates media type ratio)
-- **Focused-Varied**: Go deeper vs see more variety (modulates genre diversity)
-
-### Continuous Learning
-
-Post-onboarding interactions update the taste vector incrementally via exponential moving average. Explicit signals (thumbs up/down) carry more weight than behavioural signals (deep link clicks). A confidence floor gives the first 20 interactions 1.5x weight for faster convergence.
+- **Multi-interest retrieval (ENG-1):** up to 3 interest centroids per user (`user_interest_centroids`) drive per-centroid pgvector retrieval, deduped and weight-interleaved; the single `taste_vector_v2` remains as summary + fallback. Users without centroids get the legacy single-vector path.
+- **Scoring:** taste (cosine to source centroid) 62.5% + recency 25% + contextual 12.5% (time-of-day, viewing context, device), then an avoid-set penalty (recent thumbs-downs suppress their lookalikes at score time — negatives never touch the vectors), MMR diversity, and service de-clustering.
+- **Learning:** EMA toward the nearest interest centroid on each positive interaction; deterministic weighted k-means refreshes centroids in the 24h batch recompute. First 20 interactions carry a 1.5× confidence boost.
+- **Sliders:** Catalogue Age, Comfort Zone, Content Mix, Focused↔Varied — all re-rank client-side instantly from the cached pool.
+- **Training groundwork (→ ENG-2):** `card_impressions` + position-at-click metadata + the `v_training_examples` view accumulate the learned-re-ranker dataset; exploration slots are tagged for CTR measurement.
 
 ## Design System
 
-- **Theme**: Dark (#0a0a0f) / Light (#f5f4f1) with system preference detection
-- **Accent**: Warm coral (var(--primary))
-- **Font**: DM Sans (via Google Fonts CDN)
-- **Animations**: Motion spring physics, parallax scrolling, expandable sections
-- **Mobile-first**: Capacitor-ready CSS with safe area insets, touch optimisations, no tap delay
+Source of truth: [docs/design/design-system.md](docs/design/design-system.md) (editorial redesign) with tokens in `docs/design/tokens.css`. Dark/light themes with system detection, mobile-first with safe-area insets.
 
 ## License
 
 Private project - All rights reserved
-

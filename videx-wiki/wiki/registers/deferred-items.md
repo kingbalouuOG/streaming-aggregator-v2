@@ -3,7 +3,7 @@ title: Deferred items register
 type: register
 tags: [register, deferred, parked, post-v2, v2-5, v3]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-06-10
 sources:
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
   - raw/v2-strategy/Videx_v2_Home_and_ForYou_Composition_Hypothesis_v0.3.md
@@ -55,7 +55,7 @@ Things explicitly parked, with the trigger to revisit each. Distinct from [pre-l
 | `getAvailableTmdbIds` does not distinguish by `media_type` | Parking-lot IN-458 | Phase 5+. |
 | Director extraction widening to `credits.crew[]` "Series Director" (IN-PX-06) | Phase 0.5 summary; Phase 1 cluster eval | Only if a future template revision adds director. |
 | Director row-count gate split by `media_type` (IN-PX-07) | Phase 0.5 summary | Policy change for future phase briefs; no code impact. |
-| Drop `title_genres` and `title_credits` empty tables | Strategy §4.0; ADR-008 | When convenient; both intentionally left empty. |
+| Drop `title_genres` and `title_credits` empty tables | Strategy §4.0; ADR-008 | ✅ **Done (REPO-1, 2026-06-10)** — migration `046_drop_title_genres_credits.sql` written; awaiting Joe's apply (production DDL is an explicit-Joe action). |
 
 ## Post-v2 / v3
 
