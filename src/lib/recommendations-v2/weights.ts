@@ -269,6 +269,15 @@ export const DEFAULT_MAX_PER_GENRE = 4;
 /** Max consecutive same-service titles before de-clustering */
 export const MAX_CONSECUTIVE_SAME_SERVICE = 2;
 
+/**
+ * ENG-1 Workstream B: avoid-set penalty strength.
+ * finalScore −= γ · max(0, max_cosine(candidate, avoidSet)), applied to
+ * candidates in the top-200 embedding map after scoring, before row
+ * building. Starting value per brief §3.3; swept 0.10/0.15/0.20 in the
+ * eval gate.
+ */
+export const AVOID_PENALTY_GAMMA = 0.15;
+
 /** Hidden Gems thresholds (re-exported from types for convenience) */
 export { HIDDEN_GEMS_FILTERS } from './types';
 

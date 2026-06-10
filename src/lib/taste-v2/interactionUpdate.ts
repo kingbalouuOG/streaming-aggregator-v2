@@ -46,6 +46,11 @@ export async function applyInteractionIncremental(
   interactionCount: number,
   sessionId?: string | null,
 ): Promise<{ vector: TasteVectorV2; newCount: number } | null> {
+  // ENG-1 Workstream B: negatives never touch the vector — they feed the
+  // score-time avoid set instead. Explicit guard on top of the weights
+  // table no longer carrying negative entries.
+  if (NEGATIVE_EVENTS.has(eventType)) return null;
+
   const weight = INTERACTION_WEIGHTS[eventType];
   if (weight === undefined) return null;
 
@@ -83,15 +88,10 @@ export async function applyInteractionIncremental(
       ? SEARCH_ATTRIBUTION_BOOST
       : 1.0;
 
-  const effectiveWeight = Math.abs(weight) * LEARNING_RATE * confidenceMultiplier * searchBoost;
-  const isNegative = NEGATIVE_EVENTS.has(eventType);
-
-  const updated = isNegative
-    ? addScaled(currentVector, embedding, -effectiveWeight)
-    : addScaled(currentVector, embedding, effectiveWeight);
+  const effectiveWeight = weight * LEARNING_RATE * confidenceMultiplier * searchBoost;
 
   return {
-    vector: l2Normalise(updated),
+    vector: l2Normalise(addScaled(currentVector, embedding, effectiveWeight)),
     newCount,
   };
 }
@@ -261,12 +261,12 @@ export async function recomputeFromInteractions(
       }
     }
 
-    const effectiveWeight = Math.abs(weight) * decay * LEARNING_RATE * confidenceMultiplier * searchBoost;
-    const isNegative = NEGATIVE_EVENTS.has(interaction.event_type) || weight < 0;
+    // ENG-1 Workstream B: TASTE_RELEVANT_EVENTS is positive-only now, so
+    // the replay never sees negative rows; historical vectors heal on
+    // their next 24h recompute with no migration.
+    const effectiveWeight = weight * decay * LEARNING_RATE * confidenceMultiplier * searchBoost;
 
-    vector = isNegative
-      ? addScaled(vector, embedding, -effectiveWeight)
-      : addScaled(vector, embedding, effectiveWeight);
+    vector = addScaled(vector, embedding, effectiveWeight);
   }
 
   if (isZeroVector(vector)) return bootstrapVector;

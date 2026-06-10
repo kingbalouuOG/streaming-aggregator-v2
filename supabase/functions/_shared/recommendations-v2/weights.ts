@@ -162,6 +162,8 @@ export const DEFAULT_CANDIDATE_LIMIT = 500;
 export const PER_CENTROID_CANDIDATE_LIMIT = 200;
 export const DEFAULT_MAX_PER_GENRE = 4;
 export const MAX_CONSECUTIVE_SAME_SERVICE = 2;
+/** ENG-1 Workstream B: avoid-set penalty strength (swept in the eval gate). */
+export const AVOID_PENALTY_GAMMA = 0.15;
 
 export { HIDDEN_GEMS_FILTERS } from './types.ts';
 

@@ -68,24 +68,40 @@ export interface InterestCentroid {
   updatedAt: string;       // ISO timestamp
 }
 
-/** Interaction weight table — maps event_type to taste vector weight */
+/**
+ * Interaction weight table — maps event_type to taste vector weight.
+ *
+ * ENG-1 Workstream B: positive-only. Negative events were removed from
+ * the vector-update path entirely — in embedding space, moving away from
+ * a point is not the same as avoiding a region, and it corrupts what the
+ * positive vector encodes. thumbs_down + not_interested feed the
+ * score-time avoid set instead (recommendations-v2/avoidSet.ts);
+ * watchlist_remove is taste-neutral (un-saving is housekeeping, not
+ * aversion). The event log keeps recording everything — the next batch
+ * recompute heals historical vectors automatically.
+ */
 export const INTERACTION_WEIGHTS: Record<string, number> = {
   thumbs_up: 1.0,
   watched: 0.5,
   watchlist_add: 0.3,
   deep_link_click: 0.8,     // high confidence default; low confidence handled separately
-  watchlist_remove: -0.4,
-  thumbs_down: -0.6,
 };
 
-/** Event types that carry a negative signal */
+/** Negative-signal events — excluded from ALL vector updates since ENG-1
+ *  (kept as an explicit guard in the update paths). */
 export const NEGATIVE_EVENTS = new Set(['thumbs_down', 'watchlist_remove']);
 
-/** Event types relevant to taste vector updates */
+/** Event types relevant to taste vector updates (positive-only since ENG-1) */
 export const TASTE_RELEVANT_EVENTS = [
-  'thumbs_up', 'thumbs_down', 'watched',
-  'watchlist_add', 'watchlist_remove', 'deep_link_click',
+  'thumbs_up', 'watched', 'watchlist_add', 'deep_link_click',
 ] as const;
+
+/** Events that populate the avoid set (ENG-1 Workstream B). Derived from
+ *  the event log at fetch time — fully replayable, no backfill. */
+export const AVOID_SET_EVENTS = new Set(['thumbs_down', 'not_interested']);
+
+/** Most recent N avoid-events whose embeddings form the avoid set */
+export const AVOID_SET_SIZE = 50;
 
 /** Confidence floor: first N interactions weighted at 1.5x */
 export const CONFIDENCE_FLOOR_THRESHOLD = 20;

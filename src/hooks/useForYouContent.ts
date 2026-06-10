@@ -19,7 +19,8 @@ import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import { supabase } from '@/lib/supabase';
 import { getAuthUserId, isSupabaseActive } from '@/lib/storage';
 import { getWatchlist } from '@/lib/storage/watchlist';
-import { getComfortZoneRowCount, HIDDEN_GEMS_FILTERS } from '@/lib/recommendations-v2/weights';
+import { getComfortZoneRowCount, HIDDEN_GEMS_FILTERS, AVOID_PENALTY_GAMMA } from '@/lib/recommendations-v2/weights';
+import { fetchAvoidSet, applyAvoidPenalty } from '@/lib/recommendations-v2/avoidSet';
 import { titleRowToContentItem } from '@/lib/recommendations-v2/titleAdapter';
 import { watchlistItemToContentItem } from '@/lib/adapters/contentAdapter';
 import { tryRenderForYouEdge } from '@/lib/recommendations-v2/edgeRender';
@@ -35,6 +36,7 @@ import {
   getCachedEmbeddings,
   setCachedEmbeddings,
   type EmbeddingMap,
+  type CachedEmbedding,
 } from '@/lib/recommendations-v2/embeddingCache';
 
 /**
@@ -164,6 +166,11 @@ export function useForYouContent(
   // slider drag without refetching from titles. Phase 5.5 (C5): map
   // shape is { vec: Float32Array; norm: number } for cached-norm MMR.
   const embeddingMapRef = useRef<EmbeddingMap>(new Map());
+  // ENG-1 Workstream B: avoid-set embeddings cached per load so the
+  // rerank path re-applies the penalty without refetching. Empty on the
+  // Edge path (rows arrive pre-penalised; slider re-ranks degrade the
+  // same way MMR already does there — embeddingMap is empty too).
+  const avoidRef = useRef<CachedEmbedding[]>([]);
   const providerStr = providerIds.join(',');
 
   // ── Build rows from scored candidates ──
@@ -241,8 +248,13 @@ export function useForYouContent(
     if (!pool || pool.matched.length === 0) return;
 
     const scored = scoreCandidates(pool, newSliders, 'foryou', ctxRef.current);
-    scoredRef.current = scored;
-    buildRows(scored, newSliders);
+    // ENG-1: re-apply the avoid penalty on every re-rank — scoring from
+    // the cached pool resets finalScore, so the penalty must follow it.
+    const penalised = applyAvoidPenalty(
+      scored, avoidRef.current, embeddingMapRef.current, AVOID_PENALTY_GAMMA,
+    );
+    scoredRef.current = penalised;
+    buildRows(penalised, newSliders);
   }, [buildRows]);
 
   // ── Main load function ──
@@ -336,7 +348,6 @@ export function useForYouContent(
       setPool(pool);
 
       const scored = scoreCandidates(pool, sliderState, 'foryou', ctxRef.current);
-      scoredRef.current = scored;
 
       // Phase 5: fetch embeddings for top-200 by finalScore so MMR can
       // diversify intra-row. Out-of-top-200 candidates that bubble up
@@ -345,16 +356,27 @@ export function useForYouContent(
       // missing). Top-200 is the headroom that covers all three
       // taste-vector rows in practice. Phase 5.5 (C5): hits the 24h
       // localStorage cache first to skip the network fetch entirely.
-      embeddingMapRef.current = await fetchEmbeddingsForCandidates(
-        scored.slice(0, 200),
-        {
-          userId: getAuthUserId(),
-          tasteProfilesUpdatedAt: profile.updatedAt,
-        },
-      );
+      // ENG-1: avoid set fetched in parallel — same network window.
+      const [embMap, avoidSet] = await Promise.all([
+        fetchEmbeddingsForCandidates(
+          scored.slice(0, 200),
+          {
+            userId: getAuthUserId(),
+            tasteProfilesUpdatedAt: profile.updatedAt,
+          },
+        ),
+        fetchAvoidSet(),
+      ]);
+      embeddingMapRef.current = embMap;
+      avoidRef.current = avoidSet;
+
+      // ENG-1 Workstream B: penalty after the embedding fetch, before
+      // row building (re-sorts by penalised finalScore).
+      const penalised = applyAvoidPenalty(scored, avoidSet, embMap, AVOID_PENALTY_GAMMA);
+      scoredRef.current = penalised;
 
       // Build taste-vector-based rows — show these immediately
-      buildRows(scored, sliderState);
+      buildRows(penalised, sliderState);
       setLoading(false);
 
       // ── Background: fetch conditional rows (don't block initial render) ──

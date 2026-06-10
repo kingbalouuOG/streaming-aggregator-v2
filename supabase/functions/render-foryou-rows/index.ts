@@ -43,7 +43,8 @@ import {
 } from '../_shared/recommendations-v2/anchorSelection.ts';
 import { titleRowToContentItem } from '../_shared/recommendations-v2/titleAdapter.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { getComfortZoneRowCount, HIDDEN_GEMS_FILTERS } from '../_shared/recommendations-v2/weights.ts';
+import { getComfortZoneRowCount, HIDDEN_GEMS_FILTERS, AVOID_PENALTY_GAMMA } from '../_shared/recommendations-v2/weights.ts';
+import { fetchAvoidSet, applyAvoidPenalty } from '../_shared/recommendations-v2/avoidSet.ts';
 import {
   EXTENDED_TITLE_SELECT,
   type CandidatePool,
@@ -233,22 +234,30 @@ Deno.serve(async (req) => {
     // diversify intra-row across all three taste-vector rows. Phase 5.5
     // (C5): per-instance in-memory cache keyed on userId +
     // taste_profiles.updated_at — warm requests skip the Supabase select.
-    const embeddingMap = await fetchEmbeddingsForCandidates(supabase, scored.slice(0, 200), {
-      userId,
-      tasteProfilesUpdatedAt: profile.updatedAt,
-    });
+    // ENG-1: avoid set fetched in parallel — same network window.
+    const [embeddingMap, avoidSet] = await Promise.all([
+      fetchEmbeddingsForCandidates(supabase, scored.slice(0, 200), {
+        userId,
+        tasteProfilesUpdatedAt: profile.updatedAt,
+      }),
+      fetchAvoidSet(scope, supabase),
+    ]);
+
+    // ENG-1 Workstream B: avoid-set penalty after the embedding fetch,
+    // before row building — same contract as the client pipeline.
+    const ranked = applyAvoidPenalty(scored, avoidSet, embeddingMap, AVOID_PENALTY_GAMMA);
 
     // Taste-vector rows. usedIds is shared across rec/gems/outside for
     // cross-row dedup — same contract as src/hooks/useForYouContent.ts.
     const usedIds = new Set<string>();
 
-    const recommendedForYou = buildRowFromPool(scored, profile.sliders, {
+    const recommendedForYou = buildRowFromPool(ranked, profile.sliders, {
       config: { limit: 20, excludeIds: usedIds },
       embeddingMap,
     });
     recommendedForYou.forEach((item) => usedIds.add(item.id));
 
-    const gemCandidates = scored.filter((c) => {
+    const gemCandidates = ranked.filter((c) => {
       const pop = c.meta.popularity ?? 0;
       const votes = c.meta.vote_count ?? 0;
       const avg = c.meta.vote_average ?? 0;
@@ -265,7 +274,7 @@ Deno.serve(async (req) => {
     });
     hiddenGems.forEach((item) => usedIds.add(item.id));
 
-    const outsideYourUsual = buildOutsideYourUsual(scored, profile.sliders, usedIds, embeddingMap);
+    const outsideYourUsual = buildOutsideYourUsual(ranked, profile.sliders, usedIds, embeddingMap);
 
     // Conditional rows + anchor rooms run in parallel — they share the
     // pool + filter sets but otherwise touch different RPC paths, so
