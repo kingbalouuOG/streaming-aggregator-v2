@@ -203,14 +203,12 @@ function NumberedChartRow({
               color: "var(--fg-faint)",
             }}
           >
-            {primaryService && (
-              <span style={{ filter: "var(--badge-glow)" }}>
+            {primaryService ? <span style={{ filter: "var(--badge-glow)" }}>
                 <ServiceBadge service={primaryService} size="sm" />
-              </span>
-            )}
+              </span> : null}
             {metaParts.map((part, i) => (
               <React.Fragment key={i}>
-                {(i > 0 || primaryService) && <span>·</span>}
+                {(i > 0 || primaryService) ? <span>·</span> : null}
                 {part}
               </React.Fragment>
             ))}

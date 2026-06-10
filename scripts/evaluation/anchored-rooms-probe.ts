@@ -359,7 +359,7 @@ async function main() {
       return { mediaType: mt as 'movie' | 'tv', tmdbId: Number(idStr) };
     });
 
-  let tier1Anchors: Tier2Candidate[] = [];
+  const tier1Anchors: Tier2Candidate[] = [];
   if (tier1Ids.length > 0) {
     const { data: tier1Titles } = await supabase
       .from('titles')

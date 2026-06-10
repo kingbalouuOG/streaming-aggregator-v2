@@ -106,8 +106,7 @@ export function EditorsNote({
 
       {/* Modal sheet */}
       <AnimatePresence>
-        {open && (
-          <>
+        {open ? <>
             <motion.div
               key="backdrop"
               initial={{ opacity: 0 }}
@@ -193,8 +192,7 @@ export function EditorsNote({
                 </p>
               </div>
             </motion.div>
-          </>
-        )}
+          </> : null}
       </AnimatePresence>
     </>
   );

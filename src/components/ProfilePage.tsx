@@ -339,7 +339,7 @@ function AccountDetailsPage({
           cursor: isDirty ? "pointer" : "not-allowed",
         }}
       >
-        {isDirty && <Check className="w-4 h-4" />}
+        {isDirty ? <Check className="w-4 h-4" /> : null}
         Save changes
       </button>
     </SubPageShell>
@@ -396,11 +396,9 @@ function StreamingServicesPage({
                   {isConnected ? "Connected" : "Not connected"}
                 </span>
               </div>
-              {isConnected && (
-                <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+              {isConnected ? <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
                   <Check className="w-3 h-3 text-white" />
-                </div>
-              )}
+                </div> : null}
             </button>
           );
         })}
@@ -445,11 +443,9 @@ function AppearancePage({ onBack }: { onBack: () => void }) {
                 style={{ fontWeight: isActive ? 600 : 500 }}>
                 {opt.label}
               </span>
-              {isActive && (
-                <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+              {isActive ? <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
                   <div className="w-2 h-2 rounded-full bg-white" />
-                </div>
-              )}
+                </div> : null}
             </button>
           );
         })}
@@ -509,9 +505,7 @@ function YourTastePage({
   return (
     <SubPageShell kicker="PERSONALISATION" title="Your taste." onBack={onBack}>
       <h3 className="text-foreground text-[16px] mb-1" style={{ fontWeight: 700 }}>Your taste profile</h3>
-      {summaryText && (
-        <p className="text-muted-foreground text-[13px] mb-4 leading-relaxed">{summaryText}</p>
-      )}
+      {summaryText ? <p className="text-muted-foreground text-[13px] mb-4 leading-relaxed">{summaryText}</p> : null}
 
       {/* Cluster chips */}
       <div className="flex flex-wrap gap-2 mb-6">
@@ -544,8 +538,7 @@ function YourTastePage({
 
       {/* Retake confirmation modal */}
       <AnimatePresence>
-        {showRetakeConfirm && (
-          <motion.div
+        {showRetakeConfirm ? <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -588,8 +581,7 @@ function YourTastePage({
                 </button>
               </div>
             </motion.div>
-          </motion.div>
-        )}
+          </motion.div> : null}
       </AnimatePresence>
     </SubPageShell>
   );
@@ -653,11 +645,9 @@ function RefinePreferencesPage({
                 style={{ fontWeight: isSelected ? 600 : 500 }}>
                 {cluster.name}
               </span>
-              {isSelected && (
-                <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+              {isSelected ? <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
                   <Check className="w-2.5 h-2.5 text-white" />
-                </div>
-              )}
+                </div> : null}
             </button>
           );
         })}
@@ -930,14 +920,13 @@ function PrivacyDataPage({ onBack, username, onDeleteAccount }: PrivacyDataPageP
 
       {/* Phase 5.5 C14 — legal overlays */}
       <AnimatePresence>
-        {showPrivacy && <PrivacyPolicyPage onClose={() => setShowPrivacy(false)} />}
-        {showTerms && <TermsPage onClose={() => setShowTerms(false)} />}
+        {showPrivacy ? <PrivacyPolicyPage onClose={() => setShowPrivacy(false)} /> : null}
+        {showTerms ? <TermsPage onClose={() => setShowTerms(false)} /> : null}
       </AnimatePresence>
 
       {/* "What Videx learns" info modal */}
       <AnimatePresence>
-        {showLearnMore && (
-          <motion.div
+        {showLearnMore ? <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -990,14 +979,12 @@ function PrivacyDataPage({ onBack, username, onDeleteAccount }: PrivacyDataPageP
                 Got it
               </button>
             </motion.div>
-          </motion.div>
-        )}
+          </motion.div> : null}
       </AnimatePresence>
 
       {/* Delete account confirmation modal */}
       <AnimatePresence>
-        {showDeleteConfirm && (
-          <motion.div
+        {showDeleteConfirm ? <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -1063,8 +1050,7 @@ function PrivacyDataPage({ onBack, username, onDeleteAccount }: PrivacyDataPageP
                 </button>
               </div>
             </motion.div>
-          </motion.div>
-        )}
+          </motion.div> : null}
       </AnimatePresence>
     </SubPageShell>
   );
@@ -1162,8 +1148,7 @@ function ActionRow({ glyph, title, subtitle, trailing, onClick }: {
           color: "var(--fg)",
           lineHeight: 1.3,
         }}>{title}</p>
-        {subtitle && (
-          <p
+        {subtitle ? <p
             className="truncate"
             style={{
               fontFamily: "var(--font-ui)",
@@ -1173,10 +1158,9 @@ function ActionRow({ glyph, title, subtitle, trailing, onClick }: {
             }}
           >
             {subtitle}
-          </p>
-        )}
+          </p> : null}
       </div>
-      {trailing && <div className="shrink-0 flex items-center">{trailing}</div>}
+      {trailing ? <div className="shrink-0 flex items-center">{trailing}</div> : null}
       <ChevronRight className="w-4 h-4 shrink-0" style={{ color: "var(--fg-faint)" }} />
     </button>
   );

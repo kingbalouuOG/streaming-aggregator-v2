@@ -138,9 +138,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
     return (
       <div className="flex flex-col min-h-full">
         <div className="relative w-full aspect-[4/3] shrink-0 bg-secondary">
-          {itemImage && (
-            <ImageSkeleton src={itemImage} alt={itemTitle || ''} className="w-full h-full object-cover" />
-          )}
+          {itemImage ? <ImageSkeleton src={itemImage} alt={itemTitle || ''} className="w-full h-full object-cover" /> : null}
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
           <button
             onClick={onBack}
@@ -223,8 +221,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
         </button>
 
         {/* Status badge (non-interactive) */}
-        {(isWatched || bookmarked) && (
-          <div
+        {(isWatched || bookmarked) ? <div
             className="absolute right-4 w-8 h-8 flex items-center justify-center"
             style={{
               top: "max(1rem, env(safe-area-inset-top, 1rem))",
@@ -239,8 +236,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
             ) : (
               <Bookmark className="w-4 h-4 fill-current" />
             )}
-          </div>
-        )}
+          </div> : null}
 
         {/* Title block — overlaid bottom of hero */}
         <h1
@@ -264,19 +260,15 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
       <div className="px-5 pb-8 pt-5 relative z-10">
         <p className="text-muted-foreground text-[13px] mb-3">
           {detail.year} <span className="mx-1.5">&middot;</span> {detail.contentRating}
-          {detail.runtime && <><span className="mx-1.5">&middot;</span> {detail.runtime}</>}
-          {detail.seasons && <><span className="mx-1.5">&middot;</span> {detail.seasons} Season{detail.seasons !== 1 ? 's' : ''}</>}
-          {detail.language && (
-            <>
+          {detail.runtime ? <><span className="mx-1.5">&middot;</span> {detail.runtime}</> : null}
+          {detail.seasons ? <><span className="mx-1.5">&middot;</span> {detail.seasons} Season{detail.seasons !== 1 ? 's' : ''}</> : null}
+          {detail.language ? <>
               <span className="mx-1.5">&middot;</span>
               <span className="inline-flex items-center gap-1">
-                {languageFlags[detail.language] && (
-                  <span style={{ fontSize: '14px', lineHeight: 1 }}>{languageFlags[detail.language]}</span>
-                )}
+                {languageFlags[detail.language] ? <span style={{ fontSize: '14px', lineHeight: 1 }}>{languageFlags[detail.language]}</span> : null}
                 {detail.language}
               </span>
-            </>
-          )}
+            </> : null}
         </p>
 
         {/* Rating badges + thumbs */}
@@ -304,8 +296,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
           </div>
 
           {/* Thumbs rating buttons — always visible */}
-          {onRate && (
-            <div className="flex flex-col items-end gap-1">
+          {onRate ? <div className="flex flex-col items-end gap-1">
               <div className="flex items-center gap-1.5">
                 <motion.button
                   onClick={() => {
@@ -354,8 +345,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
                   <EyeOff className="w-3.5 h-3.5" />
                 </motion.button>
               </div>
-            </div>
-          )}
+            </div> : null}
         </div>
 
         {/* Dual action buttons */}
@@ -456,8 +446,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
         </div>
 
         {/* Rating prompt — watched but not yet rated */}
-        {isWatched && onRate && !userRating && (
-          <motion.div
+        {isWatched && onRate && !userRating ? <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
@@ -475,8 +464,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
                 Use <ThumbsUp className="w-3 h-3 inline text-muted-foreground" /> or <ThumbsDown className="w-3 h-3 inline text-muted-foreground" /> above to improve recommendations
               </p>
             </div>
-          </motion.div>
-        )}
+          </motion.div> : null}
 
         {/* Genre tags */}
         <div className="flex flex-wrap items-center gap-1.5 mb-4">
@@ -500,15 +488,13 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
         >
           {detail.description}
         </p>
-        {(descOverflows || descExpanded) && (
-          <button
+        {(descOverflows || descExpanded) ? <button
             onClick={() => setDescExpanded(!descExpanded)}
             className="text-primary text-[13px] mt-1 mb-6"
             style={{ fontWeight: 500 }}
           >
             {descExpanded ? 'Show less' : 'Show more'}
-          </button>
-        )}
+          </button> : null}
         {!descOverflows && !descExpanded && <div className="mb-6" />}
 
         {/* Where to Watch — 3-tier layout with deep linking */}

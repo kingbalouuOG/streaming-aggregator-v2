@@ -166,16 +166,14 @@ export function ContentRow({ title, items, kicker, kickerColor, standfirst, righ
             watched={watchedIds?.has(item.id)}
           />
         ))}
-        {loadingMore && (
-          <>
+        {loadingMore ? <>
             {[0, 1, 2].map((i) => (
               <div
                 key={`skeleton-${i}`}
                 className={`shrink-0 rounded-xl bg-secondary animate-pulse ${skeletonWidth}`}
               />
             ))}
-          </>
-        )}
+          </> : null}
       </div>
     </section>
   );

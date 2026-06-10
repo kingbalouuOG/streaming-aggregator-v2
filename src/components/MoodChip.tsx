@@ -81,8 +81,7 @@ export function MoodChip({ icon, label, sub, hue, active = false, onClick }: Moo
         >
           {label}
         </span>
-        {sub && (
-          <span
+        {sub ? <span
             className="truncate"
             style={{
               marginTop: 2,
@@ -93,8 +92,7 @@ export function MoodChip({ icon, label, sub, hue, active = false, onClick }: Moo
             }}
           >
             {sub}
-          </span>
-        )}
+          </span> : null}
       </span>
     </button>
   );

@@ -56,14 +56,12 @@ export function WideCard({ item, userServices, onSelect, size = "default" }: Wid
             "linear-gradient(to top, rgba(10,10,15,0.92) 0%, rgba(10,10,15,0.4) 50%, rgba(10,10,15,0) 75%)",
         }}
       />
-      {primary && (
-        <div
+      {primary ? <div
           className="absolute top-2 left-2 inline-flex"
           style={{ filter: "var(--badge-glow)" }}
         >
           <ServiceBadge service={primary} size="md" />
-        </div>
-      )}
+        </div> : null}
       <div className="absolute left-0 right-0 bottom-0 p-3">
         <h3
           className="line-clamp-2"
@@ -93,8 +91,8 @@ export function WideCard({ item, userServices, onSelect, size = "default" }: Wid
             textShadow: "0 1px 3px rgba(0,0,0,0.45)",
           }}
         >
-          {item.genre && <span>{item.genre}</span>}
-          {item.year && <span>· {item.year}</span>}
+          {item.genre ? <span>{item.genre}</span> : null}
+          {item.year ? <span>· {item.year}</span> : null}
           {item.rating != null && item.rating > 0 && (
             <span>· <span style={{ color: "var(--star)" }}>★</span> {item.rating.toFixed(1)}</span>
           )}

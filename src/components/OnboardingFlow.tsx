@@ -98,8 +98,7 @@ function StepHeader({
       >
         {title}
       </h2>
-      {standfirst && (
-        <p
+      {standfirst ? <p
           className="mt-2"
           style={{
             fontFamily: "var(--font-ui)",
@@ -111,8 +110,7 @@ function StepHeader({
           }}
         >
           {standfirst}
-        </p>
-      )}
+        </p> : null}
     </div>
   );
 }
@@ -762,16 +760,14 @@ function StepAccount({
 
       {/* Phase 5.5 C14 — legal overlays */}
       <AnimatePresence>
-        {showPrivacy && <PrivacyPolicyPage onClose={() => setShowPrivacy(false)} />}
-        {showTerms && <TermsPage onClose={() => setShowTerms(false)} />}
+        {showPrivacy ? <PrivacyPolicyPage onClose={() => setShowPrivacy(false)} /> : null}
+        {showTerms ? <TermsPage onClose={() => setShowTerms(false)} /> : null}
       </AnimatePresence>
 
       {/* Error */}
       <AnimatePresence>
-        {error && (
-          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="text-red-400 text-[13px] text-center mb-2">{error}</motion.p>
-        )}
+        {error ? <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="text-red-400 text-[13px] text-center mb-2">{error}</motion.p> : null}
       </AnimatePresence>
 
       {/* CTA */}
@@ -885,12 +881,10 @@ function StepServices({
                 style={{ borderColor: isSelected ? undefined : "var(--check-border)" }}
               >
                 <AnimatePresence>
-                  {isSelected && (
-                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+                  {isSelected ? <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
                       transition={{ type: "spring", damping: 15, stiffness: 400 }}>
                       <Check className="w-3 h-3 text-white" />
-                    </motion.div>
-                  )}
+                    </motion.div> : null}
                 </AnimatePresence>
               </div>
             </motion.button>
@@ -973,24 +967,18 @@ function StepWatchedGrid({
                   <p className="text-white text-[12px] leading-tight" style={{ fontWeight: 600 }}>
                     {title.title}
                   </p>
-                  {title.year && (
-                    <p className="text-white/60 text-[10px]">{title.year}</p>
-                  )}
+                  {title.year ? <p className="text-white/60 text-[10px]">{title.year}</p> : null}
                 </div>
                 {/* Selection indicator */}
-                {isSelected && (
-                  <motion.div
+                {isSelected ? <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     className="absolute top-2 right-2 w-7 h-7 rounded-full bg-primary flex items-center justify-center shadow-lg"
                   >
                     <Check className="w-4 h-4 text-white" />
-                  </motion.div>
-                )}
+                  </motion.div> : null}
                 {/* Selection border */}
-                {isSelected && (
-                  <div className="absolute inset-0 rounded-xl border-2 border-primary pointer-events-none" />
-                )}
+                {isSelected ? <div className="absolute inset-0 rounded-xl border-2 border-primary pointer-events-none" /> : null}
               </motion.button>
             );
           })}
@@ -1091,12 +1079,10 @@ function StepClusters({
                 style={{ borderColor: isSelected ? undefined : "var(--check-border-2)" }}
               >
                 <AnimatePresence>
-                  {isSelected && (
-                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+                  {isSelected ? <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
                       transition={{ type: "spring", damping: 15, stiffness: 400 }}>
                       <Check className="w-2.5 h-2.5 text-white" />
-                    </motion.div>
-                  )}
+                    </motion.div> : null}
                 </AnimatePresence>
               </div>
             </motion.button>

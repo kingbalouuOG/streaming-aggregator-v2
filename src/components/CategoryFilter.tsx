@@ -71,8 +71,7 @@ export function CategoryFilter({
             );
           })}
         </div>
-        {onFilterPress && (
-          <button
+        {onFilterPress ? <button
             type="button"
             onClick={onFilterPress}
             className="relative flex items-center justify-center w-9 h-9 shrink-0 transition-colors"
@@ -87,8 +86,7 @@ export function CategoryFilter({
             aria-label="Filters"
           >
             <SlidersHorizontal className="w-4 h-4" />
-            {hasActiveFilters && (
-              <span
+            {hasActiveFilters ? <span
                 className="absolute -top-1 -right-1"
                 style={{
                   width: 8,
@@ -97,10 +95,8 @@ export function CategoryFilter({
                   background: "var(--primary)",
                   boxShadow: "0 0 0 1.5px var(--surface)",
                 }}
-              />
-            )}
-          </button>
-        )}
+              /> : null}
+          </button> : null}
       </div>
     </div>
   );

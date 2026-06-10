@@ -54,8 +54,7 @@ export function ImageSkeleton({ src, alt, className = "", style }: ImageSkeleton
       </AnimatePresence>
 
       {/* Actual image (skip if src is empty to avoid loading current page) */}
-      {src && (
-        <motion.img
+      {src ? <motion.img
           src={src}
           alt={alt}
           className={className}
@@ -65,8 +64,7 @@ export function ImageSkeleton({ src, alt, className = "", style }: ImageSkeleton
           initial={{ opacity: 0 }}
           animate={{ opacity: loaded ? 1 : 0 }}
           transition={{ duration: 0.4, ease: "easeOut" }}
-        />
-      )}
+        /> : null}
     </>
   );
 }

@@ -150,8 +150,7 @@ export function SpendDashboard({ connectedServices }: SpendDashboardProps) {
 
       {/* Expanded breakdown */}
       <AnimatePresence>
-        {isExpanded && (
-          <motion.div
+        {isExpanded ? <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -325,8 +324,7 @@ export function SpendDashboard({ connectedServices }: SpendDashboardProps) {
                 </div>
               </div>
             </div>
-          </motion.div>
-        )}
+          </motion.div> : null}
       </AnimatePresence>
     </div>
   );

@@ -157,8 +157,7 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
 
         {/* Service filter pills */}
         <AnimatePresence>
-          {showServiceFilter && userServices && userServices.length > 0 && (
-            <motion.div
+          {showServiceFilter && userServices && userServices.length > 0 ? <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
@@ -202,8 +201,7 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
                   </button>
                 ))}
               </div>
-            </motion.div>
-          )}
+            </motion.div> : null}
         </AnimatePresence>
 
         {/* Date scroller */}
@@ -359,8 +357,7 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
                             {item.services.slice(0, 3).map((s) => (
                               <ServiceBadge key={s} service={s} size="sm" />
                             ))}
-                            {item.genre && (
-                              <span
+                            {item.genre ? <span
                                 style={{
                                   fontFamily: "var(--font-ui)",
                                   fontSize: 11,
@@ -371,11 +368,9 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
                                 }}
                               >
                                 {item.genre}
-                              </span>
-                            )}
+                              </span> : null}
                           </div>
-                          {item.overview && (
-                            <p
+                          {item.overview ? <p
                               className="mt-1 line-clamp-2"
                               style={{
                                 fontFamily: "var(--font-ui)",
@@ -385,12 +380,10 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
                               }}
                             >
                               {item.overview}
-                            </p>
-                          )}
+                            </p> : null}
                         </div>
                         {/* Bookmark */}
-                        {onToggleBookmark && (
-                          <button
+                        {onToggleBookmark ? <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -405,8 +398,7 @@ export function CalendarPage({ items, loading, onBack, onItemSelect, userService
                             aria-label={isBookmarked ? "Remove bookmark" : "Add bookmark"}
                           >
                             <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? "fill-current" : ""}`} />
-                          </button>
-                        )}
+                          </button> : null}
                       </div>
                     );
                   })}

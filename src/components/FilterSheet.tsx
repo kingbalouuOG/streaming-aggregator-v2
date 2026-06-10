@@ -207,8 +207,7 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, userServices }:
 
   return (
     <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center">
+      {isOpen ? <div className="fixed inset-0 z-[100] flex items-end justify-center">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -513,8 +512,7 @@ export function FilterSheet({ isOpen, onClose, filters, onApply, userServices }:
               </button>
             </div>
           </motion.div>
-        </div>
-      )}
+        </div> : null}
     </AnimatePresence>
   );
 }
@@ -537,17 +535,14 @@ interface SectionLabelProps {
 function SectionLabel({ children, kicker, sub }: SectionLabelProps) {
   return (
     <div className="mb-3">
-      {kicker && (
-        <p
+      {kicker ? <p
           className="t-kicker"
           style={{ color: "var(--fg-faint)", marginBottom: 2 }}
         >
           {kicker}
-        </p>
-      )}
+        </p> : null}
       <p className="t-kicker">{children}</p>
-      {sub && (
-        <p
+      {sub ? <p
           style={{
             marginTop: 4,
             fontFamily: "var(--font-ui)",
@@ -557,8 +552,7 @@ function SectionLabel({ children, kicker, sub }: SectionLabelProps) {
           }}
         >
           {sub}
-        </p>
-      )}
+        </p> : null}
     </div>
   );
 }

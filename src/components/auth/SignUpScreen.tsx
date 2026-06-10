@@ -343,16 +343,14 @@ export default function SignUpScreen({ onGoToSignIn, onSignUpSuccess }: SignUpSc
 
         {/* Error message */}
         <AnimatePresence>
-          {error && (
-            <motion.p
+          {error ? <motion.p
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               className="text-red-400 text-[13px] text-center"
             >
               {error}
-            </motion.p>
-          )}
+            </motion.p> : null}
         </AnimatePresence>
       </motion.div>
 

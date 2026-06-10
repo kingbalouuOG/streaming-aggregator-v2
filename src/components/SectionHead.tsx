@@ -30,7 +30,7 @@ export function SectionHead({ kicker, kickerColor, title, standfirst, right }: S
   return (
     <header className="flex items-end justify-between gap-4 mb-3">
       <div className="min-w-0">
-        {kicker && <Kicker color={kickerColor}>{kicker}</Kicker>}
+        {kicker ? <Kicker color={kickerColor}>{kicker}</Kicker> : null}
         <h2
           className="mt-1"
           style={{
@@ -45,8 +45,7 @@ export function SectionHead({ kicker, kickerColor, title, standfirst, right }: S
         >
           {title}
         </h2>
-        {standfirst && (
-          <p
+        {standfirst ? <p
             className="mt-1"
             style={{
               fontFamily: "var(--font-ui)",
@@ -57,10 +56,9 @@ export function SectionHead({ kicker, kickerColor, title, standfirst, right }: S
             }}
           >
             {standfirst}
-          </p>
-        )}
+          </p> : null}
       </div>
-      {right && <div className="shrink-0 flex items-center">{right}</div>}
+      {right ? <div className="shrink-0 flex items-center">{right}</div> : null}
     </header>
   );
 }

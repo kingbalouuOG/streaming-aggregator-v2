@@ -84,9 +84,7 @@ export function ComingSoonCard({ item, onSelect, bookmarked, onToggleBookmark }:
         }}
       >
         <span style={{ fontSize: 10 }}>{pill.line1}</span>
-        {pill.line2 && (
-          <span style={{ fontSize: 14, letterSpacing: 0 }}>{pill.line2}</span>
-        )}
+        {pill.line2 ? <span style={{ fontSize: 14, letterSpacing: 0 }}>{pill.line2}</span> : null}
       </span>
 
       {/* Title */}

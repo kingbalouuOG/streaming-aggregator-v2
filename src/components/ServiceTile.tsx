@@ -68,8 +68,7 @@ export function ServiceTile({ service, active, onToggle }: ServiceTileProps) {
             className="block w-full h-full object-cover"
           />
         </div>
-        {active && (
-          <span
+        {active ? <span
             className="absolute flex items-center justify-center"
             style={{
               bottom: -3,
@@ -83,8 +82,7 @@ export function ServiceTile({ service, active, onToggle }: ServiceTileProps) {
             }}
           >
             <TickIcon className="w-[12px] h-[12px]" />
-          </span>
-        )}
+          </span> : null}
       </div>
       <span
         className="whitespace-nowrap"

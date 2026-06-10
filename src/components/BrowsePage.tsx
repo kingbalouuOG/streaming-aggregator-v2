@@ -499,8 +499,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                 fontSize: 14,
               }}
             />
-            {search.query && (
-              <button
+            {search.query ? <button
                 type="button"
                 onClick={() => search.clearSearch()}
                 className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center"
@@ -512,8 +511,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                 aria-label="Clear search"
               >
                 <X className="w-3.5 h-3.5" />
-              </button>
-            )}
+              </button> : null}
           </div>
         </div>
 
@@ -522,8 +520,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
             Hidden on the bare landing state (no query AND default
             filters). Sort only appears once results are showing
             (typing-only suggestions view drops it). */}
-        {(hasQuery || !filtersAreDefault) && (
-          <div className="px-5 mb-3 flex items-center justify-between gap-3">
+        {(hasQuery || !filtersAreDefault) ? <div className="px-5 mb-3 flex items-center justify-between gap-3">
             <button
               type="button"
               onClick={() => onShowFiltersChange(true)}
@@ -599,8 +596,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                     }}
                   />
                 </button>
-                {sortMenuOpen && (
-                  <div
+                {sortMenuOpen ? <div
                     role="listbox"
                     className="absolute z-30 flex flex-col py-1"
                     style={{
@@ -636,25 +632,20 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                           }}
                         >
                           <span>{SORT_LABELS[opt]}</span>
-                          {selected && (
-                            <Check
+                          {selected ? <Check
                               className="w-3.5 h-3.5 shrink-0"
                               style={{ color: "var(--primary)" }}
-                            />
-                          )}
+                            /> : null}
                         </button>
                       );
                     })}
-                  </div>
-                )}
+                  </div> : null}
               </div>
             )}
-          </div>
-        )}
+          </div> : null}
 
         {/* Category filter pills — editorial chip bar with kicker. */}
-        {isSearching && (
-          <div className="px-5 mb-3">
+        {isSearching ? <div className="px-5 mb-3">
             <div
               className="t-kicker"
               style={{ marginBottom: 8 }}
@@ -689,8 +680,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                 );
               })}
             </div>
-          </div>
-        )}
+          </div> : null}
 
       </div>
 
@@ -701,8 +691,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
             "Build your search" (filter-only browse), and mood chips
             (atmospheric entry points). Hidden the moment the user
             types OR applies any filter. */}
-        {!hasQuery && !isLoading && filtersAreDefault && (
-          <div className="flex flex-col pt-4 pb-8 gap-8">
+        {!hasQuery && !isLoading && filtersAreDefault ? <div className="flex flex-col pt-4 pb-8 gap-8">
             {/* RECENT — only renders when the user has prior queries */}
             {recents.length > 0 && (
               <section className="flex flex-col">
@@ -852,26 +841,22 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                 />
               </div>
             </section>
-          </div>
-        )}
+          </div> : null}
 
         {/* Typing view — suggestions list under the input. Renders
             while the input is focused so the user sees dense matches
             as they type. Enter (or tapping out) blurs the input and
             surfaces the full results grid below. */}
-        {searchFocused && hasQuery && (
-          <SearchSuggestions
+        {searchFocused && hasQuery ? <SearchSuggestions
             query={search.query}
             items={displayItems}
             loading={isLoading}
             tooShort={search.tooShort}
             onSelect={(item) => onItemSelect?.(item)}
-          />
-        )}
+          /> : null}
 
         {/* Submitted view — full results grid */}
-        {!searchFocused && hasQuery && search.tooShort && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
+        {!searchFocused && hasQuery && search.tooShort ? <div className="flex flex-col items-center justify-center py-20 text-center">
             <p
               style={{
                 fontFamily: "var(--font-display)",
@@ -883,14 +868,11 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
             >
               Keep typing…
             </p>
-          </div>
-        )}
+          </div> : null}
 
-        {!searchFocused && isLoading && displayItems.length === 0 && (isSearching || filterOnlyMode) && (
-          <div className="flex items-center justify-center py-20">
+        {!searchFocused && isLoading && displayItems.length === 0 && (isSearching || filterOnlyMode) ? <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          </div>
-        )}
+          </div> : null}
 
         {/* Mode A → Mode C opt-in CTA. Renders when useSearch
             decides the current Mode A query looks free-text and
@@ -898,9 +880,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
             preview toast when off — handler decides. Above any
             sparse-grid render so the user sees the CTA even when
             results.length is 0–2. */}
-        {!searchFocused && search.shouldShowSemanticCTA && (
-          <SearchSemanticCTA query={search.query} onAccept={handleSemanticAccept} />
-        )}
+        {!searchFocused && search.shouldShowSemanticCTA ? <SearchSemanticCTA query={search.query} onAccept={handleSemanticAccept} /> : null}
 
         {!searchFocused && displayItems.length > 0 && (
           <>
@@ -979,8 +959,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
         {/* No-results state — redesigned per artboard. Distinguishes
             "no matches for this query at all" from "matches exist but
             filters are too tight." */}
-        {!searchFocused && !isLoading && displayItems.length === 0 && !search.tooShort && (isSearching || filterOnlyMode) && (
-          <div className="flex flex-col items-start py-12">
+        {!searchFocused && !isLoading && displayItems.length === 0 && !search.tooShort && (isSearching || filterOnlyMode) ? <div className="flex flex-col items-start py-12">
             <Search className="w-8 h-8 mb-4" style={{ color: "var(--fg-faint)" }} />
             <p
               style={{
@@ -1033,14 +1012,12 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
                 Edit filters
               </button>
             )}
-          </div>
-        )}
+          </div> : null}
 
         {/* Load more — covers both modes. Auto-paginate fills the
             grid to the per-mode visible threshold; this button is the
             user's explicit "give me more" once they're past it. */}
-        {((filterOnlyMode && browse.hasMore) || (!filterOnlyMode && search.hasMore)) && displayItems.length > 0 && (
-          <div className="flex justify-center py-6">
+        {((filterOnlyMode && browse.hasMore) || (!filterOnlyMode && search.hasMore)) && displayItems.length > 0 ? <div className="flex justify-center py-6">
             <button
               type="button"
               onClick={() => (filterOnlyMode ? browse.loadMore() : search.loadMore())}
@@ -1061,8 +1038,7 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
             >
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Load more"}
             </button>
-          </div>
-        )}
+          </div> : null}
       </div>
 
       {/* Filter Sheet */}
