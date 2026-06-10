@@ -118,7 +118,7 @@ export function weightedKMeans(
   let centroids = seedIdx.map(i => pts[i].vec.slice());
 
   // ── Lloyd iterations ──
-  let assignments = new Array<number>(pts.length).fill(-1);
+  const assignments = new Array<number>(pts.length).fill(-1);
   for (let iter = 0; iter < maxIterations; iter++) {
     let changed = false;
 
