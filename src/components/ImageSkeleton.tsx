@@ -27,14 +27,27 @@ function lqipFor(src: string): string | null {
   return src.replace(`/t/p/${m[1]}/`, "/t/p/w92/");
 }
 
+/**
+ * Progressive image with shimmer skeleton, viewport-gated loading and a
+ * single-element LQIP blur-up (PLAT-1).
+ *
+ * The blur-up is a SRC SWAP on one in-flow <img>, not an absolutely-
+ * positioned layer: the first device pass caught the layered version
+ * escaping containers whose ancestors weren't position:relative (a w92
+ * poster blown up across the whole search-suggestions panel). One
+ * element in normal flow cannot escape anything — the img starts as the
+ * blurred w92, the full rendition preloads via Image(), and the src
+ * swaps with the blur transitioning off.
+ */
 export function ImageSkeleton({ src, alt, className = "", style, priority = false }: ImageSkeletonProps) {
-  const [loaded, setLoaded] = useState(false);
-  const [lqipLoaded, setLqipLoaded] = useState(false);
+  const [displaySrc, setDisplaySrc] = useState<string | null>(null);
+  const [fullReady, setFullReady] = useState(false);
+  const [displayLoaded, setDisplayLoaded] = useState(false);
   const [, setError] = useState(false);
 
-  // Viewport gate (PLAT-1). The observer attaches to the shimmer box —
-  // it exists exactly while the image hasn't loaded, which is exactly
-  // when we need observation. triggerOnce keeps shouldLoad latched.
+  // Viewport gate. The observer attaches to the shimmer box — it exists
+  // exactly while the image hasn't rendered, which is exactly when we
+  // need observation. triggerOnce keeps the gate latched open.
   const { ref: inViewRef, isVisible } = useIntersectionObserver({
     rootMargin: "600px 0px",
     triggerOnce: true,
@@ -48,23 +61,59 @@ export function ImageSkeleton({ src, alt, className = "", style, priority = fals
   useEffect(() => {
     if (!src) {
       setError(true);
-      setLoaded(true);
+      setDisplayLoaded(true);
     }
   }, [src]);
 
-  const handleLoad = useCallback(() => setLoaded(true), []);
+  // Reset per src (recycled cards swap src on the same mounted element).
+  useEffect(() => {
+    setDisplaySrc(null);
+    setFullReady(false);
+    setDisplayLoaded(false);
+    setError(false);
+  }, [src]);
+
+  // Once in (near-)view: show the LQIP immediately if one exists, and
+  // preload the full rendition off-DOM; swap src when it's decoded.
+  useEffect(() => {
+    if (!shouldLoad || !src) return;
+
+    let cancelled = false;
+    setDisplaySrc((prev) => prev ?? lqipSrc ?? src);
+
+    if (lqipSrc) {
+      const full = new Image();
+      full.onload = () => {
+        if (cancelled) return;
+        setFullReady(true);
+        setDisplaySrc(src);
+      };
+      full.onerror = () => {
+        if (cancelled) return;
+        // Full rendition failed — keep the LQIP rather than going blank.
+        setFullReady(true);
+      };
+      full.src = src;
+    } else {
+      setFullReady(true);
+    }
+
+    return () => { cancelled = true; };
+  }, [shouldLoad, src, lqipSrc]);
+
+  const handleLoad = useCallback(() => setDisplayLoaded(true), []);
   const handleError = useCallback(() => {
     setError(true);
-    setLoaded(true);
+    setDisplayLoaded(true);
   }, []);
-  const handleLqipLoad = useCallback(() => setLqipLoaded(true), []);
+
+  const blurred = displaySrc !== null && displaySrc !== src && !fullReady;
 
   return (
     <>
-      {/* Shimmer skeleton — hides once EITHER the blur-up or the full
-          image is ready */}
+      {/* Shimmer skeleton — exits once the (LQIP or full) img has painted */}
       <AnimatePresence>
-        {!loaded && !lqipLoaded ? (
+        {!displayLoaded ? (
           <motion.div
             ref={inViewRef}
             initial={{ opacity: 1 }}
@@ -88,32 +137,23 @@ export function ImageSkeleton({ src, alt, className = "", style, priority = fals
         ) : null}
       </AnimatePresence>
 
-      {/* LQIP blur-up — absolute twin under the real image while it loads */}
-      {shouldLoad && lqipSrc && !loaded ? (
-        <img
-          src={lqipSrc}
-          alt=""
-          aria-hidden="true"
-          loading="lazy"
-          onLoad={handleLqipLoad}
-          className={`absolute inset-0 ${className}`}
-          style={{ ...style, filter: "blur(12px)", transform: "scale(1.06)" }}
-        />
-      ) : null}
-
-      {/* Actual image — only requested once in (near-)view; skip if src
-          is empty to avoid loading the current page */}
-      {src && shouldLoad ? (
+      {/* Single in-flow image: starts as the blurred w92, swaps src to
+          the preloaded full rendition. Skipped while src is empty. */}
+      {src && displaySrc ? (
         <motion.img
-          src={src}
+          src={displaySrc}
           alt={alt}
           loading={priority ? "eager" : "lazy"}
           className={className}
-          style={style}
+          style={{
+            ...style,
+            filter: blurred ? "blur(10px)" : "none",
+            transition: "filter 0.25s ease-out",
+          }}
           onLoad={handleLoad}
           onError={handleError}
           initial={{ opacity: 0 }}
-          animate={{ opacity: loaded ? 1 : 0 }}
+          animate={{ opacity: displayLoaded ? 1 : 0 }}
           transition={{ duration: 0.4, ease: "easeOut" }}
         />
       ) : null}
