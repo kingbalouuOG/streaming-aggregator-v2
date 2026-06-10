@@ -74,6 +74,9 @@ export function ContentRow({ title, items, kicker, kickerColor, standfirst, righ
         contentId: tmdbId,
         sourceSurface,
         position,
+        // ENG-1 Workstream C: exploration-slot picks tagged so ENG-2 can
+        // measure exploration CTR separately (brief §3.4).
+        metadata: item.exploration ? { exploration: true } : undefined,
       });
     });
   }, [items, sourceSurface]);

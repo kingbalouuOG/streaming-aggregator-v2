@@ -43,8 +43,22 @@ import {
 } from '../_shared/recommendations-v2/anchorSelection.ts';
 import { titleRowToContentItem } from '../_shared/recommendations-v2/titleAdapter.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { getComfortZoneRowCount, HIDDEN_GEMS_FILTERS, AVOID_PENALTY_GAMMA } from '../_shared/recommendations-v2/weights.ts';
+import {
+  getComfortZoneRowCount,
+  HIDDEN_GEMS_FILTERS,
+  AVOID_PENALTY_GAMMA,
+  EXPLORATION_COUNT,
+  EXPLORATION_SLOT_POSITIONS,
+  EXPLORATION_BAND,
+  scoreToMatchPercentage,
+} from '../_shared/recommendations-v2/weights.ts';
 import { fetchAvoidSet, applyAvoidPenalty } from '../_shared/recommendations-v2/avoidSet.ts';
+import {
+  fetchSeenContentIds,
+  selectExplorationCandidates,
+  spliceAtPositions,
+  explorationDayStamp,
+} from '../_shared/recommendations-v2/exploration.ts';
 import {
   EXTENDED_TITLE_SELECT,
   type CandidatePool,
@@ -234,13 +248,15 @@ Deno.serve(async (req) => {
     // diversify intra-row across all three taste-vector rows. Phase 5.5
     // (C5): per-instance in-memory cache keyed on userId +
     // taste_profiles.updated_at — warm requests skip the Supabase select.
-    // ENG-1: avoid set fetched in parallel — same network window.
-    const [embeddingMap, avoidSet] = await Promise.all([
+    // ENG-1: avoid set + seen-set fetched in parallel — same network
+    // window as the embedding fetch.
+    const [embeddingMap, avoidSet, seenIds] = await Promise.all([
       fetchEmbeddingsForCandidates(supabase, scored.slice(0, 200), {
         userId,
         tasteProfilesUpdatedAt: profile.updatedAt,
       }),
       fetchAvoidSet(scope, supabase),
+      fetchSeenContentIds(scope),
     ]);
 
     // ENG-1 Workstream B: avoid-set penalty after the embedding fetch,
@@ -251,11 +267,28 @@ Deno.serve(async (req) => {
     // cross-row dedup — same contract as src/hooks/useForYouContent.ts.
     const usedIds = new Set<string>();
 
-    const recommendedForYou = buildRowFromPool(ranked, profile.sliders, {
-      config: { limit: 20, excludeIds: usedIds },
+    // ENG-1 Workstream C: exploration picks reserved ahead of the base
+    // row build (same selection + daily seed as the client pipeline).
+    const explorationPicks = selectExplorationCandidates(ranked, {
+      seenContentIds: seenIds,
+      excludeKeys: usedIds,
+      count: EXPLORATION_COUNT,
+      band: EXPLORATION_BAND,
+      seed: `${userId}:${explorationDayStamp()}`,
+    });
+    explorationPicks.forEach((c) => usedIds.add(c.contentKey));
+
+    const recBase = buildRowFromPool(ranked, profile.sliders, {
+      config: { limit: 20 - explorationPicks.length, excludeIds: usedIds },
       embeddingMap,
     });
-    recommendedForYou.forEach((item) => usedIds.add(item.id));
+    recBase.forEach((item) => usedIds.add(item.id));
+
+    const explorationItems = explorationPicks.map((c) => ({
+      ...titleRowToContentItem(c.meta, scoreToMatchPercentage(c.finalScore)),
+      exploration: true,
+    }));
+    const recommendedForYou = spliceAtPositions(recBase, explorationItems, EXPLORATION_SLOT_POSITIONS);
 
     const gemCandidates = ranked.filter((c) => {
       const pop = c.meta.popularity ?? 0;

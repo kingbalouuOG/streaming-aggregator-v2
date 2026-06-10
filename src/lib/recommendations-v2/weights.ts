@@ -278,6 +278,19 @@ export const MAX_CONSECUTIVE_SAME_SERVICE = 2;
  */
 export const AVOID_PENALTY_GAMMA = 0.15;
 
+// ── ENG-1 Workstream C: exploration slot ──
+
+/** Exploration candidates reserved per Recommended For You render */
+export const EXPLORATION_COUNT = 2;
+
+/** 0-indexed splice positions (1-indexed: 6 and 14 — visible without
+ *  displacing the head of the row). Per plan Q3, confirmed by Joe. */
+export const EXPLORATION_SLOT_POSITIONS = [5, 13];
+
+/** Taste-score percentile band [low, high) the exploration candidates are
+ *  sampled from — moderate similarity: novel but not random. */
+export const EXPLORATION_BAND: [number, number] = [0.40, 0.70];
+
 /** Hidden Gems thresholds (re-exported from types for convenience) */
 export { HIDDEN_GEMS_FILTERS } from './types';
 

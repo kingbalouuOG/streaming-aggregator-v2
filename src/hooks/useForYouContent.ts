@@ -19,8 +19,22 @@ import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import { supabase } from '@/lib/supabase';
 import { getAuthUserId, isSupabaseActive } from '@/lib/storage';
 import { getWatchlist } from '@/lib/storage/watchlist';
-import { getComfortZoneRowCount, HIDDEN_GEMS_FILTERS, AVOID_PENALTY_GAMMA } from '@/lib/recommendations-v2/weights';
+import {
+  getComfortZoneRowCount,
+  HIDDEN_GEMS_FILTERS,
+  AVOID_PENALTY_GAMMA,
+  EXPLORATION_COUNT,
+  EXPLORATION_SLOT_POSITIONS,
+  EXPLORATION_BAND,
+  scoreToMatchPercentage,
+} from '@/lib/recommendations-v2/weights';
 import { fetchAvoidSet, applyAvoidPenalty } from '@/lib/recommendations-v2/avoidSet';
+import {
+  fetchSeenContentIds,
+  selectExplorationCandidates,
+  spliceAtPositions,
+  explorationDayStamp,
+} from '@/lib/recommendations-v2/exploration';
 import { titleRowToContentItem } from '@/lib/recommendations-v2/titleAdapter';
 import { watchlistItemToContentItem } from '@/lib/adapters/contentAdapter';
 import { tryRenderForYouEdge } from '@/lib/recommendations-v2/edgeRender';
@@ -171,18 +185,40 @@ export function useForYouContent(
   // Edge path (rows arrive pre-penalised; slider re-ranks degrade the
   // same way MMR already does there — embeddingMap is empty too).
   const avoidRef = useRef<CachedEmbedding[]>([]);
+  // ENG-1 Workstream C: the user's recently-impressed content ids —
+  // exploration picks must be novel. Fetched once per load.
+  const seenIdsRef = useRef<Set<number>>(new Set());
   const providerStr = providerIds.join(',');
 
   // ── Build rows from scored candidates ──
   const buildRows = useCallback((scored: ScoredCandidate[], currentSliders: SliderState) => {
     const usedIds = new Set<string>();
 
-    // 1. Recommended For You: top 20 after diversity
-    const recItems = buildRowFromPool(scored, currentSliders, {
-      config: { limit: 20, excludeIds: usedIds },
+    // 1. Recommended For You: top 20 after diversity, with
+    // EXPLORATION_COUNT positions reserved for exploration picks
+    // (ENG-1 Workstream C). Picks selected first so the base row can
+    // exclude them; daily-seeded sampling keeps the slot stable across
+    // re-renders and slider re-ranks, rotating each UTC day.
+    const explorationPicks = selectExplorationCandidates(scored, {
+      seenContentIds: seenIdsRef.current,
+      excludeKeys: usedIds,
+      count: EXPLORATION_COUNT,
+      band: EXPLORATION_BAND,
+      seed: `${getAuthUserId() ?? 'anon'}:${explorationDayStamp()}`,
+    });
+    explorationPicks.forEach(c => usedIds.add(c.contentKey));
+
+    const recBase = buildRowFromPool(scored, currentSliders, {
+      config: { limit: 20 - explorationPicks.length, excludeIds: usedIds },
       embeddingMap: embeddingMapRef.current,
     });
-    recItems.forEach(item => usedIds.add(item.id));
+    recBase.forEach(item => usedIds.add(item.id));
+
+    const explorationItems = explorationPicks.map(c => ({
+      ...titleRowToContentItem(c.meta, scoreToMatchPercentage(c.finalScore)),
+      exploration: true,
+    }));
+    const recItems = spliceAtPositions(recBase, explorationItems, EXPLORATION_SLOT_POSITIONS);
     setRecommendedForYou(recItems);
 
     // 2. Hidden Gems: from scored pool, popularity-capped
@@ -356,8 +392,9 @@ export function useForYouContent(
       // missing). Top-200 is the headroom that covers all three
       // taste-vector rows in practice. Phase 5.5 (C5): hits the 24h
       // localStorage cache first to skip the network fetch entirely.
-      // ENG-1: avoid set fetched in parallel — same network window.
-      const [embMap, avoidSet] = await Promise.all([
+      // ENG-1: avoid set + seen-set fetched in parallel — same network
+      // window as the embedding fetch.
+      const [embMap, avoidSet, seenIds] = await Promise.all([
         fetchEmbeddingsForCandidates(
           scored.slice(0, 200),
           {
@@ -366,9 +403,11 @@ export function useForYouContent(
           },
         ),
         fetchAvoidSet(),
+        fetchSeenContentIds(),
       ]);
       embeddingMapRef.current = embMap;
       avoidRef.current = avoidSet;
+      seenIdsRef.current = seenIds;
 
       // ENG-1 Workstream B: penalty after the embedding fetch, before
       // row building (re-sorts by penalised finalScore).

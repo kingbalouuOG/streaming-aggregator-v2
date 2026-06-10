@@ -31,6 +31,9 @@ export interface ContentItem {
   originalLanguage?: string;
   popularity?: number;
   voteCount?: number;
+  /** ENG-1 Workstream C: exploration-slot pick (rides the wire to the
+   *  client; ContentRow tags the impression metadata). */
+  exploration?: boolean;
 }
 
 // ── Pipeline types ──
