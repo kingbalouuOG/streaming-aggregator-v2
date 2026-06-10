@@ -2,7 +2,7 @@
  * Phase 2.5 — Cosine Drift Check (WU-2)
  *
  * Parses the Phase 2 baseline pairwise cosine similarity matrix from
- * docs/v2/phase-2-service-discrimination-eval.md, then reads current
+ * docs/v2/phase-summaries/phase-2-service-discrimination-eval.md, then reads current
  * fingerprints from service_fingerprints and computes fresh pairwise
  * cosines for the original 10 services. Reports max absolute drift.
  *
@@ -69,7 +69,7 @@ interface BaselinePair {
 function parseBaselineMatrix(): BaselinePair[] {
   // Read from the Phase 2 baseline snapshot, NOT the current eval report
   // (eval-service-discrimination.ts overwrites the report on each run).
-  const reportPath = resolve(__dirname, '..', '..', 'docs', 'v2', 'phase-2-service-discrimination-baseline.md');
+  const reportPath = resolve(__dirname, '..', '..', 'docs', 'v2', 'phase-summaries', 'phase-2-service-discrimination-baseline.md');
   const content = readFileSync(reportPath, 'utf-8');
   const lines = content.split('\n');
 

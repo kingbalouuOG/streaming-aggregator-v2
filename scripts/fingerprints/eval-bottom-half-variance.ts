@@ -15,7 +15,7 @@
  * Usage:
  *   npx tsx scripts/fingerprints/eval-bottom-half-variance.ts
  *
- * Output: docs/v2/phase-2-6-variance-eval.md
+ * Output: docs/v2/phase-summaries/phase-2-6-variance-eval.md
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -156,7 +156,7 @@ async function main(): Promise<void> {
   console.log(`  Gate (>= 8):       ${improvedCount >= 8 ? 'PASS' : 'FAIL'}`);
 
   // Write report
-  const reportPath = resolve(__dirname, '..', '..', 'docs', 'v2', 'phase-2-6-variance-eval.md');
+  const reportPath = resolve(__dirname, '..', '..', 'docs', 'v2', 'phase-summaries', 'phase-2-6-variance-eval.md');
   let md = `# Phase 2.6 — Bottom-Half Variance Eval\n\n`;
   md += `**Date:** ${new Date().toISOString().slice(0, 10)}\n`;
   md += `**Services evaluated:** ${rows.length}\n`;
