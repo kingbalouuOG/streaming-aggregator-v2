@@ -66,16 +66,24 @@ jobs:
 
       - name: Run For You parity probe
         env:
-          USER_JWT: ${{ secrets.PARITY_USER_JWT }}
+          # REPO-1: the probe signs in itself with the test-user creds and
+          # mints a fresh access token per run — Supabase access tokens
+          # live ~1 hour, which killed the old stored-JWT model (the
+          # PARITY_USER_JWT secret kept expiring between refresh and CI).
+          # USER_JWT remains an optional manual-run fallback only.
+          PARITY_TEST_EMAIL: ${{ secrets.PARITY_TEST_EMAIL }}
+          PARITY_TEST_PASSWORD: ${{ secrets.PARITY_TEST_PASSWORD }}
+          SUPABASE_ANON_KEY: ${{ secrets.PARITY_SUPABASE_ANON_KEY }}
           USER_ID: ${{ secrets.PARITY_USER_ID }}
           SERVICES: ${{ secrets.PARITY_SERVICES }}
           SUPABASE_URL: ${{ secrets.PARITY_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PARITY_SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -e
-          if [ -z "$USER_JWT" ] || [ -z "$USER_ID" ] || [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+          if [ -z "$PARITY_TEST_EMAIL" ] || [ -z "$PARITY_TEST_PASSWORD" ] || [ -z "$SUPABASE_ANON_KEY" ] || [ -z "$USER_ID" ] || [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
             echo "::warning::Parity-probe secrets not configured for this branch."
-            echo "Required secrets: PARITY_USER_JWT, PARITY_USER_ID, PARITY_SERVICES,"
+            echo "Required secrets: PARITY_TEST_EMAIL, PARITY_TEST_PASSWORD,"
+            echo "PARITY_SUPABASE_ANON_KEY, PARITY_USER_ID, PARITY_SERVICES,"
             echo "PARITY_SUPABASE_URL, PARITY_SUPABASE_SERVICE_ROLE_KEY."
             echo "Skipping probe. Configure repo secrets to enable enforcement."
             exit 0

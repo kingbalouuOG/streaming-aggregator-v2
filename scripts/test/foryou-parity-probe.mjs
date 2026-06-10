@@ -74,13 +74,25 @@ function loadEnv() {
 const ENV = { ...loadEnv(), ...process.env };
 const SUPABASE_URL = ENV.VITE_SUPABASE_URL ?? ENV.SUPABASE_URL;
 const SERVICE_ROLE_KEY = ENV.SUPABASE_SERVICE_ROLE_KEY;
+const ANON_KEY = ENV.VITE_SUPABASE_ANON_KEY ?? ENV.SUPABASE_ANON_KEY;
 
-const USER_JWT = process.env.USER_JWT;
 const USER_ID = process.env.USER_ID;
 const SERVICES = (process.env.SERVICES ?? '').split(',').filter(Boolean);
 
-if (!USER_JWT || !USER_ID || SERVICES.length === 0) {
-  console.error('Set USER_JWT, USER_ID, and SERVICES env vars. See file header.');
+// Auth: Supabase access tokens live ~1 HOUR (not the 1 week the original
+// weekly-refresh model assumed — discovered at REPO-1 close when a token
+// refreshed at 10:58 UTC was dead by CI time). The probe therefore signs
+// in ITSELF with the test user's credentials when they're available
+// (PARITY_TEST_EMAIL / PARITY_TEST_PASSWORD — same creds
+// refresh-parity-jwt.ts uses), minting a fresh token per run. A
+// pre-minted USER_JWT is still accepted as a fallback for one-off local
+// runs.
+const TEST_EMAIL = ENV.PARITY_TEST_EMAIL;
+const TEST_PASSWORD = ENV.PARITY_TEST_PASSWORD;
+let USER_JWT = process.env.USER_JWT;
+
+if ((!USER_JWT && !(TEST_EMAIL && TEST_PASSWORD)) || !USER_ID || SERVICES.length === 0) {
+  console.error('Set USER_ID + SERVICES, and either PARITY_TEST_EMAIL/PARITY_TEST_PASSWORD (preferred) or USER_JWT. See file header.');
   process.exit(1);
 }
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
@@ -92,6 +104,32 @@ const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/render-foryou-rows`;
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+
+/** Mint a fresh access token via password sign-in (preferred path). */
+async function ensureUserJwt() {
+  if (!(TEST_EMAIL && TEST_PASSWORD)) return; // USER_JWT fallback in play
+  if (!ANON_KEY) {
+    console.error('PARITY_TEST_EMAIL set but no SUPABASE_ANON_KEY/VITE_SUPABASE_ANON_KEY available for sign-in.');
+    process.exit(1);
+  }
+  const authClient = createClient(SUPABASE_URL, ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data, error } = await authClient.auth.signInWithPassword({
+    email: TEST_EMAIL,
+    password: TEST_PASSWORD,
+  });
+  if (error || !data?.session?.access_token) {
+    console.error('Test-user sign-in failed:', error?.message ?? 'no session');
+    process.exit(1);
+  }
+  if (data.user?.id !== USER_ID) {
+    console.error(`Signed-in user ${data.user?.id} does not match USER_ID — refusing to probe.`);
+    process.exit(1);
+  }
+  USER_JWT = data.session.access_token;
+  console.log('Auth: fresh token minted via test-user sign-in.');
+}
 
 const tierName = { 1: 'behavioural', 2: 'cluster-rep', 3: 'top-finalScore' };
 
@@ -303,6 +341,8 @@ function diffSnapshots(expected, actual, path = '') {
 async function main() {
   console.log(`Probing render-foryou-rows for user ${USER_ID}`);
   console.log(`Services: ${SERVICES.join(', ')}\n`);
+
+  await ensureUserJwt();
 
   console.log('Run 1...');
   const run1 = await callEdgeFunction();
