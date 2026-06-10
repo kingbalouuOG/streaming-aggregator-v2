@@ -17,11 +17,11 @@
 - **IN-PX-34** ✅ Incorporated — `docs/legal/privacy-policy.md` (11 sections) + `terms-of-service.md` (12 sections) authored. `PrivacyPolicyPage.tsx` + `TermsPage.tsx` render the markdown via `react-markdown`. Wired into signup-flow legal links + Profile → Settings → Privacy & Data. **Both docs carry the lawyer-vetting caveat at the footer; pre-launch solicitor review filed as new IN-XPS-014 (below).**
 - **IN-PX-35** ✅ Incorporated — `export_user_data` SECURITY DEFINER RPC (migration 043 applied + verified 2026-05-15). Frontend wires `@capacitor/filesystem` on native, Blob download on web. C16 ships with privacy-smoke-test path documented in the commit.
 - **IN-XPS-006** ✅ Incorporated — Phase 5 carry-forward closed. Migration 042 (`042_delete_own_account.sql`) captures the live RPC as belt-and-braces defensive explicit DELETEs across 8 user-scoped tables. C11 smoke test on a throwaway user (113 `card_impressions` + 6 onboarding events + profile/taste/services rows): every count = 0 post-delete; `auth.users` row gone. UI gate flipped + type-username-to-confirm UX live.
-- **IN-465** ✅ Incorporated — catalogue-sync gap closed via `scripts/backfill_missing_titles.ts`. 5,446 distinct missing tmdb_ids at C18-run-time: 2,698 backfilled into `titles`, 2,748 TMDb-404 (deleted stubs — correct to skip), 0 errored. Investigation findings + verdict captured in `docs/v2/investigations/in-465-catalogue-sync-gap.md`. The script's `streaming_availability LEFT JOIN titles WHERE titles IS NULL` query IS the recurring fix — wraps in scheduled Edge Function as Phase 6 work (new IN-PX-50 below).
+- **IN-465** ✅ Incorporated — catalogue-sync gap closed via `scripts/enrichment/backfill_missing_titles.ts`. 5,446 distinct missing tmdb_ids at C18-run-time: 2,698 backfilled into `titles`, 2,748 TMDb-404 (deleted stubs — correct to skip), 0 errored. Investigation findings + verdict captured in `docs/v2/investigations/in-465-catalogue-sync-gap.md`. The script's `streaming_availability LEFT JOIN titles WHERE titles IS NULL` query IS the recurring fix — wraps in scheduled Edge Function as Phase 6 work (new IN-PX-50 below).
 
 **New entries filed in Phase 5.5:**
 - **IN-XPS-014** (Phase 6 — hard pre-launch blocker) — UK solicitor review of Privacy Policy + Terms of Service. The Phase 5.5 drafts are descriptive of current Videx behaviour but **have not been reviewed by a qualified UK solicitor**. Review is required before App Store / Play Store submission and before any non-prototype user base accesses the product. Postal address + contact email placeholders (`[your-contact-email-address — TBC]`, `[your-UK-postal-address — TBC]`) are intentional flags that the doc isn't launch-ready; pre-launch fill required per Joe's call on whether to use email-only / registered office service / PO Box.
-- **IN-PX-50** (Phase 6) — Scheduled catalogue-gap backfill as Edge Function. Wraps the logic from `scripts/backfill_missing_titles.ts` in an Edge Function with pg_cron schedule (weekly or monthly). Closes the recurring half of IN-465 — `titles` rows currently only land via manual script runs, so the gap accumulates between runs. Required scope: new Edge Function `backfill-missing-titles`, new migration adding the cron schedule, TMDb API key threaded via Vault (same pattern as migration 039).
+- **IN-PX-50** (Phase 6) — Scheduled catalogue-gap backfill as Edge Function. Wraps the logic from `scripts/enrichment/backfill_missing_titles.ts` in an Edge Function with pg_cron schedule (weekly or monthly). Closes the recurring half of IN-465 — `titles` rows currently only land via manual script runs, so the gap accumulates between runs. Required scope: new Edge Function `backfill-missing-titles`, new migration adding the cron schedule, TMDb API key threaded via Vault (same pattern as migration 039).
 
 **Previous status (v0.6):** Phase 5 close-out. Phase 5 shipped four migrations (036–039) + CORS + verify_jwt CI guard + Database<> generic + foryou-parity CI workflow + contextual scoring + MMR. Status flips below reflect what landed; the Phase 5 summary at `docs/v2/phase-summaries/phase-5-summary.md` is authoritative for what shipped vs deferred.
 
@@ -1090,7 +1090,7 @@ Sample tmdb_ids from the original investigation already skew toward low numbers 
 
 **Phase target:** post-Phase-4.5 investigation. Likely a one-off backfill script + a sync-pipeline audit.
 
-**Phase 5 status:** scoped into Workstream F (one-off backfill script `scripts/backfill_missing_titles.ts`). Deferred — script not authored, profile-and-discover-fix questions in this entry are still unanswered. Re-targeted to Phase 5.5 / 6.
+**Phase 5 status:** scoped into Workstream F (one-off backfill script `scripts/enrichment/backfill_missing_titles.ts`). Deferred — script not authored, profile-and-discover-fix questions in this entry are still unanswered. Re-targeted to Phase 5.5 / 6.
 
 **Status:** ⏳ Not yet incorporated (Phase 5.5 / 6).
 
@@ -1801,10 +1801,10 @@ Two placeholders intentionally left in the drafts (`[your-contact-email-address 
 
 **Detail:** The Phase 5.5 IN-465 investigation surfaced a pipeline-split fact: `daily-content-sync` cron calls the `sync-incremental` Edge Function, which only writes to `streaming_availability` — never creates `titles` rows. `titles` rows come only from the manual `scripts/sync-content.ts:stageTmdb` script (whose `/discover` popularity-cap is the original source of the gap). Net effect: the gap between SA-side new arrivals and TMDb-side title-creation accumulates indefinitely between manual sync runs.
 
-`scripts/backfill_missing_titles.ts` IS the recurring fix — its `streaming_availability LEFT JOIN titles WHERE titles IS NULL` query catches whatever has accumulated since the last run. Joe runs it manually as monthly maintenance for now.
+`scripts/enrichment/backfill_missing_titles.ts` IS the recurring fix — its `streaming_availability LEFT JOIN titles WHERE titles IS NULL` query catches whatever has accumulated since the last run. Joe runs it manually as monthly maintenance for now.
 
 **Fix:** Wrap the backfill script logic in a new Edge Function `backfill-missing-titles` with a pg_cron schedule (weekly or monthly cadence). Required components:
-- New Edge Function under `supabase/functions/backfill-missing-titles/` (port `scripts/backfill_missing_titles.ts` to Deno + Edge runtime conventions).
+- New Edge Function under `supabase/functions/backfill-missing-titles/` (port `scripts/enrichment/backfill_missing_titles.ts` to Deno + Edge runtime conventions).
 - New migration adding the cron schedule. Reuse the Vault pattern from migration 039 for TMDb API key + Supabase service-role JWT.
 - Logging + summary on completion (rows fetched / upserted / 404-skipped / errored).
 - Idempotent — same `onConflict: 'tmdb_id,media_type'` pattern as the script.

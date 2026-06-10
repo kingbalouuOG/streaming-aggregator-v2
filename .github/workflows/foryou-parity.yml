@@ -1,7 +1,8 @@
 name: For You parity probe
 
-# IN-XPS-012: Phase 5 Workstream D — promotes scripts/_inspect_foryou_parity.mjs
-# from a manual diagnostic into a CI smoke test.
+# IN-XPS-012: Phase 5 Workstream D — promotes the parity probe (now at
+# scripts/test/foryou-parity-probe.mjs; moved from the scripts/ root in
+# REPO-1) from a manual diagnostic into a CI smoke test.
 #
 # What the probe asserts (over the live render-foryou-rows Edge
 # Function output for a fixture user):
@@ -44,7 +45,7 @@ on:
       - 'src/lib/recommendations-v2/**'
       - 'supabase/functions/_shared/recommendations-v2/**'
       - 'supabase/functions/render-foryou-rows/**'
-      - 'scripts/_inspect_foryou_parity.mjs'
+      - 'scripts/test/foryou-parity-probe.mjs'
       - 'scripts/test/foryou-parity-golden.json'
       - '.github/workflows/foryou-parity.yml'
 
@@ -79,4 +80,4 @@ jobs:
             echo "Skipping probe. Configure repo secrets to enable enforcement."
             exit 0
           fi
-          node scripts/_inspect_foryou_parity.mjs
+          node scripts/test/foryou-parity-probe.mjs

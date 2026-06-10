@@ -28,7 +28,7 @@
  *   USER_JWT="<bearer token from app localStorage>" \
  *   USER_ID="<auth.uid()>" \
  *   SERVICES="netflix,prime,disney,apple,itvx,all4,now,iplayer" \
- *   node scripts/_inspect_foryou_parity.mjs
+ *   node scripts/test/foryou-parity-probe.mjs
  *
  * Phase 5.5 C9 / IN-PX-33 — property-level golden probe:
  *   - Default mode compares run 1 against the committed golden at
@@ -409,7 +409,7 @@ async function main() {
         console.log('');
         console.log('  If this is intentional (strategy retune, test-user content change),');
         console.log('  regenerate the golden with:');
-        console.log('    node scripts/_inspect_foryou_parity.mjs --update-golden');
+        console.log('    node scripts/test/foryou-parity-probe.mjs --update-golden');
       }
     }
   }

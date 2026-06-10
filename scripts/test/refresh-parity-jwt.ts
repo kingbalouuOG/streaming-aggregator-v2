@@ -34,7 +34,7 @@
  *     gh secret set PARITY_USER_JWT --body $jwt
  *
  * Env keys SUPABASE_URL / SUPABASE_ANON_KEY come from .env (loaded
- * via the same loader pattern as scripts/_inspect_foryou_parity.mjs).
+ * via the same loader pattern as scripts/test/foryou-parity-probe.mjs).
  *
  * ─── Future: GitHub Actions automation ─────────────────────────────
  *
