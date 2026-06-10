@@ -1865,6 +1865,50 @@ Two placeholders intentionally left in the drafts (`[your-contact-email-address 
 
 ---
 
+## ENG-1 follow-ups (filed 2026-06-10 from Phase ENG-1 close-out)
+
+### IN-PX-55: Expand onboarding cluster representative lists (curation)
+
+**Source:** ENG-1 eval run 1 + rep-ID audit (2026-06-10).
+
+**Detail:** 13 of 16 clusters in `tasteClusters.ts` define only 2–4 representative titles (true-crime and cult-indie have 2). The audit cleared the pipeline: 67/68 rep ids are in the catalogue WITH embeddings (sole gap: tmdb 273481, absent from `titles`), and catalogue-wide coverage is 98.6%. The issue is curation breadth — interest seed centroids (and the pre-ENG-1 summary genreVector) average very few points for those clusters, so bootstrap quality is bounded for every user who picks them. EMA + the 24h k-means supersede bootstrap seeds within days of real use, so impact is confined to a profile's first hours.
+
+**Fix:** Expand each cluster to ~8–10 reps (Joe-owned curation, like the search 20-query fixture), backfill 273481 or drop it, then re-run `npm run eval:eng1` section A to confirm pairwise seed separation doesn't degrade (τ=0.80 decision assumed current geometry).
+
+**Phase target:** Any time pre-launch; pairs naturally with an ENG-2-era bootstrap review.
+
+**Status:** ⏳ Filed.
+
+---
+
+### IN-PX-56: `card_impressions` lacks `media_type` — training-extract join collision class
+
+**Source:** ENG-1 plan §1.2 / migration 045 known-limitation note.
+
+**Detail:** `v_training_examples` joins impressions to outcomes on `(user_id, content_id, session_id)` — no media_type on the impressions side, so a movie and TV show sharing a tmdb id within one session can cross-label. Same 0.8% collision class as IN-458 (measured in the Phase 4 audit).
+
+**Fix:** Add `media_type` to `card_impressions` (partitioned table — DDL touches the parent + template + event trigger from migration 016) and thread it through `recordImpression`; or accept as training noise and let ENG-2's eval decide. Pairs with the deferred IN-458 typed-pairs RPC work.
+
+**Phase target:** ENG-2 (only if its evals show the noise matters).
+
+**Status:** ⏳ Filed.
+
+---
+
+### IN-PX-57: Exploration seen-set reads most-recent-1000 impressions only
+
+**Source:** ENG-1 Workstream C implementation (`exploration.ts`).
+
+**Detail:** "Zero prior impressions" is approximated as "not among the user's most recent 1,000 impressions in 90 days" — PostgREST caps unpaginated reads at 1,000 rows (the C18 lesson), and the most recent rows are the ones that matter for novelty. At prototype scale this is exact; a heavy user past ~1,000 impressions/90d could occasionally see an exploration pick they were shown weeks ago.
+
+**Fix (if ever needed):** paginate the read, or replace with a SQL-side anti-join RPC (`candidates NOT IN seen`) — PLAT-3's server-side feed makes the RPC shape natural.
+
+**Phase target:** Post-launch, telemetry-driven; likely absorbed by PLAT-3.
+
+**Status:** ⏳ Filed.
+
+---
+
 ## Onboarding implementation notes
 
 *(Specific to the v2 onboarding flow build — applies to Phase 3 where onboarding gets wired to backend logic)*

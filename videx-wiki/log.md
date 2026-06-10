@@ -326,3 +326,10 @@ Conflict resolutions captured this pass:
 - Supabase auto-grants EXECUTE to anon / authenticated / service_role on every `public.*` function so PostgREST can route to it. The migration's `REVOKE FROM PUBLIC, anon` doesn't persist — the body's NULL `auth.uid()` raise is the actual auth gate. Documented inline in both 042 and 043.
 
 Page count delta: 119 → 120 (+1 `phase-5-5.md`).
+
+## [2026-06-10] ingest | phase-eng-1-summary.md + eng1-eval-2026-06-10.md
+- Updated: wiki/concepts/architecture/taste-vector.md (new ENG-1 section: K≤3 interest centroids, nearest-centroid EMA, deterministic k-means batch refresh; negative weights struck from the signal table — thumbs_down/not_interested → avoid set, watchlist_remove taste-neutral; summary-vector role reframed)
+- Updated: wiki/concepts/architecture/recommendation-pipeline.md (Stage 1 multi-interest fan-out + weighted interleave; avoid-set penalty stage; exploration slot)
+- Updated: wiki/entities/codebase/migrations.md (rows 044 + 045; corrected the 040 row — number consumed by unapplied editor_notes, IN-458 renumbers; new note: ledger has gaps, never `db push`, orchestration §3.4 is authoritative)
+- No new pages; index.md unchanged
+- Sources cited at docs/v2/phase-summaries/ (raw/ snapshots pending Joe's next drop per AGENTS.md)
