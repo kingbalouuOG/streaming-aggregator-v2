@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getCachedData, setCachedData, createOMDbCacheKey } from './cache';
+import { getCachedData, setCachedData, createOMDbCacheKey } from './apiQueryCache';
 
 const BASE_URL = 'https://www.omdbapi.com/';
 const API_KEY = import.meta.env.VITE_OMDB_API_KEY;
@@ -49,7 +49,7 @@ export const getRatings = async (imdbId: string, type = 'movie'): Promise<{ succ
     if (USE_CACHE) {
       const cacheKey = createOMDbCacheKey(imdbId);
       const cached = await getCachedData(cacheKey);
-      if (cached) return { success: true, data: cached };
+      if (cached) return { success: true, data: cached as RatingsData };
     }
 
     if (DEBUG) console.log('[OMDb Request] GET', { imdbId, type });

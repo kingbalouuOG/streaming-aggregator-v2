@@ -5,7 +5,7 @@
  */
 
 import { supabase } from '../supabase';
-import { getCachedData, setCachedData, CACHE_PREFIXES } from './cache';
+import { getCachedData, setCachedData, CACHE_PREFIXES } from './apiQueryCache';
 import { saServiceToServiceId } from '../adapters/platformAdapter';
 import type { ContentItem } from '@/components/ContentCard';
 import type { ServiceId } from '@/components/platformLogos';
@@ -35,7 +35,7 @@ export async function getStreamingLinks(
   // Check client-side cache first (24h TTL via SA prefix)
   const cacheKey = `${CACHE_PREFIXES.SA}links_${tmdbId}_${mediaType}`;
   const cached = await getCachedData(cacheKey);
-  if (cached) return cached;
+  if (cached) return cached as StreamingLink[];
 
   try {
     const { data, error } = await supabase
@@ -101,7 +101,7 @@ export async function getRentBuyPrice(
     : '';
   // v3 — labels formatted with `£` glyph instead of `GBP` suffix.
   const cacheKey = `${CACHE_PREFIXES.SA}rentbuy_v3_${tmdbId}_${mediaType}${serviceKey}`;
-  const cached = await getCachedData(cacheKey);
+  const cached = await getCachedData(cacheKey) as { absent: true } | { fromFormatted: string; streamType: 'rent' | 'buy' } | null;
   if (cached) {
     return 'absent' in cached ? null : cached;
   }

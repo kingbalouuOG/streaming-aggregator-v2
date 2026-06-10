@@ -51,7 +51,6 @@ import { useTasteProfile } from "./hooks/useTasteProfile";
 import { logOnboardingEvent } from "./lib/analytics/logger";
 import { ONBOARDING_EVENTS } from "./lib/analytics/events";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { maintainCache } from "./lib/api/cache";
 import { flushNow } from "./lib/instrumentation/impressionBatcher";
 import { parseContentItemId } from "./lib/adapters/contentAdapter";
 import { emitContentInteraction } from "./lib/storage/interactions";
@@ -131,7 +130,6 @@ function AppContent() {
   const justOnboardedRef = useRef(false);
 
   // --- Prune stale cache entries on startup ---
-  useEffect(() => { maintainCache(); }, []);
 
   // Warmup ref needs to be at component top-level (Hooks rule). The
   // useEffect that consumes it is below, after connectedServices is
