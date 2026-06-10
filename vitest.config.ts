@@ -21,18 +21,16 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    include: ['src/**/__tests__/**/*.test.ts'],
-    // Existing tsx-script-style tests under src/lib/search/__tests__ and
-    // the taste-v2 searchAttribution test run via the dedicated `npm run
-    // test:search-*` scripts; excluded from the vitest discovery pass.
-    // ENG-1 narrowed the taste-v2 exclusion from the whole directory to
-    // the single legacy file so new vitest-style taste-v2 tests run under
-    // `npm test`. (REPO-1 consolidates the tsx scripts into vitest.)
+    // REPO-1: all tests (src + scripts) are vitest suites under
+    // __tests__/ — the legacy tsx-script runners are gone, so `npm test`
+    // is the single entry point.
+    include: [
+      'src/**/__tests__/**/*.test.ts',
+      'scripts/**/__tests__/**/*.test.ts',
+    ],
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
-      'src/lib/search/__tests__/**',
-      'src/lib/taste-v2/__tests__/searchAttribution.test.ts',
     ],
   },
 });
