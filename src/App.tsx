@@ -7,19 +7,29 @@ import { ContentRow } from "./components/ContentRow";
 // FeaturedHeroCarousel — replaced on Home by <MagazineHero>; the file
 // stays for now until the Phase 5 FeaturedHero matrix row formally
 // retires it.
-import { ForYouPage } from "./components/ForYouPage";
-import { MoodRoomPage } from "./components/MoodRoomPage";
 import type { AnchorRoomPreview } from "./hooks/useAnchorMoodRooms";
 import { BottomNav } from "./components/BottomNav";
 import { ContentItem } from "./components/ContentCard";
-import { BrowsePage, BrowseStateSnapshot } from "./components/BrowsePage";
-import { DetailPage } from "./components/DetailPage";
+import type { BrowseStateSnapshot } from "./components/BrowsePage";
 import { FilterSheet } from "./components/FilterSheet";
 import { defaultFor, type FilterState } from "./lib/search/filterState";
-import { WatchlistPage } from "./components/WatchlistPage";
-import { ProfilePage } from "./components/ProfilePage";
-import { OnboardingFlow, OnboardingData } from "./components/OnboardingFlow";
-import { CalendarPage } from "./components/CalendarPage";
+import type { OnboardingData } from "./components/OnboardingFlow";
+
+// ── PLAT-1 code-splitting (plan §2, D5: React.lazy only — no router) ──
+// Every top-level page EXCEPT Home is a lazy chunk; Home is the cold-
+// start landing surface and stays eager (plan Q1). Named exports are
+// re-shaped to default via .then() — house components don't default-
+// export. One <Suspense> wraps the page region with a plain background
+// fallback (no spinner flash; chunk loads are local-disk fast in the
+// Capacitor WebView).
+const ForYouPage = React.lazy(() => import("./components/ForYouPage").then(m => ({ default: m.ForYouPage })));
+const MoodRoomPage = React.lazy(() => import("./components/MoodRoomPage").then(m => ({ default: m.MoodRoomPage })));
+const BrowsePage = React.lazy(() => import("./components/BrowsePage").then(m => ({ default: m.BrowsePage })));
+const DetailPage = React.lazy(() => import("./components/DetailPage").then(m => ({ default: m.DetailPage })));
+const WatchlistPage = React.lazy(() => import("./components/WatchlistPage").then(m => ({ default: m.WatchlistPage })));
+const ProfilePage = React.lazy(() => import("./components/ProfilePage").then(m => ({ default: m.ProfilePage })));
+const OnboardingFlow = React.lazy(() => import("./components/OnboardingFlow").then(m => ({ default: m.OnboardingFlow })));
+const CalendarPage = React.lazy(() => import("./components/CalendarPage").then(m => ({ default: m.CalendarPage })));
 // ComingSoonCard — Home no longer mounts these directly; the
 // CalendarList primitive renders them internally.
 import { MagazineHero } from "./components/MagazineHero";
@@ -626,7 +636,7 @@ function AppContent() {
       // Sign-up via the v2 onboarding flow (Step 1 handles auth)
       return (
         <>
-          <OnboardingFlow onComplete={handleOnboardingComplete} />
+          <React.Suspense fallback={<div className="min-h-screen bg-background" />}><OnboardingFlow onComplete={handleOnboardingComplete} /></React.Suspense>
           <ThemedToaster />
         </>
       );
@@ -678,7 +688,7 @@ function AppContent() {
   if (!userPrefs.onboardingComplete) {
     return (
       <>
-        <OnboardingFlow onComplete={handleOnboardingComplete} skipAuth />
+        <React.Suspense fallback={<div className="min-h-screen bg-background" />}><OnboardingFlow onComplete={handleOnboardingComplete} skipAuth /></React.Suspense>
         <ThemedToaster />
       </>
     );
@@ -712,6 +722,8 @@ function AppContent() {
           className="flex-1 overflow-y-auto pb-4 no-scrollbar safe-top"
           style={{ overflowX: 'hidden', overscrollBehaviorX: 'none', transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined, transition: isPulling.current ? 'none' : 'transform 0.3s ease' }}
         >
+          {/* PLAT-1: one Suspense for every lazy page chunk below. */}
+          <React.Suspense fallback={<div className="min-h-screen bg-background" />}>
           <AnimatePresence mode="wait">
           {showCalendar ? (
             <motion.div
@@ -1123,6 +1135,7 @@ function AppContent() {
               </motion.div>
           )}
           </AnimatePresence>
+          </React.Suspense>
         </div>
 
         {/* Bottom Navigation */}
