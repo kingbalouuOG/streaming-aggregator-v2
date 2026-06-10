@@ -1066,57 +1066,6 @@ export type Database = {
         }
         Relationships: []
       }
-      title_credits: {
-        Row: {
-          character_name: string | null
-          display_order: number | null
-          id: string
-          media_type: string
-          person_name: string
-          role: string
-          tmdb_id: number
-        }
-        Insert: {
-          character_name?: string | null
-          display_order?: number | null
-          id?: string
-          media_type: string
-          person_name: string
-          role: string
-          tmdb_id: number
-        }
-        Update: {
-          character_name?: string | null
-          display_order?: number | null
-          id?: string
-          media_type?: string
-          person_name?: string
-          role?: string
-          tmdb_id?: number
-        }
-        Relationships: []
-      }
-      title_genres: {
-        Row: {
-          genre_id: number
-          genre_name: string
-          media_type: string
-          tmdb_id: number
-        }
-        Insert: {
-          genre_id: number
-          genre_name: string
-          media_type: string
-          tmdb_id: number
-        }
-        Update: {
-          genre_id?: number
-          genre_name?: string
-          media_type?: string
-          tmdb_id?: number
-        }
-        Relationships: []
-      }
       titles: {
         Row: {
           backdrop_path: string | null
