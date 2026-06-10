@@ -1150,14 +1150,21 @@ function StepTasteSummary({
     { key: 'variety' as const, left: 'Finish what I start', right: 'Try lots of things' },
   ];
 
-  // Slider position labels
-  const softLower = (s: string): string => s.length === 0 ? s : s[0].toLowerCase() + s.slice(1);
+  // Slider position labels. Lowercase the leading word for mid-sentence
+  // use, but leave acronyms alone — "TV Series" must not become
+  // "tV Series".
+  const softLower = (s: string): string => {
+    if (s.length === 0 || /^[A-Z]{2}/.test(s)) return s;
+    return s[0].toLowerCase() + s.slice(1);
+  };
 
+  // "Balanced" describes the POSITION (midpoint), not the default —
+  // comfortZone's default is deliberately 0.25 (comfort-biased per
+  // Strategy §5.2), and labelling a 25% thumb "Balanced" reads as a bug.
   const getSliderLabel = (key: keyof SliderState, value: number) => {
-    const defaultVal = key === 'comfortZone' ? DEFAULT_SLIDERS.comfortZone : 0.5;
     const cfg = sliderConfig.find(s => s.key === key);
     if (!cfg) return '';
-    if (Math.abs(value - defaultVal) < 0.02) return 'Balanced';
+    if (Math.abs(value - 0.5) < 0.02) return 'Balanced';
     if (value < 0.3) return `Leaning ${softLower(cfg.left)}`;
     if (value > 0.7) return `Leaning ${softLower(cfg.right)}`;
     if (value < 0.5) return `Slightly prefer ${softLower(cfg.left)}`;

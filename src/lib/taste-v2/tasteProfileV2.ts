@@ -12,15 +12,18 @@ import type {
   TasteVectorV2,
   SliderState,
   BootstrapSource,
+  InterestCentroid,
 } from './types';
-import { DEFAULT_SLIDERS } from './types';
+import { DEFAULT_SLIDERS, MAX_INTEREST_CENTROIDS } from './types';
 
 // Session-scope cache for taste profile (avoids duplicate fetches from parallel hooks)
 let profileCache: { data: TasteProfileV2 | null; ts: number } | null = null;
+let centroidsCache: { data: InterestCentroid[]; ts: number } | null = null;
 const PROFILE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export function invalidateV2ProfileCache() {
   profileCache = null;
+  centroidsCache = null;
 }
 
 /**
@@ -138,6 +141,129 @@ export async function updateV2TasteVector(
 
   if (error) {
     console.error('[TasteV2] updateV2TasteVector failed:', error.message);
+    throw error;
+  }
+}
+
+// ── Interest centroids (ENG-1, migration 044) ──
+
+/**
+ * Read the user's interest centroids, ordered by slot.
+ * Returns [] when none exist — callers treat that as "single-centroid
+ * fallback path" (taste_vector_v2), which is every user until their
+ * first post-ENG-1 bootstrap or 24h recompute.
+ */
+export async function getInterestCentroids(): Promise<InterestCentroid[]> {
+  if (centroidsCache && Date.now() - centroidsCache.ts < PROFILE_CACHE_TTL) {
+    return centroidsCache.data;
+  }
+
+  if (!isSupabaseActive()) return [];
+
+  const userId = getAuthUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from('user_interest_centroids')
+    .select('slot, centroid, weight, updated_at')
+    .eq('user_id', userId)
+    .order('slot', { ascending: true });
+
+  if (error) {
+    console.error('[TasteV2] getInterestCentroids failed:', error.message);
+    return [];
+  }
+
+  // PostgREST returns pgvector as a JSON string — parse it
+  const result: InterestCentroid[] = (data ?? [])
+    .map(row => {
+      const centroid = typeof row.centroid === 'string'
+        ? JSON.parse(row.centroid) as TasteVectorV2
+        : row.centroid as unknown as TasteVectorV2;
+      return {
+        slot: row.slot,
+        centroid,
+        weight: row.weight,
+        updatedAt: row.updated_at,
+      };
+    })
+    .filter(c => Array.isArray(c.centroid) && c.centroid.length > 0);
+
+  centroidsCache = { data: result, ts: Date.now() };
+  return result;
+}
+
+/**
+ * Replace the user's interest centroids. Caller order is canonical —
+ * rows are written to slots 0..K-1 and any higher slots from a previous,
+ * larger K are deleted (k-means refresh can shrink K).
+ * updated_at is owned by the touch trigger (migration 044).
+ */
+export async function saveInterestCentroids(
+  centroids: { centroid: TasteVectorV2; weight: number }[],
+): Promise<void> {
+  invalidateV2ProfileCache();
+  if (!isSupabaseActive()) return;
+
+  const userId = getAuthUserId();
+  if (!userId) return;
+
+  if (centroids.length === 0 || centroids.length > MAX_INTEREST_CENTROIDS) {
+    console.error('[TasteV2] saveInterestCentroids: invalid count', centroids.length);
+    return;
+  }
+
+  const rows = centroids.map((c, i) => ({
+    user_id: userId,
+    slot: i,
+    centroid: `[${c.centroid.join(',')}]`,
+    weight: c.weight,
+  }));
+
+  const { error: upsertError } = await supabase
+    .from('user_interest_centroids')
+    .upsert(rows, { onConflict: 'user_id,slot' });
+
+  if (upsertError) {
+    console.error('[TasteV2] saveInterestCentroids upsert failed:', upsertError.message);
+    throw upsertError;
+  }
+
+  const { error: deleteError } = await supabase
+    .from('user_interest_centroids')
+    .delete()
+    .eq('user_id', userId)
+    .gte('slot', centroids.length);
+
+  if (deleteError) {
+    console.error('[TasteV2] saveInterestCentroids cleanup failed:', deleteError.message);
+    throw deleteError;
+  }
+}
+
+/**
+ * Update a single centroid's vector in place (incremental EMA path —
+ * writes one row, not all K). Weight is untouched; weight refresh is a
+ * batch-recompute concern.
+ */
+export async function updateInterestCentroidVector(
+  slot: number,
+  centroid: TasteVectorV2,
+): Promise<void> {
+  invalidateV2ProfileCache();
+  if (!isSupabaseActive()) return;
+
+  const userId = getAuthUserId();
+  if (!userId) return;
+
+  const { error } = await supabase
+    .from('user_interest_centroids')
+    .update({ centroid: `[${centroid.join(',')}]` })
+    .eq('user_id', userId)
+    .eq('slot', slot);
+
+  if (error) {
+    console.error('[TasteV2] updateInterestCentroidVector failed:', error.message);
     throw error;
   }
 }

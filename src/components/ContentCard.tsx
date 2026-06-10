@@ -30,6 +30,10 @@ export interface ContentItem {
   originalLanguage?: string;
   popularity?: number;
   voteCount?: number;
+  /** ENG-1 Workstream C: true for exploration-slot picks in Recommended
+   *  For You. ContentRow writes it into card_impressions.metadata so
+   *  ENG-2 can measure exploration CTR separately. No visual treatment. */
+  exploration?: boolean;
 }
 
 /**

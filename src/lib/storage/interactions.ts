@@ -11,6 +11,7 @@ import { supabase } from '../supabase';
 import type { Json } from '../database.types';
 import { invalidateDismissedIdsCache } from './recommendations';
 import { getCurrentSessionId } from '../instrumentation/sessionId';
+import { getCardClickContext } from '../instrumentation/clickContext';
 import { recordSearchTimestamp } from '../taste-v2/searchAttribution';
 
 // — Event types ——————————————————————————————————————————————————
@@ -51,6 +52,17 @@ export interface InteractionEvent {
 // — Emit ———————————————————————————————————————————————————————————
 
 /**
+ * ENG-1 Workstream D: outcome events whose metadata gains the
+ * position-at-click context ({ position, origin_surface }) when the
+ * click-context stash matches the event's content_id. The training
+ * extract view (migration 045) reads metadata->>'position'.
+ */
+const CLICK_CONTEXT_EVENTS = new Set<InteractionEventType>([
+  'detail_view', 'thumbs_up', 'thumbs_down', 'watchlist_add', 'watched',
+  'removed', 'deep_link_click', 'not_interested',
+]);
+
+/**
  * Emit a user interaction event.
  * Fire-and-forget: errors are logged but never thrown.
  * No-op when Supabase is not active (guest/unauthenticated users).
@@ -62,6 +74,17 @@ export async function emitInteraction(event: InteractionEvent): Promise<void> {
     const userId = getAuthUserId();
     if (!userId) return;
 
+    // ENG-1 Workstream D: merge position-at-click into outcome metadata.
+    // Caller-supplied position wins; contentKey match is enforced by
+    // getCardClickContext.
+    let metadata = event.metadata ?? {};
+    if (event.content_id != null && CLICK_CONTEXT_EVENTS.has(event.event_type)) {
+      const click = getCardClickContext(event.content_id);
+      if (click && metadata.position === undefined) {
+        metadata = { ...metadata, position: click.position, origin_surface: click.origin_surface };
+      }
+    }
+
     const { error } = await supabase
       .from('user_interactions')
       .insert({
@@ -71,7 +94,7 @@ export async function emitInteraction(event: InteractionEvent): Promise<void> {
         media_type: event.media_type ?? null,
         source_surface: event.source_surface ?? null,
         session_id: event.session_id ?? null,
-        metadata: (event.metadata ?? {}) as unknown as Json,
+        metadata: metadata as unknown as Json,
       });
 
     if (error) {

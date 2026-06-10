@@ -12,6 +12,17 @@
 import { supabase } from '../supabase';
 import { centroid, weightedSum, l2Normalise, isZeroVector } from './vectorOps';
 import type { TasteVectorV2 } from './types';
+import { groupSeedsIntoInterests, computeInterestWeights } from './interestGrouping';
+
+// Re-export the pure grouping layer (lives in interestGrouping.ts so the
+// tsx-run eval harness can import it without dragging in the supabase
+// client) — existing import sites keep working.
+export {
+  groupSeedsIntoInterests,
+  computeInterestWeights,
+  INTEREST_MERGE_TAU,
+  type InterestGroup,
+} from './interestGrouping';
 
 /** Fetch service fingerprint centroids for the given service IDs */
 export async function fetchServiceCentroids(
@@ -166,4 +177,125 @@ export async function bootstrapTasteVector(params: {
   if (isZeroVector(combined)) return null;
 
   return l2Normalise(combined);
+}
+
+// ── Interest centroids (ENG-1, Workstream A) ──
+//
+// Instead of collapsing the 3–5 selected clusters into one averaged vector
+// (which points at none of them for a multi-modal user), group them into
+// K ≤ 3 interest seeds: clusters whose centroids are close in embedding
+// space merge into one interest, distant ones stay separate. Service and
+// watched-grid signal blend into each interest at the existing validated
+// band weights.
+
+/** Fetch title embeddings keyed by tmdb_id (grouping requires the association) */
+async function fetchTitleEmbeddingMap(
+  titles: { tmdbId: number; mediaType: 'movie' | 'tv' }[],
+): Promise<Map<number, number[]>> {
+  const map = new Map<number, number[]>();
+  if (titles.length === 0) return map;
+
+  const tmdbIds = [...new Set(titles.map(t => t.tmdbId))];
+
+  const { data, error } = await supabase
+    .from('titles')
+    .select('tmdb_id, embedding')
+    .in('tmdb_id', tmdbIds)
+    .not('embedding', 'is', null);
+
+  if (error || !data) {
+    console.error('[Bootstrap] Failed to fetch title embedding map:', (error as any)?.message);
+    return map;
+  }
+
+  for (const row of data) {
+    if (!row.embedding) continue;
+    const emb = typeof row.embedding === 'string'
+      ? JSON.parse(row.embedding) as number[]
+      : row.embedding as number[];
+    map.set(row.tmdb_id, emb);
+  }
+
+  return map;
+}
+
+/**
+ * Bootstrap K ≤ 3 interest centroids from onboarding signals.
+ *
+ * Returns interests sorted by weight DESC (slot 0 = dominant), or null when
+ * no cluster signal is available (services_only path) — caller then skips
+ * the centroid save and the user stays on the single-centroid fallback.
+ *
+ * The single summary vector (bootstrapTasteVector) is still computed and
+ * saved by the caller regardless — both run.
+ */
+export async function bootstrapInterestCentroids(params: {
+  serviceIds: string[];
+  watchedTitles: { tmdbId: number; mediaType: 'movie' | 'tv' }[];
+  clusterSeeds: { clusterId: string; tmdbIds: { tmdbId: number; mediaType: 'movie' | 'tv' }[] }[];
+}): Promise<{ centroid: TasteVectorV2; weight: number }[] | null> {
+  const { serviceIds, watchedTitles, clusterSeeds } = params;
+
+  if (clusterSeeds.length === 0) return null;
+
+  const allReps = clusterSeeds.flatMap(s => s.tmdbIds);
+  const [serviceCentroids, watchedEmbeddings, repMap] = await Promise.all([
+    fetchServiceCentroids(serviceIds),
+    fetchTitleEmbeddings(watchedTitles),
+    fetchTitleEmbeddingMap(allReps),
+  ]);
+
+  // Per-cluster seed vectors
+  const seeds: { clusterId: string; vector: number[] }[] = [];
+  for (const s of clusterSeeds) {
+    const embeddings = s.tmdbIds
+      .map(t => repMap.get(t.tmdbId))
+      .filter((v): v is number[] => v != null);
+    if (embeddings.length === 0) continue;
+    seeds.push({ clusterId: s.clusterId, vector: l2Normalise(centroid(embeddings)) });
+  }
+
+  if (seeds.length === 0) {
+    console.warn('[Bootstrap] No cluster seed embeddings available for interest centroids');
+    return null;
+  }
+
+  const groups = groupSeedsIntoInterests(seeds);
+
+  const serviceVector = serviceCentroids.length > 0 ? centroid(serviceCentroids) : null;
+  const watchedVector = watchedEmbeddings.length > 0 ? centroid(watchedEmbeddings) : null;
+  const bandWeights = getBootstrapWeights(watchedEmbeddings.length, true);
+
+  const interestVectors: { vector: TasteVectorV2; memberCount: number }[] = [];
+  for (const group of groups) {
+    const vectors: number[][] = [];
+    const componentWeights: number[] = [];
+
+    if (serviceVector && bandWeights.service > 0) {
+      vectors.push(serviceVector);
+      componentWeights.push(bandWeights.service);
+    }
+    if (watchedVector && bandWeights.watched > 0) {
+      vectors.push(watchedVector);
+      componentWeights.push(bandWeights.watched);
+    }
+    vectors.push(group.vector);
+    componentWeights.push(bandWeights.genre);
+
+    const combined = weightedSum(vectors, componentWeights);
+    if (isZeroVector(combined)) continue;
+
+    interestVectors.push({
+      vector: l2Normalise(combined),
+      memberCount: group.memberClusterIds.length,
+    });
+  }
+
+  if (interestVectors.length === 0) return null;
+
+  const weights = computeInterestWeights(interestVectors.map(iv => iv.memberCount));
+
+  return interestVectors
+    .map((iv, i) => ({ centroid: iv.vector, weight: weights[i] }))
+    .sort((a, b) => b.weight - a.weight);
 }

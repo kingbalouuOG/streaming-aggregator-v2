@@ -32,21 +32,35 @@ export interface TasteProfileV2 {
   selectedClusters: string[];
 }
 
+export const MAX_INTEREST_CENTROIDS = 3;
+
+export const INTEREST_WEIGHT_FLOOR = 0.15;
+
+export interface InterestCentroid {
+  slot: number;
+  centroid: TasteVectorV2;
+  weight: number;
+  updatedAt: string;
+}
+
+// ENG-1 Workstream B: positive-only — negatives feed the avoid set
+// (recommendations-v2/avoidSet.ts); watchlist_remove is taste-neutral.
 export const INTERACTION_WEIGHTS: Record<string, number> = {
   thumbs_up: 1.0,
   watched: 0.5,
   watchlist_add: 0.3,
   deep_link_click: 0.8,
-  watchlist_remove: -0.4,
-  thumbs_down: -0.6,
 };
 
 export const NEGATIVE_EVENTS = new Set(['thumbs_down', 'watchlist_remove']);
 
 export const TASTE_RELEVANT_EVENTS = [
-  'thumbs_up', 'thumbs_down', 'watched',
-  'watchlist_add', 'watchlist_remove', 'deep_link_click',
+  'thumbs_up', 'watched', 'watchlist_add', 'deep_link_click',
 ] as const;
+
+export const AVOID_SET_EVENTS = new Set(['thumbs_down', 'not_interested']);
+
+export const AVOID_SET_SIZE = 50;
 
 export const CONFIDENCE_FLOOR_THRESHOLD = 20;
 export const CONFIDENCE_FLOOR_MULTIPLIER = 1.5;

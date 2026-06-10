@@ -16,6 +16,7 @@ import type {
   TasteVectorV2,
   SliderState,
   BootstrapSource,
+  InterestCentroid,
 } from './types.ts';
 import { DEFAULT_SLIDERS } from './types.ts';
 
@@ -57,6 +58,36 @@ export async function getV2TasteProfile(scope: UserScope): Promise<TasteProfileV
       variety: row.slider_variety ?? DEFAULT_SLIDERS.variety,
     },
   };
+}
+
+/**
+ * Read the user's interest centroids, ordered by slot (ENG-1, migration 044).
+ * [] = single-centroid fallback path. Read-only mirror — centroid writes
+ * (bootstrap, EMA, k-means refresh) are client-side only.
+ */
+export async function getInterestCentroids(scope: UserScope): Promise<InterestCentroid[]> {
+  const { data, error } = await scope
+    .select('user_interest_centroids', 'slot, centroid, weight, updated_at')
+    .order('slot', { ascending: true });
+
+  if (error) {
+    console.error('[TasteV2] getInterestCentroids failed:', error.message);
+    return [];
+  }
+
+  return ((data ?? []) as any[])
+    .map(row => {
+      const centroid: TasteVectorV2 = typeof row.centroid === 'string'
+        ? JSON.parse(row.centroid)
+        : row.centroid;
+      return {
+        slot: row.slot as number,
+        centroid,
+        weight: row.weight as number,
+        updatedAt: row.updated_at as string,
+      };
+    })
+    .filter(c => Array.isArray(c.centroid) && c.centroid.length > 0);
 }
 
 export async function getSliderState(scope: UserScope): Promise<SliderState> {

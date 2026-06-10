@@ -6,6 +6,7 @@ import { getScrollPosition, setScrollPosition } from "@/lib/sectionSessionCache"
 import { recordImpression, type ImpressionSurface } from "@/lib/instrumentation/impressionBatcher";
 import { getCurrentSessionId, onSessionReset } from "@/lib/instrumentation/sessionId";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
+import { setCardClickContext } from "@/lib/instrumentation/clickContext";
 
 interface ContentRowProps {
   title: string;
@@ -74,6 +75,9 @@ export function ContentRow({ title, items, kicker, kickerColor, standfirst, righ
         contentId: tmdbId,
         sourceSurface,
         position,
+        // ENG-1 Workstream C: exploration-slot picks tagged so ENG-2 can
+        // measure exploration CTR separately (brief §3.4).
+        metadata: item.exploration ? { exploration: true } : undefined,
       });
     });
   }, [items, sourceSurface]);
@@ -142,12 +146,20 @@ export function ContentRow({ title, items, kicker, kickerColor, standfirst, righ
         onScroll={handleScroll}
         className="flex gap-3 px-5 overflow-x-auto no-scrollbar scroll-smooth pb-1"
       >
-        {items.map((item) => (
+        {items.map((item, index) => (
           <ContentCard
             key={item.id}
             item={item}
             variant={variant}
-            onSelect={onItemSelect}
+            onSelect={onItemSelect ? (selected) => {
+              // ENG-1 Workstream D: stash the ranked origin so the
+              // outcome events that follow carry position-at-click.
+              const { tmdbId } = parseContentItemId(selected.id);
+              if (!Number.isNaN(tmdbId) && sourceSurface) {
+                setCardClickContext({ contentId: tmdbId, position: index, surface: sourceSurface });
+              }
+              onItemSelect(selected);
+            } : undefined}
             bookmarked={bookmarkedIds?.has(item.id)}
             onToggleBookmark={onToggleBookmark}
             userServices={userServices}

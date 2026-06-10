@@ -26,6 +26,13 @@
  *   PARITY_TEST_EMAIL='…' PARITY_TEST_PASSWORD='…' \
  *   npx tsx scripts/test/refresh-parity-jwt.ts | gh secret set PARITY_USER_JWT --body -
  *
+ *   ⚠ POSIX shells only. PowerShell's pipe re-encodes stdout and bakes
+ *   a trailing newline INSIDE the secret — the Edge function then
+ *   rejects it with UNAUTHORIZED_INVALID_JWT_FORMAT (bit us at ENG-1
+ *   close-out, 2026-06-10). PowerShell-safe form:
+ *     $jwt = (npx tsx scripts/test/refresh-parity-jwt.ts).Trim()
+ *     gh secret set PARITY_USER_JWT --body $jwt
+ *
  * Env keys SUPABASE_URL / SUPABASE_ANON_KEY come from .env (loaded
  * via the same loader pattern as scripts/_inspect_foryou_parity.mjs).
  *

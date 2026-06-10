@@ -29,6 +29,7 @@
     "test:contentcard-search-props": "npx tsx src/lib/search/__tests__/contentCardSearchProps.test.ts",
     "test:search-attribution": "npx tsx src/lib/taste-v2/__tests__/searchAttribution.test.ts",
     "eval:search-semantic": "npx tsx scripts/test/search-semantic-eval.ts",
+    "eval:eng1": "npx tsx scripts/evaluation/eng1-eval.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

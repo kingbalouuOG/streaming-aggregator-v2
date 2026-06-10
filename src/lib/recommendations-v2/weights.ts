@@ -256,11 +256,40 @@ export const CONTEXTUAL_MOBILE_LONG_RUNTIME_PENALTY = 0.12;
 /** Default candidate retrieval limit for shared pool */
 export const DEFAULT_CANDIDATE_LIMIT = 500;
 
+/**
+ * Per-centroid retrieval limit on the ENG-1 multi-interest path.
+ * K ≤ 3 centroids × 200 ≈ the single-vector 500 after dedupe — same
+ * pool volume, proportionally interleaved by interest weight.
+ */
+export const PER_CENTROID_CANDIDATE_LIMIT = 200;
+
 /** Max genre occurrences per row (default, modulated by variety slider) */
 export const DEFAULT_MAX_PER_GENRE = 4;
 
 /** Max consecutive same-service titles before de-clustering */
 export const MAX_CONSECUTIVE_SAME_SERVICE = 2;
+
+/**
+ * ENG-1 Workstream B: avoid-set penalty strength.
+ * finalScore −= γ · max(0, max_cosine(candidate, avoidSet)), applied to
+ * candidates in the top-200 embedding map after scoring, before row
+ * building. Starting value per brief §3.3; swept 0.10/0.15/0.20 in the
+ * eval gate.
+ */
+export const AVOID_PENALTY_GAMMA = 0.15;
+
+// ── ENG-1 Workstream C: exploration slot ──
+
+/** Exploration candidates reserved per Recommended For You render */
+export const EXPLORATION_COUNT = 2;
+
+/** 0-indexed splice positions (1-indexed: 6 and 14 — visible without
+ *  displacing the head of the row). Per plan Q3, confirmed by Joe. */
+export const EXPLORATION_SLOT_POSITIONS = [5, 13];
+
+/** Taste-score percentile band [low, high) the exploration candidates are
+ *  sampled from — moderate similarity: novel but not random. */
+export const EXPLORATION_BAND: [number, number] = [0.40, 0.70];
 
 /** Hidden Gems thresholds (re-exported from types for convenience) */
 export { HIDDEN_GEMS_FILTERS } from './types';

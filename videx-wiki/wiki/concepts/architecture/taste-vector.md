@@ -3,11 +3,12 @@ title: User taste vector v2
 type: concept
 tags: [taste-vector, embeddings, bootstrap, decay]
 created: 2026-04-26
-updated: 2026-05-08
+updated: 2026-06-10
 sources:
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
   - raw/v2-strategy/Videx_v2_Detail_Page_Signal_Capture_Spec_v0.3.2.md
   - raw/phase-summaries/phase-3-summary.md
+  - docs/v2/phase-summaries/phase-eng-1-summary.md
 related:
   - wiki/concepts/decisions/adr-004-1536d-embeddings.md
   - wiki/concepts/architecture/recommendation-pipeline.md
@@ -20,6 +21,8 @@ related:
 # User taste vector v2
 
 Single 1536D vector in the same embedding space as content. Replaces v1's 24D archetype vector. Stored on `taste_profiles.taste_vector_v2`.
+
+> **Phase ENG-1 (2026-06-10):** the single vector is now the *summary*, not the retrieval driver. Up to **K = 3 interest centroids** per user (`user_interest_centroids`, migration 044 — slot 0–2, weight, owner-RLS) drive multi-interest retrieval; the summary vector continues to back mood-room affinity, semantic-search taste-fit, and the fallback path for users with no centroid rows. See §ENG-1 below.
 
 ## Computation
 
@@ -34,11 +37,11 @@ Weighted aggregate of content vectors from user interactions. Per [detail page s
 | Deep-link click (low confidence) | +0.4 |
 | Watchlist add | +0.3 |
 | 30s+ dwell, back-no-action | −0.35 |
-| Watchlist remove | −0.4 |
+| Watchlist remove | ~~−0.4~~ **taste-neutral since ENG-1** |
 | 10-30s dwell, back-no-action | −0.25 |
-| Thumbs down | −0.6 |
+| Thumbs down | ~~−0.6~~ **avoid set since ENG-1, no vector update** |
 | 3-10s dwell, back-no-action | −0.15 |
-| Not interested | hard filter only, no taste update |
+| Not interested | hard filter + avoid set (ENG-1), no taste update |
 | Detail view alone | NOT positive (anchor only) |
 | <3s dwell | ignored |
 | App backgrounded (not expected) | ignored until session resumes |
@@ -86,6 +89,17 @@ Genre-weight fallback: if the user selects no clusters at Step 4 the cluster wei
 ## Schema (post Phase 3)
 
 `taste_profiles` columns: `taste_vector_v2 vector(1536)`, slider state columns, metadata. v1 columns dropped in migration 024 (`vector`, `confidence`, `seed_vector`, `quiz_completed`, `quiz_answers`, `interaction_log`, `version`).
+
+## ENG-1: interest centroids (shipped 2026-06-10)
+
+Fixes the retrieval-stage ceiling: a user who picks "cozy British comedy" + "dark thrillers" no longer gets one averaged vector pointing at neither.
+
+- **Storage:** `user_interest_centroids (user_id, slot 0–2, centroid vector(1536), weight, updated_at)` — K fixed at 3 (E&P brief §9 D3). Zero rows = single-vector fallback (self-heals at next bootstrap or 24h recompute; no backfill).
+- **Bootstrap:** per-cluster seed centroids (not the flattened union) → greedy agglomerative merge while over the K cap or pairwise cosine ≥ `INTEREST_MERGE_TAU` (0.80 — eval-confirmed: on the 16-cluster taxonomy, max pairwise is 0.7532, so only the cap merges). Service/watched signal blends into EACH interest at the existing band weights. Weights ∝ merged member count, floored at `INTEREST_WEIGHT_FLOOR` (0.15), slot 0 = dominant. Pure logic in `interestGrouping.ts`.
+- **Incremental:** EMA updates the **nearest centroid only** (cosine assignment), positive events only, same learning rate / confidence floor / search-attribution boost. Single-row write.
+- **Batch (24h recompute, client-only, fire-and-forget):** deterministic weighted k-means (`kmeans.ts`, k-means++ seeded from hashed content keys — same log replays to same centroids) over decay-weighted positive title mass; < 8 distinct positives keeps existing centroids; weights = share of decayed positive mass.
+- **Negative signals:** removed from ALL vector paths (incremental, replay, centroid). `thumbs_down` + `not_interested` feed the score-time avoid set ([recommendation-pipeline](recommendation-pipeline.md)); `watchlist_remove` is taste-neutral. Historical vectors heal on their next 24h replay — `TASTE_RELEVANT_EVENTS` is positive-only.
+- **GDPR:** migration 044 extended `delete_own_account()` + `export_user_data()` with the new table.
 
 ## Conflict resolution applied
 

@@ -43,7 +43,22 @@ import {
 } from '../_shared/recommendations-v2/anchorSelection.ts';
 import { titleRowToContentItem } from '../_shared/recommendations-v2/titleAdapter.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { getComfortZoneRowCount, HIDDEN_GEMS_FILTERS } from '../_shared/recommendations-v2/weights.ts';
+import {
+  getComfortZoneRowCount,
+  HIDDEN_GEMS_FILTERS,
+  AVOID_PENALTY_GAMMA,
+  EXPLORATION_COUNT,
+  EXPLORATION_SLOT_POSITIONS,
+  EXPLORATION_BAND,
+  scoreToMatchPercentage,
+} from '../_shared/recommendations-v2/weights.ts';
+import { fetchAvoidSet, applyAvoidPenalty } from '../_shared/recommendations-v2/avoidSet.ts';
+import {
+  fetchSeenContentIds,
+  selectExplorationCandidates,
+  spliceAtPositions,
+  explorationDayStamp,
+} from '../_shared/recommendations-v2/exploration.ts';
 import {
   EXTENDED_TITLE_SELECT,
   type CandidatePool,
@@ -52,7 +67,7 @@ import {
   type PipelineContext,
   type ScoredCandidate,
 } from '../_shared/recommendations-v2/types.ts';
-import { getV2TasteProfile } from '../_shared/taste-v2/tasteProfileV2.ts';
+import { getV2TasteProfile, getInterestCentroids } from '../_shared/taste-v2/tasteProfileV2.ts';
 import type { SliderState } from '../_shared/taste-v2/types.ts';
 import {
   buildEmbeddingCacheKey,
@@ -119,6 +134,8 @@ interface ResponsePayload {
     matched: CandidatePool['matched'];
     metadata: Record<string, ExtendedTitleRow>;
     fetchedAt: number;
+    /** ENG-1: true when the multi-interest path built this pool. */
+    interleaved?: boolean;
   };
   renderMs: number;
 }
@@ -202,7 +219,12 @@ Deno.serve(async (req) => {
       return jsonResponse(200, emptyPayload(profile?.sliders ?? null, t_start));
     }
 
-    const filterSets = await buildFilterSets(supabase, scope, body.services);
+    // ENG-1: interest centroids fetched in parallel with filter sets —
+    // 3-row PK scan, no latency cost on the critical path.
+    const [filterSets, interestCentroids] = await Promise.all([
+      buildFilterSets(supabase, scope, body.services),
+      getInterestCentroids(scope),
+    ]);
 
     // Phase 5: build PipelineContext for the contextual scorer.
     // hourOfDay / dayOfWeek prefer the body fields (client local time,
@@ -215,6 +237,9 @@ Deno.serve(async (req) => {
       filterSets,
       sliders: profile.sliders,
       surface: 'foryou',
+      interests: interestCentroids.length > 0
+        ? interestCentroids.map((c) => ({ centroid: c.centroid, weight: c.weight, slot: c.slot }))
+        : undefined,
     });
 
     const scored = scoreCandidates(pool, profile.sliders, 'foryou', ctx);
@@ -223,22 +248,49 @@ Deno.serve(async (req) => {
     // diversify intra-row across all three taste-vector rows. Phase 5.5
     // (C5): per-instance in-memory cache keyed on userId +
     // taste_profiles.updated_at — warm requests skip the Supabase select.
-    const embeddingMap = await fetchEmbeddingsForCandidates(supabase, scored.slice(0, 200), {
-      userId,
-      tasteProfilesUpdatedAt: profile.updatedAt,
-    });
+    // ENG-1: avoid set + seen-set fetched in parallel — same network
+    // window as the embedding fetch.
+    const [embeddingMap, avoidSet, seenIds] = await Promise.all([
+      fetchEmbeddingsForCandidates(supabase, scored.slice(0, 200), {
+        userId,
+        tasteProfilesUpdatedAt: profile.updatedAt,
+      }),
+      fetchAvoidSet(scope, supabase),
+      fetchSeenContentIds(scope),
+    ]);
+
+    // ENG-1 Workstream B: avoid-set penalty after the embedding fetch,
+    // before row building — same contract as the client pipeline.
+    const ranked = applyAvoidPenalty(scored, avoidSet, embeddingMap, AVOID_PENALTY_GAMMA);
 
     // Taste-vector rows. usedIds is shared across rec/gems/outside for
     // cross-row dedup — same contract as src/hooks/useForYouContent.ts.
     const usedIds = new Set<string>();
 
-    const recommendedForYou = buildRowFromPool(scored, profile.sliders, {
-      config: { limit: 20, excludeIds: usedIds },
+    // ENG-1 Workstream C: exploration picks reserved ahead of the base
+    // row build (same selection + daily seed as the client pipeline).
+    const explorationPicks = selectExplorationCandidates(ranked, {
+      seenContentIds: seenIds,
+      excludeKeys: usedIds,
+      count: EXPLORATION_COUNT,
+      band: EXPLORATION_BAND,
+      seed: `${userId}:${explorationDayStamp()}`,
+    });
+    explorationPicks.forEach((c) => usedIds.add(c.contentKey));
+
+    const recBase = buildRowFromPool(ranked, profile.sliders, {
+      config: { limit: 20 - explorationPicks.length, excludeIds: usedIds },
       embeddingMap,
     });
-    recommendedForYou.forEach((item) => usedIds.add(item.id));
+    recBase.forEach((item) => usedIds.add(item.id));
 
-    const gemCandidates = scored.filter((c) => {
+    const explorationItems = explorationPicks.map((c) => ({
+      ...titleRowToContentItem(c.meta, scoreToMatchPercentage(c.finalScore)),
+      exploration: true,
+    }));
+    const recommendedForYou = spliceAtPositions(recBase, explorationItems, EXPLORATION_SLOT_POSITIONS);
+
+    const gemCandidates = ranked.filter((c) => {
       const pop = c.meta.popularity ?? 0;
       const votes = c.meta.vote_count ?? 0;
       const avg = c.meta.vote_average ?? 0;
@@ -255,7 +307,7 @@ Deno.serve(async (req) => {
     });
     hiddenGems.forEach((item) => usedIds.add(item.id));
 
-    const outsideYourUsual = buildOutsideYourUsual(scored, profile.sliders, usedIds, embeddingMap);
+    const outsideYourUsual = buildOutsideYourUsual(ranked, profile.sliders, usedIds, embeddingMap);
 
     // Conditional rows + anchor rooms run in parallel — they share the
     // pool + filter sets but otherwise touch different RPC paths, so
@@ -282,6 +334,7 @@ Deno.serve(async (req) => {
         // Map → Record at the wire boundary (Map serialises to "{}").
         metadata: Object.fromEntries(pool.metadata),
         fetchedAt: pool.fetchedAt,
+        interleaved: pool.interleaved,
       },
       renderMs: Date.now() - t_start,
     };

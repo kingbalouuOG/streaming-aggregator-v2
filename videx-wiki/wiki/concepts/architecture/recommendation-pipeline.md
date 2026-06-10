@@ -3,12 +3,13 @@ title: Recommendation pipeline
 type: concept
 tags: [pipeline, ranker, stages, weights, scoring, contextual, mmr]
 created: 2026-04-26
-updated: 2026-05-07
+updated: 2026-06-10
 sources:
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.8.md
   - raw/phase-summaries/phase-4-summary.md
   - raw/phase-summaries/phase-4-and-4.5-summary.md
   - docs/v2/phase-summaries/phase-5-summary.md
+  - docs/v2/phase-summaries/phase-eng-1-summary.md
   - raw/codebase-snapshots/module-map.md
 related:
   - wiki/concepts/architecture/taste-vector.md
@@ -46,6 +47,12 @@ Multi-stage pipeline replacing v1's single scoring function. All weights live in
 - Retrieval volume: top 500 candidates per request.
 - One **shared 500-candidate pool** for all taste-vector rows on For You; conditional rows (Because You Watched anchors, More From [Person]) use separate calls.
 
+**Phase ENG-1 update (shipped 2026-06-10) — multi-interest retrieval:**
+
+- When `user_interest_centroids` rows exist (K ≤ 3, [taste-vector](taste-vector.md)), Stage 1 fans out **one RPC per centroid at 200 each** (`PER_CENTROID_CANDIDATE_LIMIT`), dedupes on `(tmdb_id, media_type)` keeping the closest source, tags each candidate with `sourceSlot`, and interleaves pools by **smooth weighted round-robin** (`interestPools.ts` — prefix-proportional to interest weight). Zero centroid rows → legacy single-vector path, byte-identical.
+- Taste score becomes **cosine to the candidate's source centroid** for free — each candidate's RPC `distance` is to the centroid that retrieved it. No scoring-formula change; not max-over-centroids (keeps rows coherent).
+- `CandidatePool.interleaved` flags which path ran; `sourceSlot` threads through `ScoredCandidate` to impressions and the coverage eval.
+
 ### Stage 2 — Ranking
 
 Weighted score on a consistent numerical scale.
@@ -81,6 +88,11 @@ Phase 4 implementation note: the 5-component table in strategy §5.2 represents 
 - **`ViewingContext` narrowing (IN-PX-27):** moved from `weights.ts` to `types.ts` so `PipelineContext.viewingContext` can be typed as the union directly. Defensive narrowing helper at both DB boundaries (`pipelineContext.ts` client, `render-foryou-rows/index.ts` Edge) — unknown DB values fall to `null` rather than being silently coerced at score time.
 - **Vitest rig (IN-PX-25):** 10 pure-function tests covering `computeContextualScore` (5 tests — late-night comedy vs documentary, with_family + horror suppression, empty ctx neutral, mobile long-runtime penalty, weekday_morning bucket) and `applyMMR` (5 tests — λ=1 sort-by-score, empty embeddingMap no-crash, all-redundant collapse, partial-coverage bailout, cached-norm precision equivalence).
 - **`foryou-parity` golden probe activated (IN-PX-33 + IN-XPS-012):** property-level snapshot (per-item id + matchPercentage + anchor tier + slider echo, time-dependent fields excluded). Activated 2026-05-15 with all 5 secrets configured and golden seeded at `scripts/test/foryou-parity-golden.json` (6,083 bytes, 73 items across 8 sections). Future `recommendations-v2` PRs hard-fail on Edge / client divergence.
+
+**Phase ENG-1 update (shipped 2026-06-10) — avoid set + exploration:**
+
+- **Avoid-set penalty (`avoidSet.ts`, mirrored):** negative events no longer touch any taste vector (moving away from a point ≠ avoiding a region). The most recent 50 `thumbs_down` + `not_interested` titles form a per-user avoid set (derived from the event log per load; embeddings cached under `videx_emb_avoid_` — the sign-out wipe covers it). After the top-200 embedding fetch and before row building: `finalScore −= AVOID_PENALTY_GAMMA (0.15) · max(0, max_cosine(candidate, avoidSet))`, re-sort. Runs on client load, client re-rank (re-applied every slider drag), and Edge render. Scope is the top-200 (where rows draw from) — RPC-side penalty is the documented escalation lever. γ confirmed by eval sweep (insensitive 0.10–0.20, full neighbour suppression).
+- **Exploration slot (`exploration.ts`, mirrored):** 2 positions (6 and 14, 1-indexed) of Recommended For You reserved for zero-prior-impression candidates from the 40–70th taste-percentile band, popularity-weighted, seeded `userId + UTC day` (stable within a day — parity-probe-deterministic — rotates daily). Picks selected before the base row build (base at 20 − picks, then spliced). Tagged `metadata.exploration = true` in `card_impressions`; ENG-2 reads exploration CTR from `v_training_examples`. Seen-set = most recent 1,000 impressions / 90d (IN-PX-57).
 
 Recency anchors:
 

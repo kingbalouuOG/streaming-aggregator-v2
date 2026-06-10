@@ -158,8 +158,16 @@ export const CONTEXTUAL_MOBILE_LONG_RUNTIME_PENALTY = 0.12;
 // ── Pipeline Constants ──
 
 export const DEFAULT_CANDIDATE_LIMIT = 500;
+/** ENG-1: per-centroid retrieval limit on the multi-interest path (K <= 3 x 200). */
+export const PER_CENTROID_CANDIDATE_LIMIT = 200;
 export const DEFAULT_MAX_PER_GENRE = 4;
 export const MAX_CONSECUTIVE_SAME_SERVICE = 2;
+/** ENG-1 Workstream B: avoid-set penalty strength (swept in the eval gate). */
+export const AVOID_PENALTY_GAMMA = 0.15;
+/** ENG-1 Workstream C: exploration slot config. */
+export const EXPLORATION_COUNT = 2;
+export const EXPLORATION_SLOT_POSITIONS = [5, 13];
+export const EXPLORATION_BAND: [number, number] = [0.40, 0.70];
 
 export { HIDDEN_GEMS_FILTERS } from './types.ts';
 

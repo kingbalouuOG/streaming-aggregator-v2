@@ -1313,6 +1313,30 @@ export type Database = {
           },
         ]
       }
+      user_interest_centroids: {
+        Row: {
+          centroid: string
+          slot: number
+          updated_at: string
+          user_id: string
+          weight: number
+        }
+        Insert: {
+          centroid: string
+          slot: number
+          updated_at?: string
+          user_id: string
+          weight?: number
+        }
+        Update: {
+          centroid?: string
+          slot?: number
+          updated_at?: string
+          user_id?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       user_services: {
         Row: {
           created_at: string | null

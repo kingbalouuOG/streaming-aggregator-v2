@@ -13,10 +13,10 @@
  *   9. Quick watch (under 30 min)
  *  10. Calendar strip
  *
- * Taste fingerprint and mood-refiner real wiring depend on the taste-v2
- * surface API; today they render hardcoded labels and a no-op refiner
- * so the §5 anatomy is in place. Real backing data lands in a
- * follow-up PR.
+ * Taste fingerprint sliders are wired to live engine state
+ * (content.sliders → rerank on commit). Still stubbed: the
+ * "ratings · updated" metadata line (hardcoded copy) and the mood
+ * refiner (no-op, behind MOOD_REFINER_ENABLED — parking-lot IN-V3-003).
  */
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
@@ -522,7 +522,12 @@ export function ForYouPage({
             {([
               { key: 'catalogueAge', left: 'NEW',     right: 'CLASSIC',    label: 'Catalogue age' },
               { key: 'comfortZone',  left: 'COSY',    right: 'SURPRISE',   label: 'Comfort zone' },
-              { key: 'contentMix',   left: 'TV',      right: 'FILM',       label: 'Content mix' },
+              // contentMix is 0 = films, 1 = TV (taste-v2 types.ts) —
+              // FILM must sit at the low end. The original TV-left axis
+              // mirrored both the readout AND the write: dragging "TV"
+              // to max wrote contentMix≈0, which the pipeline reads as
+              // 80% films (the device-test bug, 2026-06-10).
+              { key: 'contentMix',   left: 'FILM',    right: 'TV',         label: 'Content mix' },
               { key: 'variety',      left: 'FOCUSED', right: 'VARIETY',    label: 'Focus' },
             ] as const).map(({ key, left, right, label }) => {
               // Drafts override the engine's value while the user is

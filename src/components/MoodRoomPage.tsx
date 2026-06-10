@@ -18,6 +18,7 @@ import type { ImpressionSurface } from '@/lib/instrumentation/impressionBatcher'
 import type { Json } from '@/lib/database.types';
 import { getCurrentSessionId, onSessionReset } from '@/lib/instrumentation/sessionId';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
+import { setCardClickContext } from '@/lib/instrumentation/clickContext';
 import { buildAnchoredRoom } from '@/lib/recommendations-v2/anchoredRoom';
 import type { SelectedAnchor } from '@/lib/recommendations-v2/anchorSelection';
 import type { AnchorRoomLabel } from '@/lib/recommendations-v2/anchorRoomLabels';
@@ -314,12 +315,21 @@ export function MoodRoomPage(props: MoodRoomPageProps) {
 
           {supporting.length > 0 && (
             <div className="grid grid-cols-2 gap-3 px-5 pb-6">
-              {supporting.map((item) => (
+              {supporting.map((item, index) => (
                 <ContentCard
                   key={item.id}
                   item={item}
                   variant="mosaic"
-                  onSelect={onItemSelect}
+                  onSelect={(selected) => {
+                    // ENG-1 Workstream D: position matches the impression
+                    // scheme — visible[0] is the hero, supporting starts
+                    // at position 1.
+                    const { tmdbId } = parseContentItemId(selected.id);
+                    if (!Number.isNaN(tmdbId)) {
+                      setCardClickContext({ contentId: tmdbId, position: index + 1, surface: sourceSurface });
+                    }
+                    onItemSelect(selected);
+                  }}
                   bookmarked={bookmarkedIds.has(item.id)}
                   onToggleBookmark={onToggleBookmark}
                   userServices={connectedServiceIds}

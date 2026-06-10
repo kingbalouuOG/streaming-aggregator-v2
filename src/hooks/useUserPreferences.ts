@@ -15,8 +15,8 @@ import { serviceIdToProviderId, providerIdToServiceId } from '@/lib/adapters/pla
 import { UK_PROVIDERS_ARRAY } from '@/lib/constants/platforms';
 import type { ServiceId } from '@/components/platformLogos';
 import { TASTE_CLUSTERS } from '@/lib/taste-v2/tasteClusters';
-import { bootstrapTasteVector } from '@/lib/taste-v2/bootstrap';
-import { saveV2TasteVector, saveSliderState } from '@/lib/taste-v2/tasteProfileV2';
+import { bootstrapTasteVector, bootstrapInterestCentroids } from '@/lib/taste-v2/bootstrap';
+import { saveV2TasteVector, saveSliderState, saveInterestCentroids } from '@/lib/taste-v2/tasteProfileV2';
 import { DEFAULT_SLIDERS } from '@/lib/taste-v2/types';
 import type { BootstrapSource, SliderState } from '@/lib/taste-v2/types';
 import { debug } from '@/lib/debugLogger';
@@ -129,6 +129,25 @@ export function useUserPreferences(currentUserId?: string | null) {
       if (vector) {
         await saveV2TasteVector(vector, 0, bootstrapSource);
       }
+
+      // ENG-1: multi-interest centroids alongside the summary vector.
+      // Per-cluster seeds (not the flattened union) — close clusters merge,
+      // distant ones become separate retrieval interests.
+      const clusterSeeds = data.clusters
+        .map(clusterId => {
+          const cluster = TASTE_CLUSTERS.find(c => c.id === clusterId);
+          return { clusterId, tmdbIds: cluster?.representativeTmdbIds || [] };
+        })
+        .filter(s => s.tmdbIds.length > 0);
+
+      const interests = await bootstrapInterestCentroids({
+        serviceIds: data.services,
+        watchedTitles: data.watchedTitles || [],
+        clusterSeeds,
+      });
+      if (interests) {
+        await saveInterestCentroids(interests);
+      }
     } catch (e) {
       console.error('[Onboarding] bootstrapTasteVector failed:', e);
     }
@@ -196,19 +215,38 @@ export function useUserPreferences(currentUserId?: string | null) {
     });
 
     try {
+      const retakeServiceIds = (preferences?.platforms || [])
+        .filter(p => p.selected !== false)
+        .map(p => {
+          const sid = providerIdToServiceId(p.id);
+          return sid || '';
+        })
+        .filter(Boolean);
+
       const vector = await bootstrapTasteVector({
-        serviceIds: (preferences?.platforms || [])
-          .filter(p => p.selected !== false)
-          .map(p => {
-            const sid = providerIdToServiceId(p.id);
-            return sid || '';
-          })
-          .filter(Boolean),
+        serviceIds: retakeServiceIds,
         watchedTitles: [],
         clusterRepresentativeTmdbIds,
       });
       if (vector) {
         await saveV2TasteVector(vector, 0, 'manual_retake');
+      }
+
+      // ENG-1: re-derive interest centroids from the new cluster picks
+      const clusterSeeds = clusterIds
+        .map(clusterId => {
+          const cluster = TASTE_CLUSTERS.find(c => c.id === clusterId);
+          return { clusterId, tmdbIds: cluster?.representativeTmdbIds || [] };
+        })
+        .filter(s => s.tmdbIds.length > 0);
+
+      const interests = await bootstrapInterestCentroids({
+        serviceIds: retakeServiceIds,
+        watchedTitles: [],
+        clusterSeeds,
+      });
+      if (interests) {
+        await saveInterestCentroids(interests);
       }
     } catch (e) {
       console.error('[updateClusters] re-bootstrap failed:', e);
