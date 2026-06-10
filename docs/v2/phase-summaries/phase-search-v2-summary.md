@@ -4,8 +4,8 @@
 **Branch:** `phase-search-v2` (PR #8).
 **Predecessor:** [Phase 5 summary](phase-5-summary.md).
 **Successor:** Phase 5.5 (deferred items from Phase 5) — picks up after this phase closes.
-**Brief (retrieval/data/instrumentation):** `docs/v2/Phase_Search_V2_Kickoff.md`.
-**Brief (visual spec/copy):** `docs/v3-design/search/Phase_Search_V2_Implementation_Brief.md` + 8 artboards.
+**Brief (retrieval/data/instrumentation):** `docs/design/search/Phase_Search_V2_Kickoff.md`.
+**Brief (visual spec/copy):** `docs/design/search/Phase_Search_V2_Implementation_Brief.md` + 8 artboards.
 **Strategy context:** `videx-wiki/raw/v2-strategy/Videx_v2_Search_Strategy_Annex_v0.1.md`.
 **Plan:** `~/.claude/plans/we-re-starting-phase-search-steady-sketch.md`.
 

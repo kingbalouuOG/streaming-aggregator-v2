@@ -13,7 +13,7 @@ interface CategoryFilterProps {
 
 /**
  * CategoryFilter — editorial chip bar with optional kicker per
- * docs/v3-design/redesign-plan.md Phase 5. Active chip carries
+ * docs/design/redesign-plan.md Phase 5. Active chip carries
  * --primary, inactive sits in --surface-tint with --fg-soft text.
  * The trailing filter-sheet button matches the chip family (pill
  * radius, surface-tint surface) when no filters are active and

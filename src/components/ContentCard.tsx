@@ -37,7 +37,7 @@ export interface ContentItem {
 }
 
 /**
- * Visual size variants per docs/v3-design/design-system.md §4.
+ * Visual size variants per docs/design/design-system.md §4.
  *
  *   "default" — 160px wide. Horizontal scrollers.
  *   "wide"    — 220px wide. Horizontal scrollers that want larger cards.

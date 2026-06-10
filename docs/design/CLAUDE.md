@@ -8,8 +8,8 @@ We are migrating the entire app from the original "card grid" UI to an **editori
 
 The visual contract is captured in two documents that you MUST read before writing UI code:
 
-- `docs/v3-design/design-system.md` — tokens, type, color, components, anatomies. The source of truth for every visual decision.
-- `docs/v3-design/redesign-plan.md` — per-component checklist with status (Unchanged / UI Update / Redesign / New) and definition of done.
+- `docs/design/design-system.md` — tokens, type, color, components, anatomies. The source of truth for every visual decision.
+- `docs/design/redesign-plan.md` — per-component checklist with status (Unchanged / UI Update / Redesign / New) and definition of done.
 
 If you are about to add a colour, font weight, radius, shadow, or component that is not in `design-system.md`, **stop and ask**. Do not invent tokens.
 
@@ -34,9 +34,9 @@ If you are about to add a colour, font weight, radius, shadow, or component that
 
 ## How to work
 
-1. Read the matrix row in `docs/v3-design/redesign-plan.md` for the component you're touching.
-2. Open the corresponding anatomy in `docs/v3-design/design-system.md`.
-3. Reference the visual mock at `docs/v3-design/Videx Portfolio.html` (Home + For You) when in doubt.
+1. Read the matrix row in `docs/design/redesign-plan.md` for the component you're touching.
+2. Open the corresponding anatomy in `docs/design/design-system.md`.
+3. Reference the visual mock at `docs/design/Videx Portfolio.html` (Home + For You) when in doubt.
 4. Implement against real data — do not commit demo data.
 5. Update the matrix row's status from `[ ]` → `[x]` in the same PR.
 

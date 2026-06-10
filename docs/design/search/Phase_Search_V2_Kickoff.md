@@ -4,7 +4,7 @@
 **Branch:** `phase-search-v2` (cut from `main` after Phase 5.5 closes).
 **PR target:** Single PR back to `main`, two logically grouped commit clusters (A and B).
 **Strategy source:** `videx-wiki/raw/v2-strategy/Videx_v2_Search_Strategy_Annex_v0.1.md`.
-**Design source of truth:** `docs/v3-design/search/Phase_Search_V2_Implementation_Brief.md` + 8 artboards at `docs/v3-design/search/screens/01-search-empty.png` through `06-results-advanced.png` (plus `02b-typing-states.png`, `04b-mode-c-optin.png`). **Read both before writing any UI code.** Design takes precedence on visual spec; this brief takes precedence on retrieval / data / instrumentation.
+**Design source of truth:** `docs/design/search/Phase_Search_V2_Implementation_Brief.md` + 8 artboards at `docs/design/search/screens/01-search-empty.png` through `06-results-advanced.png` (plus `02b-typing-states.png`, `04b-mode-c-optin.png`). **Read both before writing any UI code.** Design takes precedence on visual spec; this brief takes precedence on retrieval / data / instrumentation.
 **Forward planning:** `videx-wiki/raw/forward-planning/roadmap-search-v2-entity-and-signal.md`.
 **Predecessor:** Phase 5.5 (Quality & Legal Hardening) must be merged first.
 

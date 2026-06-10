@@ -17,7 +17,7 @@ interface KickerProps {
  * <SectionHead> and any standalone kicker (mood-tile labels,
  * editor's-note marks, etc).
  *
- * Anatomy: docs/v3-design/design-system.md §4 (SectionHead),
+ * Anatomy: docs/design/design-system.md §4 (SectionHead),
  * tinted-variant rationale: §3 (service tints).
  */
 export function Kicker({ children, color, className = "" }: KickerProps) {

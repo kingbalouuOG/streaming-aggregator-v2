@@ -24,7 +24,7 @@ interface SectionHeadProps {
  * redesign. Kicker (orange tracked) → title (Fraunces) → optional
  * italic standfirst, with an optional trailing slot.
  *
- * Anatomy: docs/v3-design/design-system.md §4.
+ * Anatomy: docs/design/design-system.md §4.
  */
 export function SectionHead({ kicker, kickerColor, title, standfirst, right }: SectionHeadProps) {
   return (
