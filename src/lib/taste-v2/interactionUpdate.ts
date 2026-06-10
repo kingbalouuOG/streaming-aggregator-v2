@@ -7,7 +7,7 @@
 
 import { supabase } from '../supabase';
 import { getAuthUserId } from '../storage';
-import { l2Normalise, addScaled, isZeroVector } from './vectorOps';
+import { l2Normalise, addScaled, isZeroVector, rawCosineSimilarity } from './vectorOps';
 import {
   INTERACTION_WEIGHTS,
   NEGATIVE_EVENTS,
@@ -19,12 +19,16 @@ import {
   BEHAVIOURAL_EVENTS,
   SEARCH_ATTRIBUTION_BOOST,
   SEARCH_ATTRIBUTION_BOOSTED_EVENTS,
+  MAX_INTEREST_CENTROIDS,
 } from './types';
 import {
   getMostRecentSearchAt,
   isWithinAttributionWindow,
 } from './searchAttribution';
-import type { TasteVectorV2 } from './types';
+import { weightedKMeans } from './kmeans';
+import type { WeightedPoint } from './kmeans';
+import { computeInterestWeights } from './bootstrap';
+import type { TasteVectorV2, InterestCentroid } from './types';
 
 const LEARNING_RATE = 0.05;
 
@@ -268,6 +272,180 @@ export async function recomputeFromInteractions(
   if (isZeroVector(vector)) return bootstrapVector;
 
   return l2Normalise(vector);
+}
+
+// ── Interest centroids (ENG-1, Workstream A) ──
+
+/**
+ * Below this many distinct positively-interacted titles, k-means has too
+ * little signal to refresh centroids — the batch path keeps whatever the
+ * bootstrap seeded.
+ */
+const MIN_POSITIVES_FOR_KMEANS = 8;
+
+/**
+ * ENG-1: incremental EMA against the NEAREST interest centroid only
+ * (assignment by cosine to the title embedding). Learning rate,
+ * confidence floor and search-attribution boost are identical to the
+ * summary-vector path. Positive events only — negative signals never
+ * touch centroids (Workstream B owns negatives via the avoid set).
+ *
+ * Returns the updated slot + vector for a single-row write, or null
+ * when no update applies.
+ */
+export async function applyInteractionToCentroids(
+  centroids: InterestCentroid[],
+  tmdbId: number,
+  mediaType: 'movie' | 'tv',
+  eventType: string,
+  interactionCount: number,
+  sessionId?: string | null,
+): Promise<{ slot: number; vector: TasteVectorV2 } | null> {
+  if (centroids.length === 0) return null;
+  if (NEGATIVE_EVENTS.has(eventType)) return null;
+
+  const weight = INTERACTION_WEIGHTS[eventType];
+  if (weight === undefined || weight <= 0) return null;
+
+  const { data, error } = await supabase
+    .from('titles')
+    .select('embedding')
+    .eq('tmdb_id', tmdbId)
+    .eq('media_type', mediaType)
+    .not('embedding', 'is', null)
+    .maybeSingle();
+
+  if (error || !data?.embedding) {
+    console.warn('[InteractionUpdate] No embedding found for', mediaType, tmdbId);
+    return null;
+  }
+
+  const embedding: number[] = typeof data.embedding === 'string'
+    ? JSON.parse(data.embedding)
+    : data.embedding;
+
+  // Nearest centroid by raw cosine
+  let best = centroids[0];
+  let bestCos = -Infinity;
+  for (const c of centroids) {
+    const cos = rawCosineSimilarity(c.centroid, embedding);
+    if (cos > bestCos) {
+      bestCos = cos;
+      best = c;
+    }
+  }
+
+  const newCount = interactionCount + 1;
+  const confidenceMultiplier = newCount <= CONFIDENCE_FLOOR_THRESHOLD
+    ? CONFIDENCE_FLOOR_MULTIPLIER
+    : 1.0;
+  const searchBoost =
+    SEARCH_ATTRIBUTION_BOOSTED_EVENTS.has(eventType) &&
+    isWithinAttributionWindow(Date.now(), getMostRecentSearchAt(sessionId))
+      ? SEARCH_ATTRIBUTION_BOOST
+      : 1.0;
+
+  const effectiveWeight = Math.abs(weight) * LEARNING_RATE * confidenceMultiplier * searchBoost;
+
+  return {
+    slot: best.slot,
+    vector: l2Normalise(addScaled(best.centroid, embedding, effectiveWeight)),
+  };
+}
+
+/**
+ * ENG-1: batch refresh of interest centroids during the 24h-stale
+ * recompute. Aggregates decay-weighted mass per positively-interacted
+ * title from the event log, then runs deterministic weighted k-means
+ * (k = 3 cap). Fully replayable — derived from user_interactions alone.
+ *
+ * Returns interests sorted by weight DESC (slot 0 = dominant), or null
+ * when there's too little signal (< 8 distinct positives) — caller keeps
+ * the existing centroids.
+ */
+export async function recomputeInterestCentroids(): Promise<
+  { centroid: TasteVectorV2; weight: number }[] | null
+> {
+  const userId = getAuthUserId();
+  if (!userId) return null;
+
+  const positiveEvents = [...TASTE_RELEVANT_EVENTS].filter(e => !NEGATIVE_EVENTS.has(e));
+
+  const { data: interactions, error } = await supabase
+    .from('user_interactions')
+    .select('content_id, media_type, event_type, metadata, created_at')
+    .eq('user_id', userId)
+    .in('event_type', positiveEvents)
+    .not('content_id', 'is', null)
+    .order('created_at', { ascending: true });
+
+  if (error || !interactions) {
+    console.error('[InteractionUpdate] recomputeInterestCentroids fetch failed:', error?.message);
+    return null;
+  }
+
+  // Decay-weighted mass per unique title ("share of recent positive
+  // interactions" — recency is the decay, not a hard window)
+  const massByKey = new Map<string, number>();
+  for (const i of interactions) {
+    if (!i.created_at || !i.content_id || !i.media_type) continue;
+
+    let weight = INTERACTION_WEIGHTS[i.event_type];
+    if (weight === undefined || weight <= 0) continue;
+    if (i.event_type === 'deep_link_click') {
+      const confidence = (i.metadata as { confidence?: string } | null)?.confidence;
+      weight = confidence === 'low' ? 0.4 : 0.8;
+    }
+
+    const halfLife = BEHAVIOURAL_EVENTS.has(i.event_type)
+      ? BEHAVIOURAL_HALF_LIFE_DAYS
+      : EXPLICIT_HALF_LIFE_DAYS;
+    const decay = decayWeight(i.created_at, halfLife);
+
+    const key = `${i.media_type}-${i.content_id}`;
+    massByKey.set(key, (massByKey.get(key) ?? 0) + weight * decay);
+  }
+
+  if (massByKey.size < MIN_POSITIVES_FOR_KMEANS) return null;
+
+  // Batch fetch embeddings for the unique titles
+  const tmdbIds = [...new Set([...massByKey.keys()].map(k => parseInt(k.split('-')[1], 10)))];
+  const { data: titleRows, error: embedError } = await supabase
+    .from('titles')
+    .select('tmdb_id, media_type, embedding')
+    .in('tmdb_id', tmdbIds)
+    .not('embedding', 'is', null);
+
+  if (embedError || !titleRows) {
+    console.error('[InteractionUpdate] recomputeInterestCentroids embeddings failed:', embedError?.message);
+    return null;
+  }
+
+  const embeddingMap = new Map<string, number[]>();
+  for (const row of titleRows) {
+    const emb: number[] = typeof row.embedding === 'string'
+      ? JSON.parse(row.embedding)
+      : row.embedding;
+    embeddingMap.set(`${row.media_type}-${row.tmdb_id}`, emb);
+  }
+
+  const points: WeightedPoint[] = [];
+  for (const [key, mass] of massByKey) {
+    const emb = embeddingMap.get(key);
+    if (!emb) continue;
+    points.push({ key, vec: emb, weight: mass });
+  }
+
+  if (points.length < MIN_POSITIVES_FOR_KMEANS) return null;
+
+  const { centroids, masses } = weightedKMeans(points, MAX_INTEREST_CENTROIDS);
+  if (centroids.length === 0) return null;
+
+  const weights = computeInterestWeights(masses);
+
+  return centroids
+    .map((c, i) => ({ centroid: c, weight: weights[i] }))
+    .sort((a, b) => b.weight - a.weight);
 }
 
 /** Check if the taste vector needs recomputation (stale > 24h) */
