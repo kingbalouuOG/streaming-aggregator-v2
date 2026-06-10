@@ -22,14 +22,24 @@ import type { OnboardingData } from "./components/OnboardingFlow";
 // export. One <Suspense> wraps the page region with a plain background
 // fallback (no spinner flash; chunk loads are local-disk fast in the
 // Capacitor WebView).
-const ForYouPage = React.lazy(() => import("./components/ForYouPage").then(m => ({ default: m.ForYouPage })));
-const MoodRoomPage = React.lazy(() => import("./components/MoodRoomPage").then(m => ({ default: m.MoodRoomPage })));
-const BrowsePage = React.lazy(() => import("./components/BrowsePage").then(m => ({ default: m.BrowsePage })));
-const DetailPage = React.lazy(() => import("./components/DetailPage").then(m => ({ default: m.DetailPage })));
-const WatchlistPage = React.lazy(() => import("./components/WatchlistPage").then(m => ({ default: m.WatchlistPage })));
-const ProfilePage = React.lazy(() => import("./components/ProfilePage").then(m => ({ default: m.ProfilePage })));
-const OnboardingFlow = React.lazy(() => import("./components/OnboardingFlow").then(m => ({ default: m.OnboardingFlow })));
-const CalendarPage = React.lazy(() => import("./components/CalendarPage").then(m => ({ default: m.CalendarPage })));
+const pageImports = {
+  forYou: () => import("./components/ForYouPage"),
+  moodRoom: () => import("./components/MoodRoomPage"),
+  browse: () => import("./components/BrowsePage"),
+  detail: () => import("./components/DetailPage"),
+  watchlist: () => import("./components/WatchlistPage"),
+  profile: () => import("./components/ProfilePage"),
+  onboarding: () => import("./components/OnboardingFlow"),
+  calendar: () => import("./components/CalendarPage"),
+};
+const ForYouPage = React.lazy(() => pageImports.forYou().then(m => ({ default: m.ForYouPage })));
+const MoodRoomPage = React.lazy(() => pageImports.moodRoom().then(m => ({ default: m.MoodRoomPage })));
+const BrowsePage = React.lazy(() => pageImports.browse().then(m => ({ default: m.BrowsePage })));
+const DetailPage = React.lazy(() => pageImports.detail().then(m => ({ default: m.DetailPage })));
+const WatchlistPage = React.lazy(() => pageImports.watchlist().then(m => ({ default: m.WatchlistPage })));
+const ProfilePage = React.lazy(() => pageImports.profile().then(m => ({ default: m.ProfilePage })));
+const OnboardingFlow = React.lazy(() => pageImports.onboarding().then(m => ({ default: m.OnboardingFlow })));
+const CalendarPage = React.lazy(() => pageImports.calendar().then(m => ({ default: m.CalendarPage })));
 // ComingSoonCard — Home no longer mounts these directly; the
 // CalendarList primitive renders them internally.
 import { MagazineHero } from "./components/MagazineHero";
@@ -236,6 +246,23 @@ function AppContent() {
     warmedRef.current = true;
     void warmRenderForYou(connectedServices);
   }, [auth.loading, auth.session, userPrefs.loading, connectedServices.join(',')]);
+
+  // PLAT-1: idle-prefetch every lazy page chunk once startup settles.
+  // Chunks are local-disk assets in the WebView — fetching them at idle
+  // keeps the cold-start parse win while guaranteeing tab/page
+  // navigation never suspends (the first-visit blank-frame between
+  // AnimatePresence exit and lazy mount read as a glitch on device).
+  useEffect(() => {
+    const prefetchAll = () => {
+      for (const load of Object.values(pageImports)) void load().catch(() => {});
+    };
+    if ('requestIdleCallback' in window) {
+      const handle = window.requestIdleCallback(prefetchAll, { timeout: 3000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const t = setTimeout(prefetchAll, 1500);
+    return () => clearTimeout(t);
+  }, []);
 
   // Set of watched item IDs for detail page
   const watchedIds = useMemo(
