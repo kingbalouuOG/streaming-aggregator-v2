@@ -225,8 +225,7 @@ export function FeaturedMoodRoomCard({
         >
           {label}
         </h3>
-        {quote && (
-          <p
+        {quote ? <p
             className="mt-2"
             style={{
               fontFamily: "var(--font-ui)",
@@ -238,10 +237,8 @@ export function FeaturedMoodRoomCard({
             }}
           >
             “{quote}”
-          </p>
-        )}
-        {stats && (
-          <div className="flex items-center gap-1.5 mt-3">
+          </p> : null}
+        {stats ? <div className="flex items-center gap-1.5 mt-3">
             <span
               aria-hidden
               style={{
@@ -261,8 +258,7 @@ export function FeaturedMoodRoomCard({
             >
               {stats}
             </span>
-          </div>
-        )}
+          </div> : null}
         <button
           type="button"
           onClick={onSelect}

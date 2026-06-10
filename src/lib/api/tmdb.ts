@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { getCachedData, setCachedData, createTMDbCacheKey } from './cache';
-import { logError, ErrorType } from '../utils/errorHandler';
+import { logError, ErrorType, type ErrorTypeValue } from '../utils/errorHandler';
 import { networkNameToProviderId } from '../constants/platforms';
 
 const BASE_URL = 'https://api.themoviedb.org/3';
@@ -37,8 +37,21 @@ tmdbClient.interceptors.response.use(
   }
 );
 
-const handleTMDbError = (error: any) => {
-  let enhancedError: any;
+/** Minimal axios-error shape — only the fields this handler reads. */
+interface AxiosLikeError {
+  response?: { status: number; data?: { status_message?: string } };
+  request?: unknown;
+  message?: string;
+}
+
+/** Error enriched with classification code + HTTP status for errorHandler. */
+interface EnhancedTMDbError extends Error {
+  code?: ErrorTypeValue;
+  status?: number;
+}
+
+const handleTMDbError = (error: AxiosLikeError) => {
+  let enhancedError: EnhancedTMDbError;
 
   if (error.response) {
     const { status, data } = error.response;
@@ -96,9 +109,10 @@ async function cachedRequest<T>(
     }
 
     return { success: true, data };
-  } catch (error: any) {
-    console.error(`TMDb Error:`, error.message);
-    return { success: false, error: error.message, data: fallbackData };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`TMDb Error:`, message);
+    return { success: false, error: message, data: fallbackData };
   }
 }
 
@@ -193,7 +207,7 @@ export const getContentWatchProviders = async (contentId: number, mediaType = 'm
         const tvResponse = await tmdbClient.get(`/tv/${contentId}`);
         const networks = tvResponse.data?.networks || [];
         const networkProviders = networks
-          .map((n: any) => networkNameToProviderId(n.name))
+          .map((n: { name: string }) => networkNameToProviderId(n.name))
           .filter((id: number | null): id is number => id !== null)
           .map((id: number) => ({ provider_id: id }));
         if (networkProviders.length > 0) {

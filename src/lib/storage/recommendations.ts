@@ -11,7 +11,7 @@ const STORAGE_KEYS = {
 const RECOMMENDATION_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 
 interface RecommendationCache {
-  recommendations: any[];
+  recommendations: unknown[];
   generatedAt: number;
   expiresAt: number;
   basedOn: { genreAffinities: Record<string, number>; likedItemIds: number[] };
@@ -46,7 +46,10 @@ export const isRecommendationCacheValid = async (cache?: RecommendationCache | n
   }
 };
 
-export const setCachedRecommendations = async (recommendations: any[], basedOn: any = {}) => {
+export const setCachedRecommendations = async (
+  recommendations: unknown[],
+  basedOn: { genreAffinities?: Record<string, number>; likedItemIds?: number[] } = {},
+) => {
   const now = Date.now();
   const data: RecommendationCache = {
     recommendations, generatedAt: now, expiresAt: now + RECOMMENDATION_CACHE_TTL,

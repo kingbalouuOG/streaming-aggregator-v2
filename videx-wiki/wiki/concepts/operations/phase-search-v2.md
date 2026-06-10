@@ -6,8 +6,8 @@ created: 2026-05-13
 updated: 2026-05-13
 sources:
   - docs/v2/phase-summaries/phase-search-v2-summary.md
-  - docs/v2/Phase_Search_V2_Kickoff.md
-  - docs/v3-design/search/Phase_Search_V2_Implementation_Brief.md
+  - docs/design/search/Phase_Search_V2_Kickoff.md
+  - docs/design/search/Phase_Search_V2_Implementation_Brief.md
   - videx-wiki/raw/v2-strategy/Videx_v2_Search_Strategy_Annex_v0.1.md
 related:
   - wiki/concepts/operations/phase-history.md

@@ -18,7 +18,7 @@
  *   npx tsx scripts/fingerprints/eval-service-discrimination.ts
  *
  * Output:
- *   docs/v2/phase-2-service-discrimination-eval.md
+ *   docs/v2/phase-summaries/phase-2-service-discrimination-eval.md
  *
  * Prerequisites (.env):
  *   VITE_SUPABASE_URL
@@ -321,7 +321,7 @@ async function main(): Promise<void> {
   lines.push('');
 
   // Write report
-  const reportPath = resolve(__dirname, '..', '..', 'docs', 'v2', 'phase-2-service-discrimination-eval.md');
+  const reportPath = resolve(__dirname, '..', '..', 'docs', 'v2', 'phase-summaries', 'phase-2-service-discrimination-eval.md');
   writeFileSync(reportPath, lines.join('\n') + '\n');
   console.log(`\nReport written to: ${reportPath}`);
 }

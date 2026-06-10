@@ -9,7 +9,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Pre-launch blockers](wiki/registers/pre-launch-blockers.md) — What must happen before public launch.
 - [Deferred items](wiki/registers/deferred-items.md) — What's parked and the trigger to revisit.
 - [Acceptance gates](wiki/registers/acceptance-gates.md) — Every numerical threshold in one place.
-- [Next steps](wiki/registers/next-steps.md) — Phase 4.5 close-out, Phase 5 outlook, Phase 6 launch.
+- [Next steps](wiki/registers/next-steps.md) — E&P track: REPO-1 close-out → PLAT-1/2/3 → launch → ENG-2.
 - [Cheatsheet](wiki/registers/cheatsheet.md) — Phases ↔ branches ↔ migrations ↔ features.
 - [Registers index](wiki/registers/README.md) — This category.
 
@@ -88,6 +88,8 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [ADR-009 — `dismiss` event renamed to `not_interested`](wiki/concepts/decisions/adr-009-not-interested-rename.md)
 - [ADR-010 — pg_partman + monthly partitions for `card_impressions`](wiki/concepts/decisions/adr-010-pg-partman-card-impressions.md)
 - [ADR-011 — Edge Function shared modules duplicated into `_shared/`](wiki/concepts/decisions/adr-011-edge-function-shared-modules.md)
+- [ADR-012 — Server-side For You render via `render-foryou-rows`](wiki/concepts/decisions/adr-012-server-side-foryou-render.md)
+- [ADR-013 — Cluster-dominant bootstrap weights](wiki/concepts/decisions/adr-013-cluster-dominant-bootstrap-weights.md)
 
 ### Operations
 
@@ -102,6 +104,9 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Phase 4 — Ranking pipeline & row composition](wiki/concepts/operations/phase-4.md)
 - [Phase 5 — Contextual signals, MMR, pre-launch hardening](wiki/concepts/operations/phase-5.md)
 - [Phase 5.5 — Quality, legal & catalogue hardening](wiki/concepts/operations/phase-5-5.md)
+- [Phase Search V2 — Filtered + semantic search](wiki/concepts/operations/phase-search-v2.md)
+- [Phase ENG-1 — Multi-interest retrieval & signal quality](wiki/concepts/operations/phase-eng-1.md)
+- [Phase REPO-1 — Documentation & repo hygiene](wiki/concepts/operations/phase-repo-1.md)
 - [Sync pipeline runbook](wiki/concepts/operations/sync-pipeline.md)
 - [Embedding backfill runbook](wiki/concepts/operations/embedding-backfill.md)
 - [Edge Function deployment runbook](wiki/concepts/operations/edge-function-deployment.md)
@@ -147,12 +152,22 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Glossary](wiki/sources/glossary.md) — `raw/reference/glossary.md`.
 - [Codebase Snapshots](wiki/sources/codebase-snapshots.md) — Eight extracts under `raw/codebase-snapshots/`.
 - [V2 Strategy README](wiki/sources/v2-strategy-readme.md) — `raw/v2-strategy/README.md`.
-- [Recommendation Engine v2 Strategy v1.6.3](wiki/sources/engine-strategy-v1-6-3.md) — Most cross-referenced doc.
-- [Project Orchestration v0.3.3](wiki/sources/project-orchestration-v0-3-3.md) — Branching, environments, migrations.
+- [Engine & Platform Hardening Brief v0.2](wiki/sources/ep-hardening-brief-v0-2.md) — The E&P track: ENG-1 → REPO-1 → PLAT-1/2/3 → ENG-2, decisions D1–D6 locked.
+- [Recommendation Engine v2 Strategy v1.8](wiki/sources/engine-strategy-v1-8.md) — Current engine ground truth (supersedes v1.6.3).
+- [Recommendation Engine v2 Strategy v1.6.3](wiki/sources/engine-strategy-v1-6-3.md) — Superseded by v1.8.
+- [Project Orchestration v0.8](wiki/sources/project-orchestration-v0-8.md) — Current: §3.4 migration table + §11 E&P locks (supersedes v0.5).
+- [Project Orchestration v0.5](wiki/sources/project-orchestration-v0-5.md) — Superseded by v0.8.
+- [Project Orchestration v0.3.3](wiki/sources/project-orchestration-v0-3-3.md) — Superseded by v0.5.
 - [Detail Page Signal Capture Spec v0.3.2](wiki/sources/detail-page-signal-capture-spec-v0-3-2.md) — Signal taxonomy and capture spec.
-- [Home and For You Composition Hypothesis v0.3](wiki/sources/home-foryou-composition-hypothesis-v0-3.md) — Two-surface row composition.
+- [Home and For You Composition Hypothesis v0.4](wiki/sources/home-foryou-composition-hypothesis-v0-4.md) — Current: anchored-rooms flip on the For You row (supersedes v0.3).
+- [Home and For You Composition Hypothesis v0.3](wiki/sources/home-foryou-composition-hypothesis-v0-3.md) — Superseded by v0.4.
 - [Implementation Guide v0.2](wiki/sources/implementation-guide-v0-2.md) — CC workflow runbook.
-- [Implementation Notes Parking Lot v0.3.4](wiki/sources/implementation-notes-parking-lot-v0-3-4.md) — IN-XXX phase-tagged notes.
+- [Implementation Notes Parking Lot v0.7 (+ ENG-1)](wiki/sources/implementation-notes-parking-lot-v0-7.md) — Current snapshot incl. IN-PX-55/56/57 (supersedes v0.5).
+- [Implementation Notes Parking Lot v0.5](wiki/sources/implementation-notes-parking-lot-v0-5.md) — Superseded by v0.7.
+- [Implementation Notes Parking Lot v0.3.4](wiki/sources/implementation-notes-parking-lot-v0-3-4.md) — Superseded by v0.5.
+- [Phase ENG-1 Summary](wiki/sources/phase-eng-1-summary.md) — Multi-interest centroids, avoid set, exploration, training extract.
+- [ENG-1 Eval 2026-06-10](wiki/sources/eng1-eval-2026-06-10.md) — Gate results: coverage/parity/γ/τ green, recall carried forward.
+- [Phase REPO-1 Summary](wiki/sources/phase-repo-1-summary.md) — Docs/scripts/test/lint cleanup, migration 046, CONVENTIONS.md.
 - [Design Reference v0.1](wiki/sources/design-reference-v0-1.md) — Visual reference index.
 - [ADRs Combined](wiki/sources/adrs-combined.md) — Index for the eleven per-ADR pages.
 - [Phase Summaries (collected)](wiki/sources/phase-summaries.md) — Index for the per-phase pages.

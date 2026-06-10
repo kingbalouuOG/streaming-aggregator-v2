@@ -134,9 +134,7 @@ export function CalendarList({
                     {item.genre}
                   </span>
                 </div>
-                {item.services[0] && (
-                  <ServiceBadge service={item.services[0]} size="sm" />
-                )}
+                {item.services[0] ? <ServiceBadge service={item.services[0]} size="sm" /> : null}
                 <ChevronRightIcon className="w-4 h-4 shrink-0" />
               </button>
             ))}

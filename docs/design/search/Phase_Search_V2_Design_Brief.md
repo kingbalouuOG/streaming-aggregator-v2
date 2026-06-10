@@ -2,8 +2,8 @@
 
 **Status:** Brief v0.1 (2026-05-11) — pending Joe's approval before design work begins.
 **Strategy source:** `videx-wiki/raw/v2-strategy/Videx_v2_Search_Strategy_Annex_v0.1.md`.
-**Implementation brief (parallel):** `docs/v2/Phase_Search_V2_Kickoff.md`.
-**Design system source of truth:** `docs/v3-design/design-system.md` and `src/index.css` tokens. **Read both before sketching anything.**
+**Implementation brief (parallel):** `docs/design/search/Phase_Search_V2_Kickoff.md`.
+**Design system source of truth:** `docs/design/design-system.md` and `src/index.css` tokens. **Read both before sketching anything.**
 
 ---
 
@@ -24,7 +24,7 @@ Five surfaces / states need design:
 ## 2. Hard constraints
 
 - **Mobile first, 390 × 844.** Capacitor app — no desktop scaling concerns inside this phase.
-- **Editorial, not feed.** Read `docs/v3-design/design-system.md` §1 (Principles) and §2 (Voice & tone) before drafting copy. "The Charts" not "Trending Now".
+- **Editorial, not feed.** Read `docs/design/design-system.md` §1 (Principles) and §2 (Voice & tone) before drafting copy. "The Charts" not "Trending Now".
 - **One signal per element.** No competing badges on cards.
 - **Tokens are the contract.** No new colours, no new font sizes, no new spacing values. Everything in `src/index.css`. If something feels missing, raise it before adding.
 - **Type does the heavy lifting.** Fraunces (display, opsz axis) for editorial; DM Sans for UI. Never invert.
@@ -101,7 +101,7 @@ The sheet is going to grow. Design a vertical scroll inside the sheet (existing 
 
 ## 4. Tokens and primitives — quick reference
 
-Pulled from `docs/v3-design/design-system.md`. Do not deviate.
+Pulled from `docs/design/design-system.md`. Do not deviate.
 
 - **Surfaces:** `--surface` (paper light / ink dark), `--surface-elev` (cards, sheets).
 - **Foreground:** `--fg`, `--fg-soft` (62%), `--fg-faint` (40%).

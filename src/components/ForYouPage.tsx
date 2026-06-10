@@ -413,8 +413,7 @@ export function ForYouPage({
         </div>
 
         {/* §5.1 — Greeting + top pick */}
-        {topPick && (
-          <div className="editorial mb-8">
+        {topPick ? <div className="editorial mb-8">
             <MagazineHero
               item={topPick}
               kicker="TONIGHT'S PICK"
@@ -435,8 +434,7 @@ export function ForYouPage({
                 topPick.services.some((s) => connectedServiceIds.includes(s))
               }
             />
-          </div>
-        )}
+          </div> : null}
 
         {/* §5.2 — Taste fingerprint card. Header (icon + title +
             metadata + Tune) and a 2-column grid of sliders.
@@ -494,8 +492,7 @@ export function ForYouPage({
                 </span>
               </div>
             </div>
-            {content.sliders && (
-              <button
+            {content.sliders ? <button
                 type="button"
                 onClick={handleLockToggle}
                 aria-label={slidersUnlocked ? 'Lock taste sliders' : 'Unlock taste sliders to edit'}
@@ -515,8 +512,7 @@ export function ForYouPage({
                 {slidersUnlocked
                   ? <LockOpen className="w-4 h-4" />
                   : <Lock className="w-4 h-4" />}
-              </button>
-            )}
+              </button> : null}
           </div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-3">
             {([
@@ -637,8 +633,7 @@ export function ForYouPage({
               );
             })}
           </div>
-          {activeMood && (
-            <div className="mt-3 px-5">
+          {activeMood ? <div className="mt-3 px-5">
               <span
                 className="inline-flex items-center gap-2 px-3 py-1.5"
                 style={{
@@ -657,8 +652,7 @@ export function ForYouPage({
                 <span style={{ color: 'var(--fg-soft)' }}>·</span>
                 {`${inYourMood.length} IN YOUR STACK`}
               </span>
-            </div>
-          )}
+            </div> : null}
         </div>
         )}
 
@@ -792,15 +786,13 @@ export function ForYouPage({
         )}
 
         {/* §5.10 — Calendar list */}
-        {upcoming && upcoming.length > 0 && onSelectUpcoming && (
-          <CalendarList
+        {upcoming && upcoming.length > 0 && onSelectUpcoming ? <CalendarList
             items={upcoming}
             kicker="ON THE CALENDAR"
             title="Coming up."
             standfirst="The next two weeks across your stack."
             onSelect={onSelectUpcoming}
-          />
-        )}
+          /> : null}
       </motion.div>
     </div>
   );

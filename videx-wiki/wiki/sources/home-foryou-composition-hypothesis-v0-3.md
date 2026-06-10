@@ -16,6 +16,8 @@ related:
 
 # Source: Home and For You Composition Hypothesis v0.3
 
+> **Superseded by [Home and For You Composition Hypothesis v0.4](home-foryou-composition-hypothesis-v0-4.md)** (Phase 4.5 anchored-rooms redirect; snapshotted 2026-06-10).
+
 Defines composition logic, row types, ordering rules, and cold-start behaviour for the two primary surfaces.
 
 ## v0.3 corrections

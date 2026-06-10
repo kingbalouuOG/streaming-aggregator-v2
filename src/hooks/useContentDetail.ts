@@ -3,7 +3,7 @@ import { getMovieDetails, getTVDetails, getSimilarMovies, getSimilarTV, getMovie
 import { getRatings } from '@/lib/api/omdb';
 import { getStreamingLinks } from '@/lib/api/supabaseContent';
 import { buildDetailData, type DetailData } from '@/lib/adapters/detailAdapter';
-import { tmdbMovieToContentItem, tmdbTVToContentItem } from '@/lib/adapters/contentAdapter';
+import { tmdbMovieToContentItem, tmdbTVToContentItem, type TMDbContentResult } from '@/lib/adapters/contentAdapter';
 import { supabase } from '@/lib/supabase';
 import { cosineSimilarity } from '@/lib/taste-v2/vectorOps';
 import { getV2TasteProfile } from '@/lib/taste-v2/tasteProfileV2';
@@ -71,7 +71,7 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
       const detail = buildDetailData(tmdbDetail, mediaType, omdbRatings, streamingLinks, userPlatformIds);
 
       // Extract source characteristics for discover params
-      const sourceGenres: number[] = tmdbDetail.genres?.map((g: any) => g.id) || tmdbDetail.genre_ids || [];
+      const sourceGenres: number[] = tmdbDetail.genres?.map((g: { id: number }) => g.id) || tmdbDetail.genre_ids || [];
       const sourceRating: number = tmdbDetail.vote_average || 0;
 
       // Fetch candidates from 3 sources in parallel — graceful degradation if any fails
@@ -101,7 +101,7 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
 
       const seen = new Set<number>();
       seen.add(tmdbId);
-      const mergedCandidates: any[] = [];
+      const mergedCandidates: TMDbContentResult[] = [];
       for (const item of [...similarItems, ...recoItems, ...discoverItems]) {
         if (!seen.has(item.id)) {
           seen.add(item.id);
@@ -111,7 +111,7 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
 
       // --- V2 batch query pattern (Phase 1 locked) ---
       // Batch-fetch 1536D embeddings for all candidates + source title
-      const candidateIds = mergedCandidates.map((c: any) => c.id);
+      const candidateIds = mergedCandidates.map((c) => c.id);
       const allTmdbIds = [tmdbId, ...candidateIds];
 
       const { data: embeddingRows } = await supabase
@@ -143,7 +143,7 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
 
       // Score and sort candidates
       const similar = mergedCandidates
-        .map((item: any) => {
+        .map((item) => {
           // Try both media types since candidate might be movie or tv
           const candidateEmbedding = embeddingMap.get(`movie-${item.id}`)
             || embeddingMap.get(`tv-${item.id}`);
@@ -175,8 +175,9 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
 
       setState({ detail, similar, loading: false, error: null });
       emitDetailView(tmdbId, mediaType, detail.title);
-    } catch (err: any) {
-      setState((s) => ({ ...s, loading: false, error: err.message || 'Failed to load details' }));
+    } catch (err) {
+      const message = err instanceof Error && err.message ? err.message : 'Failed to load details';
+      setState((s) => ({ ...s, loading: false, error: message }));
     }
   }, [contentItemId, userPlatformIds?.join(',')]);
 

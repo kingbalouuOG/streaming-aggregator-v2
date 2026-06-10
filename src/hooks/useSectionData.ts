@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { discoverMovies, discoverTV } from '@/lib/api/tmdb';
-import { tmdbMovieToContentItem, tmdbTVToContentItem } from '@/lib/adapters/contentAdapter';
+import { tmdbMovieToContentItem, tmdbTVToContentItem, type TMDbContentResult } from '@/lib/adapters/contentAdapter';
 import { getSectionCache, setSectionCache } from '@/lib/sectionSessionCache';
 import { sanitiseTVGenreParams } from '@/lib/constants/genres';
 import type { ContentItem } from '@/components/ContentCard';
@@ -62,14 +62,14 @@ export interface SectionDataState {
 }
 
 /** Convert raw TMDb result to BufferedItem (ContentItem + scoring fields) */
-function toBufferedMovie(movie: any): BufferedItem {
+function toBufferedMovie(movie: TMDbContentResult): BufferedItem {
   const item = tmdbMovieToContentItem(movie) as BufferedItem;
   item._genreIds = movie.genre_ids || [];
   item._popularity = movie.popularity || 0;
   return item;
 }
 
-function toBufferedTV(tv: any): BufferedItem {
+function toBufferedTV(tv: TMDbContentResult): BufferedItem {
   const item = tmdbTVToContentItem(tv) as BufferedItem;
   item._genreIds = tv.genre_ids || [];
   item._popularity = tv.popularity || 0;

@@ -1,27 +1,91 @@
 ---
 title: Acceptance gates and thresholds
 type: register
-tags: [register, gates, thresholds, acceptance, evaluation]
+tags: [register, gates, thresholds, acceptance, evaluation, e-p-track]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-06-10
 sources:
-  - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
+  - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.8.md
+  - raw/v2-strategy/Videx_v2_Engine_and_Platform_Hardening_Brief_v0.2.md
   - raw/reference/eval-harness-reference.md
   - raw/phase-summaries/Videx_v2_Phase_0_5_End_of_Phase_Summary.md
   - raw/phase-summaries/phase-1-summary.md
   - raw/phase-summaries/phase-2-summary.md
   - raw/phase-summaries/phase-2.6-summary.md
   - raw/phase-summaries/phase-4-summary.md
+  - raw/phase-summaries/eng1-eval-2026-06-10.md
+  - raw/phase-summaries/phase-repo-1-summary.md
   - raw/runbooks/monthly-mood-room-recluster.md
 related:
   - wiki/concepts/operations/eval-harness.md
   - wiki/concepts/architecture/recommendation-pipeline.md
   - wiki/concepts/operations/phase-history.md
+  - wiki/concepts/operations/phase-eng-1.md
+  - wiki/concepts/operations/phase-repo-1.md
+  - wiki/sources/ep-hardening-brief-v0-2.md
+  - wiki/sources/eng1-eval-2026-06-10.md
 ---
 
 # Acceptance gates and thresholds
 
-Every numerical threshold or pass/fail rule the wiki references, in one scannable place. Refresh when a phase summary or eval changes a threshold.
+Every numerical threshold or pass/fail rule the wiki references, in one scannable place. Refresh when a phase summary or eval changes a threshold. E&P-track gates (2026-06-10 →) first, historical phase gates below.
+
+## Phase ENG-1 — Eval gate (brief §3.6) — **PASSED** (2026-06-10, runs 1 + 2)
+
+| Check | Gate | Result | Status |
+|---|---|---|---|
+| Coverage (multi-modal profile, top-20 distinct source interests) | ≥ 2 | **3** (single-centroid baseline leans 2) | ✅ PASS |
+| `foryou-parity` probe vs live ENG-1 Edge | green | Determinism across consecutive calls (validates daily-seeded exploration), zero filter leaks, zero cross-row dupes; golden regenerated once | ✅ PASS |
+| Avoid-set suppression, γ swept {0.10, 0.15, 0.20} | measurable suppression, zero positive regression | Full suppression at every γ; 0 positive Δ; **γ = 0.15 kept** | ✅ PASS |
+| τ merge threshold from data (16-cluster pairwise matrix) | picked from data | Max pair 0.7532; zero merges at 0.80; **τ = 0.80 kept** (K-cap does the merging) | ✅ |
+| Recall@500 multi ≥ single | strictly better on multi-modal profiles | 0/2 vs 0/2 — not meaningful at n=2; real profile below 10-positive floor | ↪ **Carried forward, not blocking** — honest at the ENG-2 data gate |
+| `rank-eval.ts` + vitest | green throughout | Green; 40 new ENG-1 tests | ✅ |
+
+## Phase REPO-1 — Acceptance (brief §4.5) — **MET** (2026-06-10)
+
+| Criterion | Result |
+|---|---|
+| `npm test` single entry, green; bespoke tsx `test:*` gone | ✅ 146/146 across 14 files; 7 script entries deleted |
+| `npm run lint` green; `no-explicit-any` at **error** | ✅ 0 errors after 72→0 burn-down (73 warnings: pre-existing exhaustive-deps + relaxed scripts profile) |
+| No duplicate/orphaned docs | ✅ Dupes deleted, eval docs single-homed, script writers repointed |
+| Wiki lint: zero unresolved contradictions | ✅ 10/10 resolved; 4 registers rebuilt at the 2026-06-10 re-snapshot ingest |
+| `docs/CONVENTIONS.md` exists, linked from README | ✅ |
+
+## Phase PLAT-1 — Acceptance (brief §5.3) — pending
+
+| Criterion | Gate |
+|---|---|
+| Initial JS chunk | ≥ 30% reduction of eagerly-loaded JS (before/after from `vite build`) |
+| Device cold-start | Before/after measured on the test phone |
+| Request dedup | Zero duplicate concurrent identical requests on Home → Detail → Back → Detail |
+| Virtualization | 500-item synthetic watchlist scrolls without jank |
+| Behaviour | **No ranking change** — For You/Home output identical |
+
+## Phase PLAT-2 — Acceptance (brief §6.4) — pending
+
+| Criterion | Gate |
+|---|---|
+| Key removal | `grep` of `dist/` shows no TMDb/OMDB keys |
+| Cache | Worker analytics shows high cache-hit ratio on `/v1/title/*` once warm |
+| Latency | p95 detail-page data latency ≤ direct-to-TMDb baseline |
+| Client third-party volume | TMDb/OMDB requests from clients ~zero |
+
+## Phase PLAT-3 — Acceptance (brief §7.3) — pending
+
+| Criterion | Gate |
+|---|---|
+| For You p95 first-paint | ≤ current warm-Edge path; **cold-start outliers (5–12s) eliminated as a category** |
+| Parity | Probe green on final pre-cutover run (then retired) |
+| Feed cache | Hit ratio measured; repeat loads within TTL (15–30 min) serve from cache |
+| Simplification | LOC/CI deleted tracked in the phase summary as a first-class deliverable |
+
+## Phase ENG-2 — Data gate + ship gate (brief §8) — waiting on launch traffic
+
+| Gate | Threshold |
+|---|---|
+| **Data gate (do not start before)** | **≥ 5–10K impressions with ≥ 500 positive outcomes** (click/watchlist/deep-link) in `v_training_examples` |
+| Ship gate | Offline AUC / NDCG vs the fixed-weight scorer on a held-out week — ship only if better; dated eval doc |
+| Exploration read | CTR on `exploration=true` vs row baseline (tagging live since ENG-1) |
 
 ## Phase 0.5 — Content enrichment row-count gates
 

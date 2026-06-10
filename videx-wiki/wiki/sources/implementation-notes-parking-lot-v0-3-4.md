@@ -3,7 +3,7 @@ title: Source — Implementation Notes Parking Lot v0.3.4
 type: source
 tags: [parking-lot, implementation-notes, in-xxx]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-06-10
 sources:
   - raw/v2-strategy/Videx_v2_Implementation_Notes_Parking_Lot_v0.3.4.md
 related:
@@ -14,6 +14,8 @@ related:
 ---
 
 # Source: Implementation Notes Parking Lot v0.3.4
+
+> Superseded by [Implementation Notes Parking Lot v0.5](implementation-notes-parking-lot-v0-5.md) (2026-04-30); docs source of truth is now v0.7 — see the [parking-lot register](../registers/parking-lot.md).
 
 Per-phase implementation-level notes that need to land in CC briefs at the right phase.
 

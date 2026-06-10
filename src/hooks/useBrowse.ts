@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { discoverMovies, discoverTV } from '@/lib/api/tmdb';
-import { tmdbMovieToContentItem, tmdbTVToContentItem } from '@/lib/adapters/contentAdapter';
+import { tmdbMovieToContentItem, tmdbTVToContentItem, type TMDbContentResult } from '@/lib/adapters/contentAdapter';
 import type { ContentItem } from '@/components/ContentCard';
 import type { FilterState } from '@/lib/search/filterState';
 import { serviceIdsToProviderIds, providerIdsToServiceIds } from '@/lib/adapters/platformAdapter';
@@ -10,6 +10,17 @@ import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import type { ServiceId } from '@/components/platformLogos';
 
 export type BrowseSortBy = 'popularity.desc' | 'vote_average.desc' | 'title.asc' | 'title.desc';
+
+/** Minimal shape of a cachedRequest-wrapped TMDb /discover response. */
+interface DiscoverResponse {
+  success: boolean;
+  data?: {
+    results?: TMDbContentResult[];
+    total_pages?: number;
+    total_results?: number;
+  };
+  error?: string;
+}
 
 export function useBrowse(
   filters: FilterState,
@@ -105,7 +116,7 @@ export function useBrowse(
       const shouldFetchMovies = filters.contentType === 'all' || filters.contentType === 'movie' || filters.contentType === 'doc';
       const shouldFetchTV = filters.contentType === 'all' || filters.contentType === 'tv';
 
-      const promises: Promise<any>[] = [];
+      const promises: Promise<DiscoverResponse>[] = [];
       if (shouldFetchMovies) promises.push(discoverMovies(params));
       if (shouldFetchTV) promises.push(discoverTV(params));
 
@@ -114,11 +125,11 @@ export function useBrowse(
       let newItems: ContentItem[] = [];
       let idx = 0;
       if (shouldFetchMovies) {
-        newItems.push(...(responses[idx].data?.results || []).map((m: any) => tmdbMovieToContentItem(m)));
+        newItems.push(...(responses[idx].data?.results || []).map((m) => tmdbMovieToContentItem(m)));
         idx++;
       }
       if (shouldFetchTV) {
-        newItems.push(...(responses[idx].data?.results || []).map((t: any) => tmdbTVToContentItem(t)));
+        newItems.push(...(responses[idx].data?.results || []).map((t) => tmdbTVToContentItem(t)));
       }
 
       // Movies first, then TV. Stable order — earlier code random-
@@ -152,14 +163,14 @@ export function useBrowse(
         newItems = newItems.filter((_, i) => checks[i]);
       }
 
-      const totalPages = Math.max(...responses.map((r: any) => r.data?.total_pages || 1));
+      const totalPages = Math.max(...responses.map((r) => r.data?.total_pages || 1));
       // Sum total_results across movie + tv responses so the mode
       // indicator can show the catalogue ceiling, not just the
       // currently-loaded slice. Only update on page 1 — TMDb's
       // total is stable across pages for a given query.
       if (pageNum === 1) {
         const total = responses.reduce(
-          (sum: number, r: any) => sum + (r.data?.total_results || 0),
+          (sum, r) => sum + (r.data?.total_results || 0),
           0,
         );
         setTotalResults(total);
@@ -172,8 +183,8 @@ export function useBrowse(
         setItems(newItems);
       }
       setPage(pageNum);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load content');
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : 'Failed to load content');
     } finally {
       setLoading(false);
       loadingRef.current = false;

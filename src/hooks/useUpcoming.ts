@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { discoverMovies, discoverTV, buildPosterUrl } from '@/lib/api/tmdb';
+import type { TMDbContentResult } from '@/lib/adapters/contentAdapter';
 import type { ServiceId } from '@/components/platformLogos';
 
 export interface UpcomingRelease {
@@ -59,11 +60,11 @@ export function useUpcoming(providerIds: number[], fetchMovies = true, fetchTV =
         }) : Promise.resolve({ data: { results: [] } }),
       ]);
 
-      const movies: UpcomingRelease[] = (moviesRes.data?.results || []).map((m: any) => ({
+      const movies: UpcomingRelease[] = (moviesRes.data?.results || []).map((m: TMDbContentResult) => ({
         id: `movie-${m.id}`,
         tmdbId: m.id,
         title: m.title || 'Untitled',
-        image: buildPosterUrl(m.poster_path) || '',
+        image: buildPosterUrl(m.poster_path ?? null) || '',
         releaseDate: m.release_date || todayStr,
         type: 'movie' as const,
         genre: m.genre_ids?.[0] ? getGenreShort(m.genre_ids[0]) : '',
@@ -73,11 +74,11 @@ export function useUpcoming(providerIds: number[], fetchMovies = true, fetchTV =
         rating: m.vote_average || undefined,
       }));
 
-      const tv: UpcomingRelease[] = (tvRes.data?.results || []).map((t: any) => ({
+      const tv: UpcomingRelease[] = (tvRes.data?.results || []).map((t: TMDbContentResult) => ({
         id: `tv-${t.id}`,
         tmdbId: t.id,
         title: t.name || t.title || 'Untitled',
-        image: buildPosterUrl(t.poster_path) || '',
+        image: buildPosterUrl(t.poster_path ?? null) || '',
         releaseDate: t.first_air_date || todayStr,
         type: 'tv' as const,
         genre: t.genre_ids?.[0] ? getGenreShort(t.genre_ids[0]) : '',

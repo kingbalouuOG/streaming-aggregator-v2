@@ -34,7 +34,7 @@ function formatDatePill(dateStr: string): { line1: string; line2: string; isToda
 }
 
 /**
- * ComingSoonCard — vertical calendar entry per docs/v3-design/redesign-plan.md
+ * ComingSoonCard — vertical calendar entry per docs/design/redesign-plan.md
  * (date pill in primary, title under). Adopts the same anatomy that
  * the upcoming CalendarStrip primitive will use, so the Home "Coming
  * Soon" strip and the new CalendarStrip read as one visual family.
@@ -84,9 +84,7 @@ export function ComingSoonCard({ item, onSelect, bookmarked, onToggleBookmark }:
         }}
       >
         <span style={{ fontSize: 10 }}>{pill.line1}</span>
-        {pill.line2 && (
-          <span style={{ fontSize: 14, letterSpacing: 0 }}>{pill.line2}</span>
-        )}
+        {pill.line2 ? <span style={{ fontSize: 14, letterSpacing: 0 }}>{pill.line2}</span> : null}
       </span>
 
       {/* Title */}

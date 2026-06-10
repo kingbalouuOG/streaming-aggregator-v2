@@ -1,112 +1,103 @@
 ---
-title: Next steps — Phase 5.5, 6, and immediate
+title: Next steps — E&P Hardening track → launch → ENG-2
 type: register
-tags: [register, next-steps, phase-5-5, phase-6, roadmap]
+tags: [register, next-steps, e-p-track, plat-1, plat-2, plat-3, phase-6, eng-2, roadmap]
 created: 2026-04-26
-updated: 2026-05-13
+updated: 2026-06-10
 sources:
-  - docs/v2/phase-summaries/phase-search-v2-summary.md
-  - docs/v2/phase-summaries/phase-5-summary.md
-  - docs/v2/Videx_v2_Project_Orchestration_v0.7.md
-  - videx-wiki/wiki/registers/parking-lot.md
+  - raw/v2-strategy/Videx_v2_Engine_and_Platform_Hardening_Brief_v0.2.md
+  - raw/v2-strategy/Videx_v2_Project_Orchestration_v0.8.md
+  - raw/phase-summaries/phase-repo-1-summary.md
+  - raw/phase-summaries/phase-eng-1-summary.md
+  - raw/v2-strategy/Videx_v2_Implementation_Notes_Parking_Lot_v0.7.md
 related:
-  - wiki/registers/parking-lot.md
+  - wiki/sources/ep-hardening-brief-v0-2.md
   - wiki/registers/pre-launch-blockers.md
   - wiki/registers/deferred-items.md
+  - wiki/registers/acceptance-gates.md
+  - wiki/registers/parking-lot.md
+  - wiki/concepts/operations/phase-eng-1.md
+  - wiki/concepts/operations/phase-repo-1.md
   - wiki/concepts/operations/phase-history.md
-  - wiki/concepts/operations/phase-search-v2.md
-  - wiki/concepts/operations/phase-5.md
 ---
 
 # Next steps
 
-Concrete near-term work in dependency-aware order. Sourced from open Phase Search V2 follow-ups, parking-lot pending items, and pre-launch blockers.
+The roadmap is the **E&P Hardening track** (brief v0.2, approved + decisions D1–D6 locked 2026-06-10; orchestration v0.8 §11): ENG-1 ✅ → REPO-1 ✅ (pending merge) → PLAT-1 → PLAT-2 → PLAT-3 → Phase 6 launch (parallel track) → ENG-2 (data-gated). All before v3 / Phase 7.
 
-## Immediately next (post Phase Search V2 close)
+## Now — close out REPO-1
 
-| # | Task | Source | Notes |
-|---|---|---|---|
-| 1 | Production APK rebuild + install | `phase-search-v2-summary.md` §9 | `npm run build ; npx cap sync android ; cd android ; ./gradlew assembleDebug` then `adb install -r`. Smoke-test all 5 search surfaces (lookup, filter-only, mood chip, suggestion routing, semantic CTA on Joe's profile). |
-| 2 | Distribute APK to family-member testers | This phase | Sideload or Play Console internal track. `search_semantic` flag stays OFF for them by default — they see Mode A only. |
-| 3 | Author 20-query semantic-eval fixture | IN-PX-40 (parking lot) | Gates `search_semantic` flag-flip from Joe-only → prototype users. Joe deliverable; update `scripts/test/search-semantic-fixtures.json` and re-run the eval workflow. |
-| 4 | Subjective semantic-search assessment | Phase Search V2 close | Joe runs the 20-query fixture over 2 days; flip flag on for prototype users when satisfied. |
-
-## Phase 5.5 — Quality + legal hardening (not started)
-
-Bundles the deferred-from-Phase-5 cluster plus Phase Search V2 follow-ups. None of these are technically launch-blockers individually, but the legal cluster IS — pre-public-launch.
-
-### Quality cluster
-
-| Task | Source | Notes |
+| # | Task | Status |
 |---|---|---|
-| Regenerate `database.types.ts` + drop remaining `as any` casts | IN-PX-21 | New dependent surfaced in Phase Search V2 (`src/lib/featureFlags.ts:47` for `user_feature_flags`). Pre-existing dependents: `AuthContext.tsx`, `anchorRoomLabels.ts`, `interactionUpdate.ts`. |
-| `catch (err: any)` cleanup in `useSearch.ts:138, 223` | IN-PX-39 | Trivial — replace with `unknown` + narrowing helper. Flagged by `kieran-typescript-reviewer` on Phase Search V2 close. |
-| Search-as-signal Level 2 — embed query into taste vector directly | IN-PX-44 | Add `'search'` to `TASTE_RELEVANT_EVENTS` (weight ~0.15), embed via `embed-query`. Defer until IN-PX-40 fixture lands so we have ground truth on embedding quality first. |
-| Embedding fetch caching for MMR (24h TTL) | IN-PX-22 | Phase 5 added ~3MB embedding fetch per For You load — dominant new latency cost. |
-| MMR partial-coverage fallback (>50% missing → genre-spread) | IN-PX-23 | Graceful degradation when embedding map is patchy. |
-| Float32Array + cosine-norm precompute in MMR | IN-PX-24 | After IN-PX-22. |
-| Test coverage for `computeContextualScore` + `applyMMR` | IN-PX-25 | — |
-| `buildRowFromPool` options-object refactor | IN-PX-26 | Param list now long enough to warrant it. |
-| `ViewingContext` to source-of-truth (`types.ts`) | IN-PX-27 | Currently duplicated. |
-| `edge-fn-jwt-guard` gap — central `supabase/config.toml` | IN-PX-28 | — |
-| Trim `supabase/cron/*.sql` source-of-truth confusion | IN-PX-31 | Migration 039 + cron files duplicate registrations. |
-| Mirror tree consolidation (`_shared/` as source-of-truth) | IN-PX-32 | Supersedes part of IN-467. Phase Search V2's `_shared/recommendations-v2/search/semanticRetrieval.ts` is already imported directly by the client — proof-of-pattern. |
-| Migration 040 (additive `get_available_tmdb_id_pairs`) | IN-458 | Re-targeted from Phase 5; closes 0.8% movie/TV id collision rate. |
-| Backfill script for ~3,807 missing tmdb_ids | IN-465 | One-off Prime-skewed catalogue gap. |
-| For You tab-switch preservation via zustand store | IN-462 | Net-new `zustand` dep accepted in Phase 5 brief. |
+| 1 | Merge `phase-repo-1-hygiene` to main (`--no-ff`) | ⏳ The only remaining REPO-1 step. Migration 046 applied (live schema snapshot 2026-06-10 is post-046); raw/ re-snapshot dropped + re-ingested 2026-06-10. |
+| 2 | `typegen-check` green post-046 | Should now pass — regenerates from the remote schema, which no longer has `title_genres`/`title_credits`. Verify on the PR. |
 
-### Legal cluster (pre-public-launch blockers)
+## PLAT-1 — Client data layer & rendering (next phase; gate: REPO-1 merged)
 
-| Task | Source | Notes |
-|---|---|---|
-| Delete account UI gate flip + RPC audit + version-controlled migration | IN-XPS-006 | RPC + client wiring exist in production; UI gate + migration are the gaps. |
-| Privacy Policy + ToS pages with functional legal links | IN-PX-34 | Store-rejection risk if left as non-functional spans. |
-| Functional "Download my data" — GDPR Article 20 | IN-PX-35 | Currently a fake-success toast. |
+In-place refactor, no backend/schema changes, written under the REPO-1 lint rules. Brief §5; ~2 weeks nominal.
 
-### Flag-flip surface (decide pre-rollout)
-
-| Task | Source | Notes |
-|---|---|---|
-| Admin UI surface OR documented runbook for `user_feature_flags` toggling | IN-PX-41 | Studio SQL is fine for Joe; multi-user rollout wants either. |
-
-## Phase 6 — Launch
-
-Per strategy §7.2: v2 is complete. Build Android release APK, run pre-launch blockers register, two prototype users re-onboard. No cutover ceremony — v2 is just the next build of the app.
-
-| Task | Source |
+| Task | Notes |
 |---|---|
-| Run through every item in [pre-launch-blockers](pre-launch-blockers.md) | This wiki |
-| Generate Android release keystore + populate `signingConfigs.release` | apk-build-and-install runbook |
-| Bump `versionCode` + `versionName`, tag the release commit | apk-build-and-install runbook |
-| `username_available` rate-limit at gateway | IN-PX-29 |
-| Defence-in-depth in `extractUserIdFromJwt` | IN-PX-30 |
-| Property-level parity probe (golden output) | IN-PX-33 |
-| Cryptographic service-role JWT rotation | IN-XPS-004 — pending Supabase JWT-format secret keys or Edge auth refactor |
+| TanStack Query as the single server-state layer | QueryClient + `persistQueryClient` replaces bespoke TTL logic in `src/lib/api/cache.ts` + sessionStorage section caches. TTLs → `staleTime`/`gcTime` (TMDb 24h, OMDB 7d, SA 24h unchanged). Kills request dup (5 parallel calls per detail open) + waterfalls. Migration order, one hook per PR-sized chunk: `useContentDetail` → `useSectionData` → `useHomeContent` → `useSearch`/`useBrowse` → `useForYouContent` last (shrinks again in PLAT-3 — do the minimum). |
+| Code-splitting | `React.lazy` + Suspense per top-level page. **No router** (D5) — tab-state + Capacitor back-button stack stays. |
+| List virtualization | TanStack Virtual on WatchlistPage, Browse results grid, CalendarPage. |
+| Image lazy-loading | IntersectionObserver in `ImageSkeleton` + native `loading="lazy"`; LQIP blur-up from TMDb `w92`. Home eager-loads ~80 posters today. |
+| State cleanup | Small Zustand store (active tab, filters, watchlist ids, user services) + `memo()` on card/row primitives. Target: BrowsePage/DetailPage 13–15 props → ≤5. Absorbs the long-deferred IN-462 store idea. |
 
-## Phase 7 — Conversational discovery (post-v2)
+Acceptance: see [acceptance-gates](acceptance-gates.md) (≥30% eager-JS reduction, zero duplicate concurrent requests, 500-item watchlist scrolls clean, **no ranking behaviour change**).
 
-Built on top of v2 infrastructure. Phase Search V2 laid the groundwork — `card_impressions.metadata.{mode, query_hash, filter_set_hash}` is the data Phase 3 search-as-signal will consume. See [v3-conversational-discovery forward-planning page](../concepts/forward-planning/v3-conversational-discovery.md).
+## PLAT-2 — API edge & content proxy (gate: PLAT-1 merged)
 
-| Step | Notes |
+Brief §6; 1–2 weeks. Infrastructure locked: **Cloudflare Workers + Hono** (D2), free plan suffices at this stage.
+
+| Task | Notes |
 |---|---|
-| Search-as-signal Level 3 (Phase 3 pipeline) | IN-PX-45 — co-cluster queries, longer attribution windows, weight calibration vs held-out engagement, query-pattern detection. Level 1 (IN-PX-43, 60s/1.3× attribution boost) shipped 2026-05-14; Level 2 (IN-PX-44, query embedding directly into vector) is the intermediate step. |
-| Entity search (Phase 2 / Mode B) | Out of Search V2 scope per `videx-wiki/raw/forward-planning/roadmap-search-v2-entity-and-signal.md`. |
-| Spike Graphiti + Kuzu (embedded) | Validates OSS approach with zero infrastructure cost. |
-| Build batch ingestion job (matches mood rooms GitHub Actions cron pattern) | Re-uses Phase 4.5 cron infrastructure. |
-| Ship NL search on Browse | Replaces TMDb text-matching for queries like "dark comedy about a dysfunctional family". (Phase Search V2 Mode C is the embedding-based opt-in version of this; Phase 7 ships the full graph-traversal variant.) |
-| Ship recommendation explanation | Each For You row item carries traversable path. |
-| Ship conversational discovery surface | Mood rooms as mapping surface for vague queries. |
+| `workers/api/` Hono app + wrangler CI deploy | Folder stub created in REPO-1 (D6). |
+| Endpoints by duplication factor | `GET /v1/title/:type/:id` (TMDb + OMDB merged, s-maxage=86400 + SWR) first; then `/v1/discover`, `/v1/search`, `/v1/trending` (1–6h). |
+| Keys server-side | TMDb/OMDB keys → Worker secrets; `VITE_TMDB_API_KEY`/`VITE_OMDB_API_KEY` deleted; client ships only Supabase URL + anon key. |
+| Repoint client `queryFn`s | One-liners thanks to PLAT-1. Supabase content-cache reads stay client→Supabase for now. |
 
-## Time-triggered reviews
+## PLAT-3 — Single engine, server-side feed + cache (gate: PLAT-2 merged)
+
+Brief §7; 2–3 weeks. The ADR-011/ADR-012 supersession point — **new ADR required at cutover**. Only new recurring cost in the track: Workers Paid ~£4/mo.
+
+| Task | Notes |
+|---|---|
+| Port `render-foryou-rows` to a Worker route (`GET /v1/foryou`) | Imports `src/lib/recommendations-v2/` + `taste-v2/` directly — no mirror. Service-role Supabase from the Worker; user JWT verified. |
+| Preserve slider UX | Response = rows + compact scored-candidate payload so slider drags re-rank client-side instantly, no refetch. |
+| Feed cache | Workers KV/Cache API keyed `userId : taste_vector_updated_at : sliderHash`, TTL 15–30 min; vector updates naturally bust it. |
+| Batch recompute off the hot path | >24h-stale full taste recompute → scheduled job, never blocking a For You load. Also the natural home for IN-PX-57's SQL anti-join. |
+| **Deletions (the payoff)** | `_shared/recommendations-v2/` + `_shared/taste-v2/` mirrors, `shared-tree-drift` workflow, `foryou-parity` CI (one final validation run, then retire), `warmup-foryou`, the 1.5s-timeout fallback dance. LOC/CI deleted tracked in the phase summary as a first-class deliverable. |
+| Client pipeline | Kept as offline/error fallback for **one release post-cutover, then deleted** (D4). |
+
+## Phase 6 — Launch (parallel track, not part of E&P sequencing)
+
+Per strategy §7.2 + brief positioning: run the [pre-launch blockers register](pre-launch-blockers.md) (14 open at last refresh — headline: IN-XPS-014 UK solicitor review of Privacy Policy/ToS, hard blocker). Release keystore + `signingConfigs.release`, versionCode/Name bump, release tag. `username_available` rate-limit (IN-PX-29), `extractUserIdFromJwt` defence-in-depth (IN-PX-30), cryptographic service-role JWT rotation (IN-XPS-004, pending Supabase tooling). Apply `040_editor_notes.sql` before Phase 6 editorial features go live. IN-PX-50 (scheduled catalogue-gap backfill Edge Function).
+
+## ENG-2 — Learned re-ranker (data-gated; lands last)
+
+**Do not start before the gate: ≥5–10K impressions with ≥500 positive outcomes** in `v_training_examples` (real launch traffic — a model trained on two prototype users is noise). Brief §8.
+
+| Task | Notes |
+|---|---|
+| Logistic regression v1 over existing pipeline features | Position included at training for debias, dropped at serve. GBDT only if LR plateaus. |
+| Nightly training via GitHub Actions (HDBSCAN cron precedent) | Artifact = weights JSON in Supabase/KV; Stage-2 scorer loads it, falls back to 62.5/25/12.5 constants. |
+| Offline eval before any serve change | AUC/NDCG vs fixed weights on a held-out week; dated eval doc per house convention. |
+| Exploration CTR read | `exploration=true` impressions vs row baseline (ENG-1 tagging). |
+| Observability | Per-row CTR / save-rate dashboard (`supabase/queries/` pattern). |
+| Era refinements unlocked | Adaptive K (D3), recall@500 measurement at scale (carried from ENG-1), IN-PX-56 media_type decision if evals show the 0.8% noise matters. |
+
+## Standing / time-triggered
 
 | Trigger | Action |
 |---|---|
-| First month tick-over after Phase 0 | Verify pg_partman creates new partitions automatically (IN-XPS-003). |
-| 3 monthly mood room reclustering runs | Re-evaluate coverage (IN-459); revisit hybrid HDBSCAN+kmeans only if engagement data reveals under-served titles. |
+| Any time pre-launch (Joe-owned) | IN-PX-55: expand cluster rep lists to ~8–10 per cluster; re-run `eval:eng1` §A. IN-PX-40: author the 20-query semantic-eval fixture (gates `search_semantic` flag-flip beyond Joe). |
+| First month tick-over | Verify pg_partman auto-creates partitions (IN-XPS-003). |
+| 3 monthly mood-room recluster runs | Re-evaluate coverage (IN-459). |
 | `actions/setup-python` v6 ships | Upgrade workflow YAML (IN-460). |
-| May 2026 cron | Review `FORBIDDEN_WORDS` compound-noun carve-outs (IN-461). |
-| Quarterly | Refresh `platformPricing.ts` (IN-XPS-007); refresh service catalogue and provider IDs in `platforms.ts`. |
+| May 2026 cron *(overdue — check)* | Review `FORBIDDEN_WORDS` carve-outs (IN-461). |
+| Quarterly | Refresh `platformPricing.ts` (IN-XPS-007) + provider IDs in `platforms.ts`. |
 
-## Deprioritised / explicitly later
+## Explicitly later
 
-See [deferred items register](deferred-items.md).
+See [deferred items](deferred-items.md) — v2.5 cluster, v3/Phase 7 conversational discovery (untouched by the E&P track, still gated on the v2 metrics baseline), CF at ~10K MAU, two-tower at ~50K MAU.

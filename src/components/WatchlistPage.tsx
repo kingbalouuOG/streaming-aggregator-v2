@@ -193,8 +193,7 @@ export function WatchlistPage({
                 </span>
               </button>
               <AnimatePresence>
-                {showSortMenu && (
-                  <>
+                {showSortMenu ? <>
                     <motion.div
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -229,8 +228,7 @@ export function WatchlistPage({
                         );
                       })}
                     </motion.div>
-                  </>
-                )}
+                  </> : null}
               </AnimatePresence>
             </div>
             {/* View mode toggle */}
@@ -511,8 +509,7 @@ function GridCard({
           >
             {item.title}
           </h3>
-          {(item.year || item.genre) && (
-            <p
+          {(item.year || item.genre) ? <p
               className="mt-1 truncate"
               style={{
                 fontFamily: "var(--font-ui)",
@@ -526,11 +523,9 @@ function GridCard({
               }}
             >
               {[item.genre, item.year].filter(Boolean).join(" · ")}
-            </p>
-          )}
+            </p> : null}
         </div>
-        {tab === "watched" && onRate && (
-          <div className="flex items-center gap-1 shrink-0 mt-0.5">
+        {tab === "watched" && onRate ? <div className="flex items-center gap-1 shrink-0 mt-0.5">
             <motion.button
               onClick={(e) => { e.stopPropagation(); onRate(rating === 'up' ? null : 'up'); }}
               whileTap={{ scale: 0.8 }}
@@ -557,14 +552,12 @@ function GridCard({
             >
               <ThumbsDown className={`w-3 h-3 ${rating === 'down' ? 'fill-current' : ''}`} />
             </motion.button>
-          </div>
-        )}
+          </div> : null}
       </div>
 
       {/* Quick action overlay (on long-press / right-click) */}
       <AnimatePresence>
-        {showActions && (
-          <motion.div
+        {showActions ? <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -612,8 +605,7 @@ function GridCard({
             >
               Remove
             </button>
-          </motion.div>
-        )}
+          </motion.div> : null}
       </AnimatePresence>
     </motion.div>
   );
@@ -901,9 +893,8 @@ function SwipeableListCard({
                   color: "var(--fg-faint)",
                 }}
               >
-                {services[0] && <ServiceBadge service={services[0]} size="sm" />}
-                {inPlan && (
-                  <span
+                {services[0] ? <ServiceBadge service={services[0]} size="sm" /> : null}
+                {inPlan ? <span
                     style={{
                       background: "color-mix(in srgb, var(--primary) 18%, transparent)",
                       color: "#fff",
@@ -916,9 +907,8 @@ function SwipeableListCard({
                     }}
                   >
                     IN YOUR PLAN
-                  </span>
-                )}
-                {added && <span>{added}</span>}
+                  </span> : null}
+                {added ? <span>{added}</span> : null}
                 {item.rating != null && item.rating > 0 && (
                   <span>
                     <span style={{ color: "var(--star)" }}>★</span> {item.rating.toFixed(1)}
@@ -928,8 +918,7 @@ function SwipeableListCard({
             );
           })()}
           <div className="flex items-center gap-1.5 mt-1">
-            {tab === "watched" && onRate && (
-              <>
+            {tab === "watched" && onRate ? <>
                 <span className="text-muted-foreground text-[11px] mx-0.5">·</span>
                 <motion.button
                   onClick={(e) => { e.stopPropagation(); onRate(rating === 'up' ? null : 'up'); }}
@@ -949,8 +938,7 @@ function SwipeableListCard({
                 >
                   <ThumbsDown className={`w-3 h-3 ${rating === 'down' ? 'fill-current' : ''}`} />
                 </motion.button>
-              </>
-            )}
+              </> : null}
           </div>
         </div>
 
@@ -1043,8 +1031,7 @@ function EmptyState({
           ? "Bookmark shows and films as you browse — they'll land here, ready for tonight."
           : "Mark titles as watched once you've finished them; they collect here as a private archive."}
       </p>
-      {isWant && (
-        <button
+      {isWant ? <button
           type="button"
           onClick={onBrowse}
           className="inline-flex items-center gap-2 px-5 py-2.5"
@@ -1059,8 +1046,7 @@ function EmptyState({
         >
           <Plus className="w-4 h-4" />
           <span>Browse content →</span>
-        </button>
-      )}
+        </button> : null}
     </motion.div>
   );
 }

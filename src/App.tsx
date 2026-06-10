@@ -690,8 +690,7 @@ function AppContent() {
     <div className="size-full bg-background text-foreground overflow-hidden flex justify-center">
       <div className="w-full max-w-md h-full flex flex-col relative">
         {/* Pull-to-refresh indicator */}
-        {(pullDistance > 0 || isRefreshing) && !selectedItem && activeTab === "home" && (
-          <div
+        {(pullDistance > 0 || isRefreshing) && !selectedItem && activeTab === "home" ? <div
             className="absolute top-0 left-0 right-0 z-20 flex items-center justify-center pointer-events-none"
             style={{ height: pullDistance, transition: isPulling.current ? 'none' : 'height 0.3s ease' }}
           >
@@ -702,8 +701,7 @@ function AppContent() {
                 transform: `rotate(${pullDistance * 3}deg)`,
               }}
             />
-          </div>
-        )}
+          </div> : null}
 
         {/* Scrollable content. `safe-top` clears the notification bar
             inset since the page no longer carries a wordmark header. */}
@@ -1033,13 +1031,11 @@ function AppContent() {
                           />
                         ) : null,
                       )}
-                      {home.canLoadMoreGenreSpotlights && (
-                        <GenreSpotlightSentinel
+                      {home.canLoadMoreGenreSpotlights ? <GenreSpotlightSentinel
                           key={`spotlight-sentinel-${home.genreSpotlights.length}`}
                           onVisible={home.loadMoreGenreSpotlights}
                           loading={home.spotlightsLoading}
-                        />
-                      )}
+                        /> : null}
 
                     </motion.div>
                   )}

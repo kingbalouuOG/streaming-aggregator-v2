@@ -1,7 +1,7 @@
 /** @deprecated Replaced by useHomeContent.ts — kept for reference */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { discoverMovies, discoverTV } from '@/lib/api/tmdb';
-import { tmdbMovieToContentItem, tmdbTVToContentItem } from '@/lib/adapters/contentAdapter';
+import { tmdbMovieToContentItem, tmdbTVToContentItem, type TMDbContentResult } from '@/lib/adapters/contentAdapter';
 import { getHomeGenres } from '@/lib/storage/userPreferences';
 import { GENRE_NAMES, GENRE_NAME_TO_ID } from '@/lib/constants/genres';
 import { serviceIdsToProviderIds, providerIdsToServiceIds } from '@/lib/adapters/platformAdapter';
@@ -131,24 +131,24 @@ export function useContentService(providerIds: number[], filters?: FilterState) 
 
       // Build popular (first, no exclusion)
       const popular = await filterPaidOnly([
-        ...(popularMovies.data?.results || []).slice(0, 8).map((m: any) => tmdbMovieToContentItem(m)),
-        ...(popularTV.data?.results || []).slice(0, 8).map((t: any) => tmdbTVToContentItem(t)),
+        ...(popularMovies.data?.results || []).slice(0, 8).map((m: TMDbContentResult) => tmdbMovieToContentItem(m)),
+        ...(popularTV.data?.results || []).slice(0, 8).map((t: TMDbContentResult) => tmdbTVToContentItem(t)),
       ].sort(() => Math.random() - 0.5).slice(0, 10));
 
       const excludeSet = new Set<string>(popular.map((i) => i.id));
 
       // Highest rated (exclude popular)
       const highestRated = await filterPaidOnly(deduplicate([
-        ...(topMovies.data?.results || []).slice(0, 8).map((m: any) => tmdbMovieToContentItem(m)),
-        ...(topTV.data?.results || []).slice(0, 8).map((t: any) => tmdbTVToContentItem(t)),
+        ...(topMovies.data?.results || []).slice(0, 8).map((m: TMDbContentResult) => tmdbMovieToContentItem(m)),
+        ...(topTV.data?.results || []).slice(0, 8).map((t: TMDbContentResult) => tmdbTVToContentItem(t)),
       ].sort((a, b) => (b.rating || 0) - (a.rating || 0)), excludeSet).slice(0, 10));
 
       highestRated.forEach((i) => excludeSet.add(i.id));
 
       // Recently added (exclude popular + highest rated)
       const recentlyAdded = await filterPaidOnly(deduplicate([
-        ...(recentMovies.data?.results || []).slice(0, 8).map((m: any) => tmdbMovieToContentItem(m)),
-        ...(recentTV.data?.results || []).slice(0, 8).map((t: any) => tmdbTVToContentItem(t)),
+        ...(recentMovies.data?.results || []).slice(0, 8).map((m: TMDbContentResult) => tmdbMovieToContentItem(m)),
+        ...(recentTV.data?.results || []).slice(0, 8).map((t: TMDbContentResult) => tmdbTVToContentItem(t)),
       ], excludeSet).slice(0, 10));
 
       recentlyAdded.forEach((i) => excludeSet.add(i.id));
@@ -194,8 +194,8 @@ export function useContentService(providerIds: number[], filters?: FilterState) 
 
           const [movies, tv] = genreResults[i];
           const genreItems = await filterPaidOnly(deduplicate([
-            ...(movies.data?.results || []).slice(0, 10).map((m: any) => tmdbMovieToContentItem(m)),
-            ...(tv.data?.results || []).slice(0, 10).map((t: any) => tmdbTVToContentItem(t)),
+            ...(movies.data?.results || []).slice(0, 10).map((m: TMDbContentResult) => tmdbMovieToContentItem(m)),
+            ...(tv.data?.results || []).slice(0, 10).map((t: TMDbContentResult) => tmdbTVToContentItem(t)),
           ].sort(() => Math.random() - 0.5), excludeSet).slice(0, 15));
 
           if (genreItems.length > 0) {
@@ -208,9 +208,10 @@ export function useContentService(providerIds: number[], filters?: FilterState) 
       } catch (genreErr) {
         console.error('[ContentService] Genre rows failed (non-blocking):', genreErr);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('[ContentService] Load failed:', err);
-      setState((s) => ({ ...s, loading: false, error: err.message || 'Failed to load content' }));
+      const message = err instanceof Error && err.message ? err.message : 'Failed to load content';
+      setState((s) => ({ ...s, loading: false, error: message }));
     }
   }, [providerStr, filters?.contentType, [...(filters?.costs || [])].sort().join(','), filters?.services?.join(','), filters?.genres?.join(','), filters?.minRating]);
 

@@ -3,7 +3,7 @@ title: Parking lot — all IN-XXX entries
 type: register
 tags: [register, parking-lot, in-xxx, status]
 created: 2026-04-26
-updated: 2026-05-15
+updated: 2026-06-10
 sources:
   - raw/v2-strategy/Videx_v2_Implementation_Notes_Parking_Lot_v0.3.4.md
   - docs/v2/Videx_v2_Implementation_Notes_Parking_Lot_v0.7.md
@@ -50,11 +50,11 @@ Status legend: ✅ Incorporated · ⏳ Pending · ⚠ Partial · 🛑 Discharged
 | ID | Subject | Status |
 |---|---|---|
 | IN-101 | Validate row counts after backfill, not just schema | ✅ Incorporated |
-| IN-102 | Investigate existing `title_credits` sync scripts before rewriting | ✅ Incorporated (confirmed empty; left untouched) |
+| IN-102 | Investigate existing `title_credits` sync scripts before rewriting | ✅ Incorporated (confirmed empty; left untouched — table dropped by migration 046, REPO-1 2026-06-10, apply pending) |
 | IN-103 | Use existing TMDb append_to_response pattern for backfill | ✅ Incorporated |
 | IN-104 | Embedding input template must match eval template exactly | ⚠ Partial (Phase 1 task; columns now populated) |
 | IN-105 | Runtime backfill added to Phase 0.5 enrichment scope | ✅ Incorporated (81.4% post-fix for `runtime: 0` sentinel) |
-| IN-106 | `title_genres` via static TMDb genre mapping | ✅ Incorporated (table left empty) |
+| IN-106 | `title_genres` via static TMDb genre mapping | ✅ Incorporated (table left empty — dropped by migration 046, REPO-1 2026-06-10, apply pending) |
 | IN-107 | Phase 0.5 sync split — backfill script + enrichment Edge Function | ✅ Incorporated |
 
 ### Cross-phase deviations from Phase 0/0.5
@@ -120,7 +120,7 @@ Status legend: ✅ Incorporated · ⏳ Pending · ⚠ Partial · 🛑 Discharged
 | IN-461 | Review `FORBIDDEN_WORDS` compound-noun carve-outs after May cron | ⏳ May 2026 review |
 | IN-462 | For You tab-switch preservation | ⏳ Re-targeted to Phase 6 (paired with IN-468 / IN-469 — designing the store shape pre-telemetry risks rework) |
 | IN-463 | LLM thematic labels for anchored rooms | ✅ Incorporated (Phase 4.5 fast-follow — `mood_rooms.anchor_label_text`, `label-anchor-room` Edge Function, migration 034) |
-| IN-465 | Backfill ~3,807 missing tmdb_ids | ✅ Incorporated (Phase 5.5, 2026-05-15) — `scripts/backfill_missing_titles.ts` executed: 5,446 missing at run-time → 2,698 upserted / 2,748 TMDb-404 (deleted stubs stay missing forever) / 0 errored. `titles` grew 20,140 → 22,838. Investigation `docs/v2/investigations/in-465-catalogue-sync-gap.md` diagnosed Prime back-catalogue + TMDb `/discover` 500-page cap as root cause; pipeline-split finding (`daily-content-sync` cron never writes `titles`) means the backfill script's left-join query IS the recurring fix. Phase 6 IN-PX-50 wraps in scheduled Edge Function. |
+| IN-465 | Backfill ~3,807 missing tmdb_ids | ✅ Incorporated (Phase 5.5, 2026-05-15) — `scripts/enrichment/backfill_missing_titles.ts` executed: 5,446 missing at run-time → 2,698 upserted / 2,748 TMDb-404 (deleted stubs stay missing forever) / 0 errored. `titles` grew 20,140 → 22,838. Investigation `docs/v2/investigations/in-465-catalogue-sync-gap.md` diagnosed Prime back-catalogue + TMDb `/discover` 500-page cap as root cause; pipeline-split finding (`daily-content-sync` cron never writes `titles`) means the backfill script's left-join query IS the recurring fix. Phase 6 IN-PX-50 wraps in scheduled Edge Function. |
 | IN-466 | Server-side For You first paint | ✅ Incorporated (`render-foryou-rows` Edge Function, ADR-012) |
 | IN-467 | Mirror tree consolidation evaluation | ⏳ Pending (criteria partially superseded by IN-PX-32) |
 | IN-468 | SWR cache for For You | ⏳ Pending (warm-path p95 telemetry input needed) |
@@ -173,7 +173,7 @@ Quality / hardening items (IN-PX-21..33) and pre-launch legal blockers (IN-PX-34
 | IN-PX-30 | Defence-in-depth in `extractUserIdFromJwt` | ⏳ Filed (Phase 6 — pre-public-launch) |
 | IN-PX-31 | Trim `supabase/cron/*.sql` source-of-truth confusion | ✅ Incorporated (Phase 5.5). Three SQL files deleted; migration 039 is sole source; `supabase/cron/README.md` documents the now-empty directory. |
 | IN-PX-32 | Mirror tree consolidation (`_shared/` as source-of-truth for leaf modules) | ⏳ Filed (Phase 6 — no drift incidents recorded; refactor warrants its own phase) |
-| IN-PX-33 | Property-level parity probe (golden output) | ✅ Incorporated (Phase 5.5). `--update-golden` flag on `_inspect_foryou_parity.mjs` + JWT refresh script + activation (5 secrets + golden seeded for test user). |
+| IN-PX-33 | Property-level parity probe (golden output) | ✅ Incorporated (Phase 5.5). `--update-golden` flag on the parity probe (now `scripts/test/foryou-parity-probe.mjs` — renamed from `scripts/_inspect_foryou_parity.mjs` in REPO-1) + JWT refresh script + activation (5 secrets + golden seeded for test user). |
 | IN-PX-34 | Privacy Policy text + functional legal links | ✅ Incorporated (Phase 5.5). `docs/legal/privacy-policy.md` + `terms-of-service.md` authored with mandatory lawyer-vetting caveat footer. Rendered via `react-markdown` from `?raw` Vite imports. Signup-flow spans → buttons. Pre-launch solicitor review filed as new IN-XPS-014. |
 | IN-PX-35 | Functional "Download my data" — GDPR Article 20 | ✅ Incorporated (Phase 5.5). Migration 043 `export_user_data` SECURITY DEFINER RPC. Frontend wires `@capacitor/filesystem` Documents directory write on native, Blob download on web. |
 
@@ -182,7 +182,7 @@ Quality / hardening items (IN-PX-21..33) and pre-launch legal blockers (IN-PX-34
 | ID | Subject | Status |
 |---|---|---|
 | IN-XPS-014 | UK solicitor review of Privacy Policy + Terms of Service | ⏳ Filed (Phase 6 — **hard pre-launch blocker** for App Store / Google Play submission). The Phase 5.5 drafts are descriptive of current Videx behaviour but not lawyer-vetted. Placeholders `[your-contact-email-address — TBC]` + `[your-UK-postal-address — TBC]` left visible to signal not-launch-ready. Joe's decision pre-launch: email-only (legally sufficient under UK GDPR) vs. email + registered office address service (~£30-50/yr) vs. email + PO Box. Personal home address advised against. |
-| IN-PX-50 | Scheduled catalogue-gap backfill as Edge Function | ⏳ Filed (Phase 6 — automation, not launch-gating). Wraps `scripts/backfill_missing_titles.ts` logic in a new Edge Function `backfill-missing-titles` with pg_cron schedule (weekly or monthly). Closes the recurring half of IN-465 — until then Joe runs the script manually as monthly maintenance. Required: new Edge Function under `supabase/functions/backfill-missing-titles/`, new migration adding cron schedule, TMDb API key threaded via Vault (same pattern as migration 039). |
+| IN-PX-50 | Scheduled catalogue-gap backfill as Edge Function | ⏳ Filed (Phase 6 — automation, not launch-gating). Wraps `scripts/enrichment/backfill_missing_titles.ts` logic in a new Edge Function `backfill-missing-titles` with pg_cron schedule (weekly or monthly). Closes the recurring half of IN-465 — until then Joe runs the script manually as monthly maintenance. Required: new Edge Function under `supabase/functions/backfill-missing-titles/`, new migration adding cron schedule, TMDb API key threaded via Vault (same pattern as migration 039). |
 | IN-PX-51 | Hook `clearEmbeddingCache` into `onAuthStateChange` SIGNED_OUT | ✅ Incorporated (Phase 5.5 review-pass fixup, commit `e9c8560`). Surfaced by `kieran-typescript-reviewer` — original C5 implementation only fired on manual signOut callback, missing JWT expiry / multi-tab / server-side invalidation. UserId namespacing in the cache key prevented cross-user correctness contamination; this closes the docstring contract gap. |
 | IN-PX-52 | Regenerate Edge `_shared/database.types.ts` for typed RPC calls | ⏳ Filed (Phase 6 — non-launch-blocking). The Edge `_shared/` tree doesn't have generated types; `render-foryou-rows/index.ts` still uses `(client.from('titles') as any).select(...)` patterns. `<Database>` generic not applied to Edge `createClient`. Current casts are correctness-equivalent, just type-unsafe. |
 | IN-PX-53 | Compress embedding cache or cap to top-100 for Safari mobile | ⏳ Filed (Phase 6+ — only impacts Safari mobile prototype users; zero today). At 200 candidates × 1536 dims, localStorage write hits ~5MB which is Safari mobile's quota ceiling. Quota error is swallowed correctly (falls through to network fetch), but cache hit rate silently degrades. Options: cap top-100 / base64-encode ArrayBuffer / move to IndexedDB. |
@@ -222,11 +222,21 @@ Surfaced during the end-to-end visual review against the design reference. UI sh
 | IN-V3-002 | Taste-v2 surface for hero match% + per-title mood signals — match% wires to ranker output when present, mood is hardcoded "contemplative" | ⏳ Filed (IN YOUR PLAN client-side signal: ✅ wired) |
 | IN-V3-003 | Wire "Refine by feeling" mood refiner to taste-v2 — UI complete and hidden behind `MOOD_REFINER_ENABLED=false` flag in `ForYouPage.tsx` pending the data-layer work | ⏳ Filed |
 
+## Phase ENG-1 follow-ups (filed 2026-06-10 at close-out)
+
+Recorded in the docs parking lot v0.7 ENG-1 section; see `docs/v2/phase-summaries/phase-eng-1-summary.md` §5.
+
+| ID | Subject | Status |
+|---|---|---|
+| IN-PX-55 | Cluster rep-list curation breadth — 13/16 onboarding clusters define only 2–4 representatives; tmdb 273481 missing. Bounds the synthetic recall eval. | ⏳ Filed (Joe-owned) |
+| IN-PX-56 | `card_impressions` lacks `media_type` — movie/TV `content_id` collision class affects the `v_training_examples` join (migration 045). Pairs with IN-458. | ⏳ Filed |
+| IN-PX-57 | Exploration-slot seen-set recent-1000 cap — revisit; likely absorbed by PLAT-3. | ⏳ Filed |
+
 ## Counts
 
-- Total entries: **97** (Pre-PRE 1 + P0 13 + P0.5 7 + P0/0.5 cross 6 + P1 5 + P2 3 + P3 3 + P4 4 + P4.5 16 + OB 6 + XPS 14 + PX-21..35 15 + PX-36..38 3 + PX-39..45 7 + PX-50..54 5 + V3-001..003 3).
+- Total entries: **100** (Pre-PRE 1 + P0 13 + P0.5 7 + P0/0.5 cross 6 + P1 5 + P2 3 + P3 3 + P4 4 + P4.5 16 + OB 6 + XPS 14 + PX-21..35 15 + PX-36..38 3 + PX-39..45 7 + PX-50..54 5 + PX-55..57 3 + V3-001..003 3).
 - ✅ Incorporated: **59** (Phase 5.5 close 2026-05-15 added: IN-PX-21..28 except 29/30/32, IN-PX-31, IN-PX-33, IN-PX-34, IN-PX-35, IN-PX-51, IN-XPS-001, IN-XPS-006, IN-465; bumped IN-XPS-012 from partial → ✅ on parity activation).
-- ⏳ Pending / Not yet incorporated: **27** (Phase 5.5 added: IN-XPS-014, IN-PX-50, IN-PX-52, IN-PX-53, IN-PX-54; reclassified IN-458, IN-462 to Phase 6).
+- ⏳ Pending / Not yet incorporated: **30** (Phase 5.5 added: IN-XPS-014, IN-PX-50, IN-PX-52, IN-PX-53, IN-PX-54; reclassified IN-458, IN-462 to Phase 6; ENG-1 close 2026-06-10 added IN-PX-55, IN-PX-56, IN-PX-57).
 - ⚠ Partial: **2** (IN-104, IN-XPS-004 — IN-XPS-001 closed Phase 5.5).
 - 🛑 Discharged: **1** (IN-260).
 - 🅿 Parked: **6** (IN-PX-06, IN-261, IN-XPS-008, IN-XPS-009, IN-OB-006, IN-PX-42).

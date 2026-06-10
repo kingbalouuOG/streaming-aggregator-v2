@@ -11,19 +11,27 @@ const omdbClient = axios.create({
   timeout: 10000,
 });
 
-const handleOMDbError = (error: any): Error => {
-  if (error.response) {
-    const { status, data } = error.response;
+/** Minimal axios-error shape — only the fields this handler reads. */
+interface OMDbAxiosError {
+  response?: { status: number; data?: { Error?: string } };
+  request?: unknown;
+  message?: string;
+}
+
+const handleOMDbError = (error: unknown): Error => {
+  const err = error as OMDbAxiosError;
+  if (err.response) {
+    const { status, data } = err.response;
     const message = data?.Error || 'OMDb API error';
     switch (status) {
       case 401: return new Error('Invalid OMDb API key. Please check your configuration.');
       case 404: return new Error('Movie/show not found in OMDb database.');
       default: return new Error(`OMDb API Error: ${message}`);
     }
-  } else if (error.request) {
+  } else if (err.request) {
     return new Error('Network error. Please check your internet connection.');
   }
-  return new Error(error.message || 'An unexpected error occurred.');
+  return new Error(err.message || 'An unexpected error occurred.');
 };
 
 export interface RatingsData {

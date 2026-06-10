@@ -20,6 +20,33 @@ export interface WatchlistItemMetadata {
   originalLanguage: string | null;
 }
 
+/**
+ * Loose metadata input accepted by addToWatchlist — callers pass either
+ * the stored camelCase shape or a raw TMDb snake_case object. Only the
+ * fields actually read during normalization are declared.
+ */
+export interface WatchlistMetadataInput {
+  title?: string;
+  name?: string;
+  posterPath?: string | null;
+  poster_path?: string | null;
+  backdropPath?: string | null;
+  backdrop_path?: string | null;
+  overview?: string;
+  releaseDate?: string;
+  release_date?: string;
+  first_air_date?: string;
+  voteAverage?: number;
+  vote_average?: number;
+  genreIds?: number[];
+  genre_ids?: number[];
+  runtime?: number | null;
+  numberOfSeasons?: number | null;
+  number_of_seasons?: number | null;
+  originalLanguage?: string | null;
+  original_language?: string | null;
+}
+
 export interface WatchlistItem {
   id: number;
   type: 'movie' | 'tv';
@@ -88,13 +115,13 @@ export const isInWatchlist = async (id: number, type: string): Promise<boolean> 
   return (await getWatchlistItem(id, type)) !== null;
 };
 
-export const addToWatchlist = async (id: number, type: 'movie' | 'tv', metadata: any, status: 'want_to_watch' | 'watched' = 'want_to_watch'): Promise<WatchlistItem> => {
+export const addToWatchlist = async (id: number, type: 'movie' | 'tv', metadata: WatchlistMetadataInput, status: 'want_to_watch' | 'watched' = 'want_to_watch'): Promise<WatchlistItem> => {
   if (isSupabaseActive()) {
     try {
       // Check for existing item first — if exists, update instead
       const existing = await supa.supaGetWatchlistItem(id, type);
       if (existing) {
-        const updated = await supa.supaUpdateWatchlistItem(id, type, { status, metadata });
+        const updated = await supa.supaUpdateWatchlistItem(id, type, { status, metadata: metadata as WatchlistItemMetadata });
         invalidateCaches();
         if (DEBUG) console.log('[Watchlist] Updated in Supabase:', metadata?.title || metadata?.name);
         return updated!;
@@ -112,7 +139,7 @@ export const addToWatchlist = async (id: number, type: 'movie' | 'tv', metadata:
   const existingIndex = watchlist.items.findIndex((item) => item.id === id && item.type === type);
 
   if (existingIndex >= 0) {
-    return (await updateWatchlistItem(id, type, { status, metadata }))!;
+    return (await updateWatchlistItem(id, type, { status, metadata: metadata as WatchlistItemMetadata }))!;
   }
 
   const now = Date.now();

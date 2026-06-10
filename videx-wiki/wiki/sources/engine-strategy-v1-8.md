@@ -3,12 +3,13 @@ title: Source — Recommendation Engine v2 Strategy v1.8
 type: source
 tags: [strategy, recommendation-engine, v2, edge-functions]
 created: 2026-04-30
-updated: 2026-04-30
+updated: 2026-06-10
 supersedes:
   - wiki/sources/engine-strategy-v1-6-3.md
 sources:
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.8.md
 related:
+  - wiki/sources/ep-hardening-brief-v0-2.md
   - wiki/concepts/architecture/two-surface-architecture.md
   - wiki/concepts/architecture/recommendation-pipeline.md
   - wiki/concepts/architecture/for-you-surface.md
@@ -20,7 +21,7 @@ related:
 
 # Source: Recommendation Engine v2 Strategy (v1.8)
 
-Author: Head of Strategy & Engineering with Joe. Date: April 2026. Most cross-referenced doc in the v2 set.
+Author: Head of Strategy & Engineering with Joe. Date: April 2026. Most cross-referenced doc in the v2 set. Raw snapshot landed 2026-06-10 (page predates it — created from the live docs/ copy at Phase 5 kickoff). v1.8 remains current: the [E&P Hardening Brief v0.2](ep-hardening-brief-v0-2.md) cites it as "engine ground truth" and layers the ENG/PLAT phases on top without bumping it; engine-behaviour changes since (multi-interest, avoid set, exploration) are recorded in the ENG-1 phase docs, not a strategy bump.
 
 ## v1.8 changes (load-bearing)
 

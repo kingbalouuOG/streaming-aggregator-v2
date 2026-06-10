@@ -67,8 +67,7 @@ export function ReportSheet({
 
   return (
     <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center">
+      {isOpen ? <div className="fixed inset-0 z-[100] flex items-end justify-center">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -281,7 +280,7 @@ export function ReportSheet({
                   cursor: canSubmit ? "pointer" : "not-allowed",
                 }}
               >
-                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 Submit Report
               </button>
             </div>
@@ -291,8 +290,7 @@ export function ReportSheet({
             .no-scrollbar::-webkit-scrollbar { display: none; }
             .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
           `}</style>
-        </div>
-      )}
+        </div> : null}
     </AnimatePresence>
   );
 }

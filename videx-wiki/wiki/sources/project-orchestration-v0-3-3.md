@@ -3,7 +3,7 @@ title: Source — Project Orchestration v0.3.3
 type: source
 tags: [orchestration, infrastructure, branching, migrations]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-06-10
 sources:
   - raw/v2-strategy/Videx_v2_Project_Orchestration_v0.3.3.md
 related:
@@ -17,6 +17,8 @@ related:
 ---
 
 # Source: Project Orchestration v0.3.3
+
+> Superseded by [Project Orchestration v0.5](project-orchestration-v0-5.md) (2026-04-30); docs source of truth is now v0.8 (`docs/v2/Videx_v2_Project_Orchestration_v0.8.md` — §3.4 is the authoritative migration applied-status table).
 
 Defines version control, environment setup, and orchestration for the v2 build. Sister doc to the strategy doc; mirrors strategy version log.
 

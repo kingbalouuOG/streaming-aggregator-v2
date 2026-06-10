@@ -84,8 +84,7 @@ export function BottomNav({ activeTab, onTabChange, watchlistCount = 0 }: Bottom
                 >
                   <Glyph className="w-6 h-6" />
                 </motion.div>
-                {showDot && (
-                  <motion.span
+                {showDot ? <motion.span
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     className="absolute -top-0.5 -right-1 block"
@@ -99,8 +98,7 @@ export function BottomNav({ activeTab, onTabChange, watchlistCount = 0 }: Bottom
                       boxShadow: "0 0 0 1.5px var(--surface)",
                     }}
                     aria-label="New releases"
-                  />
-                )}
+                  /> : null}
               </div>
               <span
                 className="whitespace-nowrap"

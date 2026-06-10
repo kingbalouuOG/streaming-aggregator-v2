@@ -150,8 +150,7 @@ export function MagazineHero({
             {kicker}
           </span>
         </div>
-        {statusPill && (
-          <div
+        {statusPill ? <div
             className="inline-flex items-center px-3 py-1 pointer-events-auto"
             style={{
               borderRadius: "var(--r-pill)",
@@ -166,20 +165,17 @@ export function MagazineHero({
             }}
           >
             {statusPill}
-          </div>
-        )}
+          </div> : null}
       </div>
 
       {/* Top-right: primary service badge — full-bleed, no chip
           wrapper, soft drop-shadow halo lifts it off the poster. */}
-      {primaryService && (
-        <div
+      {primaryService ? <div
           className="absolute top-4 right-4 inline-flex"
           style={{ filter: "var(--badge-glow)" }}
         >
           <ServiceBadge service={primaryService} size="md" />
-        </div>
-      )}
+        </div> : null}
 
       {/* Title block — bottom-aligned */}
       <div
@@ -201,8 +197,7 @@ export function MagazineHero({
         >
           {item.title}
         </h1>
-        {standfirst && (
-          <p
+        {standfirst ? <p
             className="line-clamp-3"
             style={{
               fontFamily: "var(--font-ui)",
@@ -214,17 +209,14 @@ export function MagazineHero({
             }}
           >
             {standfirst}
-          </p>
-        )}
+          </p> : null}
 
         {/* CTA row — Play pill + bookmark + info */}
-        {showCta && (
-          <div
+        {showCta ? <div
             className="flex items-center gap-2 mt-2 pointer-events-auto"
             style={{ textShadow: "none" }}
           >
-            {primaryService && (
-              <button
+            {primaryService ? <button
                 type="button"
                 onClick={(e) => { stop(e); onSelect?.(item); }}
                 className="inline-flex items-center gap-2 px-4 py-2.5"
@@ -239,10 +231,8 @@ export function MagazineHero({
               >
                 <Play className="w-4 h-4" fill="#0a0a0f" strokeWidth={0} />
                 <span>Play on {serviceLabels[primaryService] ?? primaryService}</span>
-              </button>
-            )}
-            {onToggleBookmark && (
-              <button
+              </button> : null}
+            {onToggleBookmark ? <button
                 type="button"
                 onClick={(e) => { stop(e); onToggleBookmark(item); }}
                 className="inline-flex items-center justify-center w-9 h-9"
@@ -257,10 +247,8 @@ export function MagazineHero({
                 aria-label={bookmarked ? "Remove bookmark" : "Add bookmark"}
               >
                 <Bookmark className="w-4 h-4" fill={bookmarked ? "#fff" : "none"} strokeWidth={2} />
-              </button>
-            )}
-            {onMoreInfo && (
-              <button
+              </button> : null}
+            {onMoreInfo ? <button
                 type="button"
                 onClick={(e) => { stop(e); onMoreInfo(item); }}
                 className="inline-flex items-center justify-center w-9 h-9"
@@ -275,10 +263,8 @@ export function MagazineHero({
                 aria-label="More info"
               >
                 <Info className="w-4 h-4" strokeWidth={2} />
-              </button>
-            )}
-          </div>
-        )}
+              </button> : null}
+          </div> : null}
 
         {/* Meta line — year · runtime · genre · ★ rating · IN YOUR PLAN */}
         <div
@@ -289,8 +275,7 @@ export function MagazineHero({
             color: "rgba(255,255,255,0.72)",
           }}
         >
-          {inYourPlan && (
-            <span
+          {inYourPlan ? <span
               className="inline-flex items-center px-2 py-0.5"
               style={{
                 background: "rgba(232, 93, 37, 0.18)",
@@ -304,8 +289,7 @@ export function MagazineHero({
               }}
             >
               IN YOUR PLAN
-            </span>
-          )}
+            </span> : null}
           {/* Build meta segments first, then join with `·` so we never
               render a dangling separator when leading fields are
               absent (year/runtime/genre may all be optional). */}

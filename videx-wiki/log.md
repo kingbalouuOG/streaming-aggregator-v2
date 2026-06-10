@@ -333,3 +333,68 @@ Page count delta: 119 → 120 (+1 `phase-5-5.md`).
 - Updated: wiki/entities/codebase/migrations.md (rows 044 + 045; corrected the 040 row — number consumed by unapplied editor_notes, IN-458 renumbers; new note: ledger has gaps, never `db push`, orchestration §3.4 is authoritative)
 - No new pages; index.md unchanged
 - Sources cited at docs/v2/phase-summaries/ (raw/ snapshots pending Joe's next drop per AGENTS.md)
+
+## [2026-06-10] lint | REPO-1 hygiene pass
+Link audit: 326 relative markdown links checked across index.md + wiki/** (127 pages). 1 broken link found and fixed; 0 broken after pass.
+
+Broken links fixed:
+- wiki/concepts/operations/phase-history.md — Phase 4.5 row linked `../../../docs/v2/phase-summaries/phase-4-and-4.5-summary.md` (one `../` short, resolved inside the vault); corrected to `../../../../`. The REPO-1 renames (docs/v3-design → docs/design, Phase_Search_V2 briefs → docs/design/search/, parity probe → scripts/test/foryou-parity-probe.mjs, backfill script → scripts/enrichment/, eval docs → docs/v2/phase-summaries/) broke NO markdown link targets — they appear only in prose, almost entirely in read-only raw/ snapshots and historical phase pages.
+
+Contradictions resolved (pages edited):
+- wiki/entities/codebase/database-schema.md — title_genres/title_credits rows no longer claim "forward compatibility"; both marked as dropped by migration 046 (REPO-1, written 2026-06-10, NOT yet applied). Added a post-032 changes note (033/034/036/040/041/044/045/046) so the as-of-032 snapshot stops silently misrepresenting current schema.
+- wiki/entities/codebase/migrations.md — row 046 added (drop title_genres + title_credits; in repo, not applied; explicit-Joe apply). db-push warning extended to cover 046. REPO-1 note added.
+- wiki/registers/deferred-items.md — "Drop title_genres and title_credits" flipped to done (migration 046 written; apply pending).
+- wiki/concepts/decisions/adr-008-static-genre-mapping.md — "remains as a future hook" consequence struck and superseded by the 046 drop; decision itself (static genre mapping) stands.
+- wiki/registers/parking-lot.md — IN-102/IN-106 annotated with the 046 drop; IN-PX-33 path updated to scripts/test/foryou-parity-probe.mjs (REPO-1 rename); NEW ENG-1 section added (IN-PX-55/56/57 were missing from the register despite being filed at ENG-1 close); counts refreshed 97 → 100 total, ⏳ 27 → 30.
+- wiki/registers/cheatsheet.md — was frozen at 2026-04-26 ("Phase 5 not started", migrations ending at 032). Phase map now covers 4.5 (full migration set), 5, v3 redesign, Search V2, 5.5, ENG-1, REPO-1 (in progress); migration→phase table extended 033–046; Stage 2 weights table updated (real contextual scorer since Phase 5, MMR, ENG-1 avoid-set + exploration slots); cron schedule rows no longer cite the deleted supabase/cron/*.sql files (migration 039 sole source since 5.5); locked decisions updated (046 drop, multi-interest K ≤ 3).
+- wiki/concepts/operations/phase-history.md — ENG-1 row added (multi-interest centroids / avoid set / exploration slot / training extract; migrations 044+045; closed 2026-06-10).
+- wiki/entities/codebase/rpcs.md — delete_own_account and export_user_data sections updated: migration 044 extended both to cover the new user_interest_centroids table (9 user-scoped tables, not 8).
+- wiki/concepts/operations/eval-harness.md — output convention now points at docs/v2/phase-summaries/ (REPO-1 consolidation); ENG-1 eval harness section added (npm run eval:eng1).
+- wiki/concepts/operations/phase-5-5.md — dated correction note on the vitest-rig claim that bespoke `npm run test:search-*` invocations were kept: REPO-1 retired the npx-tsx test:* scripts; `npm test` is the single test entry.
+
+Orphan pages: 3 found, all wiki/sources/ successor pages with zero inbound links (index.md still lists only their predecessors): engine-strategy-v1-8.md, implementation-notes-parking-lot-v0-5.md, project-orchestration-v0-5.md. Fixed without touching index.md (per pass constraints) by adding "Superseded by …" forward links on the three predecessor pages. Consider adding the successors to index.md at the next ingest.
+
+Flagged for human (not fixed — register-wide refreshes are ingest-scale, not lint-scale):
+- wiki/registers/next-steps.md — still framed as "post Phase Search V2 / Phase 5.5 not started"; superseded by the E&P Hardening track approved 2026-06-10 (ENG-1 → REPO-1 → PLAT-1/2/3 → launch → ENG-2). Needs a rebuild against the track brief.
+- wiki/registers/deferred-items.md — beyond the 046 row fixed above, the "Phase 5 (locked but not started)" section is stale (contextual scorer + MMR shipped in Phase 5; IN-458/IN-462 re-targeted to Phase 6) and counts predate Phases 5–ENG-1.
+- wiki/registers/open-questions.md, wiki/registers/acceptance-gates.md, wiki/registers/README.md — untouched since 2026-04-26; need a refresh pass against Phases 5 → ENG-1.
+- wiki/entities/codebase/database-schema.md — interim post-032 note added, but the page wants a full re-snapshot (human refresh of raw/codebase-snapshots/database-schema-snapshot.md, then re-ingest).
+- wiki/concepts/operations/phase-history.md "Realistic timeline note" still says "Actuals through Phase Search V2" — left as-is (narrative), refresh at next ingest if desired.
+
+raw/ staleness: expected and out of scope — raw/ snapshots lag docs/ (no ENG-1/REPO-1 snapshots yet; old paths in raw/ prose); re-snapshot is human-owned.
+
+Pages edited (13, all `updated:` bumped to 2026-06-10): database-schema.md, migrations.md, rpcs.md, deferred-items.md, parking-lot.md, cheatsheet.md, adr-008-static-genre-mapping.md, phase-history.md, eval-harness.md, phase-5-5.md, sources/engine-strategy-v1-6-3.md, sources/implementation-notes-parking-lot-v0-3-4.md, sources/project-orchestration-v0-3-3.md. index.md NOT touched (no broken links there).
+
+## [2026-06-10] ingest | REPO-1 raw re-snapshot
+Joe dropped refreshed snapshots into raw/ (E&P brief v0.2, orchestration v0.8, strategy v1.8, parking lot v0.7, composition v0.4, eight phase-summary files, two 2026-06-10 plans, regenerated database-schema snapshot). This ingest is the ingest-scale work the same-day lint pass deferred.
+
+New pages (10):
+- wiki/sources/ep-hardening-brief-v0-2.md — the approved E&P track (most important new source: phase sequence + D1–D6 + cost impact + out-of-scope list)
+- wiki/sources/phase-eng-1-summary.md
+- wiki/sources/phase-repo-1-summary.md
+- wiki/sources/eng1-eval-2026-06-10.md — authoritative ENG-1 gate results
+- wiki/sources/project-orchestration-v0-8.md — supersedes the orphaned v0-5 successor page (chain: v0.3.3 → v0.5 → v0.8; v0.6/v0.7 never snapshotted)
+- wiki/sources/implementation-notes-parking-lot-v0-7.md — supersedes v0-5 (v0.6 never snapshotted); carries the ENG-1 follow-ups section (IN-PX-55/56/57)
+- wiki/sources/home-foryou-composition-hypothesis-v0-4.md — supersedes v0-3 (anchored-rooms flip)
+- wiki/concepts/operations/phase-eng-1.md — per-phase page (phase-5-5 template)
+- wiki/concepts/operations/phase-repo-1.md — per-phase page
+
+Register rebuilds (the four flagged by the lint pass):
+- wiki/registers/next-steps.md — rebuilt around the E&P track: REPO-1 close-out (merge only — 046 applied, snapshots dropped) → PLAT-1 (TanStack Query/code-split/virtualization) → PLAT-2 (Workers+Hono proxy) → PLAT-3 (single engine + feed cache + ADR-011/012 supersession) → Phase 6 launch (parallel) → ENG-2 (data-gated). Sources: brief §2/§5–§8 + orchestration v0.8 §11.
+- wiki/registers/deferred-items.md — full refresh vs phases 5 → REPO-1: new "Scheduled by the E&P track" bucket (client-pipeline deletion at PLAT-3+1 per D4, adaptive K, IN-PX-56/57, IN-462 → PLAT-1, IN-467/IN-PX-32 → superseded by PLAT-3); "Done since last refresh" section (046 drop DONE+applied, contextual scorer, MMR, Database generic, IN-465, negative-weights removal); CF 10K MAU + two-tower 50K MAU reaffirmed per brief §11; two new discharged items (LLM-as-ranker, RN rewrite); counts re-bucketed.
+- wiki/registers/open-questions.md — resolved sections added: E&P brief §9 D1–D6, ENG-1 plan Q1–Q4 + τ/γ from the eval, earlier-phase resolutions (contextual scorer, Database generic, For You perf path). Still-open re-grouped (engine/data, platform/ops, product) incl. new items: exploration CTR (ENG-2), recall@500 carried forward, τ-after-IN-PX-55, Workers CPU-cap headroom. One ⚠ unverified note on residual dwell-negative weighting.
+- wiki/registers/acceptance-gates.md — E&P gates added at top: ENG-1 eval gate PASSED (coverage 3≥2, parity, γ sweep, τ; recall carried), REPO-1 §4.5 acceptance MET (146 tests, any 72→0, 0 contradictions), PLAT-1 §5.3 / PLAT-2 §6.4 / PLAT-3 §7.3 pending criteria, ENG-2 data gate ≥5–10K impressions / ≥500 positive outcomes.
+
+Updated pages:
+- wiki/entities/codebase/database-schema.md — fully rebuilt from the regenerated snapshot (live production pull, post-046); interim "as of 032" note retired.
+- wiki/entities/codebase/migrations.md — 046 row flipped to ✅ applied (evidence: post-046 schema snapshot); REPO-1 note updated.
+- wiki/concepts/operations/phase-history.md — REPO-1 row added; ENG-1 row link → wiki/concepts/operations/phase-eng-1.md; sources moved to raw/ paths; timeline note extended.
+- wiki/sources/engine-strategy-v1-8.md — raw snapshot now exists; noted v1.8 stays current under the E&P brief; linked to ep-hardening-brief page.
+- wiki/sources/project-orchestration-v0-5.md, implementation-notes-parking-lot-v0-5.md, home-foryou-composition-hypothesis-v0-3.md — "Superseded by …" headers added.
+- wiki/sources/phase-summaries.md — table extended (5.5, ENG-1, ENG-1 eval, REPO-1); docs/ paths → raw/.
+- wiki/sources/plans.md — the two 2026-06-10 plans added (ENG-1, REPO-1) with Q&A resolutions.
+- index.md — added: 2 operations phase pages + phase-search-v2 (was missing), ADR-012/ADR-013 (were missing), 7 new source pages, the 3 formerly-orphaned successor source pages (engine-strategy-v1-8, project-orchestration-v0-5, implementation-notes-parking-lot-v0-5), supersession annotations on the chains; next-steps register description refreshed.
+
+Notable fact established this ingest: migration 046 IS applied — the regenerated database-schema snapshot is a live production information_schema pull post-046 ("033, 036–046 applied via Studio/MCP"), superseding the lint-pass-era "awaiting Joe's apply" wording in deferred-items/migrations/database-schema.
+
+Cross-refs: wiki/concepts/architecture/taste-vector.md + recommendation-pipeline.md already carried the ENG-1 behaviour from the same-day pre-snapshot ingest — not re-edited.

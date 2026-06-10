@@ -26,13 +26,13 @@ export const classifyError = (error: AppError | null): ErrorTypeValue => {
   if (error.message?.includes('Network request failed') || error.code === 'NETWORK_ERROR') {
     return ErrorType.NETWORK;
   }
-  if ((error as any).status === 429 || error.code === 'RATE_LIMIT') {
+  if (error.status === 429 || error.code === 'RATE_LIMIT') {
     return ErrorType.RATE_LIMIT;
   }
-  if ((error as any).status === 401 || (error as any).status === 403) {
+  if (error.status === 401 || error.status === 403) {
     return ErrorType.AUTHENTICATION;
   }
-  if ((error as any).status >= 400 && (error as any).status < 500) {
+  if (typeof error.status === 'number' && error.status >= 400 && error.status < 500) {
     return ErrorType.API;
   }
   if (error.message?.includes('Storage') || error.code === 'CACHE_ERROR') {

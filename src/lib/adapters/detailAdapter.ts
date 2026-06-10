@@ -6,10 +6,57 @@
 
 import type { ServiceId } from '@/components/platformLogos';
 import type { StreamingLink } from '../api/supabaseContent';
+import type { RatingsData } from '../api/omdb';
 import { buildBackdropUrl, buildPosterUrl, buildImageUrl } from '../api/tmdb';
 import { providerIdsToServiceIds, providerIdToServiceId } from './platformAdapter';
 import { mapProviderIdToCanonical, normalizePlatformName, networkNameToProviderId } from '../constants/platforms';
 import { isoToLanguageName } from './contentAdapter';
+
+/** Minimal TMDb watch-provider entry — only the fields this adapter reads. */
+interface TMDbProviderEntry {
+  provider_id: number;
+  provider_name: string;
+}
+
+interface TMDbWatchProviderRegion {
+  flatrate?: TMDbProviderEntry[];
+  free?: TMDbProviderEntry[];
+  ads?: TMDbProviderEntry[];
+  rent?: TMDbProviderEntry[];
+  buy?: TMDbProviderEntry[];
+}
+
+/**
+ * Minimal TMDb detail response wire shape (movie or TV, with
+ * credits + watch/providers appended). Only fields read here.
+ */
+export interface TMDbDetailResponse {
+  id: number;
+  title?: string;
+  name?: string;
+  backdrop_path?: string | null;
+  poster_path?: string | null;
+  release_date?: string;
+  first_air_date?: string;
+  genres?: Array<{ name: string }>;
+  'watch/providers'?: { results?: Record<string, TMDbWatchProviderRegion> };
+  networks?: Array<{ name: string }>;
+  vote_average?: number;
+  certification?: string;
+  adult?: boolean;
+  credits?: {
+    cast?: Array<{
+      name: string;
+      character?: string;
+      known_for_department?: string;
+      profile_path?: string | null;
+    }>;
+  };
+  runtime?: number;
+  number_of_seasons?: number;
+  original_language?: string;
+  overview?: string;
+}
 
 export interface CastMember {
   name: string;
@@ -86,9 +133,9 @@ function resolveServiceKey(providerName: string, providerId?: number): ServiceId
  * - BBC iPlayer + Sky Go → search URL fallbacks (not in SA API)
  */
 export function buildDetailData(
-  tmdbDetail: any,
+  tmdbDetail: TMDbDetailResponse,
   mediaType: 'movie' | 'tv',
-  omdbRatings?: any,
+  omdbRatings?: RatingsData | null,
   streamingLinks?: StreamingLink[],
   userPlatformIds?: number[]
 ): DetailData {
@@ -96,14 +143,14 @@ export function buildDetailData(
   const title = tmdbDetail.title || tmdbDetail.name || 'Untitled';
 
   // Hero image
-  const heroImage = buildBackdropUrl(tmdbDetail.backdrop_path) || buildPosterUrl(tmdbDetail.poster_path) || '';
+  const heroImage = buildBackdropUrl(tmdbDetail.backdrop_path ?? null) || buildPosterUrl(tmdbDetail.poster_path ?? null) || '';
 
   // Year
   const dateStr = tmdbDetail.release_date || tmdbDetail.first_air_date;
   const year = dateStr ? parseInt(dateStr.substring(0, 4), 10) : 0;
 
   // Genres
-  const genres = (tmdbDetail.genres || []).map((g: any) => g.name);
+  const genres = (tmdbDetail.genres || []).map((g) => g.name);
 
   // Streaming services from watch/providers (flatrate + free + ads = "available to stream")
   const providers = tmdbDetail['watch/providers']?.results?.GB;
@@ -112,7 +159,7 @@ export function buildDetailData(
     ...(providers?.free || []),
     ...(providers?.ads || []),
   ];
-  const streamingIds = streamingProviders.map((p: any) => mapProviderIdToCanonical(p.provider_id));
+  const streamingIds = streamingProviders.map((p) => mapProviderIdToCanonical(p.provider_id));
   const allServices = providerIdsToServiceIds(streamingIds);
 
   // Fallback: if no streaming providers found for TV, use networks (production metadata)
@@ -147,7 +194,7 @@ export function buildDetailData(
   const contentRating = tmdbDetail.certification || (tmdbDetail.adult ? '18' : 'PG');
 
   // Cast from credits
-  const cast: CastMember[] = (tmdbDetail.credits?.cast || []).slice(0, 20).map((member: any) => ({
+  const cast: CastMember[] = (tmdbDetail.credits?.cast || []).slice(0, 20).map((member) => ({
     name: member.name,
     character: member.character || member.known_for_department || '',
     image: member.profile_path ? buildImageUrl(member.profile_path, 'w185') || '' : '',
@@ -194,7 +241,7 @@ export function buildDetailData(
 
   // Fallback to TMDb rent/buy labels if no SA API data
   if (rentalOptions.length === 0 && providers) {
-    (providers.rent || []).forEach((p: any) => {
+    (providers.rent || []).forEach((p) => {
       const key = resolveServiceKey(p.provider_name, p.provider_id);
       if (key && !flatrateServiceSet.has(key)) {
         rentalOptions.push({
@@ -205,7 +252,7 @@ export function buildDetailData(
         });
       }
     });
-    (providers.buy || []).forEach((p: any) => {
+    (providers.buy || []).forEach((p) => {
       const key = resolveServiceKey(p.provider_name, p.provider_id);
       if (key && !flatrateServiceSet.has(key)) {
         rentalOptions.push({

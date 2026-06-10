@@ -3,7 +3,7 @@ title: Supabase RPC Catalogue
 type: entity
 tags: [supabase, rpc, postgres]
 created: 2026-04-26
-updated: 2026-05-15
+updated: 2026-06-10
 sources:
   - raw/codebase-snapshots/rpc-catalogue.md
   - raw/phase-summaries/phase-5.5-summary.md
@@ -79,6 +79,7 @@ Every Supabase function callable via `supabase.rpc()`. Source of truth: `supabas
 - Caller: `AuthContext.deleteAccount` via `supabase.rpc('delete_own_account')`.
 - **Source-of-truth gap closed Phase 5.5 (migration 042, 2026-05-15).** Live RPC body was captured pre-cut (H5 audit) — original body was a minimal single-line `DELETE FROM auth.users WHERE id = auth.uid();` relying entirely on FK cascade chains.
 - **Body (migration 042):** SECURITY DEFINER + `SET search_path = public, pg_temp`. Raises `'delete_own_account called without auth.uid()'` if `auth.uid()` returns NULL. Then explicit DELETEs across 8 user-scoped tables in this order: `card_impressions` → `user_interactions` → `taste_profiles` → `user_services` → `user_genres` → `watchlist` → `onboarding_events` → `user_feature_flags` → `profiles` → `auth.users`. Belt-and-braces against future cascade-rule regression.
+- **ENG-1 update (migration 044, 2026-06-10):** body CREATE OR REPLACEd to also DELETE from the new `user_interest_centroids` table — 9 user-scoped tables now covered. IN-PX-54 honoured at table-creation time.
 - **Supabase auto-grant gotcha:** the migration's `REVOKE EXECUTE FROM PUBLIC, anon` doesn't persist — Supabase auto-grants EXECUTE to anon / authenticated / service_role on every `public.*` function so PostgREST can route to it. The functional auth gate is the body's NULL `auth.uid()` raise, not the grant. Documented inline in the migration.
 - **C11 throwaway-account smoke test (validated 2026-05-15):** throwaway user with 113 `card_impressions` + 6 `onboarding_events` + profile / taste / services rows. Post-`delete_own_account()`: every count = 0; `auth.users` row gone. The 113 → 0 specifically validates the partitioned `card_impressions` FK CASCADE.
 - UI gate flipped at the same time (`ProfilePage.tsx` `PrivacyDataPage` modal): type-username-to-confirm UX, case-insensitive trimmed match against `currentUsername`.
@@ -90,6 +91,7 @@ Every Supabase function callable via `supabase.rpc()`. Source of truth: `supabas
 - Notes: GDPR Article 20 (data portability) + Article 15 (access). SECURITY DEFINER + search_path pinned. Raises if `auth.uid()` is NULL. Scoped to caller's user_id on every internal `SELECT ... WHERE user_id = v_user_id`.
 - **Payload shape:** keys `profiles`, `taste_profiles`, `user_services`, `user_genres`, `watchlist`, `user_interactions`, `card_impressions` (capped to last 90 days — matches migration 014's daily-aggregate rollup), `onboarding_events`. Plus `_export_metadata` with `{ version: '1.0', generated_at: now(), user_id: auth.uid() }`. Empty tables return `'[]'::jsonb` via `COALESCE`.
 - Migration: 043 (applied 2026-05-15). Verified `prosecdef = true`, `search_path = public,pg_temp`.
+- **ENG-1 update (migration 044, 2026-06-10):** body CREATE OR REPLACEd to also export `user_interest_centroids` (IN-PX-54 honoured at table-creation time).
 
 ## Edge Functions (RPC-shaped HTTP endpoints)
 

@@ -31,13 +31,13 @@
  *
  * Usage:
  *   # Dry-run — prints what would happen, no writes.
- *   npx tsx scripts/backfill_missing_titles.ts --dry-run
+ *   npx tsx scripts/enrichment/backfill_missing_titles.ts --dry-run
  *
  *   # Live run.
- *   npx tsx scripts/backfill_missing_titles.ts
+ *   npx tsx scripts/enrichment/backfill_missing_titles.ts
  *
  *   # Bound to first N missing IDs (testing).
- *   npx tsx scripts/backfill_missing_titles.ts --limit 50 --dry-run
+ *   npx tsx scripts/enrichment/backfill_missing_titles.ts --limit 50 --dry-run
  *
  * Env: .env must have VITE_TMDB_API_KEY, VITE_SUPABASE_URL,
  *      SUPABASE_SERVICE_ROLE_KEY.

@@ -37,7 +37,7 @@ export interface ContentItem {
 }
 
 /**
- * Visual size variants per docs/v3-design/design-system.md §4.
+ * Visual size variants per docs/design/design-system.md §4.
  *
  *   "default" — 160px wide. Horizontal scrollers.
  *   "wide"    — 220px wide. Horizontal scrollers that want larger cards.
@@ -245,8 +245,7 @@ export function ContentCard({
           orange brand colour stays saturated against the muted
           backdrop. Phase Search V2 only renders this on off-service
           rentables; on-service cards never carry it. */}
-      {rentBuyPriceLabel && (
-        <div
+      {rentBuyPriceLabel ? <div
           className="absolute bottom-2 right-2 inline-flex items-center"
           style={{
             padding: "3px 9px",
@@ -262,8 +261,7 @@ export function ContentCard({
           }}
         >
           {rentBuyPriceLabel}
-        </div>
-      )}
+        </div> : null}
       </div>
 
       {/* Title + meta — below the poster, not overlaid.
@@ -282,8 +280,7 @@ export function ContentCard({
         >
           {item.title}
         </h3>
-        {(item.year || item.genre) && (
-          <p
+        {(item.year || item.genre) ? <p
             className="mt-1 truncate"
             style={{
               fontFamily: "var(--font-ui)",
@@ -297,8 +294,7 @@ export function ContentCard({
             }}
           >
             {[item.genre, item.year].filter(Boolean).join(" · ")}
-          </p>
-        )}
+          </p> : null}
       </div>
     </div>
   );

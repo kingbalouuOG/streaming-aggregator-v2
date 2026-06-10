@@ -5,8 +5,30 @@
 
 import type { ContentItem } from '@/components/ContentCard';
 import type { ServiceId } from '@/components/platformLogos';
+import type { WatchlistItem } from '../storage/watchlist';
 import { buildPosterUrl, buildBackdropUrl } from '../api/tmdb';
 import { GENRE_NAMES } from '../constants/genres';
+
+/**
+ * Minimal TMDb result wire shape — covers movie, TV, and multi-search
+ * results. Only the fields the adapters actually read are declared.
+ */
+export interface TMDbContentResult {
+  id: number;
+  media_type?: string;
+  title?: string;
+  name?: string;
+  poster_path?: string | null;
+  backdrop_path?: string | null;
+  vote_average?: number;
+  release_date?: string;
+  first_air_date?: string;
+  genre_ids?: number[];
+  overview?: string;
+  original_language?: string;
+  popularity?: number;
+  vote_count?: number;
+}
 
 const ISO_TO_LANGUAGE: Record<string, string> = {
   en: "English", ja: "Japanese", ko: "Korean", es: "Spanish",
@@ -24,13 +46,13 @@ export function isoToLanguageName(code: string): string | undefined {
  * Convert a TMDb movie object to a ContentItem.
  * Services are left empty — lazy-loaded per card via serviceCache.
  */
-export function tmdbMovieToContentItem(movie: any): ContentItem {
+export function tmdbMovieToContentItem(movie: TMDbContentResult): ContentItem {
   const genreIds: number[] = movie.genre_ids || [];
   return {
     id: `movie-${movie.id}`,
     title: movie.title || 'Untitled',
-    image: buildPosterUrl(movie.poster_path) || '',
-    backdrop: buildBackdropUrl(movie.backdrop_path, 'w780') || undefined,
+    image: buildPosterUrl(movie.poster_path ?? null) || '',
+    backdrop: buildBackdropUrl(movie.backdrop_path ?? null, 'w780') || undefined,
     services: [] as ServiceId[],
     rating: movie.vote_average ?? undefined,
     year: movie.release_date ? parseInt(movie.release_date.substring(0, 4), 10) : undefined,
@@ -49,13 +71,13 @@ export function tmdbMovieToContentItem(movie: any): ContentItem {
  * Convert a TMDb TV show object to a ContentItem.
  * Services are left empty — lazy-loaded per card via serviceCache.
  */
-export function tmdbTVToContentItem(tvShow: any): ContentItem {
+export function tmdbTVToContentItem(tvShow: TMDbContentResult): ContentItem {
   const genreIds: number[] = tvShow.genre_ids || [];
   return {
     id: `tv-${tvShow.id}`,
     title: tvShow.name || tvShow.title || 'Untitled',
-    image: buildPosterUrl(tvShow.poster_path) || '',
-    backdrop: buildBackdropUrl(tvShow.backdrop_path, 'w780') || undefined,
+    image: buildPosterUrl(tvShow.poster_path ?? null) || '',
+    backdrop: buildBackdropUrl(tvShow.backdrop_path ?? null, 'w780') || undefined,
     services: [] as ServiceId[],
     rating: tvShow.vote_average ?? undefined,
     year: tvShow.first_air_date ? parseInt(tvShow.first_air_date.substring(0, 4), 10) : undefined,
@@ -74,7 +96,7 @@ export function tmdbTVToContentItem(tvShow: any): ContentItem {
  * Convert a TMDb search result (multi) to a ContentItem.
  * Handles both movie and TV results.
  */
-export function tmdbSearchResultToContentItem(result: any): ContentItem {
+export function tmdbSearchResultToContentItem(result: TMDbContentResult): ContentItem {
   const mediaType = result.media_type || (result.title ? 'movie' : 'tv');
   if (mediaType === 'movie') {
     return tmdbMovieToContentItem(result);
@@ -97,7 +119,7 @@ export function parseContentItemId(id: string): { tmdbId: number; mediaType: 'mo
 /**
  * Convert a watchlist item (stored with TMDb metadata) to a ContentItem.
  */
-export function watchlistItemToContentItem(item: any): ContentItem {
+export function watchlistItemToContentItem(item: WatchlistItem): ContentItem {
   return {
     id: `${item.type}-${item.id}`,
     title: item.metadata?.title || 'Unknown',

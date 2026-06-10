@@ -4,7 +4,7 @@ import { getPlatform, type ServiceId } from "./platformLogos";
 interface ServiceBadgeProps {
   service: ServiceId | string;
   /**
-   * Per docs/v3-design/design-system.md §4 ServiceBadge anatomy
+   * Per docs/design/design-system.md §4 ServiceBadge anatomy
    * the canonical size is `md` (24×24). `sm` (20) and `lg` (32)
    * are kept for tight or hero contexts but new code should
    * default to `md`.
@@ -66,7 +66,7 @@ interface ServiceStackProps {
 /**
  * ServiceStack — overlapped row of ServiceBadges.
  *
- * Per docs/v3-design/design-system.md §4: stack overlaps at -8px
+ * Per docs/design/design-system.md §4: stack overlaps at -8px
  * when there are 2+ services. Visible cap is 4; remaining services
  * collapse to a "+N" pill matching the badge dimensions.
  */

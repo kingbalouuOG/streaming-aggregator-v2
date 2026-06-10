@@ -3,7 +3,7 @@ title: ADR-008 — Static genre mapping retained over populating title_genres
 type: concept
 tags: [adr, decision, genres, locked, applied]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-06-10
 sources:
   - raw/adrs/adrs-combined.md
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
@@ -27,7 +27,7 @@ Do not backfill `title_genres`. Resolve title → genres via the static TMDb gen
 ## Consequences
 
 - Simpler enrichment pipeline.
-- `title_genres` remains as a future hook if multi-source genre data becomes useful.
+- ~~`title_genres` remains as a future hook if multi-source genre data becomes useful.~~ **Superseded 2026-06-10 (REPO-1):** migration `046_drop_title_genres_credits.sql` drops `title_genres` and `title_credits` (written, not yet applied). The decision itself stands — static genre mapping remains the genre path.
 - No per-title row explosion in a join table.
 
 ## Reference
