@@ -9,6 +9,15 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // Stub the Supabase env so importing modules whose chain touches
+  // src/lib/supabase.ts (which throws when VITE_SUPABASE_URL is absent)
+  // works on env-less CI runners — AND so the pure-function tests are
+  // hermetic locally: they can never reach real Supabase even by
+  // accident. Same stub-value pattern as build-verify.yml.
+  define: {
+    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://stub.supabase.co'),
+    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('stub-anon-key'),
+  },
   test: {
     environment: 'jsdom',
     globals: true,
