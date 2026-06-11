@@ -20,7 +20,7 @@
  */
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { Loader2, Lock, LockOpen } from 'lucide-react';
+import { Lock, LockOpen } from 'lucide-react';
 import { motion } from 'motion/react';
 import { TasteSlider } from './TasteSlider';
 import { ContentRow } from './ContentRow';
@@ -39,7 +39,6 @@ import { useForYouContent } from '@/hooks/useForYouContent';
 import { useAnchorMoodRooms, type AnchorRoomPreview } from '@/hooks/useAnchorMoodRooms';
 import type { FilterSets } from '@/lib/recommendations-v2/hardFilters';
 import type { ContentItem } from './ContentCard';
-import type { ServiceId } from './platformLogos';
 import type { SliderState } from '@/lib/taste-v2/types';
 import type { UpcomingRelease } from '@/hooks/useUpcoming';
 
