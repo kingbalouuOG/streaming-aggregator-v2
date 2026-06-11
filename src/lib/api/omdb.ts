@@ -62,14 +62,7 @@ export const getRatings = async (imdbId: string, type = 'movie'): Promise<{ succ
       throw new Error(response.data.Error || 'Not found');
     }
 
-    const ratings = response.data.Ratings || [];
-    const ratingsData: RatingsData = {
-      imdbRating: response.data.imdbRating !== 'N/A' ? response.data.imdbRating : null,
-      rottenTomatoes: getRottenTomatoesScore(ratings),
-      imdbVotes: response.data.imdbVotes || null,
-      metacritic: response.data.Metascore !== 'N/A' ? response.data.Metascore : null,
-      rawRatings: ratings,
-    };
+    const ratingsData: RatingsData = parseOmdbBody(response.data);
 
     if (USE_CACHE) {
       const cacheKey = createOMDbCacheKey(imdbId);
@@ -86,6 +79,30 @@ export const getRatings = async (imdbId: string, type = 'movie'): Promise<{ succ
       data: { imdbRating: null, rottenTomatoes: null, imdbVotes: null, metacritic: null, rawRatings: [] },
     };
   }
+};
+
+/** Raw OMDB body fields this module reads. */
+export interface OmdbRawBody {
+  imdbRating?: string;
+  imdbVotes?: string;
+  Metascore?: string;
+  Ratings?: Array<{ Source: string; Value: string }>;
+}
+
+/**
+ * Parse a raw OMDB response body into RatingsData. Shared by the direct
+ * getRatings path and the PLAT-2 proxy path (the Worker's /v1/title
+ * returns the raw OMDB body; the client owns parsing).
+ */
+export const parseOmdbBody = (body: OmdbRawBody): RatingsData => {
+  const ratings = body.Ratings || [];
+  return {
+    imdbRating: body.imdbRating && body.imdbRating !== 'N/A' ? body.imdbRating : null,
+    rottenTomatoes: getRottenTomatoesScore(ratings),
+    imdbVotes: body.imdbVotes || null,
+    metacritic: body.Metascore && body.Metascore !== 'N/A' ? body.Metascore : null,
+    rawRatings: ratings,
+  };
 };
 
 export const getRottenTomatoesScore = (ratings: Array<{ Source: string; Value: string }>): number | null => {

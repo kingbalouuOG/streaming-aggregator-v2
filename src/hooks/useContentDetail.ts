@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  getMovieDetails,
-  getTVDetails,
   getSimilarMovies,
   getSimilarTV,
   getMovieRecommendations,
@@ -10,9 +8,9 @@ import {
   discoverMovies,
   discoverTV,
 } from '@/lib/api/tmdb';
-import { getRatings, type RatingsData } from '@/lib/api/omdb';
+import { fetchMergedTitle, type MergedTitle } from '@/lib/api/videxApi';
 import { getStreamingLinks, type StreamingLink } from '@/lib/api/supabaseContent';
-import { buildDetailData, type DetailData, type TMDbDetailResponse } from '@/lib/adapters/detailAdapter';
+import { buildDetailData, type DetailData } from '@/lib/adapters/detailAdapter';
 import { tmdbMovieToContentItem, tmdbTVToContentItem, type TMDbContentResult } from '@/lib/adapters/contentAdapter';
 import { supabase } from '@/lib/supabase';
 import { cosineSimilarity } from '@/lib/taste-v2/vectorOps';
@@ -25,18 +23,6 @@ interface ContentDetailState {
   similar: ContentItem[];
   loading: boolean;
   error: string | null;
-}
-
-/**
- * TMDb detail payload fields this hook reads beyond the adapter's view.
- * The API client returns the raw TMDb response (untyped); this captures
- * exactly the extra fields the legacy orchestration accessed.
- */
-interface TMDbDetailFull extends TMDbDetailResponse {
-  imdb_id?: string | null;
-  external_ids?: { imdb_id?: string | null };
-  genres?: Array<{ id: number; name: string }>;
-  genre_ids?: number[];
 }
 
 interface TMDbListResponse {
@@ -78,18 +64,17 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
   const tmdbId = parsed?.tmdbId ?? 0;
   const queriesEnabled = !!parsed && parsed.valid;
 
-  // TMDb detail (credits, providers, external_ids appended)
+  // PLAT-2: merged title — ONE request to the Worker's /v1/title
+  // (TMDb detail with credits/external_ids/providers appended + OMDB
+  // ratings, CDN-cached). Replaces the two-leg detail + ratings chain;
+  // direct-mode fallback composes the same shape client-side.
   const detailQuery = useQuery({
-    queryKey: ['tmdb', 'detail', mediaType, tmdbId],
+    queryKey: ['tmdb', 'title', mediaType, tmdbId],
     enabled: queriesEnabled,
-    queryFn: async (): Promise<TMDbDetailFull> => {
-      const detailFn = mediaType === 'movie' ? getMovieDetails : getTVDetails;
-      const res = await detailFn(tmdbId);
-      // cachedRequest never rejects: failures surface as success:false with a
-      // null data fallback. The legacy hook mapped both cases to the same
-      // 'Content not found' error — keep that exact message.
-      if (!res.success || !res.data) throw new Error('Content not found');
-      return res.data as TMDbDetailFull;
+    queryFn: async (): Promise<MergedTitle> => {
+      const res = await fetchMergedTitle(mediaType, tmdbId);
+      if (!res.success || !res.data) throw new Error(res.error || 'Content not found');
+      return res.data;
     },
   });
 
@@ -100,20 +85,7 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
     queryFn: (): Promise<StreamingLink[]> => getStreamingLinks(tmdbId, mediaType),
   });
 
-  const detailData = detailQuery.data;
-  const imdbId = detailData ? detailData.external_ids?.imdb_id || detailData.imdb_id || null : null;
-
-  // OMDB ratings — genuinely depends on imdb_id from the TMDb detail.
-  const omdbQuery = useQuery({
-    queryKey: ['omdb', 'ratings', imdbId],
-    enabled: queriesEnabled && !!imdbId,
-    queryFn: async (): Promise<RatingsData> => {
-      if (!imdbId) throw new Error('IMDb ID is required');
-      const res = await getRatings(imdbId, mediaType);
-      if (!res.success) throw new Error(res.error || 'Ratings unavailable');
-      return res.data;
-    },
-  });
+  const detailData = detailQuery.data?.tmdb;
 
   // Similar + recommendations — only need the tmdbId, so they are
   // independent queries (no invented dependency on the detail fetch).
@@ -175,7 +147,6 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
     detailQuery.isError ||
     (detailQuery.isSuccess &&
       (linksQuery.isSuccess || linksQuery.isError) &&
-      (!imdbId || omdbQuery.isSuccess || omdbQuery.isError) &&
       (similarQuery.isSuccess || similarQuery.isError) &&
       (recoQuery.isSuccess || recoQuery.isError) &&
       (discoverQuery.isSuccess || discoverQuery.isError));
@@ -205,7 +176,7 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
     if (!allSettled || !detailData) return;
 
     const runId = ++runIdRef.current;
-    const omdbRatings = omdbQuery.data;
+    const omdbRatings = detailQuery.data?.ratings ?? undefined;
     const streamingLinks = linksQuery.data;
     const similarItems = similarQuery.data?.results || [];
     const recoItems = recoQuery.data?.results || [];
@@ -309,7 +280,6 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
     allSettled,
     detailData,
     detailQuery.isError,
-    omdbQuery.data,
     linksQuery.data,
     similarQuery.data,
     recoQuery.data,
@@ -321,7 +291,7 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
   // served from cache (failures were never cached). Mirror that: refetch only
   // the queries in error state, then re-run the assembly pipeline.
   const reload = useCallback(async () => {
-    const queries = [detailQuery, linksQuery, omdbQuery, similarQuery, recoQuery, discoverQuery];
+    const queries = [detailQuery, linksQuery, similarQuery, recoQuery, discoverQuery];
     await Promise.all(queries.filter((q) => q.isError).map((q) => q.refetch()));
     setPipelineRun((c) => c + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -330,7 +300,6 @@ export function useContentDetail(contentItemId: string | null, userPlatformIds?:
     platformKey,
     detailQuery.isError,
     linksQuery.isError,
-    omdbQuery.isError,
     similarQuery.isError,
     recoQuery.isError,
     discoverQuery.isError,
