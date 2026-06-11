@@ -1,0 +1,11 @@
+# Videx API proxy — PLAT-2 (E&P brief §6, locked D2/D6).
+# Secrets (set once via `wrangler secret put`): TMDB_API_KEY, OMDB_API_KEY.
+# Deployed to the workers.dev subdomain at prototype scale (plan Q2);
+# custom domain is a launch-prep item.
+
+name = "videx-api"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+
+[observability]
+enabled = true

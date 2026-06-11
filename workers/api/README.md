@@ -19,4 +19,9 @@ cache), importing `src/lib/recommendations-v2/` directly — wrangler
 bundles from anywhere in the repo, which is what dissolves the ADR-011
 `_shared/` mirror.
 
-Until PLAT-2: nothing in here runs; no wrangler config exists yet.
+PLAT-2 status: LIVE code. Hono app at src/index.ts, pure routing/cache
+rules at src/rules.ts (unit-tested from the root vitest rig), deploys
+via .github/workflows/deploy-worker.yml on merge (soft-skips until the
+Cloudflare repo secrets exist). Worker secrets: TMDB_API_KEY +
+OMDB_API_KEY via wrangler secret put. Local dev: npm run dev in this
+folder (wrangler dev); bundle check: npm run check.
