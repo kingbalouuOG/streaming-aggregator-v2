@@ -446,6 +446,34 @@ export function useForYouContent(
       poolRef.current = edge.pool;
       setPool(edge.pool);
       setLoading(false);
+
+      // PLAT-1 fix (device pass 2): hydrate embeddings + avoid set +
+      // seen-set in the BACKGROUND so slider re-ranks on Edge-served
+      // sessions run the SAME pipeline as the server render (MMR with
+      // cached norms + avoid penalty + novel exploration picks) instead
+      // of the degraded genreSpread/no-penalty fallback — that
+      // divergence was why titles vanished unexpectedly on drags.
+      // Embeddings hit the 24h localStorage cache on warm sessions, so
+      // this is usually instant; cold it's a background fetch that
+      // upgrades the NEXT drag.
+      void (async () => {
+        try {
+          const scored = scoreCandidates(edge.pool, edge.sliders, 'foryou', result.ctx);
+          const [embMap, avoidSet, seenIds] = await Promise.all([
+            fetchEmbeddingsForCandidates(scored.slice(0, 200), {
+              userId: getAuthUserId(),
+              tasteProfilesUpdatedAt: null,
+            }),
+            fetchAvoidSet(),
+            fetchSeenContentIds(),
+          ]);
+          embeddingMapRef.current = embMap;
+          avoidRef.current = avoidSet;
+          seenIdsRef.current = seenIds;
+        } catch {
+          // Hydration is best-effort — re-rank falls back exactly as before.
+        }
+      })();
       return;
     }
 

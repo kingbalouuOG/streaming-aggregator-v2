@@ -367,11 +367,39 @@ export function ForYouPage({
     content.fromYourWatchlist.length === 0;
 
   if (content.loading) {
+    // PLAT-1 polish: structured skeleton of the actual §5 anatomy
+    // (greeting → hero → fingerprint card → two rows) instead of a
+    // spinner — first composition takes seconds (PLAT-3 moves it
+    // server-side); until then the page should read as "composing",
+    // not "stuck".
     return (
-      <div className="px-0 pt-2">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className="px-0 pt-2" aria-busy="true" aria-label="Composing your page">
+        <div className="px-5 mb-4">
+          <div className="h-3 w-28 rounded bg-secondary/80 animate-pulse mb-3" />
+          <div className="h-8 w-3/4 rounded bg-secondary/80 animate-pulse" />
         </div>
+        <div className="px-5 mb-6">
+          <div className="w-full aspect-[4/5] rounded-2xl bg-secondary/80 animate-pulse" />
+        </div>
+        <div className="px-5 mb-8">
+          <div className="h-40 rounded-2xl bg-secondary/60 animate-pulse" />
+        </div>
+        {[0, 1].map((row) => (
+          <div key={row} className="mb-8">
+            <div className="px-5 mb-3">
+              <div className="h-3 w-24 rounded bg-secondary/70 animate-pulse mb-2" />
+              <div className="h-6 w-1/2 rounded bg-secondary/70 animate-pulse" />
+            </div>
+            <div className="flex gap-3 px-5 overflow-hidden">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="shrink-0 w-[160px]">
+                  <div className="w-[160px] aspect-[5/7] rounded-xl bg-secondary/80 animate-pulse" />
+                  <div className="h-3 w-24 rounded bg-secondary/60 animate-pulse mt-2" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     );
   }

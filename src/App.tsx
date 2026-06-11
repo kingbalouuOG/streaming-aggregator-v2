@@ -41,6 +41,22 @@ const WatchlistPage = React.lazy(() => pageImports.watchlist().then(m => ({ defa
 const ProfilePage = React.lazy(() => pageImports.profile().then(m => ({ default: m.ProfilePage })));
 const OnboardingFlow = React.lazy(() => pageImports.onboarding().then(m => ({ default: m.OnboardingFlow })));
 const CalendarPage = React.lazy(() => pageImports.calendar().then(m => ({ default: m.CalendarPage })));
+
+/**
+ * PLAT-1 polish (device pass 2): Suspense fallback that renders NOTHING
+ * for its first 160ms. Warm navigations mount lazy pages in well under
+ * that, so the old instant blank-background fallback produced a visible
+ * flash on every first visit; now only genuinely slow chunk loads (cold
+ * start before the idle prefetch lands) show the quiet background.
+ */
+function DelayedBlank() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setShow(true), 160);
+    return () => clearTimeout(t);
+  }, []);
+  return show ? <div className="min-h-screen bg-background" /> : null;
+}
 // ComingSoonCard — Home no longer mounts these directly; the
 // CalendarList primitive renders them internally.
 import { MagazineHero } from "./components/MagazineHero";
@@ -748,7 +764,7 @@ function AppContent() {
       // Sign-up via the v2 onboarding flow (Step 1 handles auth)
       return (
         <>
-          <React.Suspense fallback={<div className="min-h-screen bg-background" />}><OnboardingFlow onComplete={handleOnboardingComplete} /></React.Suspense>
+          <React.Suspense fallback={<DelayedBlank />}><OnboardingFlow onComplete={handleOnboardingComplete} /></React.Suspense>
           <ThemedToaster />
         </>
       );
@@ -800,7 +816,7 @@ function AppContent() {
   if (!userPrefs.onboardingComplete) {
     return (
       <>
-        <React.Suspense fallback={<div className="min-h-screen bg-background" />}><OnboardingFlow onComplete={handleOnboardingComplete} skipAuth /></React.Suspense>
+        <React.Suspense fallback={<DelayedBlank />}><OnboardingFlow onComplete={handleOnboardingComplete} skipAuth /></React.Suspense>
         <ThemedToaster />
       </>
     );
@@ -835,7 +851,7 @@ function AppContent() {
           style={{ overflowX: 'hidden', overscrollBehaviorX: 'none', transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined, transition: isPulling.current ? 'none' : 'transform 0.3s ease' }}
         >
           {/* PLAT-1: one Suspense for every lazy page chunk below. */}
-          <React.Suspense fallback={<div className="min-h-screen bg-background" />}>
+          <React.Suspense fallback={<DelayedBlank />}>
           <AnimatePresence mode="wait">
           {showCalendar ? (
             <motion.div
