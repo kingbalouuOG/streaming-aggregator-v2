@@ -30,7 +30,7 @@ interface BrowseCardProps {
  * anatomy (poster, bookmark, rating pill, title+meta below) lives in
  * ContentCard so Browse stays in lockstep with the rest of the app.
  */
-export function BrowseCard({ item, index = 0, virtualized = false, ...rest }: BrowseCardProps) {
+function BrowseCardImpl({ item, index = 0, virtualized = false, ...rest }: BrowseCardProps) {
   return (
     <motion.div
       initial={virtualized ? false : { opacity: 0, y: 16 }}
@@ -46,3 +46,8 @@ export function BrowseCard({ item, index = 0, virtualized = false, ...rest }: Br
     </motion.div>
   );
 }
+
+// PLAT-1 Workstream E: memo'd — App re-renders on every scroll pixel
+// (scrollY is state); with store-backed stable props this stops the
+// per-frame re-render cascade through the card/row primitives.
+export const BrowseCard = React.memo(BrowseCardImpl);

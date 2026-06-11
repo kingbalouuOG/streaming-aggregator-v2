@@ -80,7 +80,7 @@ interface ContentCardProps {
   rentBuyPriceLabel?: string;
 }
 
-export function ContentCard({
+function ContentCardImpl({
   item,
   variant = "default",
   onSelect,
@@ -299,3 +299,8 @@ export function ContentCard({
     </div>
   );
 }
+
+// PLAT-1 Workstream E: memo'd — App re-renders on every scroll pixel
+// (scrollY is state); with store-backed stable props this stops the
+// per-frame re-render cascade through the card/row primitives.
+export const ContentCard = React.memo(ContentCardImpl);

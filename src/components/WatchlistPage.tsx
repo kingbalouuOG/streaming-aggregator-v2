@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Bookmark, LayoutGrid, List, Plus, ChevronRight, Trash2, CheckCircle2, ThumbsUp, ThumbsDown, ArrowUpDown, Clock, Star, Timer } from "lucide-react";
 import { TickIcon } from "./icons";
@@ -8,6 +8,7 @@ import { ServiceBadge } from "./ServiceBadge";
 import { ImageSkeleton } from "./ImageSkeleton";
 import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
+import { useAppStore } from "@/lib/store/appStore";
 import type { ServiceId } from "./platformLogos";
 
 type WatchlistTab = "want" | "watched";
@@ -56,40 +57,89 @@ function getCategoryCounts(items: ContentItem[]): Record<Category, number> {
 interface WatchlistPageProps {
   watchlist: ContentItem[];
   watched: ContentItem[];
-  onRemoveBookmark: (id: string) => void;
-  onMoveToWatched: (id: string) => void;
-  onMoveToWantToWatch: (id: string) => void;
-  onItemSelect: (item: ContentItem) => void;
-  onNavigateToBrowse: () => void;
-  ratings?: Record<string, 'up' | 'down'>;
-  onRate?: (id: string, rating: 'up' | 'down' | null) => void;
   activeSubTab?: "want" | "watched";
   onSubTabChange?: (tab: "want" | "watched") => void;
-  /** User's connected services — used to render the IN YOUR PLAN
-   *  badge on list rows when a title overlaps the user's stack. */
-  userServices?: ServiceId[];
+}
+
+/** __DEV__ 500-item synthetic watchlist seed (PLAT-1 plan Q3).
+ *  Triple-tap the tab header to layer 500 local-only ContentItems over
+ *  the Want-to-watch list for the scroll-jank acceptance test. Never
+ *  written to storage/Supabase; production builds tree-shake this. */
+const SYNTHETIC_COUNT = 500;
+const SYNTHETIC_SERVICES: ServiceId[] = ["netflix", "prime", "disney", "itvx", "channel4"];
+function buildSyntheticItems(): ContentItem[] {
+  const now = Date.now();
+  return Array.from({ length: SYNTHETIC_COUNT }, (_, i) => ({
+    // Non-empty `services` is deliberate: it short-circuits the cards'
+    // getCachedServices fallback so synthetic rows never hit TMDb.
+    id: `movie-${900001 + i}`,
+    title: `Synthetic ${i + 1}`,
+    image: "",
+    services: [SYNTHETIC_SERVICES[i % SYNTHETIC_SERVICES.length]],
+    rating: 5 + ((i * 7) % 50) / 10,
+    year: 2000 + (i % 26),
+    type: "movie" as const,
+    runtime: 45 + (i % 135),
+    addedAt: now - i * 60_000,
+    genre: "Synthetic",
+  }));
 }
 
 export function WatchlistPage({
   watchlist,
   watched,
-  onRemoveBookmark,
-  onMoveToWatched,
-  onMoveToWantToWatch,
-  onItemSelect,
-  onNavigateToBrowse,
-  ratings,
-  onRate,
   activeSubTab,
   onSubTabChange,
-  userServices,
 }: WatchlistPageProps) {
+  // PLAT-1: app-level state + stable action callbacks from the store
+  // (App is the writer; this page is a reader).
+  const userServices = useAppStore((s) => s.userServices);
+  const ratings = useAppStore((s) => s.ratings);
+  const setAppTab = useAppStore((s) => s.setActiveTab);
+  const onItemSelect = useAppStore((s) => s.actions.onItemSelect);
+  const onRemoveBookmark = useAppStore((s) => s.actions.onRemoveBookmark);
+  const onMoveToWatched = useAppStore((s) => s.actions.onMoveToWatched);
+  const onMoveToWantToWatch = useAppStore((s) => s.actions.onMoveToWantToWatch);
+  const onRate = useAppStore((s) => s.actions.onRate);
+  const onNavigateToBrowse = useCallback(() => setAppTab("browse"), [setAppTab]);
+
   const [localTab, setLocalTab] = useState<WatchlistTab>("want");
   const activeTab = activeSubTab ?? localTab;
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [activeCategory, setActiveCategory] = useState<Category>("all");
   const [activeSort, setActiveSort] = useState<SortOption>("added");
   const [showSortMenu, setShowSortMenu] = useState(false);
+
+  // ── __DEV__ synthetic seed (PLAT-1 plan Q3) ─────────────────────
+  // LOCAL component state only — layered over the real list at render
+  // time, never persisted. Triple-tap the tab header toggles it.
+  const [syntheticActive, setSyntheticActive] = useState(false);
+  const seedTapCountRef = useRef(0);
+  const seedTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSeedGesture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!__DEV__) return;
+    // Taps on the tab chips themselves switch tabs — only count taps
+    // on the header's non-interactive area.
+    if ((e.target as HTMLElement).closest("button")) return;
+    seedTapCountRef.current += 1;
+    if (seedTapTimerRef.current) clearTimeout(seedTapTimerRef.current);
+    if (seedTapCountRef.current >= 3) {
+      seedTapCountRef.current = 0;
+      setSyntheticActive((v) => !v);
+    } else {
+      seedTapTimerRef.current = setTimeout(() => {
+        seedTapCountRef.current = 0;
+      }, 600);
+    }
+  };
+  const syntheticItems = useMemo<ContentItem[]>(
+    () => (__DEV__ && syntheticActive ? buildSyntheticItems() : []),
+    [syntheticActive]
+  );
+  const effectiveWatchlist = useMemo(
+    () => (syntheticItems.length > 0 ? [...watchlist, ...syntheticItems] : watchlist),
+    [watchlist, syntheticItems]
+  );
 
   // Reset category when switching tabs
   const handleTabChange = (tab: WatchlistTab) => {
@@ -98,10 +148,10 @@ export function WatchlistPage({
     setActiveCategory("all");
   };
 
-  const tabItems = activeTab === "want" ? watchlist : watched;
+  const tabItems = activeTab === "want" ? effectiveWatchlist : watched;
   const categoryCounts = getCategoryCounts(tabItems);
   const items = sortItems(filterByCategory(tabItems, activeCategory), activeSort);
-  const totalItems = watchlist.length + watched.length;
+  const totalItems = effectiveWatchlist.length + watched.length;
 
   // ── PLAT-1 §3: list virtualization (E&P brief §5) ──────────────
   // Long lists render through a row virtualizer attached to the
@@ -147,7 +197,7 @@ export function WatchlistPage({
       el.getBoundingClientRect().top - sp.getBoundingClientRect().top + sp.scrollTop,
     );
     setScrollMargin((prev) => (Math.abs(prev - margin) > 1 ? margin : prev));
-  }, [watchlist.length, watched.length, items.length, tabItems.length, totalItems, viewMode, activeTab, activeCategory, activeSort]);
+  }, [effectiveWatchlist.length, watched.length, items.length, tabItems.length, totalItems, viewMode, activeTab, activeCategory, activeSort]);
 
   const rowVirtualizer = useVirtualizer<HTMLElement, HTMLDivElement>({
     count: rowCount,
@@ -173,12 +223,17 @@ export function WatchlistPage({
     <div className="flex flex-col min-h-full">
       {/* Sticky header + tab bar */}
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl" style={{ backgroundColor: "var(--background)", paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
-        {/* Editorial chip tabs — replace the segmented control. */}
-        <div className="px-5 pt-3 mb-4 flex gap-2">
+        {/* Editorial chip tabs — replace the segmented control.
+            __DEV__: triple-tap the non-button area of this header row
+            to toggle the 500-item synthetic seed (PLAT-1 plan Q3). */}
+        <div
+          className="px-5 pt-3 mb-4 flex gap-2 items-center"
+          onClick={__DEV__ ? handleSeedGesture : undefined}
+        >
           {(["want", "watched"] as const).map((t) => {
             const active = activeTab === t;
             const label = t === "want" ? "Want to watch" : "Watched";
-            const count = t === "want" ? watchlist.length : watched.length;
+            const count = t === "want" ? effectiveWatchlist.length : watched.length;
             return (
               <button
                 key={t}

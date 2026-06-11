@@ -88,7 +88,7 @@ export interface MoodRoomCardProps {
  * Bottom: kicker (with bullet · titles meta when titleCount > 0) +
  * Fraunces label.
  */
-export function MoodRoomCard({
+function MoodRoomCardImpl({
   id,
   label,
   titleCount,
@@ -280,3 +280,8 @@ export function FeaturedMoodRoomCard({
     </div>
   );
 }
+
+// PLAT-1 Workstream E: memo'd — App re-renders on every scroll pixel
+// (scrollY is state); with store-backed stable props this stops the
+// per-frame re-render cascade through the card/row primitives.
+export const MoodRoomCard = React.memo(MoodRoomCardImpl);

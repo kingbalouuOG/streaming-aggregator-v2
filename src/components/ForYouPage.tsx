@@ -33,6 +33,7 @@ import { MagazineHero } from './MagazineHero';
 import { CalendarList } from './CalendarList';
 import { WideCard } from './WideCard';
 import { MoodRoomCard, FeaturedMoodRoomCard } from './MoodRoomCard';
+import { useAppStore } from "@/lib/store/appStore";
 import { useAuth } from './AuthContext';
 import { useForYouContent } from '@/hooks/useForYouContent';
 import { useAnchorMoodRooms, type AnchorRoomPreview } from '@/hooks/useAnchorMoodRooms';
@@ -43,16 +44,13 @@ import type { SliderState } from '@/lib/taste-v2/types';
 import type { UpcomingRelease } from '@/hooks/useUpcoming';
 
 interface ForYouPageProps {
-  providerIds: number[];
-  connectedServiceIds: ServiceId[];
+  // PLAT-1 Workstream E: providerIds / connectedServiceIds /
+  // bookmarkedIds / watchedIds and the item-select + bookmark actions
+  // now come from the app store; only App-local wiring stays as props.
   sharedFilters: FilterSets | null;
   filterWatched: (items: ContentItem[]) => ContentItem[];
   filterLanguage: (items: ContentItem[]) => ContentItem[];
-  onItemSelect: (item: ContentItem) => void;
   onSelectAnchorRoom: (preview: AnchorRoomPreview) => void;
-  bookmarkedIds: Set<string>;
-  onToggleBookmark: (item: ContentItem) => void;
-  watchedIds: Set<string>;
   /** Upcoming releases for the foot-of-page CalendarList. Optional. */
   upcoming?: UpcomingRelease[];
   /** Callback when the user taps a calendar entry. */
@@ -213,20 +211,22 @@ function CoverStoryMoodRoom({
 }
 
 export function ForYouPage({
-  providerIds,
-  connectedServiceIds,
   sharedFilters,
   filterWatched,
   filterLanguage,
-  onItemSelect,
   onSelectAnchorRoom,
-  bookmarkedIds,
-  onToggleBookmark,
-  watchedIds,
   upcoming,
   onSelectUpcoming,
 }: ForYouPageProps) {
   const { username } = useAuth();
+  // App-level state/actions via the store (PLAT-1 Workstream E). Local
+  // names match the old props so every internal usage is untouched.
+  const providerIds = useAppStore((s) => s.providerIds);
+  const connectedServiceIds = useAppStore((s) => s.userServices);
+  const bookmarkedIds = useAppStore((s) => s.bookmarkedIds);
+  const watchedIds = useAppStore((s) => s.watchedIds);
+  const onItemSelect = useAppStore((s) => s.actions.onItemSelect);
+  const onToggleBookmark = useAppStore((s) => s.actions.onToggleBookmark);
   const content = useForYouContent(providerIds, sharedFilters);
   const anchorRooms = useAnchorMoodRooms(
     providerIds,

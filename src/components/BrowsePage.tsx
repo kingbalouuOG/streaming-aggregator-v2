@@ -3,7 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Search, X, SlidersHorizontal, Loader2, Clock, Leaf, Zap, Moon, Heart, Check, ChevronDown } from "lucide-react";
 import { BrowseCard } from "./BrowseCard";
 import { ContentItem } from "./ContentCard";
-import { FilterSheet, FilterState, ALL_GENRES, FILTER_LANGUAGES } from "./FilterSheet";
+import { FilterSheet, ALL_GENRES, FILTER_LANGUAGES } from "./FilterSheet";
 import { MoodChip } from "./MoodChip";
 import { SearchSuggestions } from "./search/SearchSuggestions";
 import { SearchModeIndicator } from "./search/SearchModeIndicator";
@@ -30,6 +30,7 @@ import { getCurrentSessionId } from "@/lib/instrumentation/sessionId";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 import { setCardClickContext } from "@/lib/instrumentation/clickContext";
 import { emitSearch } from "@/lib/storage/interactions";
+import { useAppStore } from "@/lib/store/appStore";
 import type { ServiceId } from "./platformLogos";
 
 const browseCategories = ["All", "Movies", "TV", "Docs"];
@@ -56,16 +57,6 @@ export interface BrowseStateSnapshot {
 }
 
 interface BrowsePageProps {
-  onItemSelect?: (item: ContentItem) => void;
-  filters: FilterState;
-  onFiltersChange: (filters: FilterState) => void;
-  showFilters: boolean;
-  onShowFiltersChange: (show: boolean) => void;
-  bookmarkedIds?: Set<string>;
-  onToggleBookmark?: (item: ContentItem) => void;
-  providerIds?: number[];
-  userServices?: ServiceId[];
-  watchedIds?: Set<string>;
   savedState?: React.MutableRefObject<BrowseStateSnapshot | null>;
   /** User's 1536D taste vector — drives the filter-only "Best match"
    *  sort. When null/undefined, Best match falls back to popularity. */
@@ -78,7 +69,20 @@ interface BrowsePageProps {
   semanticFlagOn?: boolean;
 }
 
-export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters, onShowFiltersChange, bookmarkedIds, onToggleBookmark, providerIds = [], userServices, watchedIds, savedState, tasteVector, semanticFlagOn = false }: BrowsePageProps) {
+export function BrowsePage({ savedState, tasteVector, semanticFlagOn = false }: BrowsePageProps) {
+  // PLAT-1: app-level state read straight from the store (App is the
+  // writer). Setters and action callbacks have stable identities.
+  const filters = useAppStore((s) => s.filters);
+  const onFiltersChange = useAppStore((s) => s.setFilters);
+  const showFilters = useAppStore((s) => s.showFilters);
+  const onShowFiltersChange = useAppStore((s) => s.setShowFilters);
+  const bookmarkedIds = useAppStore((s) => s.bookmarkedIds);
+  const watchedIds = useAppStore((s) => s.watchedIds);
+  const userServices = useAppStore((s) => s.userServices);
+  const providerIds = useAppStore((s) => s.providerIds);
+  const onItemSelect = useAppStore((s) => s.actions.onItemSelect);
+  const onToggleBookmark = useAppStore((s) => s.actions.onToggleBookmark);
+
   const initial = savedState?.current;
 
   const search = useSearch(userServices, initial?.query, initial?.results, {
