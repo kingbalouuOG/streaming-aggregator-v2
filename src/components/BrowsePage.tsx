@@ -1,8 +1,9 @@
-import React, { useMemo, useEffect, useRef, useState, useCallback } from "react";
+import React, { useMemo, useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Search, X, SlidersHorizontal, Loader2, Clock, Leaf, Zap, Moon, Heart, Check, ChevronDown } from "lucide-react";
 import { BrowseCard } from "./BrowseCard";
 import { ContentItem } from "./ContentCard";
-import { FilterSheet, FilterState, ALL_GENRES, FILTER_LANGUAGES } from "./FilterSheet";
+import { FilterSheet, ALL_GENRES, FILTER_LANGUAGES } from "./FilterSheet";
 import { MoodChip } from "./MoodChip";
 import { SearchSuggestions } from "./search/SearchSuggestions";
 import { SearchModeIndicator } from "./search/SearchModeIndicator";
@@ -29,6 +30,7 @@ import { getCurrentSessionId } from "@/lib/instrumentation/sessionId";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 import { setCardClickContext } from "@/lib/instrumentation/clickContext";
 import { emitSearch } from "@/lib/storage/interactions";
+import { useAppStore } from "@/lib/store/appStore";
 import type { ServiceId } from "./platformLogos";
 
 const browseCategories = ["All", "Movies", "TV", "Docs"];
@@ -55,16 +57,6 @@ export interface BrowseStateSnapshot {
 }
 
 interface BrowsePageProps {
-  onItemSelect?: (item: ContentItem) => void;
-  filters: FilterState;
-  onFiltersChange: (filters: FilterState) => void;
-  showFilters: boolean;
-  onShowFiltersChange: (show: boolean) => void;
-  bookmarkedIds?: Set<string>;
-  onToggleBookmark?: (item: ContentItem) => void;
-  providerIds?: number[];
-  userServices?: ServiceId[];
-  watchedIds?: Set<string>;
   savedState?: React.MutableRefObject<BrowseStateSnapshot | null>;
   /** User's 1536D taste vector — drives the filter-only "Best match"
    *  sort. When null/undefined, Best match falls back to popularity. */
@@ -77,7 +69,20 @@ interface BrowsePageProps {
   semanticFlagOn?: boolean;
 }
 
-export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters, onShowFiltersChange, bookmarkedIds, onToggleBookmark, providerIds = [], userServices, watchedIds, savedState, tasteVector, semanticFlagOn = false }: BrowsePageProps) {
+export function BrowsePage({ savedState, tasteVector, semanticFlagOn = false }: BrowsePageProps) {
+  // PLAT-1: app-level state read straight from the store (App is the
+  // writer). Setters and action callbacks have stable identities.
+  const filters = useAppStore((s) => s.filters);
+  const onFiltersChange = useAppStore((s) => s.setFilters);
+  const showFilters = useAppStore((s) => s.showFilters);
+  const onShowFiltersChange = useAppStore((s) => s.setShowFilters);
+  const bookmarkedIds = useAppStore((s) => s.bookmarkedIds);
+  const watchedIds = useAppStore((s) => s.watchedIds);
+  const userServices = useAppStore((s) => s.userServices);
+  const providerIds = useAppStore((s) => s.providerIds);
+  const onItemSelect = useAppStore((s) => s.actions.onItemSelect);
+  const onToggleBookmark = useAppStore((s) => s.actions.onToggleBookmark);
+
   const initial = savedState?.current;
 
   const search = useSearch(userServices, initial?.query, initial?.results, {
@@ -460,6 +465,91 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
       metadata: { filter_set_hash: filterSetHash },
     });
   }, [filters, userServices, filterSetHash, queryTrimmed, displayItems.length]);
+
+  // ── PLAT-1 §3: results-grid virtualization (E&P brief §5) ───────
+  // Long grids chunk finalItems into 2-per-row pairs rendered through
+  // a row virtualizer attached to the App-level scroll container.
+  // Short grids (< 21 items — i.e. a typical page-1 result set) keep
+  // the original markup, including BrowseCard's staggered entrance.
+  const VIRTUALIZE_MIN = 21;
+  const virtualizeGrid = finalItems.length >= VIRTUALIZE_MIN;
+  const gridRowCount = virtualizeGrid ? Math.ceil(finalItems.length / 2) : 0;
+
+  const gridWrapRef = useRef<HTMLDivElement | null>(null);
+  const scrollParentRef = useRef<HTMLElement | null>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  // Resolve the nearest scrollable ancestor and the grid's offset
+  // within it. The deps cover the state that changes the height of
+  // the content above the grid (sticky header rows, filter strip,
+  // mode indicator, CTA); the guarded setState only re-renders when
+  // the offset actually moved.
+  useLayoutEffect(() => {
+    const el = gridWrapRef.current;
+    if (!el) return;
+    if (!scrollParentRef.current) {
+      let p: HTMLElement | null = el.parentElement;
+      while (p) {
+        const { overflowY } = window.getComputedStyle(p);
+        if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") break;
+        p = p.parentElement;
+      }
+      scrollParentRef.current = p;
+    }
+    const sp = scrollParentRef.current;
+    if (!sp) return;
+    const margin = Math.round(
+      el.getBoundingClientRect().top - sp.getBoundingClientRect().top + sp.scrollTop,
+    );
+    setScrollMargin((prev) => (Math.abs(prev - margin) > 1 ? margin : prev));
+  }, [finalItems.length, displayItems.length, searchFocused, hasQuery, isSearching, filtersAreDefault, activeFilterPills.length, search.mode, search.tooShort, search.shouldShowSemanticCTA, isLoading]);
+
+  const rowVirtualizer = useVirtualizer<HTMLElement, HTMLDivElement>({
+    count: gridRowCount,
+    getScrollElement: () => scrollParentRef.current,
+    // 5/7 poster (~237px at 390px viewports) + 8px text offset +
+    // ~47px title/meta + 12px row gap. measureElement corrects.
+    estimateSize: () => 304,
+    overscan: 4,
+    scrollMargin,
+    getItemKey: (index) => finalItems[index * 2]?.id ?? index,
+  });
+
+  // Single source for the card render so the virtual and non-virtual
+  // paths share identical per-item availability decisions (badges,
+  // off-service tint, rent/buy label) and the SAME flat-index click
+  // context — `index` is always the position in finalItems, never the
+  // virtual row index.
+  const renderBrowseCard = (item: ContentItem, index: number, virtualized = false) => {
+    // Override item.services with the matched/displayable
+    // set from the availability check so the ServiceStack
+    // reflects on-service vs "where it lives" intent.
+    const badges = availability.serviceBadges.get(item.id);
+    const renderItem = badges ? { ...item, services: badges } : item;
+    return (
+      <BrowseCard
+        key={item.id}
+        item={renderItem}
+        index={index}
+        virtualized={virtualized}
+        onSelect={(selected) => {
+          // ENG-1 Workstream D: stash the ranked origin for
+          // position-at-click on downstream outcome events.
+          const { tmdbId } = parseContentItemId(selected.id);
+          if (!Number.isNaN(tmdbId)) {
+            setCardClickContext({ contentId: tmdbId, position: index, surface: 'search' });
+          }
+          onItemSelect?.(selected);
+        }}
+        bookmarked={bookmarkedIds?.has(item.id)}
+        onToggleBookmark={onToggleBookmark}
+        userServices={userServices}
+        watched={watchedIds?.has(item.id)}
+        offService={availability.unavailableIds.has(item.id)}
+        rentBuyPriceLabel={availability.rentBuyPrices.get(item.id)}
+      />
+    );
+  };
 
   return (
     <div className="flex flex-col gap-0">
@@ -922,37 +1012,42 @@ export function BrowsePage({ onItemSelect, filters, onFiltersChange, showFilters
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              {finalItems.map((item, index) => {
-                // Override item.services with the matched/displayable
-                // set from the availability check so the ServiceStack
-                // reflects on-service vs "where it lives" intent.
-                const badges = availability.serviceBadges.get(item.id);
-                const renderItem = badges ? { ...item, services: badges } : item;
-                return (
-                  <BrowseCard
-                    key={item.id}
-                    item={renderItem}
-                    index={index}
-                    onSelect={(selected) => {
-                      // ENG-1 Workstream D: stash the ranked origin for
-                      // position-at-click on downstream outcome events.
-                      const { tmdbId } = parseContentItemId(selected.id);
-                      if (!Number.isNaN(tmdbId)) {
-                        setCardClickContext({ contentId: tmdbId, position: index, surface: 'search' });
-                      }
-                      onItemSelect?.(selected);
-                    }}
-                    bookmarked={bookmarkedIds?.has(item.id)}
-                    onToggleBookmark={onToggleBookmark}
-                    userServices={userServices}
-                    watched={watchedIds?.has(item.id)}
-                    offService={availability.unavailableIds.has(item.id)}
-                    rentBuyPriceLabel={availability.rentBuyPrices.get(item.id)}
-                  />
-                );
-              })}
-            </div>
+            {virtualizeGrid ? (
+              /* Virtualized path — one absolutely-positioned virtual
+                 row per item pair, rendered with the same
+                 `grid grid-cols-2 gap-3` shell. The inter-row gap is
+                 baked into each row as padding so measured heights
+                 include it (last row stays flush, as today). */
+              <div
+                ref={gridWrapRef}
+                className="relative w-full"
+                style={{ height: rowVirtualizer.getTotalSize() }}
+              >
+                {rowVirtualizer.getVirtualItems().map((vRow) => (
+                  <div
+                    key={vRow.key}
+                    data-index={vRow.index}
+                    ref={rowVirtualizer.measureElement}
+                    className="absolute top-0 left-0 w-full"
+                    style={{ transform: `translateY(${vRow.start - rowVirtualizer.options.scrollMargin}px)` }}
+                  >
+                    <div
+                      className="grid grid-cols-2 gap-3"
+                      style={{ paddingBottom: vRow.index === gridRowCount - 1 ? 0 : 12 }}
+                    >
+                      {[vRow.index * 2, vRow.index * 2 + 1].map((flatIndex) => {
+                        const item = finalItems[flatIndex];
+                        return item ? renderBrowseCard(item, flatIndex, true) : null;
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {finalItems.map((item, index) => renderBrowseCard(item, index))}
+              </div>
+            )}
           </>
         )}
 

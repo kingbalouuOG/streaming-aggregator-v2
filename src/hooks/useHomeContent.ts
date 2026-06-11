@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useSectionData } from './useSectionData';
 import { clearSectionCache } from '@/lib/sectionSessionCache';
 import { prefetchServices } from '@/lib/utils/serviceCache';
@@ -39,36 +40,11 @@ const FALLBACK_NOTE: EditorNote = {
   publishedAt: new Date().toISOString(),
 };
 
-const EDITOR_NOTE_CACHE_KEY = 'videx.editorNote.v1';
+// PLAT-1: the bespoke sessionStorage TTL cache for the editor's note is
+// replaced by the query cache (24h stale/gc under the memory-only 'home'
+// namespace — equivalent lifetime: sessionStorage also died with the
+// app process).
 const EDITOR_NOTE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-
-interface CachedEditorNote {
-  fetchedAt: number;
-  note: EditorNote | null;
-}
-
-function readCachedEditorNote(): CachedEditorNote | null {
-  try {
-    const raw = sessionStorage.getItem(EDITOR_NOTE_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as CachedEditorNote;
-    if (Date.now() - parsed.fetchedAt > EDITOR_NOTE_CACHE_TTL_MS) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function writeCachedEditorNote(note: EditorNote | null) {
-  try {
-    sessionStorage.setItem(
-      EDITOR_NOTE_CACHE_KEY,
-      JSON.stringify({ fetchedAt: Date.now(), note } satisfies CachedEditorNote),
-    );
-  } catch {
-    // sessionStorage unavailable; ignore.
-  }
-}
 
 async function fetchEditorNote(): Promise<EditorNote | null> {
   // Migration 040 (editor_notes) lives in the repo but is not applied to
@@ -121,7 +97,6 @@ async function fetchEditorNote(): Promise<EditorNote | null> {
 }
 
 export function useHomeContent(providerIds: number[], filters?: FilterState) {
-  const [sharedFilters, setSharedFilters] = useState<FilterSets | null>(null);
   const [reloadCounter, setReloadCounter] = useState(0);
 
   // Phase 4 Home rows
@@ -136,26 +111,16 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
   const [selectedClusters, setSelectedClusters] = useState<string[]>([]);
 
   // §5.2 editor's note. Reads once-per-day from the editor_notes table
-  // (migration 040), cached in sessionStorage; falls back to the
-  // hardcoded FALLBACK_NOTE if Supabase returns nothing or errors.
-  const [editorNote, setEditorNote] = useState<EditorNote>(() => {
-    const cached = readCachedEditorNote();
-    return cached?.note ?? FALLBACK_NOTE;
+  // (migration 040); falls back to the hardcoded FALLBACK_NOTE if
+  // Supabase returns nothing or errors (fetchEditorNote returns null in
+  // both cases — never throws).
+  const editorNoteQuery = useQuery({
+    queryKey: ['home', 'editorNote'],
+    queryFn: fetchEditorNote,
+    staleTime: EDITOR_NOTE_CACHE_TTL_MS,
+    gcTime: EDITOR_NOTE_CACHE_TTL_MS,
   });
-  useEffect(() => {
-    let cancelled = false;
-    const cached = readCachedEditorNote();
-    if (cached) {
-      // Within TTL — cached value is already in state.
-      return;
-    }
-    fetchEditorNote().then((note) => {
-      if (cancelled) return;
-      writeCachedEditorNote(note);
-      setEditorNote(note ?? FALLBACK_NOTE);
-    });
-    return () => { cancelled = true; };
-  }, []);
+  const editorNote: EditorNote = editorNoteQuery.data ?? FALLBACK_NOTE;
 
   const providerStr = providerIds.join(',');
 
@@ -239,57 +204,81 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     batchSize: 8,
   });
 
-  // --- Build shared filter sets ---
-  useEffect(() => {
-    if (!providerStr) return;
-    const serviceIds: string[] = providerIds
-      .map(id => providerIdToServiceId(id))
-      .filter(Boolean) as string[];
-    if (serviceIds.length === 0) return;
-    buildFilterSets(serviceIds).then(setSharedFilters);
-  }, [providerStr, reloadCounter]);
+  // --- Shared filter sets (PLAT-1: query-cached, memory-only 'home'
+  // namespace, 15min gcTime → tab-return reuses them) ---
+  const filterSetsQuery = useQuery({
+    queryKey: ['home', 'filterSets', providerStr, reloadCounter],
+    enabled: !!providerStr,
+    staleTime: 0,
+    gcTime: 15 * 60 * 1000,
+    queryFn: async (): Promise<FilterSets | null> => {
+      const serviceIds: string[] = providerIds
+        .map(id => providerIdToServiceId(id))
+        .filter(Boolean) as string[];
+      if (serviceIds.length === 0) return null;
+      return buildFilterSets(serviceIds);
+    },
+  });
+  const sharedFilters: FilterSets | null = filterSetsQuery.data ?? null;
+  const availableCount = sharedFilters?.availableTmdbIds.size ?? -1;
 
-  // --- Phase 4 Home rows (fetch when filters are ready) ---
-  useEffect(() => {
-    if (!sharedFilters) return;
-    const serviceIds: string[] = providerIds
-      .map(id => providerIdToServiceId(id))
-      .filter(Boolean) as string[];
+  // --- Phase 4 Home rows (PLAT-1: one query, enabled when filters are
+  // ready). The documented Home WATERFALL died here: profile, charts and
+  // acclaimed had no data dependencies on each other and now fetch in
+  // ONE parallel window (was profile → [charts ∥ acclaimed]). The
+  // spotlight still waits for charts — its dedup seed (the
+  // "Goldbergs in adjacent sections" fix) is a real dependency. Inputs
+  // to every fetcher are identical → rendered content identical.
+  const rowsQuery = useQuery({
+    queryKey: ['home', 'rows', providerStr, availableCount, reloadCounter],
+    enabled: !!sharedFilters,
+    staleTime: 0,
+    gcTime: 15 * 60 * 1000,
+    queryFn: async () => {
+      const sf = sharedFilters as FilterSets;
+      const serviceIds: string[] = providerIds
+        .map(id => providerIdToServiceId(id))
+        .filter(Boolean) as string[];
 
-    // Read profile to get selectedClusters for spotlight ordering. The
-    // result feeds both the local state (for `loadMoreGenreSpotlights`)
-    // and the primary fetch below.
-    void getV2TasteProfile().then((profile) => {
-      const picks = profile?.selectedClusters ?? [];
-      setSelectedClusters(picks);
-
-      // Build per-service-charts ID set as initial dedup seed for
-      // spotlights — Joe's "Goldbergs in adjacent sections" was a
-      // dedup miss. Per-service rows ship before spotlights so we
-      // can safely seed.
-      Promise.all([
+      const [profile, charts, acclaimed] = await Promise.all([
+        getV2TasteProfile(),
         fetchPerServiceCharts(serviceIds),
-        fetchCriticallyAcclaimed(sharedFilters!.availableTmdbIds),
-      ]).then(async ([charts, acclaimed]) => {
-        setPerServiceCharts(charts);
-        setCriticallyAcclaimed(acclaimed);
+        fetchCriticallyAcclaimed(sf.availableTmdbIds),
+      ]);
+      const picks = profile?.selectedClusters ?? [];
 
-        const seedExclude = new Set<string>();
-        for (const c of charts) for (const i of c.items) seedExclude.add(i.id);
+      const seedExclude = new Set<string>();
+      for (const c of charts) for (const i of c.items) seedExclude.add(i.id);
 
-        const primarySpotlight = await fetchGenreSpotlight(
-          sharedFilters!.availableTmdbIds,
-          15,
-          0,
-          picks,
-          seedExclude,
-        );
-        setGenreSpotlights(primarySpotlight.items.length > 0 ? [primarySpotlight] : []);
-      }).catch((err) => {
-        console.error('[useHomeContent] Phase 4 rows error:', err);
-      });
-    });
-  }, [sharedFilters, providerStr]);
+      const primarySpotlight = await fetchGenreSpotlight(
+        sf.availableTmdbIds,
+        15,
+        0,
+        picks,
+        seedExclude,
+      );
+
+      return { picks, charts, acclaimed, primarySpotlight };
+    },
+  });
+
+  // Applier — distribute the rows payload into state (selectedClusters
+  // and genreSpotlights stay state because loadMoreGenreSpotlights
+  // appends to them imperatively, exactly as before).
+  useEffect(() => {
+    const data = rowsQuery.data;
+    if (!data) return;
+    setSelectedClusters(data.picks);
+    setPerServiceCharts(data.charts);
+    setCriticallyAcclaimed(data.acclaimed);
+    setGenreSpotlights(data.primarySpotlight.items.length > 0 ? [data.primarySpotlight] : []);
+  }, [rowsQuery.data]);
+
+  useEffect(() => {
+    if (rowsQuery.isError) {
+      console.error('[useHomeContent] Phase 4 rows error:', rowsQuery.error);
+    }
+  }, [rowsQuery.isError, rowsQuery.error]);
 
   /**
    * Lazy-load the next genre spotlight. Called from a scroll sentinel

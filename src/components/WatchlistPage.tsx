@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Bookmark, LayoutGrid, List, Plus, ChevronRight, Trash2, CheckCircle2, ThumbsUp, ThumbsDown, ArrowUpDown, Clock, Star, Timer } from "lucide-react";
 import { TickIcon } from "./icons";
 import { motion, AnimatePresence } from "motion/react";
@@ -7,6 +8,7 @@ import { ServiceBadge } from "./ServiceBadge";
 import { ImageSkeleton } from "./ImageSkeleton";
 import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
+import { useAppStore } from "@/lib/store/appStore";
 import type { ServiceId } from "./platformLogos";
 
 type WatchlistTab = "want" | "watched";
@@ -55,40 +57,89 @@ function getCategoryCounts(items: ContentItem[]): Record<Category, number> {
 interface WatchlistPageProps {
   watchlist: ContentItem[];
   watched: ContentItem[];
-  onRemoveBookmark: (id: string) => void;
-  onMoveToWatched: (id: string) => void;
-  onMoveToWantToWatch: (id: string) => void;
-  onItemSelect: (item: ContentItem) => void;
-  onNavigateToBrowse: () => void;
-  ratings?: Record<string, 'up' | 'down'>;
-  onRate?: (id: string, rating: 'up' | 'down' | null) => void;
   activeSubTab?: "want" | "watched";
   onSubTabChange?: (tab: "want" | "watched") => void;
-  /** User's connected services — used to render the IN YOUR PLAN
-   *  badge on list rows when a title overlaps the user's stack. */
-  userServices?: ServiceId[];
+}
+
+/** __DEV__ 500-item synthetic watchlist seed (PLAT-1 plan Q3).
+ *  Triple-tap the tab header to layer 500 local-only ContentItems over
+ *  the Want-to-watch list for the scroll-jank acceptance test. Never
+ *  written to storage/Supabase; production builds tree-shake this. */
+const SYNTHETIC_COUNT = 500;
+const SYNTHETIC_SERVICES: ServiceId[] = ["netflix", "prime", "disney", "itvx", "channel4"];
+function buildSyntheticItems(): ContentItem[] {
+  const now = Date.now();
+  return Array.from({ length: SYNTHETIC_COUNT }, (_, i) => ({
+    // Non-empty `services` is deliberate: it short-circuits the cards'
+    // getCachedServices fallback so synthetic rows never hit TMDb.
+    id: `movie-${900001 + i}`,
+    title: `Synthetic ${i + 1}`,
+    image: "",
+    services: [SYNTHETIC_SERVICES[i % SYNTHETIC_SERVICES.length]],
+    rating: 5 + ((i * 7) % 50) / 10,
+    year: 2000 + (i % 26),
+    type: "movie" as const,
+    runtime: 45 + (i % 135),
+    addedAt: now - i * 60_000,
+    genre: "Synthetic",
+  }));
 }
 
 export function WatchlistPage({
   watchlist,
   watched,
-  onRemoveBookmark,
-  onMoveToWatched,
-  onMoveToWantToWatch,
-  onItemSelect,
-  onNavigateToBrowse,
-  ratings,
-  onRate,
   activeSubTab,
   onSubTabChange,
-  userServices,
 }: WatchlistPageProps) {
+  // PLAT-1: app-level state + stable action callbacks from the store
+  // (App is the writer; this page is a reader).
+  const userServices = useAppStore((s) => s.userServices);
+  const ratings = useAppStore((s) => s.ratings);
+  const setAppTab = useAppStore((s) => s.setActiveTab);
+  const onItemSelect = useAppStore((s) => s.actions.onItemSelect);
+  const onRemoveBookmark = useAppStore((s) => s.actions.onRemoveBookmark);
+  const onMoveToWatched = useAppStore((s) => s.actions.onMoveToWatched);
+  const onMoveToWantToWatch = useAppStore((s) => s.actions.onMoveToWantToWatch);
+  const onRate = useAppStore((s) => s.actions.onRate);
+  const onNavigateToBrowse = useCallback(() => setAppTab("browse"), [setAppTab]);
+
   const [localTab, setLocalTab] = useState<WatchlistTab>("want");
   const activeTab = activeSubTab ?? localTab;
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [activeCategory, setActiveCategory] = useState<Category>("all");
   const [activeSort, setActiveSort] = useState<SortOption>("added");
   const [showSortMenu, setShowSortMenu] = useState(false);
+
+  // ── __DEV__ synthetic seed (PLAT-1 plan Q3) ─────────────────────
+  // LOCAL component state only — layered over the real list at render
+  // time, never persisted. Triple-tap the tab header toggles it.
+  const [syntheticActive, setSyntheticActive] = useState(false);
+  const seedTapCountRef = useRef(0);
+  const seedTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSeedGesture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!__DEV__) return;
+    // Taps on the tab chips themselves switch tabs — only count taps
+    // on the header's non-interactive area.
+    if ((e.target as HTMLElement).closest("button")) return;
+    seedTapCountRef.current += 1;
+    if (seedTapTimerRef.current) clearTimeout(seedTapTimerRef.current);
+    if (seedTapCountRef.current >= 3) {
+      seedTapCountRef.current = 0;
+      setSyntheticActive((v) => !v);
+    } else {
+      seedTapTimerRef.current = setTimeout(() => {
+        seedTapCountRef.current = 0;
+      }, 600);
+    }
+  };
+  const syntheticItems = useMemo<ContentItem[]>(
+    () => (__DEV__ && syntheticActive ? buildSyntheticItems() : []),
+    [syntheticActive]
+  );
+  const effectiveWatchlist = useMemo(
+    () => (syntheticItems.length > 0 ? [...watchlist, ...syntheticItems] : watchlist),
+    [watchlist, syntheticItems]
+  );
 
   // Reset category when switching tabs
   const handleTabChange = (tab: WatchlistTab) => {
@@ -97,21 +148,92 @@ export function WatchlistPage({
     setActiveCategory("all");
   };
 
-  const tabItems = activeTab === "want" ? watchlist : watched;
+  const tabItems = activeTab === "want" ? effectiveWatchlist : watched;
   const categoryCounts = getCategoryCounts(tabItems);
   const items = sortItems(filterByCategory(tabItems, activeCategory), activeSort);
-  const totalItems = watchlist.length + watched.length;
+  const totalItems = effectiveWatchlist.length + watched.length;
+
+  // ── PLAT-1 §3: list virtualization (E&P brief §5) ──────────────
+  // Long lists render through a row virtualizer attached to the
+  // App-level scroll container (App.tsx scrollRef — the nearest
+  // overflow-y ancestor). Short lists keep the original, fully
+  // animated markup so empty/short states stay pixel-identical.
+  const VIRTUALIZE_MIN = 21;
+  const virtualize = items.length >= VIRTUALIZE_MIN;
+  const gridMode = viewMode === "grid";
+  // Grid mode chunks items into 2-per-row pairs; the trailing "Add
+  // titles" card occupies the slot after the last item, so the row
+  // count covers items.length + 1 slots. List mode is 1 item per row.
+  const rowCount = virtualize
+    ? gridMode
+      ? Math.ceil((items.length + 1) / 2)
+      : items.length
+    : 0;
+
+  const listWrapRef = useRef<HTMLDivElement | null>(null);
+  const scrollParentRef = useRef<HTMLElement | null>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  // Resolve the nearest scrollable ancestor and the list's offset
+  // within it. The deps cover every piece of state that can change
+  // the height of the content above the list (tabs, pills, progress
+  // bar, swipe hint); the guarded setState only re-renders when the
+  // offset actually moved.
+  useLayoutEffect(() => {
+    const el = listWrapRef.current;
+    if (!el) return;
+    if (!scrollParentRef.current) {
+      let p: HTMLElement | null = el.parentElement;
+      while (p) {
+        const { overflowY } = window.getComputedStyle(p);
+        if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") break;
+        p = p.parentElement;
+      }
+      scrollParentRef.current = p;
+    }
+    const sp = scrollParentRef.current;
+    if (!sp) return;
+    const margin = Math.round(
+      el.getBoundingClientRect().top - sp.getBoundingClientRect().top + sp.scrollTop,
+    );
+    setScrollMargin((prev) => (Math.abs(prev - margin) > 1 ? margin : prev));
+  }, [effectiveWatchlist.length, watched.length, items.length, tabItems.length, totalItems, viewMode, activeTab, activeCategory, activeSort]);
+
+  const rowVirtualizer = useVirtualizer<HTMLElement, HTMLDivElement>({
+    count: rowCount,
+    getScrollElement: () => scrollParentRef.current,
+    // Grid rows: 5/7 poster (~237px at 390px viewports) + 8px text
+    // offset + ~47px title/meta + 12px row gap. List rows: 80px thumb
+    // + 20px card padding + 8px row gap. measureElement corrects.
+    estimateSize: () => (gridMode ? 304 : 108),
+    overscan: 4,
+    scrollMargin,
+    getItemKey: (index) =>
+      gridMode ? items[index * 2]?.id ?? "add-card-row" : items[index].id,
+  });
+
+  // Measured row heights are keyed by item id, and the same id maps
+  // to a very different height in grid vs list mode — flush the
+  // measurement cache when the view mode flips.
+  useEffect(() => {
+    rowVirtualizer.measure();
+  }, [viewMode, rowVirtualizer]);
 
   return (
     <div className="flex flex-col min-h-full">
       {/* Sticky header + tab bar */}
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-xl" style={{ backgroundColor: "var(--background)", paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
-        {/* Editorial chip tabs — replace the segmented control. */}
-        <div className="px-5 pt-3 mb-4 flex gap-2">
+        {/* Editorial chip tabs — replace the segmented control.
+            __DEV__: triple-tap the non-button area of this header row
+            to toggle the 500-item synthetic seed (PLAT-1 plan Q3). */}
+        <div
+          className="px-5 pt-3 mb-4 flex gap-2 items-center"
+          onClick={__DEV__ ? handleSeedGesture : undefined}
+        >
           {(["want", "watched"] as const).map((t) => {
             const active = activeTab === t;
             const label = t === "want" ? "Want to watch" : "Watched";
-            const count = t === "want" ? watchlist.length : watched.length;
+            const count = t === "want" ? effectiveWatchlist.length : watched.length;
             return (
               <button
                 key={t}
@@ -294,7 +416,74 @@ export function WatchlistPage({
       {/* Content */}
       <div className="flex-1 px-5">
         {items.length > 0 ? (
-          viewMode === "grid" ? (
+          virtualize ? (
+            /* Virtualized path — rows are absolutely positioned inside
+               a total-height container. Grid rows hold an item pair in
+               the same `grid grid-cols-2 gap-3` shell; the inter-row
+               gap is baked into each row as padding so measured row
+               heights include it (last row stays flush, as today). */
+            <div
+              ref={listWrapRef}
+              className="relative w-full"
+              style={{ height: rowVirtualizer.getTotalSize() }}
+            >
+              {rowVirtualizer.getVirtualItems().map((vRow) => (
+                <div
+                  key={vRow.key}
+                  data-index={vRow.index}
+                  ref={rowVirtualizer.measureElement}
+                  className="absolute top-0 left-0 w-full"
+                  style={{ transform: `translateY(${vRow.start - rowVirtualizer.options.scrollMargin}px)` }}
+                >
+                  {gridMode ? (
+                    <div
+                      className="grid grid-cols-2 gap-3"
+                      style={{ paddingBottom: vRow.index === rowCount - 1 ? 0 : 12 }}
+                    >
+                      {[vRow.index * 2, vRow.index * 2 + 1].map((slot) => {
+                        if (slot < items.length) {
+                          const item = items[slot];
+                          return (
+                            <GridCard
+                              key={item.id}
+                              item={item}
+                              tab={activeTab}
+                              onSelect={() => onItemSelect(item)}
+                              onRemove={() => onRemoveBookmark(item.id)}
+                              onMoveToWatched={() => onMoveToWatched(item.id)}
+                              onMoveToWantToWatch={() => onMoveToWantToWatch(item.id)}
+                              rating={ratings?.[item.id]}
+                              onRate={onRate ? (r) => onRate(item.id, r) : undefined}
+                              virtualized
+                            />
+                          );
+                        }
+                        if (slot === items.length) {
+                          return <AddTitlesCard key="add-card" onClick={onNavigateToBrowse} />;
+                        }
+                        return null;
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ paddingBottom: vRow.index === rowCount - 1 ? 0 : 8 }}>
+                      <SwipeableListCard
+                        item={items[vRow.index]}
+                        tab={activeTab}
+                        onSelect={() => onItemSelect(items[vRow.index])}
+                        onRemove={() => onRemoveBookmark(items[vRow.index].id)}
+                        onMoveToWatched={() => onMoveToWatched(items[vRow.index].id)}
+                        onMoveToWantToWatch={() => onMoveToWantToWatch(items[vRow.index].id)}
+                        rating={ratings?.[items[vRow.index].id]}
+                        onRate={onRate ? (r) => onRate(items[vRow.index].id, r) : undefined}
+                        userServices={userServices}
+                        virtualized
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : viewMode === "grid" ? (
             <div className="grid grid-cols-2 gap-3">
               <AnimatePresence mode="popLayout">
                 {items.map((item) => (
@@ -312,19 +501,7 @@ export function WatchlistPage({
                 ))}
               </AnimatePresence>
               {/* Add card */}
-              <motion.button
-                layout
-                onClick={onNavigateToBrowse}
-                className="aspect-[3/4] rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors cursor-pointer"
-                style={{ borderColor: "var(--overlay-medium)" }}
-              >
-                <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
-                  <Plus className="w-5 h-5" />
-                </div>
-                <span className="text-[12px]" style={{ fontWeight: 500 }}>
-                  Add titles
-                </span>
-              </motion.button>
+              <AddTitlesCard onClick={onNavigateToBrowse} />
             </div>
           ) : (
             <div className="flex flex-col gap-2">
@@ -368,6 +545,25 @@ export function WatchlistPage({
   );
 }
 
+/* ---- Add-titles card (shared by virtual + non-virtual grid) ---- */
+function AddTitlesCard({ onClick }: { onClick: () => void }) {
+  return (
+    <motion.button
+      layout
+      onClick={onClick}
+      className="aspect-[3/4] rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors cursor-pointer"
+      style={{ borderColor: "var(--overlay-medium)" }}
+    >
+      <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
+        <Plus className="w-5 h-5" />
+      </div>
+      <span className="text-[12px]" style={{ fontWeight: 500 }}>
+        Add titles
+      </span>
+    </motion.button>
+  );
+}
+
 /* ---- Grid Card ---- */
 interface CardProps {
   item: ContentItem;
@@ -379,6 +575,11 @@ interface CardProps {
   rating?: 'up' | 'down';
   onRate?: (rating: 'up' | 'down' | null) => void;
   userServices?: ServiceId[];
+  /** True when the card renders inside a virtual row. Disables the
+   *  mount/layout animations — virtual rows remount on scroll, so
+   *  replaying the entrance animation per scroll-into-view would be
+   *  a visible behaviour change from the non-virtual grid. */
+  virtualized?: boolean;
 }
 
 function GridCard({
@@ -390,6 +591,7 @@ function GridCard({
   onMoveToWantToWatch,
   rating,
   onRate,
+  virtualized,
 }: CardProps) {
   const [showActions, setShowActions] = useState(false);
   const [services, setServices] = useState<ServiceId[]>(item.services);
@@ -405,8 +607,8 @@ function GridCard({
 
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, scale: 0.9 }}
+      layout={!virtualized}
+      initial={virtualized ? false : { opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.2 } }}
       transition={{ type: "spring", damping: 25, stiffness: 350 }}
@@ -638,6 +840,7 @@ function SwipeableListCard({
   rating,
   onRate,
   userServices,
+  virtualized,
 }: CardProps) {
   const [offsetX, setOffsetX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
@@ -770,8 +973,8 @@ function SwipeableListCard({
 
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, x: -20 }}
+      layout={!virtualized}
+      initial={virtualized ? false : { opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -60, transition: { duration: 0.25 } }}
       transition={{ type: "spring", damping: 25, stiffness: 350 }}

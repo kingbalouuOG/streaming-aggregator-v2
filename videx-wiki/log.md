@@ -398,3 +398,7 @@ Updated pages:
 Notable fact established this ingest: migration 046 IS applied — the regenerated database-schema snapshot is a live production information_schema pull post-046 ("033, 036–046 applied via Studio/MCP"), superseding the lint-pass-era "awaiting Joe's apply" wording in deferred-items/migrations/database-schema.
 
 Cross-refs: wiki/concepts/architecture/taste-vector.md + recommendation-pipeline.md already carried the ENG-1 behaviour from the same-day pre-snapshot ingest — not re-edited.
+
+## [2026-06-11] ingest | phase-plat-1-summary.md (light pass)
+- Updated: wiki/concepts/operations/phase-history.md (PLAT-1 row + actuals note), wiki/registers/cheatsheet.md (PLAT-1 row; corrected stale REPO-1 'in progress' / 046 'not applied' rows — both predated the merge)
+- Full source-page ingest deferred to the next human raw/ snapshot drop (REPO-1 precedent)

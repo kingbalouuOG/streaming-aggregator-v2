@@ -32,7 +32,7 @@ interface ContentRowProps {
   hasMore?: boolean;
 }
 
-export function ContentRow({ title, items, kicker, kickerColor, standfirst, right, variant = "default", sectionKey, sourceSurface, onItemSelect, bookmarkedIds, onToggleBookmark, userServices, watchedIds, onLoadMore, loadingMore, hasMore }: ContentRowProps) {
+function ContentRowImpl({ title, items, kicker, kickerColor, standfirst, right, variant = "default", sectionKey, sourceSurface, onItemSelect, bookmarkedIds, onToggleBookmark, userServices, watchedIds, onLoadMore, loadingMore, hasMore }: ContentRowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadMoreCalledRef = useRef(false);
   const scrollLeftRef = useRef(0);
@@ -178,3 +178,8 @@ export function ContentRow({ title, items, kicker, kickerColor, standfirst, righ
     </section>
   );
 }
+
+// PLAT-1 Workstream E: memo'd — App re-renders on every scroll pixel
+// (scrollY is state); with store-backed stable props this stops the
+// per-frame re-render cascade through the card/row primitives.
+export const ContentRow = React.memo(ContentRowImpl);

@@ -20,7 +20,7 @@
  */
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { Loader2, Lock, LockOpen } from 'lucide-react';
+import { Lock, LockOpen } from 'lucide-react';
 import { motion } from 'motion/react';
 import { TasteSlider } from './TasteSlider';
 import { ContentRow } from './ContentRow';
@@ -33,26 +33,23 @@ import { MagazineHero } from './MagazineHero';
 import { CalendarList } from './CalendarList';
 import { WideCard } from './WideCard';
 import { MoodRoomCard, FeaturedMoodRoomCard } from './MoodRoomCard';
+import { useAppStore } from "@/lib/store/appStore";
 import { useAuth } from './AuthContext';
 import { useForYouContent } from '@/hooks/useForYouContent';
 import { useAnchorMoodRooms, type AnchorRoomPreview } from '@/hooks/useAnchorMoodRooms';
 import type { FilterSets } from '@/lib/recommendations-v2/hardFilters';
 import type { ContentItem } from './ContentCard';
-import type { ServiceId } from './platformLogos';
 import type { SliderState } from '@/lib/taste-v2/types';
 import type { UpcomingRelease } from '@/hooks/useUpcoming';
 
 interface ForYouPageProps {
-  providerIds: number[];
-  connectedServiceIds: ServiceId[];
+  // PLAT-1 Workstream E: providerIds / connectedServiceIds /
+  // bookmarkedIds / watchedIds and the item-select + bookmark actions
+  // now come from the app store; only App-local wiring stays as props.
   sharedFilters: FilterSets | null;
   filterWatched: (items: ContentItem[]) => ContentItem[];
   filterLanguage: (items: ContentItem[]) => ContentItem[];
-  onItemSelect: (item: ContentItem) => void;
   onSelectAnchorRoom: (preview: AnchorRoomPreview) => void;
-  bookmarkedIds: Set<string>;
-  onToggleBookmark: (item: ContentItem) => void;
-  watchedIds: Set<string>;
   /** Upcoming releases for the foot-of-page CalendarList. Optional. */
   upcoming?: UpcomingRelease[];
   /** Callback when the user taps a calendar entry. */
@@ -213,20 +210,22 @@ function CoverStoryMoodRoom({
 }
 
 export function ForYouPage({
-  providerIds,
-  connectedServiceIds,
   sharedFilters,
   filterWatched,
   filterLanguage,
-  onItemSelect,
   onSelectAnchorRoom,
-  bookmarkedIds,
-  onToggleBookmark,
-  watchedIds,
   upcoming,
   onSelectUpcoming,
 }: ForYouPageProps) {
   const { username } = useAuth();
+  // App-level state/actions via the store (PLAT-1 Workstream E). Local
+  // names match the old props so every internal usage is untouched.
+  const providerIds = useAppStore((s) => s.providerIds);
+  const connectedServiceIds = useAppStore((s) => s.userServices);
+  const bookmarkedIds = useAppStore((s) => s.bookmarkedIds);
+  const watchedIds = useAppStore((s) => s.watchedIds);
+  const onItemSelect = useAppStore((s) => s.actions.onItemSelect);
+  const onToggleBookmark = useAppStore((s) => s.actions.onToggleBookmark);
   const content = useForYouContent(providerIds, sharedFilters);
   const anchorRooms = useAnchorMoodRooms(
     providerIds,
@@ -367,11 +366,39 @@ export function ForYouPage({
     content.fromYourWatchlist.length === 0;
 
   if (content.loading) {
+    // PLAT-1 polish: structured skeleton of the actual §5 anatomy
+    // (greeting → hero → fingerprint card → two rows) instead of a
+    // spinner — first composition takes seconds (PLAT-3 moves it
+    // server-side); until then the page should read as "composing",
+    // not "stuck".
     return (
-      <div className="px-0 pt-2">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className="px-0 pt-2" aria-busy="true" aria-label="Composing your page">
+        <div className="px-5 mb-4">
+          <div className="h-3 w-28 rounded bg-secondary/80 animate-pulse mb-3" />
+          <div className="h-8 w-3/4 rounded bg-secondary/80 animate-pulse" />
         </div>
+        <div className="px-5 mb-6">
+          <div className="w-full aspect-[4/5] rounded-2xl bg-secondary/80 animate-pulse" />
+        </div>
+        <div className="px-5 mb-8">
+          <div className="h-40 rounded-2xl bg-secondary/60 animate-pulse" />
+        </div>
+        {[0, 1].map((row) => (
+          <div key={row} className="mb-8">
+            <div className="px-5 mb-3">
+              <div className="h-3 w-24 rounded bg-secondary/70 animate-pulse mb-2" />
+              <div className="h-6 w-1/2 rounded bg-secondary/70 animate-pulse" />
+            </div>
+            <div className="flex gap-3 px-5 overflow-hidden">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="shrink-0 w-[160px]">
+                  <div className="w-[160px] aspect-[5/7] rounded-xl bg-secondary/80 animate-pulse" />
+                  <div className="h-3 w-24 rounded bg-secondary/60 animate-pulse mt-2" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     );
   }

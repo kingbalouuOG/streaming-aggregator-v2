@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getCachedData, setCachedData, createTMDbCacheKey } from './cache';
+import { getCachedData, setCachedData, createTMDbCacheKey } from './apiQueryCache';
 import { logError, ErrorType, type ErrorTypeValue } from '../utils/errorHandler';
 import { networkNameToProviderId } from '../constants/platforms';
 
@@ -98,7 +98,7 @@ async function cachedRequest<T>(
     if (USE_CACHE) {
       const cacheKey = createTMDbCacheKey(cacheKeyName, cacheParams);
       const cached = await getCachedData(cacheKey);
-      if (cached) return { success: true, data: cached };
+      if (cached) return { success: true, data: cached as T };
     }
 
     const data = await requestFn();

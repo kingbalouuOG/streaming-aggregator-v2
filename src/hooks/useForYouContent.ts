@@ -11,6 +11,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { fetchCandidatePool, scoreCandidates, buildRowFromPool } from '@/lib/recommendations-v2/ranker';
 import { buildAnchoredRoom } from '@/lib/recommendations-v2/anchoredRoom';
 import { buildFilterSets, type FilterSets } from '@/lib/recommendations-v2/hardFilters';
@@ -112,6 +113,108 @@ async function fetchEmbeddingsForCandidates(
 
   if (cacheKey) setCachedEmbeddings(cacheKey, map);
   return map;
+}
+
+/**
+ * PLAT-1 (plan §1 commit 6): the render acquisition — Edge attempt +
+ * client-fallback pipeline — extracted into a pure async fn so TanStack
+ * Query owns WHEN it runs and caches the products in memory (gcTime
+ * 15min, key namespace 'foryou' → never persisted). Tab-away/tab-back
+ * now re-applies the cached render instantly (SWR background refetch)
+ * instead of re-running the full pipeline. Every pipeline step is
+ * byte-identical to the pre-Query load(); PLAT-3 replaces this hook's
+ * acquisition with the Worker feed and shrinks it again.
+ */
+type ForYouRenderResult =
+  | { source: 'edge'; ctx: PipelineContext; edge: NonNullable<Awaited<ReturnType<typeof tryRenderForYouEdge>>> }
+  | {
+      source: 'client';
+      ctx: PipelineContext;
+      sliders: SliderState;
+      filterSets: FilterSets;
+      pool: CandidatePool;
+      penalised: ScoredCandidate[];
+      embMap: EmbeddingMap;
+      avoidSet: CachedEmbedding[];
+      seenIds: Set<number>;
+    }
+  | { source: 'empty'; ctx: PipelineContext };
+
+async function fetchForYouRender(
+  providerIds: number[],
+  sharedFilters: FilterSets | null | undefined,
+): Promise<ForYouRenderResult> {
+  // ── Edge path ──
+  // Build ctx ahead of the Edge call so the body carries the client's
+  // local hourOfDay (decision 9); ctx is returned for the rerank path.
+  const ctx = await buildPipelineContext();
+
+  const edge = await tryRenderForYouEdge(providerIds, ctx);
+  if (edge) {
+    const anchorMax = edge.perAnchorLatencyMs.length > 0 ? Math.max(...edge.perAnchorLatencyMs) : 0;
+    console.log(
+      `[useForYouContent] edge: wall=${edge.wallclockMs}ms server=${edge.renderMs}ms `
+      + `anchorMax=${anchorMax}ms rec=${edge.recommendedForYou.length} `
+      + `gems=${edge.hiddenGems.length} outside=${edge.outsideYourUsual.length} `
+      + `byw=${edge.becauseYouWatched.length} mfp=${edge.moreFromPerson ? 1 : 0} `
+      + `wl=${edge.fromYourWatchlist.length} rooms=${edge.anchorRooms.length}`,
+    );
+    return { source: 'edge', ctx, edge };
+  }
+
+  // ── Client fallback path ── (identical pipeline to the pre-Query load)
+  const [profile, sliderState, interestCentroids] = await Promise.all([
+    getV2TasteProfile(),
+    getSliderState(),
+    getInterestCentroids(),
+  ]);
+
+  if (!profile?.tasteVector) {
+    return { source: 'empty', ctx };
+  }
+
+  let filterSets: FilterSets;
+  if (sharedFilters) {
+    filterSets = sharedFilters;
+  } else {
+    const serviceIds = providerIds
+      .map(id => providerIdToServiceId(id))
+      .filter(Boolean) as string[];
+    filterSets = await buildFilterSets(serviceIds);
+  }
+
+  // ENG-1: centroid rows present → per-interest retrieval; none →
+  // legacy single-vector path (fallback ladder).
+  const pool = await fetchCandidatePool({
+    tasteVector: profile.tasteVector,
+    filterSets,
+    sliders: sliderState,
+    surface: 'foryou',
+    interests: interestCentroids.length > 0
+      ? interestCentroids.map(c => ({ centroid: c.centroid, weight: c.weight, slot: c.slot }))
+      : undefined,
+  });
+
+  const scored = scoreCandidates(pool, sliderState, 'foryou', ctx);
+
+  // Phase 5: top-200 embeddings for MMR; Phase 5.5: 24h cache.
+  // ENG-1: avoid set + seen-set in the same parallel window.
+  const [embMap, avoidSet, seenIds] = await Promise.all([
+    fetchEmbeddingsForCandidates(
+      scored.slice(0, 200),
+      {
+        userId: getAuthUserId(),
+        tasteProfilesUpdatedAt: profile.updatedAt,
+      },
+    ),
+    fetchAvoidSet(),
+    fetchSeenContentIds(),
+  ]);
+
+  // ENG-1 Workstream B: penalty after the embedding fetch, before rows.
+  const penalised = applyAvoidPenalty(scored, avoidSet, embMap, AVOID_PENALTY_GAMMA);
+
+  return { source: 'client', ctx, sliders: sliderState, filterSets, pool, penalised, embMap, avoidSet, seenIds };
 }
 
 interface BecauseYouWatchedRow {
@@ -293,33 +396,45 @@ export function useForYouContent(
     buildRows(penalised, newSliders);
   }, [buildRows]);
 
-  // ── Main load function ──
-  // IN-466: try the render-foryou-rows Edge Function first. On any failure
-  // (timeout > 1.5s, 5xx, malformed JSON), fall through to the existing
-  // client-side pipeline. The fallback contract is the resilience layer
-  // that makes shipping the Edge path safe.
-  const load = useCallback(async () => {
-    if (!providerStr) { setLoading(false); return; }
-    setLoading(true);
+  // ── Render acquisition via TanStack Query (PLAT-1) ──
+  // IN-466 contract unchanged: Edge first, client pipeline on any
+  // failure — both inside fetchForYouRender. Key: 'foryou' namespace is
+  // NOT in the persistence filter (memory-only); gcTime 15min makes
+  // tab-away/tab-back re-apply the cached render instantly with a
+  // background refetch (staleTime 0) instead of a skeleton reload.
+  // sharedFilters can't live in the key (object identity) — its
+  // availability-set size stands in, matching the old load() dep's
+  // practical refetch triggers.
+  const renderQuery = useQuery({
+    queryKey: [
+      'foryou', 'render',
+      getAuthUserId() ?? 'anon',
+      providerStr,
+      sharedFilters ? `s${sharedFilters.availableTmdbIds.size}` : 'own',
+    ],
+    queryFn: () => fetchForYouRender(providerIds, sharedFilters),
+    enabled: providerStr.length > 0,
+    staleTime: 0,
+    gcTime: 15 * 60 * 1000,
+  });
 
-    // ── Edge path ──
-    // Build ctx ahead of the Edge call so (a) the body carries the
-    // client's local hourOfDay (decision 9), and (b) ctxRef is
-    // populated for the rerank path that runs against the cached
-    // Edge-returned pool on slider drag.
-    const ctx = await buildPipelineContext();
-    ctxRef.current = ctx;
+  // No services selected → nothing to load (old load()'s early-out).
+  useEffect(() => {
+    if (!providerStr) setLoading(false);
+  }, [providerStr]);
 
-    const edge = await tryRenderForYouEdge(providerIds, ctx);
-    if (edge) {
-      const anchorMax = edge.perAnchorLatencyMs.length > 0 ? Math.max(...edge.perAnchorLatencyMs) : 0;
-      console.log(
-        `[useForYouContent] edge: wall=${edge.wallclockMs}ms server=${edge.renderMs}ms `
-        + `anchorMax=${anchorMax}ms rec=${edge.recommendedForYou.length} `
-        + `gems=${edge.hiddenGems.length} outside=${edge.outsideYourUsual.length} `
-        + `byw=${edge.becauseYouWatched.length} mfp=${edge.moreFromPerson ? 1 : 0} `
-        + `wl=${edge.fromYourWatchlist.length} rooms=${edge.anchorRooms.length}`,
-      );
+  // Applier: distribute the (possibly cached) render result into the
+  // hook's state + refs. Splitting acquisition (queryFn) from
+  // application (this effect) is the whole migration — every assignment
+  // below matches the pre-Query load() ordering.
+  useEffect(() => {
+    const result = renderQuery.data;
+    if (!result) return;
+
+    ctxRef.current = result.ctx;
+
+    if (result.source === 'edge') {
+      const edge = result.edge;
       setSliders(edge.sliders);
       setRecommendedForYou(edge.recommendedForYou);
       setHiddenGems(edge.hiddenGems);
@@ -331,112 +446,85 @@ export function useForYouContent(
       poolRef.current = edge.pool;
       setPool(edge.pool);
       setLoading(false);
+
+      // PLAT-1 fix (device pass 2): hydrate embeddings + avoid set +
+      // seen-set in the BACKGROUND so slider re-ranks on Edge-served
+      // sessions run the SAME pipeline as the server render (MMR with
+      // cached norms + avoid penalty + novel exploration picks) instead
+      // of the degraded genreSpread/no-penalty fallback — that
+      // divergence was why titles vanished unexpectedly on drags.
+      // Embeddings hit the 24h localStorage cache on warm sessions, so
+      // this is usually instant; cold it's a background fetch that
+      // upgrades the NEXT drag.
+      void (async () => {
+        try {
+          const scored = scoreCandidates(edge.pool, edge.sliders, 'foryou', result.ctx);
+          const [embMap, avoidSet, seenIds] = await Promise.all([
+            fetchEmbeddingsForCandidates(scored.slice(0, 200), {
+              userId: getAuthUserId(),
+              tasteProfilesUpdatedAt: null,
+            }),
+            fetchAvoidSet(),
+            fetchSeenContentIds(),
+          ]);
+          embeddingMapRef.current = embMap;
+          avoidRef.current = avoidSet;
+          seenIdsRef.current = seenIds;
+        } catch {
+          // Hydration is best-effort — re-rank falls back exactly as before.
+        }
+      })();
       return;
     }
 
-    // ── Client fallback path ──
-    // Anchor rooms hook needs to do its own work since the edge didn't
-    // pre-build them.
+    // Client paths: anchor rooms hook does its own work.
     setPrebuiltAnchorRooms(null);
 
-    try {
-      // Fetch taste profile + slider state + interest centroids in parallel.
-      // (ctx already built and stored in ctxRef.current before the
-      // Edge attempt above — reuse it for the client pipeline.)
-      const [profile, sliderState, interestCentroids] = await Promise.all([
-        getV2TasteProfile(),
-        getSliderState(),
-        getInterestCentroids(),
-      ]);
-
-      if (!profile?.tasteVector) {
-        setLoading(false);
-        return;
-      }
-
-      setSliders(sliderState);
-
-      // Build filter sets (reuse from Home if available)
-      let filterSets: FilterSets;
-      if (sharedFilters) {
-        filterSets = sharedFilters;
-      } else {
-        const serviceIds = providerIds
-          .map(id => providerIdToServiceId(id))
-          .filter(Boolean) as string[];
-        filterSets = await buildFilterSets(serviceIds);
-      }
-      filterSetsRef.current = filterSets;
-
-      // ── Pipeline: fetch shared pool + score candidates ──
-      // ENG-1: centroid rows present → per-interest retrieval; none →
-      // legacy single-vector path (fallback ladder, identical to today).
-      const pool = await fetchCandidatePool({
-        tasteVector: profile.tasteVector,
-        filterSets,
-        sliders: sliderState,
-        surface: 'foryou',
-        interests: interestCentroids.length > 0
-          ? interestCentroids.map(c => ({ centroid: c.centroid, weight: c.weight, slot: c.slot }))
-          : undefined,
-      });
-      poolRef.current = pool;
-      setPool(pool);
-
-      const scored = scoreCandidates(pool, sliderState, 'foryou', ctxRef.current);
-
-      // Phase 5: fetch embeddings for top-200 by finalScore so MMR can
-      // diversify intra-row. Out-of-top-200 candidates that bubble up
-      // into Hidden Gems / Outside Your Usual rows get neutral 0
-      // redundancy (MMR degrades gracefully when an embedding is
-      // missing). Top-200 is the headroom that covers all three
-      // taste-vector rows in practice. Phase 5.5 (C5): hits the 24h
-      // localStorage cache first to skip the network fetch entirely.
-      // ENG-1: avoid set + seen-set fetched in parallel — same network
-      // window as the embedding fetch.
-      const [embMap, avoidSet, seenIds] = await Promise.all([
-        fetchEmbeddingsForCandidates(
-          scored.slice(0, 200),
-          {
-            userId: getAuthUserId(),
-            tasteProfilesUpdatedAt: profile.updatedAt,
-          },
-        ),
-        fetchAvoidSet(),
-        fetchSeenContentIds(),
-      ]);
-      embeddingMapRef.current = embMap;
-      avoidRef.current = avoidSet;
-      seenIdsRef.current = seenIds;
-
-      // ENG-1 Workstream B: penalty after the embedding fetch, before
-      // row building (re-sorts by penalised finalScore).
-      const penalised = applyAvoidPenalty(scored, avoidSet, embMap, AVOID_PENALTY_GAMMA);
-      scoredRef.current = penalised;
-
-      // Build taste-vector-based rows — show these immediately
-      buildRows(penalised, sliderState);
+    if (result.source === 'empty') {
+      // No taste vector → user hasn't onboarded; empty-state UI.
       setLoading(false);
+      return;
+    }
 
-      // ── Background: fetch conditional rows (don't block initial render) ──
-      Promise.all([
-        fetchBecauseYouWatched(filterSets, pool),
-        fetchMoreFromPerson(filterSets),
-        fetchFromWatchlist(),
-      ]).then(([bywRows, mfpRow, wlItems]) => {
-        setBecauseYouWatched(bywRows);
-        setMoreFromPerson(mfpRow);
-        setFromYourWatchlist(wlItems);
-      }).catch(err => {
-        console.error('[useForYouContent] Conditional rows error:', err);
-      });
-    } catch (error) {
-      console.error('[useForYouContent] Error:', error);
+    setSliders(result.sliders);
+    filterSetsRef.current = result.filterSets;
+    poolRef.current = result.pool;
+    setPool(result.pool);
+    embeddingMapRef.current = result.embMap;
+    avoidRef.current = result.avoidSet;
+    seenIdsRef.current = result.seenIds;
+    scoredRef.current = result.penalised;
+
+    // Build taste-vector-based rows — show these immediately
+    buildRows(result.penalised, result.sliders);
+    setLoading(false);
+
+    // ── Background: conditional rows (don't block initial render) ──
+    Promise.all([
+      fetchBecauseYouWatched(result.filterSets, result.pool),
+      fetchMoreFromPerson(result.filterSets),
+      fetchFromWatchlist(),
+    ]).then(([bywRows, mfpRow, wlItems]) => {
+      setBecauseYouWatched(bywRows);
+      setMoreFromPerson(mfpRow);
+      setFromYourWatchlist(wlItems);
+    }).catch(err => {
+      console.error('[useForYouContent] Conditional rows error:', err);
+    });
+  }, [renderQuery.data, buildRows]);
+
+  // Error parity with the old catch block.
+  useEffect(() => {
+    if (renderQuery.isError) {
+      console.error('[useForYouContent] Error:', renderQuery.error);
       setLoading(false);
     }
-  }, [providerStr, sharedFilters, buildRows]);
+  }, [renderQuery.isError, renderQuery.error]);
 
-  useEffect(() => { load(); }, [load]);
+  const { refetch } = renderQuery;
+  const reload = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
   return {
     recommendedForYou,
@@ -449,7 +537,7 @@ export function useForYouContent(
     pool,
     prebuiltAnchorRooms,
     loading,
-    reload: load,
+    reload,
     rerank,
   };
 }

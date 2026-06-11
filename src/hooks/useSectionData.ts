@@ -3,8 +3,58 @@ import { discoverMovies, discoverTV } from '@/lib/api/tmdb';
 import { tmdbMovieToContentItem, tmdbTVToContentItem, type TMDbContentResult } from '@/lib/adapters/contentAdapter';
 import { getSectionCache, setSectionCache } from '@/lib/sectionSessionCache';
 import { sanitiseTVGenreParams } from '@/lib/constants/genres';
+import { queryClient } from '@/lib/queryClient';
 import type { ContentItem } from '@/components/ContentCard';
 import { debug } from '@/lib/debugLogger';
+
+/**
+ * PLAT-1 (plan §1 commit 3): TanStack Query enters this hook at the
+ * PAGE-FETCH boundary only. The buffer/drain mechanics, cross-section
+ * dedup, and sessionStorage display-state restore stay byte-identical —
+ * they are deliberately NOT cacheable by query key: the displayed items
+ * depend on what OTHER sections registered into the shared exclude set
+ * first (mount-order-dependent), so caching display state would let a
+ * remounted section show titles another section now owns. Caching the
+ * raw discover pages (pure in their params) gives the TTL + dedup +
+ * persistence wins without touching that state machine.
+ */
+
+/** Stable signature for a discover param set — sorted-entries JSON,
+ *  the same idea as the retiring cache.ts hashParams. */
+function paramsSignature(params: Record<string, unknown>): string {
+  return JSON.stringify(Object.keys(params).sort().map((k) => [k, params[k]]));
+}
+
+/** Wrapped discover response shape this hook reads (cachedRequest never
+ *  rejects — failures surface as success:false). */
+interface DiscoverPage {
+  success?: boolean;
+  error?: string;
+  data?: { results?: TMDbContentResult[]; total_pages?: number } | null;
+}
+
+/**
+ * One cached discover page. Throws on success:false so failures are
+ * NEVER cached under the 24h ['tmdb'] staleTime (the old cache.ts also
+ * refused to cache failures); the caller's catch path produces the same
+ * empty-section outcome the old silent-failure path did.
+ */
+function fetchDiscoverPage(
+  mediaKind: 'movie' | 'tv',
+  params: Record<string, unknown>,
+  page: number,
+): Promise<DiscoverPage> {
+  const { page: _page, ...rest } = params;
+  return queryClient.fetchQuery({
+    queryKey: ['tmdb', 'section', paramsSignature(rest), mediaKind, page],
+    queryFn: async (): Promise<DiscoverPage> => {
+      const fn = mediaKind === 'movie' ? discoverMovies : discoverTV;
+      const res = (await fn(params)) as DiscoverPage;
+      if (res.success === false) throw new Error(res.error || 'Discover fetch failed');
+      return res;
+    },
+  });
+}
 
 // Phase 3: scoring modes are preserved as type but all resolve to 'none'.
 // Phase 4 reintroduces vector-based scoring via the v2 ranker.
@@ -126,13 +176,16 @@ export function useSectionData(options: UseSectionDataOptions): SectionDataState
       ? sanitiseTVGenreParams(rawTvParams)
       : rawTvParams;
 
+    // PLAT-1: pages served through the query cache (24h tmdb staleTime,
+    // in-flight dedup, localStorage persistence) — movie and TV pages as
+    // separate entries so single-kind sections never fetch both.
     const [movieRes, tvRes] = await Promise.all([
       fetchMovies
-        ? discoverMovies({ ...baseParams, ...movieParams, page: moviePage })
-        : Promise.resolve({ data: { results: [], total_pages: 0 } }),
+        ? fetchDiscoverPage('movie', { ...baseParams, ...movieParams, page: moviePage }, moviePage)
+        : Promise.resolve<DiscoverPage>({ data: { results: [], total_pages: 0 } }),
       fetchTV
-        ? discoverTV(effectiveTvParams)
-        : Promise.resolve({ data: { results: [], total_pages: 0 } }),
+        ? fetchDiscoverPage('tv', effectiveTvParams, tvPage)
+        : Promise.resolve<DiscoverPage>({ data: { results: [], total_pages: 0 } }),
     ]);
 
     const movieResults = (movieRes.data?.results || []).map(toBufferedMovie);

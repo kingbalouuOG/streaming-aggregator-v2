@@ -3,7 +3,7 @@ import { ArrowLeft, Bookmark, Star, Loader2, ThumbsUp, ThumbsDown, Plus, Eye, Ey
 import { motion } from "motion/react";
 import { ServiceBadge } from "./ServiceBadge";
 import { SectionHead } from "./SectionHead";
-import { ContentCard, ContentItem } from "./ContentCard";
+import { ContentCard } from "./ContentCard";
 import { ImageSkeleton } from "./ImageSkeleton";
 import type { ServiceId } from "./platformLogos";
 import { serviceLabels as platformServiceLabels } from "./platformLogos";
@@ -15,6 +15,7 @@ import { classifyProviders } from "@/lib/utils/providerClassifier";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 import { startDwell, exitDwell, setLastAction, getCurrentDwellSeconds } from "@/lib/instrumentation/dwellTimer";
 import { markNotInterested } from "@/lib/storage/interactions";
+import { useAppStore } from "@/lib/store/appStore";
 import rottenTomatoesLogo from "@/assets/rotten-tomatoes-logo.png";
 import { ReportSheet } from "./ReportSheet";
 
@@ -49,23 +50,30 @@ interface DetailPageProps {
   itemTitle?: string;
   itemImage?: string;
   onBack: () => void;
-  bookmarked?: boolean;
+  /** Toggles the CURRENT item (App closes over its selectedItem so the
+   *  full ContentItem — genreIds, services, type — feeds taste
+   *  tracking; the page only knows id/title/image). */
   onToggleBookmark?: () => void;
-  onItemSelect?: (item: ContentItem) => void;
-  bookmarkedIds?: Set<string>;
-  onToggleBookmarkItem?: (item: ContentItem) => void;
-  connectedServices?: number[];
-  userServices?: ServiceId[];
-  watchedIds?: Set<string>;
-  onMoveToWatched?: (id: string) => void;
-  onMoveToWantToWatch?: (id: string) => void;
-  userRating?: 'up' | 'down' | null;
-  onRate?: (id: string, rating: 'up' | 'down' | null) => void;
 }
 
-export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = false, onToggleBookmark, onItemSelect, bookmarkedIds, onToggleBookmarkItem, connectedServices, userServices, watchedIds, onMoveToWatched, onMoveToWantToWatch, userRating, onRate }: DetailPageProps) {
+export function DetailPage({ itemId, itemTitle, itemImage, onBack, onToggleBookmark }: DetailPageProps) {
+  // PLAT-1: app-level state + stable action callbacks from the store
+  // (App is the writer; this page is a reader).
+  const bookmarkedIds = useAppStore((s) => s.bookmarkedIds);
+  const watchedIds = useAppStore((s) => s.watchedIds);
+  const userServices = useAppStore((s) => s.userServices);
+  const connectedServices = useAppStore((s) => s.providerIds);
+  const ratings = useAppStore((s) => s.ratings);
+  const onItemSelect = useAppStore((s) => s.actions.onItemSelect);
+  const onToggleBookmarkItem = useAppStore((s) => s.actions.onToggleBookmark);
+  const onMoveToWatched = useAppStore((s) => s.actions.onMoveToWatched);
+  const onMoveToWantToWatch = useAppStore((s) => s.actions.onMoveToWantToWatch);
+  const onRate = useAppStore((s) => s.actions.onRate);
+  const bookmarked = bookmarkedIds.has(itemId);
+  const userRating = ratings[itemId] || null;
+
   const { detail, similar, loading, error } = useContentDetail(itemId, connectedServices);
-  const isWatched = watchedIds?.has(itemId) ?? false;
+  const isWatched = watchedIds.has(itemId);
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [hasReported, setHasReported] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
@@ -138,7 +146,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
     return (
       <div className="flex flex-col min-h-full">
         <div className="relative w-full aspect-[4/3] shrink-0 bg-secondary">
-          {itemImage ? <ImageSkeleton src={itemImage} alt={itemTitle || ''} className="w-full h-full object-cover" /> : null}
+          {itemImage ? <ImageSkeleton src={itemImage} alt={itemTitle || ''} className="w-full h-full object-cover" priority /> : null}
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
           <button
             onClick={onBack}
@@ -194,6 +202,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
           src={detail.heroImage}
           alt={detail.title}
           className="absolute inset-0 w-full h-full object-cover"
+          priority
         />
         {/* Bottom gradient — reads the title block */}
         <div
@@ -296,7 +305,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
           </div>
 
           {/* Thumbs rating buttons — always visible */}
-          {onRate ? <div className="flex flex-col items-end gap-1">
+          <div className="flex flex-col items-end gap-1">
               <div className="flex items-center gap-1.5">
                 <motion.button
                   onClick={() => {
@@ -345,7 +354,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
                   <EyeOff className="w-3.5 h-3.5" />
                 </motion.button>
               </div>
-            </div> : null}
+            </div>
         </div>
 
         {/* Dual action buttons */}
@@ -446,7 +455,7 @@ export function DetailPage({ itemId, itemTitle, itemImage, onBack, bookmarked = 
         </div>
 
         {/* Rating prompt — watched but not yet rated */}
-        {isWatched && onRate && !userRating ? <motion.div
+        {isWatched && !userRating ? <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}

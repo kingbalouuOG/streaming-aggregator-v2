@@ -111,6 +111,7 @@ export function MagazineHero({
         src={item.image}
         alt={item.title}
         className="absolute inset-0 w-full h-full object-cover"
+        priority
       />
 
       {/* Bottom gradient — read the title block */}

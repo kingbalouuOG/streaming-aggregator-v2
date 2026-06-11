@@ -7,19 +7,56 @@ import { ContentRow } from "./components/ContentRow";
 // FeaturedHeroCarousel — replaced on Home by <MagazineHero>; the file
 // stays for now until the Phase 5 FeaturedHero matrix row formally
 // retires it.
-import { ForYouPage } from "./components/ForYouPage";
-import { MoodRoomPage } from "./components/MoodRoomPage";
 import type { AnchorRoomPreview } from "./hooks/useAnchorMoodRooms";
 import { BottomNav } from "./components/BottomNav";
 import { ContentItem } from "./components/ContentCard";
-import { BrowsePage, BrowseStateSnapshot } from "./components/BrowsePage";
-import { DetailPage } from "./components/DetailPage";
+import type { BrowseStateSnapshot } from "./components/BrowsePage";
 import { FilterSheet } from "./components/FilterSheet";
-import { defaultFor, type FilterState } from "./lib/search/filterState";
-import { WatchlistPage } from "./components/WatchlistPage";
-import { ProfilePage } from "./components/ProfilePage";
-import { OnboardingFlow, OnboardingData } from "./components/OnboardingFlow";
-import { CalendarPage } from "./components/CalendarPage";
+import type { FilterState } from "./lib/search/filterState";
+import { useAppStore, type AppActions } from "./lib/store/appStore";
+import type { OnboardingData } from "./components/OnboardingFlow";
+
+// ── PLAT-1 code-splitting (plan §2, D5: React.lazy only — no router) ──
+// Every top-level page EXCEPT Home is a lazy chunk; Home is the cold-
+// start landing surface and stays eager (plan Q1). Named exports are
+// re-shaped to default via .then() — house components don't default-
+// export. One <Suspense> wraps the page region with a plain background
+// fallback (no spinner flash; chunk loads are local-disk fast in the
+// Capacitor WebView).
+const pageImports = {
+  forYou: () => import("./components/ForYouPage"),
+  moodRoom: () => import("./components/MoodRoomPage"),
+  browse: () => import("./components/BrowsePage"),
+  detail: () => import("./components/DetailPage"),
+  watchlist: () => import("./components/WatchlistPage"),
+  profile: () => import("./components/ProfilePage"),
+  onboarding: () => import("./components/OnboardingFlow"),
+  calendar: () => import("./components/CalendarPage"),
+};
+const ForYouPage = React.lazy(() => pageImports.forYou().then(m => ({ default: m.ForYouPage })));
+const MoodRoomPage = React.lazy(() => pageImports.moodRoom().then(m => ({ default: m.MoodRoomPage })));
+const BrowsePage = React.lazy(() => pageImports.browse().then(m => ({ default: m.BrowsePage })));
+const DetailPage = React.lazy(() => pageImports.detail().then(m => ({ default: m.DetailPage })));
+const WatchlistPage = React.lazy(() => pageImports.watchlist().then(m => ({ default: m.WatchlistPage })));
+const ProfilePage = React.lazy(() => pageImports.profile().then(m => ({ default: m.ProfilePage })));
+const OnboardingFlow = React.lazy(() => pageImports.onboarding().then(m => ({ default: m.OnboardingFlow })));
+const CalendarPage = React.lazy(() => pageImports.calendar().then(m => ({ default: m.CalendarPage })));
+
+/**
+ * PLAT-1 polish (device pass 2): Suspense fallback that renders NOTHING
+ * for its first 160ms. Warm navigations mount lazy pages in well under
+ * that, so the old instant blank-background fallback produced a visible
+ * flash on every first visit; now only genuinely slow chunk loads (cold
+ * start before the idle prefetch lands) show the quiet background.
+ */
+function DelayedBlank() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setShow(true), 160);
+    return () => clearTimeout(t);
+  }, []);
+  return show ? <div className="min-h-screen bg-background" /> : null;
+}
 // ComingSoonCard — Home no longer mounts these directly; the
 // CalendarList primitive renders them internally.
 import { MagazineHero } from "./components/MagazineHero";
@@ -51,7 +88,6 @@ import { useTasteProfile } from "./hooks/useTasteProfile";
 import { logOnboardingEvent } from "./lib/analytics/logger";
 import { ONBOARDING_EVENTS } from "./lib/analytics/events";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { maintainCache } from "./lib/api/cache";
 import { flushNow } from "./lib/instrumentation/impressionBatcher";
 import { parseContentItemId } from "./lib/adapters/contentAdapter";
 import { emitContentInteraction } from "./lib/storage/interactions";
@@ -117,13 +153,18 @@ function AppContent() {
   const auth = useAuth();
   const { isOnline, recheck: recheckNetwork } = useNetworkStatus();
   const [activeCategory, setActiveCategory] = useState("All");
-  const [activeTab, setActiveTab] = useState("home");
+  // PLAT-1: app-level state relocated to the zustand store (App stays
+  // the writer; pages read via selectors). Store setters are stable.
+  const activeTab = useAppStore((s) => s.activeTab);
+  const setActiveTab = useAppStore((s) => s.setActiveTab);
+  const filters = useAppStore((s) => s.filters);
+  const setFilters = useAppStore((s) => s.setFilters);
+  const showFilters = useAppStore((s) => s.showFilters);
+  const setShowFilters = useAppStore((s) => s.setShowFilters);
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
   const [selectedAnchorRoom, setSelectedAnchorRoom] = useState<AnchorRoomPreview | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [watchlistSubTab, setWatchlistSubTab] = useState<"want" | "watched">("want");
-  const [filters, setFilters] = useState<FilterState>(() => defaultFor([]));
   const [showSignUpSuccess, setShowSignUpSuccess] = useState(false);
   const [showSignUpOnboarding, setShowSignUpOnboarding] = useState(false);
   const [authUsername, setAuthUsername] = useState<string | null>(null);
@@ -131,7 +172,6 @@ function AppContent() {
   const justOnboardedRef = useRef(false);
 
   // --- Prune stale cache entries on startup ---
-  useEffect(() => { maintainCache(); }, []);
 
   // Warmup ref needs to be at component top-level (Hooks rule). The
   // useEffect that consumes it is below, after connectedServices is
@@ -152,7 +192,7 @@ function AppContent() {
       }
     }
     prevSessionRef.current = hasSession;
-  }, [auth.session, auth.loading, userPrefs.loading, userPrefs.onboardingComplete, showSignUpSuccess]);
+  }, [auth.session, auth.loading, userPrefs.loading, userPrefs.onboardingComplete, showSignUpSuccess, setActiveTab]);
 
   // Called explicitly by AuthScreen when sign-up succeeds
   const handleSignUpSuccess = useCallback(async (username: string) => {
@@ -189,9 +229,14 @@ function AppContent() {
   }, [userId]);
 
   // --- Derive provider IDs from user's selected services ---
-  const connectedServices = userPrefs.preferences?.platforms
-    ?.filter((p) => p.selected !== false)
-    .map((p) => p.id) || [];
+  // Memoized on the preferences object so the array identity is stable
+  // across renders (PLAT-1: it's pushed into the app store and read by
+  // memo'd pages — a fresh array every render would churn subscribers).
+  const prefPlatforms = userPrefs.preferences?.platforms;
+  const connectedServices = useMemo(
+    () => prefPlatforms?.filter((p) => p.selected !== false).map((p) => p.id) || [],
+    [prefPlatforms]
+  );
 
   // ServiceId[] for filtering card badges to user's subscribed services
   const connectedServiceIds = useMemo(
@@ -212,7 +257,13 @@ function AppContent() {
     if (connectedServiceIds.length === 0) return;
     filtersSeededRef.current = true;
     setFilters((prev) => ({ ...prev, services: connectedServiceIds }));
-  }, [connectedServiceIds]);
+  }, [connectedServiceIds, setFilters]);
+
+  // PLAT-1: push connected services into the app store (App is the
+  // writer; BrowsePage/DetailPage/etc. read via selectors).
+  useEffect(() => {
+    useAppStore.getState().setConnectedServices(connectedServices, connectedServiceIds);
+  }, [connectedServices, connectedServiceIds]);
 
   // --- Warm the For You Edge Function (IN-466 Variant A) ---
   // Fire-and-forget hit on render-foryou-rows itself once auth + prefs
@@ -229,11 +280,33 @@ function AppContent() {
     void warmRenderForYou(connectedServices);
   }, [auth.loading, auth.session, userPrefs.loading, connectedServices.join(',')]);
 
+  // PLAT-1: idle-prefetch every lazy page chunk once startup settles.
+  // Chunks are local-disk assets in the WebView — fetching them at idle
+  // keeps the cold-start parse win while guaranteeing tab/page
+  // navigation never suspends (the first-visit blank-frame between
+  // AnimatePresence exit and lazy mount read as a glitch on device).
+  useEffect(() => {
+    const prefetchAll = () => {
+      for (const load of Object.values(pageImports)) void load().catch(() => {});
+    };
+    if ('requestIdleCallback' in window) {
+      const handle = window.requestIdleCallback(prefetchAll, { timeout: 3000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const t = setTimeout(prefetchAll, 1500);
+    return () => clearTimeout(t);
+  }, []);
+
   // Set of watched item IDs for detail page
   const watchedIds = useMemo(
     () => new Set(wl.watched.map((i) => i.id)),
     [wl.watched]
   );
+
+  // PLAT-1: push derived watchlist sets + ratings into the app store.
+  useEffect(() => {
+    useAppStore.getState().setWatchlistDerived(wl.bookmarkedIds, watchedIds, wl.ratings);
+  }, [wl.bookmarkedIds, watchedIds, wl.ratings]);
 
   // --- Build home filters from category pills + FilterSheet ---
   const homeFilters: FilterState = useMemo(() => {
@@ -291,7 +364,39 @@ function AppContent() {
     );
   }, [filters.languages]);
 
-  const handleItemSelect = (item: ContentItem) => {
+  // PLAT-1: memoize the Home rows' filtered item arrays so the memo'd
+  // ContentRow/FreeTonight primitives keep stable `items` identities
+  // across App's scroll-driven re-renders (same outputs, same filters).
+  const recentlyAddedItems = useMemo(
+    () => filterLanguage(filterWatched(home.recentlyAdded.items)),
+    [filterLanguage, filterWatched, home.recentlyAdded.items]
+  );
+  const popularItems = useMemo(
+    () => filterLanguage(filterWatched(home.popular.items)),
+    [filterLanguage, filterWatched, home.popular.items]
+  );
+  const criticallyAcclaimedItems = useMemo(
+    () => filterLanguage(filterWatched(home.criticallyAcclaimed)),
+    [filterLanguage, filterWatched, home.criticallyAcclaimed]
+  );
+  const perServiceChartsFiltered = useMemo(
+    () => home.perServiceCharts.map((chart) => ({
+      ...chart,
+      items: filterLanguage(filterWatched(chart.items)),
+    })),
+    [filterLanguage, filterWatched, home.perServiceCharts]
+  );
+  const genreSpotlightsFiltered = useMemo(
+    () => home.genreSpotlights.map((spotlight) => ({
+      ...spotlight,
+      filteredItems: filterLanguage(filterWatched(spotlight.items)),
+    })),
+    [filterLanguage, filterWatched, home.genreSpotlights]
+  );
+
+  // PLAT-1: navigation handlers are useCallback'd so memo'd rows/cards
+  // beneath them keep stable callback props during scroll re-renders.
+  const handleItemSelect = useCallback((item: ContentItem) => {
     // Flush trigger #6: detail page entry. Fire-and-forget — we
     // don't await because the selection UI should be instant.
     void flushNow();
@@ -299,17 +404,17 @@ function AppContent() {
       savedScrollPositions.current[activeTab] = scrollRef.current.scrollTop;
     }
     setSelectedItem(item);
-  };
+  }, [activeTab]);
 
   const pendingScrollRestore = useRef<number | null>(null);
 
-  const handleDetailBack = () => {
+  const handleDetailBack = useCallback(() => {
     // Save the scroll position we want to restore AFTER the exit animation finishes
     pendingScrollRestore.current = savedScrollPositions.current[activeTab] ?? 0;
     setSelectedItem(null);
-  };
+  }, [activeTab]);
 
-  const handleSelectAnchorRoom = (preview: AnchorRoomPreview) => {
+  const handleSelectAnchorRoom = useCallback((preview: AnchorRoomPreview) => {
     // Flush trigger (parity with handleItemSelect): any pending For You
     // card impressions must be attributed to for_you, not to the room
     // surface we're navigating into.
@@ -318,21 +423,21 @@ function AppContent() {
       savedScrollPositions.current[activeTab] = scrollRef.current.scrollTop;
     }
     setSelectedAnchorRoom(preview);
-  };
+  }, [activeTab]);
 
-  const handleMoodRoomBack = () => {
+  const handleMoodRoomBack = useCallback(() => {
     pendingScrollRestore.current = savedScrollPositions.current[activeTab] ?? 0;
     setSelectedAnchorRoom(null);
-  };
+  }, [activeTab]);
 
-  const handleShowCalendar = () => {
+  const handleShowCalendar = useCallback(() => {
     if (scrollRef.current) {
       savedScrollPositions.current[activeTab] = scrollRef.current.scrollTop;
     }
     setShowCalendar(true);
-  };
+  }, [activeTab]);
 
-  const handleTabChange = (tab: string) => {
+  const handleTabChange = useCallback((tab: string) => {
     // Flush trigger #5: bottom nav tab change. Fire-and-forget —
     // we don't await because the tab UI should switch instantly.
     void flushNow();
@@ -343,7 +448,7 @@ function AppContent() {
     setSelectedAnchorRoom(null);
     setShowCalendar(false);
     setActiveTab(tab);
-  };
+  }, [activeTab, setActiveTab]);
 
   // Helper: extract content metadata for taste tracking from a ContentItem
   const buildTasteMeta = useCallback((item: ContentItem) => {
@@ -465,6 +570,37 @@ function AppContent() {
       toast.error("Something went wrong");
     }
   }, [wl.setRating, wl.toggleBookmark, wl.moveToWatched, wl.bookmarkedIds, watchedIds, wl.watchlist, wl.watched, selectedItem, taste.trackInteraction, buildTasteMeta]);
+
+  // PLAT-1: register app-level actions into the store ONCE with stable
+  // identities. The wrappers dispatch through a ref that is refreshed
+  // every render, so store readers always invoke the latest handler
+  // without ever seeing a new callback identity (memo-friendly).
+  const liveActionsRef = useRef<AppActions>({
+    onItemSelect: handleItemSelect,
+    onToggleBookmark: handleToggleBookmark,
+    onRemoveBookmark: handleRemoveBookmark,
+    onMoveToWatched: handleMoveToWatched,
+    onMoveToWantToWatch: handleMoveToWantToWatch,
+    onRate: handleRate,
+  });
+  liveActionsRef.current = {
+    onItemSelect: handleItemSelect,
+    onToggleBookmark: handleToggleBookmark,
+    onRemoveBookmark: handleRemoveBookmark,
+    onMoveToWatched: handleMoveToWatched,
+    onMoveToWantToWatch: handleMoveToWantToWatch,
+    onRate: handleRate,
+  };
+  useEffect(() => {
+    useAppStore.getState().registerActions({
+      onItemSelect: (item) => liveActionsRef.current.onItemSelect(item),
+      onToggleBookmark: (item) => liveActionsRef.current.onToggleBookmark(item),
+      onRemoveBookmark: (id) => liveActionsRef.current.onRemoveBookmark(id),
+      onMoveToWatched: (id) => liveActionsRef.current.onMoveToWatched(id),
+      onMoveToWantToWatch: (id) => liveActionsRef.current.onMoveToWantToWatch(id),
+      onRate: (id, rating) => liveActionsRef.current.onRate(id, rating),
+    });
+  }, []);
 
   const handleOnboardingComplete = useCallback(async (data: OnboardingData) => {
     // Populate name/email from auth context (onboarding no longer collects them)
@@ -628,7 +764,7 @@ function AppContent() {
       // Sign-up via the v2 onboarding flow (Step 1 handles auth)
       return (
         <>
-          <OnboardingFlow onComplete={handleOnboardingComplete} />
+          <React.Suspense fallback={<DelayedBlank />}><OnboardingFlow onComplete={handleOnboardingComplete} /></React.Suspense>
           <ThemedToaster />
         </>
       );
@@ -680,7 +816,7 @@ function AppContent() {
   if (!userPrefs.onboardingComplete) {
     return (
       <>
-        <OnboardingFlow onComplete={handleOnboardingComplete} skipAuth />
+        <React.Suspense fallback={<DelayedBlank />}><OnboardingFlow onComplete={handleOnboardingComplete} skipAuth /></React.Suspense>
         <ThemedToaster />
       </>
     );
@@ -714,6 +850,8 @@ function AppContent() {
           className="flex-1 overflow-y-auto pb-4 no-scrollbar safe-top"
           style={{ overflowX: 'hidden', overscrollBehaviorX: 'none', transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined, transition: isPulling.current ? 'none' : 'transform 0.3s ease' }}
         >
+          {/* PLAT-1: one Suspense for every lazy page chunk below. */}
+          <React.Suspense fallback={<DelayedBlank />}>
           <AnimatePresence mode="wait">
           {showCalendar ? (
             <motion.div
@@ -749,18 +887,7 @@ function AppContent() {
               itemTitle={selectedItem.title}
               itemImage={selectedItem.image}
               onBack={handleDetailBack}
-              bookmarked={wl.bookmarkedIds.has(selectedItem.id)}
               onToggleBookmark={() => handleToggleBookmark(selectedItem)}
-              onItemSelect={handleItemSelect}
-              bookmarkedIds={wl.bookmarkedIds}
-              onToggleBookmarkItem={handleToggleBookmark}
-              connectedServices={connectedServices}
-              userServices={connectedServiceIds}
-              watchedIds={watchedIds}
-              onMoveToWatched={handleMoveToWatched}
-              onMoveToWantToWatch={handleMoveToWantToWatch}
-              userRating={wl.ratings[selectedItem.id] || null}
-              onRate={handleRate}
             />
             </motion.div>
           ) : selectedAnchorRoom ? (
@@ -872,7 +999,7 @@ function AppContent() {
                         title="Recently added."
                         sectionKey="recently-added"
                         sourceSurface="home"
-                        items={filterLanguage(filterWatched(home.recentlyAdded.items))}
+                        items={recentlyAddedItems}
                         onItemSelect={handleItemSelect}
                         bookmarkedIds={wl.bookmarkedIds}
                         onToggleBookmark={handleToggleBookmark}
@@ -888,7 +1015,7 @@ function AppContent() {
                           ITVX / Channel 4). Skipped when the user has
                           none of those services. */}
                       <FreeTonight
-                        items={filterLanguage(filterWatched(home.popular.items))}
+                        items={popularItems}
                         userServices={connectedServiceIds}
                         onSelect={handleItemSelect}
                         bookmarkedIds={wl.bookmarkedIds}
@@ -906,7 +1033,7 @@ function AppContent() {
                         kicker="THE CHARTS"
                         title="Trending across your stack."
                         standfirst="What everyone's queueing tonight."
-                        items={filterLanguage(filterWatched(home.popular.items))}
+                        items={popularItems}
                         userServices={connectedServiceIds}
                         onSelect={handleItemSelect}
                       />
@@ -939,7 +1066,7 @@ function AppContent() {
                       })()}
 
                       {/* §5.6 — Per-service rows with service-tinted kickers */}
-                      {home.perServiceCharts.map((chart) => (
+                      {perServiceChartsFiltered.map((chart) => (
                         <ContentRow
                           key={`svc-${chart.serviceId}`}
                           kicker={`NEW ON ${chart.serviceName.toUpperCase()}`}
@@ -947,7 +1074,7 @@ function AppContent() {
                           title={`This week on ${chart.serviceName}.`}
                           sectionKey={`svc-chart-${chart.serviceId}`}
                           sourceSurface="home"
-                          items={filterLanguage(filterWatched(chart.items))}
+                          items={chart.items}
                           onItemSelect={handleItemSelect}
                           bookmarkedIds={wl.bookmarkedIds}
                           onToggleBookmark={handleToggleBookmark}
@@ -970,7 +1097,7 @@ function AppContent() {
                             className="flex gap-4 overflow-x-auto no-scrollbar px-5 pb-1"
                             style={{ scrollbarWidth: "none" }}
                           >
-                            {filterLanguage(filterWatched(home.criticallyAcclaimed)).map((item) => (
+                            {criticallyAcclaimedItems.map((item) => (
                               <WideCard
                                 key={item.id}
                                 item={item}
@@ -1014,7 +1141,7 @@ function AppContent() {
                           BELOW the calendar; further clusters mount as
                           the user scrolls past the previous sentinel,
                           and the calendar stays anchored where it loaded. */}
-                      {home.genreSpotlights.map((spotlight, idx) =>
+                      {genreSpotlightsFiltered.map((spotlight, idx) =>
                         spotlight.items.length > 0 ? (
                           <ContentRow
                             key={`genre-spotlight-${idx}`}
@@ -1022,7 +1149,7 @@ function AppContent() {
                             title={`${spotlight.clusterName}.`}
                             sectionKey={`genre-spotlight-${idx}`}
                             sourceSurface="home"
-                            items={filterLanguage(filterWatched(spotlight.items))}
+                            items={spotlight.filteredItems}
                             onItemSelect={handleItemSelect}
                             bookmarkedIds={wl.bookmarkedIds}
                             onToggleBookmark={handleToggleBookmark}
@@ -1044,16 +1171,10 @@ function AppContent() {
 
               {activeTab === "foryou" && (
                 <ForYouPage
-                  providerIds={connectedServices}
-                  connectedServiceIds={connectedServiceIds}
                   sharedFilters={home.sharedFilters ?? null}
                   filterWatched={filterWatched}
                   filterLanguage={filterLanguage}
-                  onItemSelect={handleItemSelect}
                   onSelectAnchorRoom={handleSelectAnchorRoom}
-                  bookmarkedIds={wl.bookmarkedIds}
-                  onToggleBookmark={handleToggleBookmark}
-                  watchedIds={watchedIds}
                   upcoming={reorderedUpcoming}
                   onSelectUpcoming={(u) =>
                     handleItemSelect({
@@ -1066,16 +1187,6 @@ function AppContent() {
 
               {activeTab === "browse" && (
                 <BrowsePage
-                  onItemSelect={handleItemSelect}
-                  filters={filters}
-                  onFiltersChange={setFilters}
-                  showFilters={showFilters}
-                  onShowFiltersChange={setShowFilters}
-                  bookmarkedIds={wl.bookmarkedIds}
-                  onToggleBookmark={handleToggleBookmark}
-                  providerIds={connectedServices}
-                  userServices={connectedServiceIds}
-                  watchedIds={watchedIds}
                   savedState={browseStateRef}
                   tasteVector={taste.profile?.tasteVector ?? null}
                   semanticFlagOn={semanticFlagOn}
@@ -1086,16 +1197,8 @@ function AppContent() {
                 <WatchlistPage
                   watchlist={wl.watchlist}
                   watched={wl.watched}
-                  onRemoveBookmark={handleRemoveBookmark}
-                  onMoveToWatched={handleMoveToWatched}
-                  onMoveToWantToWatch={handleMoveToWantToWatch}
-                  onItemSelect={handleItemSelect}
-                  onNavigateToBrowse={() => setActiveTab("browse")}
-                  ratings={wl.ratings}
-                  onRate={handleRate}
                   activeSubTab={watchlistSubTab}
                   onSubTabChange={setWatchlistSubTab}
-                  userServices={connectedServiceIds}
                 />
               )}
 
@@ -1125,6 +1228,7 @@ function AppContent() {
               </motion.div>
           )}
           </AnimatePresence>
+          </React.Suspense>
         </div>
 
         {/* Bottom Navigation */}

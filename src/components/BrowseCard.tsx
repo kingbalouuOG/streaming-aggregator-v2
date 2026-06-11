@@ -17,6 +17,11 @@ interface BrowseCardProps {
   /** Forwarded to ContentCard — renders the bottom-right "From £X.XX"
    *  pill for rentable/buyable off-service titles. */
   rentBuyPriceLabel?: string;
+  /** True when the card renders inside a virtual row (PLAT-1 grid
+   *  virtualization). Disables the staggered entrance animation —
+   *  virtual rows remount as they scroll into view, so replaying the
+   *  entry transition on every scroll would be visible churn. */
+  virtualized?: boolean;
 }
 
 /**
@@ -25,10 +30,10 @@ interface BrowseCardProps {
  * anatomy (poster, bookmark, rating pill, title+meta below) lives in
  * ContentCard so Browse stays in lockstep with the rest of the app.
  */
-export function BrowseCard({ item, index = 0, ...rest }: BrowseCardProps) {
+function BrowseCardImpl({ item, index = 0, virtualized = false, ...rest }: BrowseCardProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={virtualized ? false : { opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
         delay: Math.min(index * 0.04, 0.3),
@@ -41,3 +46,8 @@ export function BrowseCard({ item, index = 0, ...rest }: BrowseCardProps) {
     </motion.div>
   );
 }
+
+// PLAT-1 Workstream E: memo'd — App re-renders on every scroll pixel
+// (scrollY is state); with store-backed stable props this stops the
+// per-frame re-render cascade through the card/row primitives.
+export const BrowseCard = React.memo(BrowseCardImpl);

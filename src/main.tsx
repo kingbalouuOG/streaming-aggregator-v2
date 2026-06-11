@@ -1,6 +1,9 @@
 
   import { createRoot } from "react-dom/client";
+  import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+  import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
   import App from "./App.tsx";
+  import { queryClient, persistOptions } from "./lib/queryClient";
   import "./index.css";
 
   // ─── Phase 0 / IN-012: one-time v1 localStorage purge ─────────────
@@ -57,4 +60,12 @@
     localStorage.setItem(VIDEX_VERSION_KEY, '2');
   }
 
-  createRoot(document.getElementById("root")!).render(<App />);
+  // PLAT-1: TanStack Query provider with localStorage persistence
+  // (content namespaces only — see lib/queryClient.ts). Devtools render
+  // nothing in production builds (library no-ops on import.meta.env.PROD).
+  createRoot(document.getElementById("root")!).render(
+    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+      <App />
+      {import.meta.env.DEV ? <ReactQueryDevtools initialIsOpen={false} /> : null}
+    </PersistQueryClientProvider>,
+  );
