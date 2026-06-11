@@ -41,7 +41,8 @@ Single-page lookup table for "which phase, which branch, which migration, what s
 | Search V2 | `phase-search-v2` (PR #8) | merged | 2026-05-13 | 041 | Typed FilterState + URL sync, FilterSheet rewrite, 3-source Mode A retrieval, semantic Mode C behind `search_semantic` per-user flag (`user_feature_flags`). |
 | 5.5 | `claude/zealous-dijkstra-0fe0d7` (PR #11) | merged | 2026-05-15 | 042, 043 | Quality/type/perf cluster (typegen, MMR fallback, embedding cache, vitest rig), legal cluster (delete account 042, data export 043, Privacy/ToS pages), catalogue gap closure (IN-465 backfill: titles 20,140 → 22,838). |
 | ENG-1 | `phase-eng-1-multi-interest` | closed | 2026-06-10 | 044, 045 | Multi-interest centroids (K ≤ 3) + retrieval fan-out, avoid-set negative scoring (vectors positive-only), exploration slots (positions 6 + 14), training extract view. First E&P Hardening track phase. |
-| REPO-1 | `phase-repo-1-hygiene` | in progress | 2026-06-10 | 046 (written, **NOT yet applied**) | Repo hygiene: docs reorganisation (`docs/v3-design/` → `docs/design/`, eval docs → `docs/v2/phase-summaries/`), script moves (`scripts/test/`, `scripts/enrichment/`), `npm test` single test entry, eslint `no-explicit-any` → error, drop `title_genres`/`title_credits` (046). |
+| REPO-1 | `phase-repo-1-hygiene` | merged 2026-06-10 (PR #15) | 2026-06-10 | 046 (applied) | Repo hygiene: docs reorganisation (`docs/v3-design/` → `docs/design/`), `npm test` single entry (146 tests), `no-explicit-any` → error, `title_genres`/`title_credits` dropped. |
+| PLAT-1 | `phase-plat-1-client-data-layer` | impl complete 2026-06-11; device gate pending | 2026-06-10 | — | TanStack Query everywhere (cache.ts deleted), React.lazy + idle prefetch, TanStack Virtual ×3 surfaces, LQIP images, Zustand store + memo. Bundle −44.5%. |
 | 6 | (planned) | not started | — | — | Launch: APK release build, pre-launch blocker review, solicitor-reviewed legal docs, cryptographic JWT rotation if tooling allows. |
 | 7 (post-v2) | — | not started | — | — | Conversational discovery on top of v2. See [v3 forward-planning](../concepts/forward-planning/v3-conversational-discovery.md). |
 
@@ -94,7 +95,7 @@ Single-page lookup table for "which phase, which branch, which migration, what s
 | 043 | `043_export_user_data.sql` | 5.5 | GDPR Article 20 export RPC. |
 | 044 | `044_user_interest_centroids.sql` | ENG-1 | K ≤ 3 interest centroids; extends delete/export RPCs. |
 | 045 | `045_training_extract_view.sql` | ENG-1 | `v_training_examples` view (ENG-2 dataset shape). |
-| 046 | `046_drop_title_genres_credits.sql` | REPO-1 | **Written, NOT yet applied.** Drops `title_genres` + `title_credits`. |
+| 046 | `046_drop_title_genres_credits.sql` | REPO-1 | Applied 2026-06-10. Drops `title_genres` + `title_credits`. |
 
 ## Service slug ↔ TMDb ↔ SA API ↔ deep links
 
@@ -157,7 +158,7 @@ ENG-1 additions outside the formula: avoid-set penalty (`finalScore −= 0.15 ·
 - **`card_impressions` dedicated partitioned table** (pg_partman monthly), RLS via event trigger.
 - **HDBSCAN runs in Python + GitHub Actions monthly cron**, psycopg2 direct connection.
 - **`dismiss` → `not_interested`** event type rename (Phase 0).
-- **Static genre mapping** retained over `title_genres` backfill (`title_genres` + `title_credits` dropped by migration 046, REPO-1 — apply pending).
+- **Static genre mapping** retained over `title_genres` backfill (`title_genres` + `title_credits` dropped by migration 046, REPO-1, applied 2026-06-10).
 - **Two surfaces**: Home (discovery, 15-20% taste) + For You (heavy personalisation, sliders, mood rooms).
 - **Sliders Option C dual-access**: Profile + For You modal/tray, shared state.
 - **Detail view alone is NOT positive** (anchor only).
