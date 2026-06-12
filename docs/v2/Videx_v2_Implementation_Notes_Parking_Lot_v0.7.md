@@ -1963,6 +1963,22 @@ Two placeholders intentionally left in the drafts (`[your-contact-email-address 
 
 ---
 
+### IN-PX-62: GDPR data-flow drift since ENG-1 (export gap + stale Privacy Policy inventory)
+
+**Source:** LAUNCH-1 W3 solicitor-pack prep (2026-06-12) — surfaced while inventorying user-owned tables.
+
+**Detail:** Two tables added after the legal docs / RPCs were written are now out of sync with the GDPR surfaces:
+1. **`export_user_data` (migration 043) omits `user_interest_centroids`** (ENG-1, migration 044). Right-to-deletion is fine — `user_interest_centroids` has `ON DELETE CASCADE` on the `auth.users` FK, so `delete_own_account`'s final `DELETE FROM auth.users` removes it — but the portability/access export silently drops the derived sub-taste vectors. Decide whether they belong in an Art. 15/20 response (solicitor Q in the pack) and if so add to the export RPC.
+2. **Privacy Policy §2 data inventory is stale** — missing `user_interest_centroids` and `user_feature_flags` (added in ENG-1 / Search V2). Update §2 to match the inventory in `docs/legal/solicitor-review-pack.md` §2 before publish.
+
+Both are the recurring class IN-PX-54 was filed to prevent (a CI check that delete + export RPCs cover every user-scoped table). Worth doing IN-PX-54 properly now rather than hand-patching again.
+
+**Phase target:** before non-prototype launch (rides the IN-XPS-014 solicitor outcome).
+
+**Status:** ⏳ Filed.
+
+---
+
 ## Onboarding implementation notes
 
 *(Specific to the v2 onboarding flow build — applies to Phase 3 where onboarding gets wired to backend logic)*
