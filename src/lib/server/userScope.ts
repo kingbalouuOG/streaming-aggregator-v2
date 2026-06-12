@@ -109,6 +109,15 @@ export function withUserScope(client: SupabaseClient, userId: string): UserScope
         .eq('user_id', userId) as unknown as ScopedQuery;
     },
     upsert(table, rows, opts) {
+      // Invariant (security review LOW-3): a conflict target that omits
+      // user_id could match ANOTHER tenant's row under service-role
+      // (no RLS) and overwrite it with the injected user_id. Refuse at
+      // the wrapper so a future caller can't break the contract.
+      if (opts?.onConflict && !opts.onConflict.split(',').map((c) => c.trim()).includes('user_id')) {
+        throw new Error(
+          `UserScope.upsert(${table}): onConflict must include user_id (got "${opts.onConflict}")`,
+        );
+      }
       const withUser = (Array.isArray(rows) ? rows : [rows]).map((r) => ({
         ...r,
         user_id: userId,

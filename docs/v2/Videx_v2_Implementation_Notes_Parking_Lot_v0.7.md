@@ -1939,6 +1939,18 @@ Two placeholders intentionally left in the drafts (`[your-contact-email-address 
 
 ---
 
+### IN-PX-60: Rate limiting on /v1/foryou (security review MEDIUM-1)
+
+**Source:** PLAT-3 post-merge security review (security-sentinel, 2026-06-12). Verdict SAFE-WITH-NITS; this is the one MEDIUM.
+
+**Detail:** An authenticated user can loop cache-missing `/v1/foryou` requests; each miss costs a full render (pgvector ANN scans + ~10 Supabase queries + KV write) — a cost-amplification vector against Supabase compute/quota. PLAT-3 hardening already closed the cheap half (service ids are membership-checked against the canonical 10, so the KV key space is bounded and unknown-id requests 400 before rendering). Remaining: per-user rate limiting — Cloudflare WAF rule on the route, or a token bucket keyed on the verified userId (Workers KV/DO). LOW-1/2/3 from the same review were fixed in-PR.
+
+**Phase target:** pre-launch hardening (blocker-class per the review: "worth fixing before launch").
+
+**Status:** ⏳ Filed.
+
+---
+
 ## Onboarding implementation notes
 
 *(Specific to the v2 onboarding flow build — applies to Phase 3 where onboarding gets wired to backend logic)*
