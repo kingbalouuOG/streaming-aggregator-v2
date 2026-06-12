@@ -1,54 +1,80 @@
-import { ScrollView, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// NATIVE-1 W2 smoke screen — proves the two load-bearing pipelines:
-//  1. Metro resolves the SHARED lib tree (../src/lib via tsconfig paths
-//     + watchFolders): providerIdToServiceId is the same module the web
-//     app and the Worker import.
-//  2. NativeWind compiles the Tailwind classes from tailwind.config.js
-//     (ported design tokens).
-// Replaced by the real Home feed in W4.
-import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
-import { SERVICE_DISPLAY_NAMES, type ServiceId } from '@/lib/types/content';
-
-// TMDb provider ids → expected services, through the real adapter.
-const SMOKE_PROVIDER_IDS = [8, 9, 337, 350, 531]; // netflix, prime, disney, apple, paramount
+// NATIVE-1 W4 — the real Home feed. Data flows through the SAME lib
+// row-builder as the web Home (fetchPerServiceCharts → Supabase content
+// cache → titleAdapter); only the rendering layer is native: expo-image
+// posters in horizontal FlashLists, native RefreshControl replacing the
+// hand-rolled pull-to-refresh, Reanimated Reveal stagger replacing the
+// web's motion variant.
+import { ContentRow } from '@/components/ContentRow';
+import { HomeHero } from '@/components/HomeHero';
+import { Reveal } from '@/components/Reveal';
+import { useHomeFeed } from '@/hooks/useHomeFeed';
 
 export default function HomeScreen() {
-  const resolved = SMOKE_PROVIDER_IDS.map((id) => providerIdToServiceId(id));
+  const feed = useHomeFeed();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await feed.refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [feed]);
+
+  if (feed.isLoading) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-background">
+        <ActivityIndicator color="#e85d25" />
+      </SafeAreaView>
+    );
+  }
+
+  if (feed.isError || !feed.data) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-background px-8">
+        <Text className="text-center font-display text-section text-foreground">
+          Couldn&apos;t load tonight&apos;s shelf
+        </Text>
+        <Text className="mt-2 text-center text-body text-muted-foreground">
+          {feed.error instanceof Error ? feed.error.message : 'Pull down to try again.'}
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  const { hero, rows } = feed.data;
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
-      <ScrollView contentContainerClassName="px-5 py-6">
-        <Text className="text-kicker font-sans uppercase tracking-widest text-primary-on-soft">
-          NATIVE-1 · W2
-        </Text>
-        <Text className="mt-1 text-headline text-foreground">Shared tree smoke test</Text>
-        <Text className="mt-2 text-body text-muted-foreground">
-          The rows below come from src/lib/adapters/platformAdapter — the same module the web
-          client and the videx-api Worker import. If they render, Metro is resolving the shared
-          tree and NativeWind is compiling the ported tokens.
-        </Text>
+    <SafeAreaView edges={['top']} className="flex-1 bg-background">
+      <ScrollView
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#e85d25" />
+        }
+        contentContainerClassName="pb-8">
+        {hero ? (
+          <Reveal index={0}>
+            <HomeHero item={hero} />
+          </Reveal>
+        ) : null}
 
-        <View className="mt-6 rounded-card border border-border bg-card p-4">
-          {SMOKE_PROVIDER_IDS.map((providerId, i) => {
-            const serviceId = resolved[i];
-            return (
-              <View
-                key={providerId}
-                className="flex-row items-center justify-between border-b border-border py-3 last:border-b-0">
-                <Text className="text-body text-muted-foreground">TMDb provider {providerId}</Text>
-                <Text className="text-body font-bold text-foreground">
-                  {serviceId ? SERVICE_DISPLAY_NAMES[serviceId as ServiceId] : 'unmapped'}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
+        {rows.map((row, i) => (
+          <Reveal key={row.serviceId} index={i + 1}>
+            <ContentRow kicker="Top on" title={row.serviceName} items={row.items} />
+          </Reveal>
+        ))}
 
-        <View className="mt-4 self-start rounded-pill bg-primary-soft px-4 py-2">
-          <Text className="text-meta text-primary-on-soft">tokens: bg, card, border, primary</Text>
-        </View>
+        {rows.length === 0 ? (
+          <View className="mt-16 items-center px-8">
+            <Text className="text-center text-body text-muted-foreground">
+              No rows came back — check EXPO_PUBLIC_SUPABASE_URL/.env wiring.
+            </Text>
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

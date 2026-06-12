@@ -21,8 +21,17 @@ const { withNativeWind } = require('nativewind/metro');
 
 const config = getDefaultConfig(__dirname);
 
-// Treat the native/src/lib junction as a regular directory instead of
-// resolving through it to the (unwatched) real path.
-config.resolver.unstable_enableSymlinks = false;
+// Metro realpaths modules found through the junction, so shared-tree
+// files have ../src/lib/* origins. Bare specifiers from those origins
+// would walk up the REAL directory tree and miss this app's
+// node_modules — pin the lookup order: native first (anything with
+// native code must autolink from here), repo root as fallback. A
+// "Failed to get SHA-1 ... node_modules" error means a shared dep is
+// resolving to the root copy: install it into native/package.json.
+const path = require('path');
+config.resolver.nodeModulesPaths = [
+  path.resolve(__dirname, 'node_modules'),
+  path.resolve(__dirname, '..', 'node_modules'),
+];
 
 module.exports = withNativeWind(config, { input: './src/global.css' });

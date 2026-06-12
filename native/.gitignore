@@ -44,3 +44,6 @@ example
 
 # Junction to the shared tree (created by scripts/link-shared.js)
 src/lib
+
+# Local env (mirrored from root .env by hand)
+.env
