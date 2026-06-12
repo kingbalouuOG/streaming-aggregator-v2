@@ -81,7 +81,6 @@ import { useWatchlist } from "./hooks/useWatchlist";
 import { useHomeContent } from "./hooks/useHomeContent";
 import { useUpcoming } from "./hooks/useUpcoming";
 import { providerIdsToServiceIds, providerIdToServiceId } from "./lib/adapters/platformAdapter";
-import { warmRenderForYou } from "./lib/recommendations-v2/edgeWarmup";
 import type { ServiceId } from "./components/platformLogos";
 import { App as CapApp } from "@capacitor/app";
 import { useTasteProfile } from "./hooks/useTasteProfile";
@@ -173,11 +172,6 @@ function AppContent() {
 
   // --- Prune stale cache entries on startup ---
 
-  // Warmup ref needs to be at component top-level (Hooks rule). The
-  // useEffect that consumes it is below, after connectedServices is
-  // declared, since we need user services to fire the warmup.
-  const warmedRef = useRef(false);
-
   // --- User preferences (onboarding, profile) ---
   const userId = auth.loading ? null : (auth.user?.id ?? null);
   const userPrefs = useUserPreferences(userId);
@@ -265,20 +259,8 @@ function AppContent() {
     useAppStore.getState().setConnectedServices(connectedServices, connectedServiceIds);
   }, [connectedServices, connectedServiceIds]);
 
-  // --- Warm the For You Edge Function (IN-466 Variant A) ---
-  // Fire-and-forget hit on render-foryou-rows itself once auth + prefs
-  // have resolved. Edge Function instances are per-function, so warming
-  // a noop function doesn't help — we have to warm the function we
-  // actually want hot. Cost: one extra full pipeline run per app
-  // session. Gain: first For You navigation hits ~800ms warm instead
-  // of 5-12s cold. Logic lives in edgeWarmup.ts.
-  useEffect(() => {
-    if (warmedRef.current) return;
-    if (auth.loading || userPrefs.loading) return;
-    if (!auth.session || connectedServices.length === 0) return;
-    warmedRef.current = true;
-    void warmRenderForYou(connectedServices);
-  }, [auth.loading, auth.session, userPrefs.loading, connectedServices.join(',')]);
+  // (PLAT-3: the IN-466 Variant A Edge warmup that lived here is gone —
+  // Workers have no per-function cold start to warm against.)
 
   // PLAT-1: idle-prefetch every lazy page chunk once startup settles.
   // Chunks are local-disk assets in the WebView — fetching them at idle

@@ -1,27 +1,46 @@
 /**
- * Client wrapper around the render-foryou-rows Edge Function (IN-466).
+ * Client wrapper around the videx-api Worker's GET /v1/foryou (PLAT-3).
  *
  * Primary path for For You first paint. Returns a fully-built payload
  * that useForYouContent populates state from in one go. On any failure
- * (timeout, 5xx, malformed JSON), returns null so the hook can fall
- * through to the existing client-side pipeline.
+ * (network error, 5xx, malformed JSON, safety timeout), returns null so
+ * the hook falls through to the client-side pipeline — the D4
+ * one-release fallback.
  *
- * Timeout: 1.5s. Cold Edge Function instances take 5-12s; we don't want
- * to block the user that long when the client-fallback path completes
- * in 2-3s. The 1.5s ceiling lets warm requests succeed (~800ms typical)
- * while bailing fast on cold instances. See IN-466 phase summary for
- * the latency profile that informed this number.
+ * History: this called the render-foryou-rows Supabase Edge Function
+ * (IN-466) with a 1.5s bail-fast timeout because cold Deno instances
+ * took 5–12s. Workers have no cold-start category and warm KV hits are
+ * ~175ms, so the timeout is now a 10s SAFETY net against hung requests,
+ * not a latency strategy — we no longer abandon a slow-but-succeeding
+ * render to start a 2–3s client pipeline from zero.
  */
 
 import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
-import { readAccessToken } from './edgeWarmup';
 import type { ContentItem } from '@/components/ContentCard';
 import type { SliderState } from '@/lib/taste-v2/types';
 import type { CandidatePool, ExtendedTitleRow, MatchedTitle, PipelineContext } from './types';
 import type { AnchorRoomPreview } from '@/hooks/useAnchorMoodRooms';
 
-const FUNCTION_PATH = '/functions/v1/render-foryou-rows';
-const TIMEOUT_MS = 1500;
+const PROXY_URL = import.meta.env.VITE_API_PROXY_URL as string | undefined;
+const SAFETY_TIMEOUT_MS = 10_000;
+
+/**
+ * Read the supabase-js auth token from localStorage. Returns null if
+ * no session exists or the entry is malformed. (Lived in edgeWarmup.ts
+ * until PLAT-3 deleted the warmup hack.)
+ */
+export function readAccessToken(): string | null {
+  const tokenKey = Object.keys(localStorage).find(
+    (k) => k.startsWith('sb-') && k.endsWith('-auth-token'),
+  );
+  if (!tokenKey) return null;
+  try {
+    const stored = JSON.parse(localStorage.getItem(tokenKey) ?? 'null');
+    return stored?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
 
 interface BecauseYouWatchedRow {
   anchor: ContentItem;
@@ -36,15 +55,15 @@ interface MoreFromPersonRow {
 
 /** Wire shape of the candidate pool. metadata serialises as Record on
  *  the wire (Map → "{}" via JSON), reconstructed to Map by reconstructPool. */
-interface EdgePoolWire {
+interface WorkerPoolWire {
   matched: MatchedTitle[];
   metadata: Record<string, ExtendedTitleRow>;
   fetchedAt: number;
-  /** ENG-1: true when the Edge built the pool via the multi-interest path. */
+  /** ENG-1: true when the server built the pool via the multi-interest path. */
   interleaved?: boolean;
 }
 
-export interface EdgeRenderPayload {
+export interface WorkerRenderPayload {
   recommendedForYou: ContentItem[];
   hiddenGems: ContentItem[];
   outsideYourUsual: ContentItem[];
@@ -60,13 +79,11 @@ export interface EdgeRenderPayload {
   wallclockMs: number;
 }
 
-export async function tryRenderForYouEdge(
+export async function tryRenderForYouWorker(
   providerIds: number[],
   ctx?: PipelineContext,
-): Promise<EdgeRenderPayload | null> {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !anonKey) return null;
+): Promise<WorkerRenderPayload | null> {
+  if (!PROXY_URL) return null;
 
   const services = providerIds
     .map((id) => providerIdToServiceId(id))
@@ -78,37 +95,30 @@ export async function tryRenderForYouEdge(
 
   const t0 = Date.now();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), SAFETY_TIMEOUT_MS);
 
   // Phase 5 decision 9: pass the client's local hourOfDay (and
-  // dayOfWeek for calendar-boundary safety) in the body so the Edge
-  // path scores against the same time-of-day bucket as the client
-  // would. Edge falls back to UTC if absent.
-  const body: { services: string[]; hourOfDay?: number; dayOfWeek?: number } = { services };
-  if (ctx?.hourOfDay != null) body.hourOfDay = ctx.hourOfDay;
-  if (ctx?.dayOfWeek != null) body.dayOfWeek = ctx.dayOfWeek;
+  // dayOfWeek for calendar-boundary safety) so the server scores
+  // against the same time-of-day bucket. Server falls back to UTC.
+  const params = new URLSearchParams({ services: services.join(',') });
+  if (ctx?.hourOfDay != null) params.set('hour', String(ctx.hourOfDay));
+  if (ctx?.dayOfWeek != null) params.set('dow', String(ctx.dayOfWeek));
 
   try {
-    const res = await fetch(`${supabaseUrl}${FUNCTION_PATH}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        apikey: anonKey,
-      },
-      body: JSON.stringify(body),
+    const res = await fetch(`${PROXY_URL}/v1/foryou?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
       signal: controller.signal,
     });
 
     if (!res.ok) {
-      console.warn(`[edgeRender] HTTP ${res.status}; falling back to client pipeline`);
+      console.warn(`[workerRender] HTTP ${res.status}; falling back to client pipeline`);
       return null;
     }
 
     const data = await res.json();
     const wallclockMs = Date.now() - t0;
 
-    const pool = reconstructPool(data.pool as EdgePoolWire);
+    const pool = reconstructPool(data.pool as WorkerPoolWire);
     if (!pool) return null;
 
     return {
@@ -118,9 +128,9 @@ export async function tryRenderForYouEdge(
     };
   } catch (err) {
     if ((err as Error)?.name === 'AbortError') {
-      console.warn(`[edgeRender] timed out after ${TIMEOUT_MS}ms; falling back to client pipeline`);
+      console.warn(`[workerRender] safety timeout after ${SAFETY_TIMEOUT_MS}ms; falling back to client pipeline`);
     } else {
-      console.warn('[edgeRender] failed; falling back to client pipeline:', err);
+      console.warn('[workerRender] failed; falling back to client pipeline:', err);
     }
     return null;
   } finally {
@@ -132,10 +142,10 @@ export async function tryRenderForYouEdge(
  *  that a non-empty matched list arrives with non-empty metadata —
  *  if it doesn't, the wire format has drifted and we'd silently render
  *  zero rows. Returns null in that case so the caller falls back. */
-function reconstructPool(wire: EdgePoolWire): CandidatePool | null {
+function reconstructPool(wire: WorkerPoolWire): CandidatePool | null {
   const metaEntries = Object.entries(wire.metadata);
   if (wire.matched.length > 0 && metaEntries.length === 0) {
-    console.warn('[edgeRender] pool wire format drift: matched non-empty but metadata empty');
+    console.warn('[workerRender] pool wire format drift: matched non-empty but metadata empty');
     return null;
   }
   return {

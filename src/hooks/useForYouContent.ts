@@ -38,7 +38,7 @@ import {
 } from '@/lib/recommendations-v2/exploration';
 import { titleRowToContentItem } from '@/lib/recommendations-v2/titleAdapter';
 import { watchlistItemToContentItem } from '@/lib/adapters/contentAdapter';
-import { tryRenderForYouEdge } from '@/lib/recommendations-v2/edgeRender';
+import { tryRenderForYouWorker } from '@/lib/recommendations-v2/edgeRender';
 import { buildPipelineContext } from '@/lib/recommendations-v2/pipelineContext';
 import type { AnchorRoomPreview } from '@/hooks/useAnchorMoodRooms';
 import type { ContentItem } from '@/components/ContentCard';
@@ -126,7 +126,7 @@ async function fetchEmbeddingsForCandidates(
  * acquisition with the Worker feed and shrinks it again.
  */
 type ForYouRenderResult =
-  | { source: 'edge'; ctx: PipelineContext; edge: NonNullable<Awaited<ReturnType<typeof tryRenderForYouEdge>>> }
+  | { source: 'edge'; ctx: PipelineContext; edge: NonNullable<Awaited<ReturnType<typeof tryRenderForYouWorker>>> }
   | {
       source: 'client';
       ctx: PipelineContext;
@@ -144,16 +144,16 @@ async function fetchForYouRender(
   providerIds: number[],
   sharedFilters: FilterSets | null | undefined,
 ): Promise<ForYouRenderResult> {
-  // ── Edge path ──
-  // Build ctx ahead of the Edge call so the body carries the client's
+  // ── Server path (videx-api Worker, PLAT-3) ──
+  // Build ctx ahead of the call so the query carries the client's
   // local hourOfDay (decision 9); ctx is returned for the rerank path.
   const ctx = await buildPipelineContext();
 
-  const edge = await tryRenderForYouEdge(providerIds, ctx);
+  const edge = await tryRenderForYouWorker(providerIds, ctx);
   if (edge) {
     const anchorMax = edge.perAnchorLatencyMs.length > 0 ? Math.max(...edge.perAnchorLatencyMs) : 0;
     console.log(
-      `[useForYouContent] edge: wall=${edge.wallclockMs}ms server=${edge.renderMs}ms `
+      `[useForYouContent] worker: wall=${edge.wallclockMs}ms server=${edge.renderMs}ms `
       + `anchorMax=${anchorMax}ms rec=${edge.recommendedForYou.length} `
       + `gems=${edge.hiddenGems.length} outside=${edge.outsideYourUsual.length} `
       + `byw=${edge.becauseYouWatched.length} mfp=${edge.moreFromPerson ? 1 : 0} `
