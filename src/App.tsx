@@ -14,7 +14,8 @@ import type { BrowseStateSnapshot } from "./components/BrowsePage";
 import { FilterSheet } from "./components/FilterSheet";
 import type { FilterState } from "./lib/search/filterState";
 import { useAppStore, type AppActions } from "./lib/store/appStore";
-import { prefetchForYouFeed } from "./lib/recommendations-v2/edgeRender";
+import { queryClient } from "./lib/queryClient";
+import { fetchForYouRender, forYouRenderQueryKey } from "./hooks/useForYouContent";
 import type { OnboardingData } from "./components/OnboardingFlow";
 
 // ── PLAT-1 code-splitting (plan §2, D5: React.lazy only — no router) ──
@@ -275,7 +276,13 @@ function AppContent() {
     if (auth.loading || userPrefs.loading) return;
     if (!auth.session || connectedServices.length === 0) return;
     prefetchedRef.current = true;
-    prefetchForYouFeed(connectedServices);
+    // UX-1 W2: prefetch THROUGH the page's query (same key + fetcher)
+    // so the For You mount attaches to this in-flight render instead of
+    // firing its own. Also primes the Worker's KV entry, as before.
+    void queryClient.prefetchQuery({
+      queryKey: forYouRenderQueryKey(connectedServices, home.sharedFilters ?? null),
+      queryFn: () => fetchForYouRender(connectedServices, home.sharedFilters ?? null),
+    });
   }, [auth.loading, auth.session, userPrefs.loading, connectedServices.join(',')]);
 
   // PLAT-1: idle-prefetch every lazy page chunk once startup settles.

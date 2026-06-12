@@ -144,47 +144,6 @@ export async function tryRenderForYouWorker(
   }
 }
 
-/**
- * Boot-time feed prefetch (PLAT-3 device pass 1). Fires the REAL
- * /v1/foryou request fire-and-forget so the Worker materialises the
- * user's KV entry; the For You navigation then hits the ~175ms cache
- * path instead of a 9-15s first-ever render. Strictly better than the
- * old Edge warmup hack: that only heated a Deno instance — this
- * produces the actual feed, shared via KV across the session. No
- * timeout: it either lands (and the KV entry exists for 20 min) or the
- * page's own request takes over. Result discarded deliberately.
- */
-export function prefetchForYouFeed(providerIds: number[]): void {
-  if (!PROXY_URL) return;
-
-  const services = providerIds
-    .map((id) => providerIdToServiceId(id))
-    .filter(Boolean) as string[];
-  if (services.length === 0) return;
-
-  const accessToken = readAccessToken();
-  if (!accessToken) return;
-
-  const params = new URLSearchParams({ services: services.join(',') });
-  const now = new Date();
-  params.set('hour', String(now.getHours()));
-  params.set('dow', String(now.getDay()));
-
-  const t0 = Date.now();
-  void fetch(`${PROXY_URL}/v1/foryou?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
-    .then((res) => {
-      console.log(
-        `[prefetch] foryou primed in ${Date.now() - t0}ms `
-        + `(${res.status}, cache=${res.headers.get('x-videx-cache') ?? 'n/a'})`,
-      );
-    })
-    .catch(() => {
-      // Best-effort — the page's own request handles failure properly.
-    });
-}
-
 /** Wire-shape pool → client shape (metadata Record→Map). Sanity-checks
  *  that a non-empty matched list arrives with non-empty metadata —
  *  if it doesn't, the wire format has drifted and we'd silently render

@@ -30,10 +30,13 @@ const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 
 /** Bump on persisted-shape changes (the cache.ts _wpN successor). */
-export const QUERY_CACHE_BUSTER = 'plat1-v1';
+export const QUERY_CACHE_BUSTER = 'ux1-v1';
 
 /** Namespaces that persist across sessions (content reads only). */
-const PERSISTED_SOURCES = new Set(['tmdb', 'omdb', 'sa']);
+// UX-1 W1: 'foryou' joins the persisted set - the last feed render
+// paints instantly on app open (stale-while-revalidate, the native-app
+// pattern) instead of a skeleton on every launch.
+const PERSISTED_SOURCES = new Set(['tmdb', 'omdb', 'sa', 'foryou']);
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,9 +56,24 @@ queryClient.setQueryDefaults(['tmdb'], { staleTime: DAY, gcTime: DAY });
 queryClient.setQueryDefaults(['omdb'], { staleTime: 7 * DAY, gcTime: 7 * DAY });
 queryClient.setQueryDefaults(['sa'], { staleTime: DAY, gcTime: DAY });
 
+// UX-1 W1: the For You payload carries pool.metadata as a Map, which
+// plain JSON silently flattens to {}. Tagged round-trip keeps it.
+const MAP_TAG = '__videxMap';
+function mapReplacer(_k: string, v: unknown): unknown {
+  return v instanceof Map ? { [MAP_TAG]: Array.from(v.entries()) } : v;
+}
+function mapReviver(_k: string, v: unknown): unknown {
+  if (v && typeof v === 'object' && MAP_TAG in (v as Record<string, unknown>)) {
+    return new Map((v as Record<string, [unknown, unknown][]>)[MAP_TAG]);
+  }
+  return v;
+}
+
 const persister = createSyncStoragePersister({
   storage: typeof window !== 'undefined' ? window.localStorage : undefined,
   key: 'videx_rq_cache',
+  serialize: (client) => JSON.stringify(client, mapReplacer),
+  deserialize: (cached) => JSON.parse(cached, mapReviver),
   // Batch writes — card-grid mounts fire many queries in a burst.
   throttleTime: 2000,
 });

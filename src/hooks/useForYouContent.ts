@@ -140,7 +140,22 @@ type ForYouRenderResult =
     }
   | { source: 'empty'; ctx: PipelineContext };
 
-async function fetchForYouRender(
+/** Canonical render-query key — shared by the hook and the App boot
+ *  prefetch (UX-1 W2) so an early tab-in ATTACHES to the in-flight
+ *  prefetch instead of firing a second full render. */
+export function forYouRenderQueryKey(
+  providerIds: number[],
+  sharedFilters: FilterSets | null | undefined,
+): (string | number)[] {
+  return [
+    'foryou', 'render',
+    getAuthUserId() ?? 'anon',
+    providerIds.join(','),
+    sharedFilters ? `s${sharedFilters.availableTmdbIds.size}` : 'own',
+  ];
+}
+
+export async function fetchForYouRender(
   providerIds: number[],
   sharedFilters: FilterSets | null | undefined,
 ): Promise<ForYouRenderResult> {
@@ -406,12 +421,7 @@ export function useForYouContent(
   // availability-set size stands in, matching the old load() dep's
   // practical refetch triggers.
   const renderQuery = useQuery({
-    queryKey: [
-      'foryou', 'render',
-      getAuthUserId() ?? 'anon',
-      providerStr,
-      sharedFilters ? `s${sharedFilters.availableTmdbIds.size}` : 'own',
-    ],
+    queryKey: forYouRenderQueryKey(providerIds, sharedFilters),
     queryFn: () => fetchForYouRender(providerIds, sharedFilters),
     enabled: providerStr.length > 0,
     staleTime: 0,
@@ -437,6 +447,11 @@ export function useForYouContent(
   useEffect(() => {
     const result = renderQuery.data;
     if (!result) return;
+
+    // UX-1 W1 (Q2): never reflow under the user's thumb. If rows are
+    // already on screen and the user has scrolled, hold the fresh
+    // result - it stays in the query cache and applies on next mount.
+    if (poolRef.current && window.scrollY > 80) return;
 
     ctxRef.current = result.ctx;
 

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { clearAllData } from '@/lib/storage/userPreferences';
 import { setAuthState } from '@/lib/storage';
 import { clearEmbeddingCache } from '@/lib/recommendations-v2/embeddingCache';
+import { queryClient } from '@/lib/queryClient';
 
 interface AuthContextValue {
   user: User | null;
@@ -77,6 +78,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // session invalidation, and the deleteAccount → signOut chain.
         if (event === 'SIGNED_OUT') {
           clearEmbeddingCache();
+          // UX-1 W1: the persisted query cache now carries the user's
+          // For You feed - same cross-user concern as the embeddings.
+          queryClient.clear();
         }
       }
     );
@@ -110,10 +114,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('[Auth] signOut error:', e);
     }
     // Don't clear localStorage — preserve preferences for same-user re-sign-in.
-    // Exception: embedding cache, which is namespaced per-user but
-    // accumulates dead keys across users on a shared device, and could
-    // theoretically be probed via dev tools. Drop on every signOut path.
+    // Exceptions: embedding cache + persisted query cache (UX-1: now
+    // includes the For You feed), both per-user data on a shared device.
     clearEmbeddingCache();
+    queryClient.clear();
   }, []);
 
   const forgotPassword = useCallback(async (email: string) => {
