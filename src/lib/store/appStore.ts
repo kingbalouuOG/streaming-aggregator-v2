@@ -22,8 +22,8 @@
 // readers never see churning callback props.
 
 import { create } from "zustand";
-import type { ContentItem } from "../../components/ContentCard";
-import type { ServiceId } from "../../components/platformLogos";
+import type { ContentItem } from "../types/content";
+import type { ServiceId } from "../types/content";
 import { defaultFor, type FilterState } from "../search/filterState";
 
 export interface AppActions {
