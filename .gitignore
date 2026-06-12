@@ -113,3 +113,7 @@ scripts/fingerprints/.failures.jsonl
 scripts/fingerprints/.backfill-checkpoint.json
 scripts/fingerprints/.backfill-failures.jsonl
 .mcp.json
+
+# PLAT-2 worker build artifacts
+workers/api/.wrangler-check/
+workers/api/.wrangler/

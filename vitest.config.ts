@@ -27,6 +27,8 @@ export default defineConfig({
     include: [
       'src/**/__tests__/**/*.test.ts',
       'scripts/**/__tests__/**/*.test.ts',
+      // PLAT-2: the Worker's pure rules (no Workers/Hono imports there).
+      'workers/api/src/**/__tests__/**/*.test.ts',
     ],
     exclude: [
       '**/node_modules/**',

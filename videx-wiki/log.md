@@ -402,3 +402,8 @@ Cross-refs: wiki/concepts/architecture/taste-vector.md + recommendation-pipeline
 ## [2026-06-11] ingest | phase-plat-1-summary.md (light pass)
 - Updated: wiki/concepts/operations/phase-history.md (PLAT-1 row + actuals note), wiki/registers/cheatsheet.md (PLAT-1 row; corrected stale REPO-1 'in progress' / 046 'not applied' rows — both predated the merge)
 - Full source-page ingest deferred to the next human raw/ snapshot drop (REPO-1 precedent)
+
+## [2026-06-12] ingest | phase-plat-2-summary.md (light pass)
+- Updated: wiki/concepts/operations/phase-history.md (PLAT-2 row; PLAT-1 row closed with PR #16), wiki/registers/cheatsheet.md (PLAT-2 row; PLAT-1 status closed)
+- Notable: first non-Supabase production surface (Cloudflare Worker `videx-api`); TMDb/OMDB keys are server-side Worker secrets only — client bundle provably keyless (dist grep). PLAT-3 lands `GET /v1/foryou` in the same Worker and dissolves the ADR-011 `_shared/` mirror.
+- Full source-page ingest deferred to the next human raw/ snapshot drop (REPO-1 precedent)

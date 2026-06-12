@@ -3,15 +3,23 @@ import { getCachedData, setCachedData, createTMDbCacheKey } from './apiQueryCach
 import { logError, ErrorType, type ErrorTypeValue } from '../utils/errorHandler';
 import { networkNameToProviderId } from '../constants/platforms';
 
-const BASE_URL = 'https://api.themoviedb.org/3';
-const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
+// PLAT-2: when VITE_API_PROXY_URL is set, every TMDb read routes through
+// the videx-api Worker's allowlisted passthrough — the key is injected
+// server-side and (post device-smoke) leaves the client bundle entirely.
+// Unsetting the env var is the rollback lever back to direct TMDb.
+const PROXY_URL = import.meta.env.VITE_API_PROXY_URL as string | undefined;
+const USE_PROXY = !!PROXY_URL;
+// PLAT-2 commit 6: the TMDb key no longer exists in client code — the
+// Worker injects it server-side. Direct mode (PROXY_URL unset) is now a
+// keyless degraded path; full rollback = restore the key reference from
+// git history AND re-add the env var.
+const BASE_URL = USE_PROXY ? `${PROXY_URL}/v1/tmdb` : 'https://api.themoviedb.org/3';
 
 const DEBUG = __DEV__;
 const USE_CACHE = true;
 
 const tmdbClient = axios.create({
   baseURL: BASE_URL,
-  params: { api_key: API_KEY },
   timeout: 10000,
 });
 
