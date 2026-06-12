@@ -14,6 +14,7 @@ import type { BrowseStateSnapshot } from "./components/BrowsePage";
 import { FilterSheet } from "./components/FilterSheet";
 import type { FilterState } from "./lib/search/filterState";
 import { useAppStore, type AppActions } from "./lib/store/appStore";
+import { prefetchForYouFeed } from "./lib/recommendations-v2/edgeRender";
 import type { OnboardingData } from "./components/OnboardingFlow";
 
 // ── PLAT-1 code-splitting (plan §2, D5: React.lazy only — no router) ──
@@ -172,6 +173,10 @@ function AppContent() {
 
   // --- Prune stale cache entries on startup ---
 
+  // Prefetch ref at component top-level (Hooks rule); the effect that
+  // consumes it is below, after connectedServices is declared.
+  const prefetchedRef = useRef(false);
+
   // --- User preferences (onboarding, profile) ---
   const userId = auth.loading ? null : (auth.user?.id ?? null);
   const userPrefs = useUserPreferences(userId);
@@ -259,8 +264,19 @@ function AppContent() {
     useAppStore.getState().setConnectedServices(connectedServices, connectedServiceIds);
   }, [connectedServices, connectedServiceIds]);
 
-  // (PLAT-3: the IN-466 Variant A Edge warmup that lived here is gone —
-  // Workers have no per-function cold start to warm against.)
+  // --- Boot-time For You feed prefetch (PLAT-3 device pass 1) ---
+  // Replaces the IN-466 Variant A Edge warmup, but earns its keep
+  // differently: the request materialises the user's KV feed entry on
+  // the Worker, so the For You navigation is a ~175ms cache hit
+  // instead of a 9-15s first-ever render. Fire-and-forget once auth +
+  // prefs resolve.
+  useEffect(() => {
+    if (prefetchedRef.current) return;
+    if (auth.loading || userPrefs.loading) return;
+    if (!auth.session || connectedServices.length === 0) return;
+    prefetchedRef.current = true;
+    prefetchForYouFeed(connectedServices);
+  }, [auth.loading, auth.session, userPrefs.loading, connectedServices.join(',')]);
 
   // PLAT-1: idle-prefetch every lazy page chunk once startup settles.
   // Chunks are local-disk assets in the WebView — fetching them at idle

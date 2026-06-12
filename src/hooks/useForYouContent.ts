@@ -416,6 +416,13 @@ export function useForYouContent(
     enabled: providerStr.length > 0,
     staleTime: 0,
     gcTime: 15 * 60 * 1000,
+    // PLAT-3 device pass 1: a WebView focus event mid-session triggered
+    // a background refetch whose result re-applied the SERVER's
+    // saved-slider ranking over the user's in-progress local re-rank —
+    // "slider doesn't work". The feed is KV-cached 20 min server-side,
+    // so focus refetches add nothing; remount/tab-return still
+    // refetches via staleTime 0.
+    refetchOnWindowFocus: false,
   });
 
   // No services selected → nothing to load (old load()'s early-out).
