@@ -21,18 +21,14 @@ export interface HomeFeed {
 async function fetchHomeFeed(): Promise<HomeFeed> {
   const charts = await fetchPerServiceCharts(DEV_SERVICES);
 
-  // Hero = first backdrop-bearing item; it's pulled OUT of its row so
-  // the same title doesn't lead the hero and row one.
+  // Hero = first row's lead title, pulled OUT of its row so the same
+  // title doesn't lead the hero and row one. The MagazineHero renders
+  // the 4:5 POSTER (design-system §4), so no backdrop requirement.
   let hero: ContentItem | null = null;
   const rows = charts.map((row) => ({ ...row, items: [...row.items] }));
-  outer: for (const row of rows) {
-    for (let i = 0; i < row.items.length; i++) {
-      if (row.items[i].backdrop) {
-        hero = row.items[i];
-        row.items.splice(i, 1);
-        break outer;
-      }
-    }
+  const firstWithItems = rows.find((row) => row.items.length > 0);
+  if (firstWithItems) {
+    hero = firstWithItems.items.shift() ?? null;
   }
 
   return { hero, rows };

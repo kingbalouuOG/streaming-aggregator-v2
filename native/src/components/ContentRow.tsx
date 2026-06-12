@@ -22,11 +22,11 @@ export function ContentRow({ title, kicker, items, onItemPress }: ContentRowProp
   return (
     <View className="mt-7">
       {kicker ? (
-        <Text className="px-5 text-kicker font-bold uppercase tracking-widest text-primary-on-soft">
+        <Text className="px-5 font-sans-bold text-kicker uppercase tracking-[1.6px] text-primary-on-soft">
           {kicker}
         </Text>
       ) : null}
-      <Text className="mt-0.5 px-5 font-display text-section text-foreground">{title}</Text>
+      <Text className="mt-0.5 px-5 font-display-bold text-title text-foreground">{title}</Text>
       <FlashList
         horizontal
         data={items}

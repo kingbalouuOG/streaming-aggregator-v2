@@ -75,9 +75,19 @@ module.exports = {
         pill: '9999px',
       },
       fontFamily: {
-        // Loaded via expo-font in W4 (@expo-google-fonts dm-sans/fraunces)
+        // Loaded in app/_layout.tsx via @expo-google-fonts. RN cannot
+        // synthesize weights for custom fonts — one family entry per
+        // cut, matching design-system.md's type scale:
+        //   font-display        Fraunces 600 (sections)
+        //   font-display-bold   Fraunces 700 (titles)
+        //   font-display-black  Fraunces 800 (hero)
+        //   font-sans[-medium|-bold]  DM Sans 400/500/700
         sans: ['DMSans_400Regular'],
+        'sans-medium': ['DMSans_500Medium'],
+        'sans-bold': ['DMSans_700Bold'],
         display: ['Fraunces_600SemiBold'],
+        'display-bold': ['Fraunces_700Bold'],
+        'display-black': ['Fraunces_800ExtraBold'],
       },
     },
   },
