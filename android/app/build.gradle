@@ -1,5 +1,16 @@
 apply plugin: 'com.android.application'
 
+// LAUNCH-1 W2: release signing. Credentials live in android/keystore.properties
+// (gitignored) — path + alias + passwords. The file is ABSENT on CI and on any
+// machine without the secret, so the release signingConfig is only wired up
+// when it exists; otherwise `assembleRelease` produces an unsigned APK and
+// debug builds are unaffected. Keystore file itself lives OUTSIDE the repo.
+def keystorePropsFile = rootProject.file("keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
+}
+
 android {
     namespace = "app.videx.streaming"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +18,8 @@ android {
         applicationId "app.videx.streaming"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.0.1"
+        versionCode 3
+        versionName "1.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +27,24 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (keystorePropsFile.exists()) {
+            release {
+                storeFile rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Only sign when the keystore is configured; unsigned otherwise.
+            if (keystorePropsFile.exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
