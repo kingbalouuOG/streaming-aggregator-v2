@@ -30,8 +30,8 @@ import {
 } from '@/lib/api/imageUrls';
 import { GENRE_NAMES } from '@/lib/constants/genres';
 import { isoToLanguageName } from '@/lib/adapters/contentAdapter';
-import type { ContentItem } from '@/components/ContentCard';
-import type { ServiceId } from '@/components/platformLogos';
+import type { ContentItem } from '@/lib/types/content';
+import type { ServiceId } from '@/lib/types/content';
 import type { FilterState } from '@/lib/search/filterState';
 
 export { WEIGHT_RELEVANCE, WEIGHT_TASTE, WEIGHT_RECENCY };

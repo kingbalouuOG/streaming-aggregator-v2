@@ -16,10 +16,9 @@
  */
 
 import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
-import type { ContentItem } from '@/components/ContentCard';
+import type { ContentItem } from '@/lib/types/content';
 import type { SliderState } from '@/lib/taste-v2/types';
-import type { CandidatePool, ExtendedTitleRow, MatchedTitle, PipelineContext } from './types';
-import type { AnchorRoomPreview } from '@/hooks/useAnchorMoodRooms';
+import type { AnchorRoomPreview, CandidatePool, ExtendedTitleRow, MatchedTitle, PipelineContext } from './types';
 import { env } from '../env';
 
 const PROXY_URL = env.API_PROXY_URL;

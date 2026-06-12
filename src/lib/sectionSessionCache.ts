@@ -1,4 +1,4 @@
-import type { ContentItem } from '@/components/ContentCard';
+import type { ContentItem } from '@/lib/types/content';
 
 export interface SectionCacheEntry {
   displayItems: ContentItem[];

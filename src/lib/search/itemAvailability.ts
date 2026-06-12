@@ -11,8 +11,8 @@
 import { getServiceProviders } from "@/lib/utils/serviceCache";
 import { getRentBuyPrice } from "@/lib/api/supabaseContent";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
-import type { ContentItem } from "@/components/ContentCard";
-import type { ServiceId } from "@/components/platformLogos";
+import type { ContentItem } from "@/lib/types/content";
+import type { ServiceId } from "@/lib/types/content";
 
 export type Tier = "free" | "rent" | "buy";
 

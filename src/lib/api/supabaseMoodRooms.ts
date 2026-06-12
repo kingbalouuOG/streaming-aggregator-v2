@@ -21,7 +21,7 @@ import { buildPosterUrl } from './tmdb';
 import { GENRE_NAMES } from '../constants/genres';
 import { titleRowToContentItem } from '../recommendations-v2/titleAdapter';
 import type { ExtendedTitleRow } from '../recommendations-v2/types';
-import type { ContentItem } from '@/components/ContentCard';
+import type { ContentItem } from '@/lib/types/content';
 
 
 /** Ranked mood room with preview thumbnails, for the For You row. */

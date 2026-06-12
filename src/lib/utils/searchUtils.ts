@@ -3,7 +3,7 @@
  * Query preprocessing and client-side result re-ranking for TMDb search.
  */
 
-import type { ContentItem } from '@/components/ContentCard';
+import type { ContentItem } from '@/lib/types/content';
 
 /**
  * Extract a trailing year from a search query.

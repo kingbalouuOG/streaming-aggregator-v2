@@ -3,8 +3,8 @@
  * Maps TMDb API responses to the UI's ContentItem interface.
  */
 
-import type { ContentItem } from '@/components/ContentCard';
-import type { ServiceId } from '@/components/platformLogos';
+import type { ContentItem } from '@/lib/types/content';
+import type { ServiceId } from '@/lib/types/content';
 import type { WatchlistItem } from '../storage/watchlist';
 import { buildPosterUrl, buildBackdropUrl } from '../api/tmdb';
 import { GENRE_NAMES } from '../constants/genres';

@@ -12,6 +12,7 @@ export default tseslint.config(
       '_archive/**',
       'node_modules/**',
       'supabase/functions/**', // Deno runtime, separate type system (engine mirror gone since PLAT-3)
+      'native/**', // NATIVE-1: Expo app lints via its own `expo lint` (Metro/Babel config + RN globals)
       'workers/api/.wrangler-check/**', // wrangler dry-run bundle output
       'workers/api/.wrangler/**',
       'tests/**',

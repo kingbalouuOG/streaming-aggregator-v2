@@ -12,7 +12,7 @@ import { getAuthUserId, isSupabaseActive } from '@/lib/storage';
 import { titleRowToContentItem } from '../../titleAdapter';
 import { EXTENDED_TITLE_SELECT } from '../../types';
 import type { ExtendedTitleRow } from '../../types';
-import type { ContentItem } from '@/components/ContentCard';
+import type { ContentItem } from '@/lib/types/content';
 
 export interface PerServiceChartRow {
   serviceId: string;
