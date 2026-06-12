@@ -18,7 +18,7 @@ This plan covers NATIVE-1 only; later phases get their own plans.
 ## Locked decisions (proposed — confirm or veto in review)
 
 - **D-N1 — Expo SDK 56** (RN 0.85, React 19.2, New Architecture). expo-router v7 for navigation, FlashList v2 for feeds/carousels, expo-image (ThumbHash placeholders replace the LQIP system), Reanimated 4 (its CSS-syntax API carries the M3 fade-through/Reveal choreography from UX-1 over almost verbatim).
-- **D-N2 — Styling: Uniwind** (Tailwind v4-native, Unistyles team). Rationale: keeps the existing TW v4 `@theme` token config and class vocabulary; style resolution off the JS render path fits the phase's whole purpose (feel). Risk: young (late 2025). Containment: class vocabulary is identical to NativeWind's — if Uniwind hits a wall, NativeWind v5 (TW v4, currently preview) is the fallback once stable; the components don't change, only the Metro/Babel plumbing. Pin the version; no `latest`.
+- **D-N2 — Styling: NativeWind 4 (stable)** — Joe's call at plan review (2026-06-12), preferring battle-tested over Tailwind-v4 syntax continuity. Consequences: `native/` carries a Tailwind **v3** `tailwind.config.js` (the web tree stays on v4 — the two configs are siblings, not shared); design tokens are ported as v3 `theme.extend` values sourced from `src/index.css` `@theme`. Class vocabulary is unchanged, so components are unaffected by a later NativeWind v5 (TW v4) upgrade — that upgrade is parked until v5 is stable. Pin the version; no `latest`.
 - **D-N3 — Repo shape: `native/` folder in this repo**, plain folder like `workers/api` (D6 precedent — no workspace split). Own `package.json`/`node_modules`; Metro `watchFolders`/`nodeModulesPaths` reach the root so `native/` imports `src/lib` **directly from the single tree** (ADR-014 extended: one engine tree, now three consumers — web client, Worker, native). ADR-015 records this; rides this PR.
 - **D-N4 — React version skew is a non-issue by construction:** `src/lib` is React-free (CONVENTIONS "No React" rule). The one violation, `src/lib/search/useFilterUrlSync.ts`, moves to `src/hooks/` in W1 (it's web-only — URL bar state). `src/hooks/` is NOT shared; native gets its own thin hooks layer.
 - **D-N5 — Env indirection instead of `import.meta.env`:** 6 call sites in `src/lib` (supabase.ts, videxApi.ts, tmdb.ts, edgeRender.ts, debugLogger.ts + 1). New `src/lib/env.ts` resolves from `import.meta.env.VITE_*` (web) or `process.env.EXPO_PUBLIC_*` (native) behind one typed accessor, same lazy-read discipline as the supabase singleton. Worker is unaffected (it injects its own config already).
@@ -76,7 +76,7 @@ The only real question is whether "launch" (beyond the 2 prototype testers) wait
 
 | Risk | Containment |
 |---|---|
-| Uniwind immaturity | D-N2 fallback path (NativeWind v5); styling layer swap doesn't touch components |
+| Two Tailwind configs (v4 web, v3 native) drift on tokens | Tokens ported from `src/index.css` `@theme` in one place (`native/tailwind.config.js`); design-system.md remains the source of truth; revisit at NativeWind v5 |
 | Metro + shared root tree resolution quirks (duplicate deps, e.g. two `@supabase/supabase-js`) | `nodeModulesPaths` ordering + `resolver.extraNodeModules` pin; surface early in W2 smoke |
 | Motion → Reanimated fidelity for the UX-1 choreography | Reanimated 4 CSS API is near-isomorphic; W4 limits scope to the two core motions |
 | Scope creep toward parity in one phase | NATIVE-1 ends at one screen, deliberately |
@@ -86,8 +86,8 @@ The only real question is whether "launch" (beyond the 2 prototype testers) wait
 
 For You/Detail/Browse/Watchlist screens, auth/onboarding, signal-capture parity, iOS, Play Store, Capacitor removal, `com.videx.app` cutover, EAS.
 
-## Open questions for review
+## Open questions — RESOLVED at plan review (2026-06-12)
 
-- **Q1 — D-N2 styling:** Uniwind (recommended) vs NativeWind 4 stable (TW v3 regression) — veto window.
-- **Q2 — Sequencing vs LAUNCH-1:** parallel as recommended, or does NATIVE preempt the tester release?
-- **Q3 — Phase summary cadence:** one summary at NATIVE-1 exit (recommended) vs per-work-item notes.
+- **Q1 — styling:** Joe chose **NativeWind 4 stable** (D-N2 updated accordingly).
+- **Q2 — sequencing:** parallel with LAUNCH-1, as recommended.
+- **Q3 — summary cadence:** one summary at NATIVE-1 exit.
