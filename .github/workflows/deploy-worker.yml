@@ -26,7 +26,8 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          # wrangler 4.x requires Node >= 22 (first deploy run failed on 20)
+          node-version: '22'
 
       - name: Deploy
         env:
