@@ -861,10 +861,9 @@ function AppContent() {
           {showCalendar ? (
             <motion.div
               key="calendar"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1, transition: { duration: 0.21, ease: [0, 0, 0, 1] } }}
+              exit={{ opacity: 0, transition: { duration: 0.09, ease: [0.3, 0, 1, 1] } }}
             >
             <CalendarPage
               items={upcoming.items}
@@ -882,10 +881,9 @@ function AppContent() {
           ) : selectedItem ? (
             <motion.div
               key={`detail-${selectedItem.id}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1, transition: { duration: 0.21, ease: [0, 0, 0, 1] } }}
+              exit={{ opacity: 0, transition: { duration: 0.09, ease: [0.3, 0, 1, 1] } }}
             >
             <DetailPage
               itemId={selectedItem.id}
@@ -898,10 +896,9 @@ function AppContent() {
           ) : selectedAnchorRoom ? (
             <motion.div
               key={`anchor-room-${selectedAnchorRoom.id}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1, transition: { duration: 0.21, ease: [0, 0, 0, 1] } }}
+              exit={{ opacity: 0, transition: { duration: 0.09, ease: [0.3, 0, 1, 1] } }}
             >
             <MoodRoomPage
               kind="anchor"
@@ -924,10 +921,9 @@ function AppContent() {
           ) : (
               <motion.div
                 key={`tab-${activeTab}`}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.2, ease: "easeInOut" }}
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1, transition: { duration: 0.21, ease: [0, 0, 0, 1] } }}
+                exit={{ opacity: 0, transition: { duration: 0.09, ease: [0.3, 0, 1, 1] } }}
               >
               {activeTab === "home" && (
                 <>

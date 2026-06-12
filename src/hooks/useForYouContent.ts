@@ -478,7 +478,19 @@ export function useForYouContent(
       // Embeddings hit the 24h localStorage cache on warm sessions, so
       // this is usually instant; cold it's a background fetch that
       // upgrades the NEXT drag.
-      void (async () => {
+      //
+      // UX-1 W3: deferred to IDLE time. Preview instrumentation caught
+      // this block freezing the main thread ~4s on first mount (3MB
+      // embedding fetch + Float32Array conversion + 3MB sync
+      // localStorage write) - it upgrades slider drags, so it has no
+      // business inside the first-paint window. requestIdleCallback
+      // with a setTimeout fallback (WebView support varies); 1.5s cap
+      // so a busy main thread can't starve it forever.
+      const scheduleIdle = (fn: () => void) =>
+        typeof window.requestIdleCallback === 'function'
+          ? window.requestIdleCallback(() => fn(), { timeout: 1500 })
+          : window.setTimeout(fn, 800);
+      scheduleIdle(() => void (async () => {
         try {
           const scored = scoreCandidates(edge.pool, edge.sliders, 'foryou', result.ctx);
           const [embMap, avoidSet, seenIds] = await Promise.all([
@@ -495,7 +507,7 @@ export function useForYouContent(
         } catch {
           // Hydration is best-effort — re-rank falls back exactly as before.
         }
-      })();
+      })());
       return;
     }
 
