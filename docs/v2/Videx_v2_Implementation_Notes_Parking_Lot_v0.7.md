@@ -1909,6 +1909,22 @@ Two placeholders intentionally left in the drafts (`[your-contact-email-address 
 
 ---
 
+## PLAT-1/2 follow-ups (filed 2026-06-12)
+
+### IN-PX-58: Fingerprint card "CLASSIC" label vs catalogue-age semantics
+
+**Source:** PLAT-1 device pass 2 (Joe's Pulp Fiction slider repro).
+
+**Detail:** The For You fingerprint card labels the catalogue-age axis NEW ↔ CLASSIC, but the engine semantics are 0 = boost new releases, 1 = "best match, any age" (recency weight 0.30 → 0.10). The right-hand end does NOT boost old films — it merely stops penalising them. Users read "CLASSIC" as an old-films preference. The mechanical re-rank divergence that amplified this was fixed in PLAT-1 (Edge-session hydration); the wording/semantics gap remains.
+
+**Fix options:** (a) relabel the end ("ANY ERA" / "ALL TIME"); (b) make the right half an actual classics bias (inverted recency component above 0.5 — a scoring change, ENG-territory, needs an eval pass). Joe to pick; (a) is a copy change, (b) is engine work.
+
+**Phase target:** (a) any time; (b) ENG-2-adjacent.
+
+**Status:** ⏳ Filed.
+
+---
+
 ## Onboarding implementation notes
 
 *(Specific to the v2 onboarding flow build — applies to Phase 3 where onboarding gets wired to backend logic)*
