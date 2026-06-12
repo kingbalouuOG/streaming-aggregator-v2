@@ -175,6 +175,18 @@ function AppContent() {
 
   // --- Prune stale cache entries on startup ---
 
+  // UX-1: splash holds (launchAutoHide false) until the first real
+  // frame is on screen - two RAFs after mount = layout + paint done.
+  // The dynamic import keeps @capacitor/splash-screen out of the
+  // critical chunk; on web it resolves to a no-op shim.
+  useEffect(() => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      void import("@capacitor/splash-screen")
+        .then(({ SplashScreen }) => SplashScreen.hide({ fadeOutDuration: 220 }))
+        .catch(() => { /* web / plugin unavailable - nothing to hide */ });
+    }));
+  }, []);
+
   // Prefetch ref at component top-level (Hooks rule); the effect that
   // consumes it is below, after connectedServices is declared.
   const prefetchedRef = useRef(false);

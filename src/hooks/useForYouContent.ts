@@ -145,7 +145,9 @@ type ForYouRenderResult =
  *  prefetch instead of firing a second full render. */
 export function forYouRenderQueryKey(
   providerIds: number[],
-  sharedFilters: FilterSets | null | undefined,
+  // Kept in the signature so call sites read naturally, deliberately
+  // unused - see the key-identity note below.
+  _sharedFilters: FilterSets | null | undefined,
 ): (string | number)[] {
   // No sharedFilters component in the key (UX-1 first-load capture):
   // the suffix differed between the boot prefetch ('own') and the page

@@ -11,7 +11,11 @@ const config: CapacitorConfig = {
   plugins: {
     StatusBar: { style: 'Dark', backgroundColor: '#0a0a0a' },
     SplashScreen: {
-      launchAutoHide: true,
+      // UX-1 (forum-confirmed pattern): hold the splash until React has
+      // actually painted - App.tsx hides it after the first frame. Auto
+      // -hide dropped the splash on WebView-ready, ~before first paint,
+      // leaving a (dark, colour-matched) gap.
+      launchAutoHide: false,
       backgroundColor: '#0a0a0a',
       showSpinner: false,
       androidScaleType: 'CENTER_CROP',
