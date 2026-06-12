@@ -26,6 +26,7 @@
 
 import { supabase } from '../supabase';
 import { getAuthUserId, isSupabaseActive } from '../storage';
+import type { UserScope } from '../server/userScope';
 import type { ScoredCandidate } from './types';
 
 const SEEN_WINDOW_DAYS = 90;
@@ -84,6 +85,31 @@ export async function fetchSeenContentIds(): Promise<Set<number>> {
   }
 
   for (const row of data ?? []) {
+    if (row.content_id != null) seen.add(row.content_id);
+  }
+  return seen;
+}
+
+/** Scoped (server) variant — PLAT-3, absorbed from the ADR-011 mirror.
+ *  card_impressions is user-owned, so the read goes through UserScope.
+ *  Selection + splice below are shared between both runtimes as-is. */
+export async function fetchSeenContentIdsScoped(scope: UserScope): Promise<Set<number>> {
+  const seen = new Set<number>();
+
+  const since = new Date(Date.now() - SEEN_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await scope
+    .select('card_impressions', 'content_id')
+    .gte('shown_at', since)
+    .order('shown_at', { ascending: false })
+    .limit(SEEN_FETCH_CAP);
+
+  if (error) {
+    console.error('[Exploration] seen-set query failed:', error.message);
+    return seen;
+  }
+
+  for (const row of (data ?? []) as { content_id: number | null }[]) {
     if (row.content_id != null) seen.add(row.content_id);
   }
   return seen;

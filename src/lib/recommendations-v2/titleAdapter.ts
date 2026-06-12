@@ -4,7 +4,7 @@
  * Converts titles table rows to the ContentItem interface used by all UI components.
  */
 
-import { buildPosterUrl } from '../api/tmdb';
+import { buildPosterUrl } from '../api/imageUrls';
 import { GENRE_NAMES } from '../constants/genres';
 import type { ContentItem } from '@/components/ContentCard';
 import type { TitleRow } from './types';

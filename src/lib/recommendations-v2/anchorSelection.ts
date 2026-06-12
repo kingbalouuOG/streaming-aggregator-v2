@@ -34,7 +34,9 @@
  * thresholds in one place during the §7 mid-flight tuning window.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
+import type { UserScope } from '../server/userScope';
 import { TASTE_CLUSTERS, type TasteCluster } from '../taste-v2/tasteClusters';
 import { buildRowFromPool, scoreCandidates } from './ranker';
 import type { CandidatePool } from './types';
@@ -105,6 +107,15 @@ export interface AnchorSelectionInput {
   /** Already-loaded pool from the existing pipeline. Reused for Tier 3. */
   pool: CandidatePool | null;
   sliders: SliderState;
+  /**
+   * Server (scoped) mode — PLAT-3, absorbed from the ADR-011 mirror.
+   * When provided, embedding fetches use `client` and user_interactions
+   * reads go through `scope` (service-role defence-in-depth contract).
+   * When omitted, the browser singleton + userId path is used. One
+   * implementation, two data-access modes.
+   */
+  client?: SupabaseClient;
+  scope?: UserScope;
 }
 
 export interface AnchorSelectionResult {
@@ -150,7 +161,8 @@ export async function selectAnchors(
     .map((id) => TASTE_CLUSTERS.find((c) => c.id === id))
     .filter((c): c is TasteCluster => c != null);
 
-  const clusterRepEmbeds = await fetchRepresentativeEmbeddings(userClusters);
+  const db = input.client ?? supabase;
+  const clusterRepEmbeds = await fetchRepresentativeEmbeddings(db, userClusters);
   const clusterCentroids = computeClusterCentroids(userClusters, clusterRepEmbeds);
 
   // ── Tier 1 ────────────────────────────────────────────────────────
@@ -159,6 +171,8 @@ export async function selectAnchors(
   // avoids N sequential round-trips for the same titles we just fetched.
   const { anchors: tier1, embedMap: tier1EmbedMap } = await selectTier1({
     userId: input.userId,
+    db,
+    scope: input.scope,
     tasteUnit,
     clusterCentroids,
     coldStartGuardActive,
@@ -216,6 +230,9 @@ export async function selectAnchors(
 
 interface Tier1Context {
   userId: string;
+  db: SupabaseClient;
+  /** Present in server mode — user_interactions reads go through it. */
+  scope?: UserScope;
   tasteUnit: number[];
   clusterCentroids: Map<string, number[]>;
   coldStartGuardActive: boolean;
@@ -234,30 +251,53 @@ async function selectTier1(ctx: Tier1Context): Promise<Tier1Result> {
     Date.now() - TIER_1_LOOKBACK_DAYS * 24 * 60 * 60 * 1000,
   ).toISOString();
 
-  // Two parallel reads: thumbs_up events + (watched ∪ watchlist_add) events.
-  const [thumbsRes, engageRes] = await Promise.all([
-    supabase
-      .from('user_interactions')
-      .select('content_id, media_type, created_at')
-      .eq('user_id', ctx.userId)
-      .eq('event_type', 'thumbs_up')
-      .gte('created_at', cutoff)
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('user_interactions')
-      .select('content_id, media_type, created_at')
-      .eq('user_id', ctx.userId)
-      .in('event_type', ['watched', 'watchlist_add'])
-      .gte('created_at', cutoff)
-      .order('created_at', { ascending: false }),
-  ]);
+  // Two parallel reads: thumbs_up events + (watched ∪ watchlist_add)
+  // events. Server mode routes through UserScope (which applies the
+  // user_id filter); browser mode filters explicitly on the singleton.
+  const [thumbsRes, engageRes] = await Promise.all(
+    ctx.scope
+      ? [
+          ctx.scope
+            .select('user_interactions', 'content_id, media_type, created_at')
+            .eq('event_type', 'thumbs_up')
+            .gte('created_at', cutoff)
+            .order('created_at', { ascending: false }),
+          ctx.scope
+            .select('user_interactions', 'content_id, media_type, created_at')
+            .in('event_type', ['watched', 'watchlist_add'])
+            .gte('created_at', cutoff)
+            .order('created_at', { ascending: false }),
+        ]
+      : [
+          supabase
+            .from('user_interactions')
+            .select('content_id, media_type, created_at')
+            .eq('user_id', ctx.userId)
+            .eq('event_type', 'thumbs_up')
+            .gte('created_at', cutoff)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('user_interactions')
+            .select('content_id, media_type, created_at')
+            .eq('user_id', ctx.userId)
+            .in('event_type', ['watched', 'watchlist_add'])
+            .gte('created_at', cutoff)
+            .order('created_at', { ascending: false }),
+        ],
+  );
 
-  if (!thumbsRes.data || !engageRes.data) return { anchors: [], embedMap: new Map() };
+  const thumbsData = thumbsRes.data as
+    | { content_id: number | null; media_type: string | null; created_at: string | null }[]
+    | null;
+  const engageData = engageRes.data as
+    | { content_id: number | null; media_type: string | null; created_at: string | null }[]
+    | null;
+  if (!thumbsData || !engageData) return { anchors: [], embedMap: new Map() };
 
   // user_interactions.content_id / media_type are nullable in the schema for
   // non-content events (slider tweaks, etc.); skip those rows.
   const thumbsByKey = new Map<string, { tmdbId: number; mediaType: 'movie' | 'tv'; createdAt: string }>();
-  for (const r of thumbsRes.data) {
+  for (const r of thumbsData) {
     if (r.content_id == null || (r.media_type !== 'movie' && r.media_type !== 'tv') || r.created_at == null) continue;
     const key = `${r.media_type}-${r.content_id}`;
     if (!thumbsByKey.has(key)) {
@@ -270,7 +310,7 @@ async function selectTier1(ctx: Tier1Context): Promise<Tier1Result> {
   }
 
   const engagedKeys = new Set(
-    engageRes.data
+    engageData
       .filter((r) => r.content_id != null && r.media_type != null)
       .map((r) => `${r.media_type}-${r.content_id}`),
   );
@@ -295,6 +335,7 @@ async function selectTier1(ctx: Tier1Context): Promise<Tier1Result> {
 
   // (G2) + (G3) require embeddings. Fetch all in one batch.
   const fullEmbedMap = await fetchTitleEmbeddingsBatch(
+    ctx.db,
     combined.map((c) => ({ tmdbId: c.tmdbId, mediaType: c.mediaType })),
   );
 
@@ -451,13 +492,15 @@ function selectTier3(ctx: Tier3Context): SelectedAnchor[] {
 // ── Embedding fetches ──────────────────────────────────────────────
 
 async function fetchRepresentativeEmbeddings(
+  db: SupabaseClient,
   clusters: TasteCluster[],
 ): Promise<Map<string, number[]>> {
   const all = clusters.flatMap((c) => c.representativeTmdbIds);
-  return fetchTitleEmbeddingsBatch(all);
+  return fetchTitleEmbeddingsBatch(db, all);
 }
 
 async function fetchTitleEmbeddingsBatch(
+  db: SupabaseClient,
   refs: { tmdbId: number; mediaType: 'movie' | 'tv' }[],
 ): Promise<Map<string, number[]>> {
   const out = new Map<string, number[]>();
@@ -469,7 +512,7 @@ async function fetchTitleEmbeddingsBatch(
   // the map even though their keys won't collide.
   const wanted = new Set(refs.map((r) => `${r.mediaType}-${r.tmdbId}`));
   const ids = [...new Set(refs.map((r) => r.tmdbId))];
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('titles')
     .select('tmdb_id, media_type, embedding')
     .in('tmdb_id', ids);

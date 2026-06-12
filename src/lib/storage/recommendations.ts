@@ -2,7 +2,10 @@ import storage from '../storage';
 import { isSupabaseActive, getAuthUserId } from '../storage';
 import { supabase } from '../supabase';
 
-const DEBUG = __DEV__;
+// typeof guard: __DEV__ is a Vite define; in non-Vite bundles (videx-api
+// Worker imports this module transitively, PLAT-3) the bare identifier
+// would throw ReferenceError at module init.
+const DEBUG = typeof __DEV__ !== 'undefined' && __DEV__;
 
 const STORAGE_KEYS = {
   RECOMMENDATIONS: '@app_recommendations',

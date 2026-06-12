@@ -1,0 +1,4 @@
+.dev.vars
+*.log
+.wrangler-check/
+.wrangler/

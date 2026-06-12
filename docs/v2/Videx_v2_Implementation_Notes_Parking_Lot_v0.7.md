@@ -1921,6 +1921,20 @@ Two placeholders intentionally left in the drafts (`[your-contact-email-address 
 
 **Phase target:** (a) any time; (b) ENG-2-adjacent.
 
+**Update (2026-06-12, PLAT-3 device pass 2):** both top sliders confirmed working mechanically — catalogue-age full-swing reorders the entire top-20 (0/20 same-position in sim on a real payload); comfort zone resizes Outside Your Usual 5→15 by design and touches nothing else. The gap is purely labelling + affordance ("which row does this slider control"). Joe verified on device once told where to look.
+
+**Status:** ⏳ Filed.
+
+---
+
+### IN-PX-59: D4 clock — delete the client For You pipeline one release after PLAT-3
+
+**Source:** PLAT-3 close-out (ADR-014, locked decision D4).
+
+**Detail:** The client-side For You pipeline survives exactly one release from the PLAT-3 merge (2026-06-12) as an error fallback. When the clock expires, delete: the client fallback path in `useForYouContent` (the `source: 'client'` arm + its pipeline imports), the client (non-`Scoped`) data-access variants that share files with their `*Scoped` twins (hardFilters, avoidSet, exploration, tasteProfileV2 reads, recompute delegations collapse to scoped-only), `scripts/test/foryou-parity-probe.mjs` + golden, and the CONVENTIONS.md in-file twin rule. The `*Scoped` suffix can drop at the same time.
+
+**Phase target:** first release AFTER PLAT-3 ships to the prototype users (launch-adjacent).
+
 **Status:** ⏳ Filed.
 
 ---

@@ -15,6 +15,7 @@
  * ./anchoredRoom.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import { titleRowToContentItem } from './titleAdapter';
 import { computeHomeRecencyScore, computeForYouRecencyScore } from './recency';
@@ -59,6 +60,20 @@ import type { SliderState } from '@/lib/taste-v2/types';
 export async function fetchCandidatePool(
   input: PipelineInput,
 ): Promise<CandidatePool> {
+  return fetchCandidatePoolScoped(supabase, input);
+}
+
+/**
+ * Scoped (server) variant — PLAT-3. The retrieval bodies were
+ * byte-identical between client and the ADR-011 mirror apart from where
+ * the Supabase client came from, so the client entry point above is a
+ * thin delegation and THIS is the single implementation. The videx-api
+ * Worker calls it with a service-role client.
+ */
+export async function fetchCandidatePoolScoped(
+  client: SupabaseClient,
+  input: PipelineInput,
+): Promise<CandidatePool> {
   const { tasteVector, filterSets, candidateLimit = DEFAULT_CANDIDATE_LIMIT, interests } = input;
 
   // ENG-1 multi-interest path: one RPC per centroid, dedupe keep-closest,
@@ -66,7 +81,7 @@ export async function fetchCandidatePool(
   // falls through to the legacy single-vector path below rather than
   // serving an empty surface.
   if (interests && interests.length > 0) {
-    const multi = await fetchMultiInterestPool(interests, filterSets);
+    const multi = await fetchMultiInterestPool(client, interests, filterSets);
     if (multi) return multi;
     console.warn('[Pipeline] multi-interest retrieval empty; falling back to single-vector');
   }
@@ -74,7 +89,7 @@ export async function fetchCandidatePool(
   const vectorStr = `[${tasteVector.join(',')}]`;
 
   // Stage 1: cosine similarity retrieval via RPC
-  const { data: matched, error: rpcError } = await supabase
+  const { data: matched, error: rpcError } = await client
     .rpc('match_titles_by_vector', {
       query_vector: vectorStr,
       match_limit: candidateLimit,
@@ -108,7 +123,7 @@ export async function fetchCandidatePool(
   // to allow for filtering. The full 'filtered' list is kept in pool.matched
   // for cosine-score distribution calculations.
   const metadataIds = [...new Set(filtered.slice(0, 100).map(t => t.tmdb_id))];
-  const metadata = await fetchExtendedMetadata(metadataIds);
+  const metadata = await fetchExtendedMetadata(client, metadataIds);
 
   return { matched: filtered, metadata, fetchedAt: Date.now() };
 }
@@ -124,12 +139,13 @@ export async function fetchCandidatePool(
  * the caller falls back to single-vector retrieval.
  */
 async function fetchMultiInterestPool(
+  client: SupabaseClient,
   interests: InterestRetrievalInput[],
   filterSets: FilterSets,
 ): Promise<CandidatePool | null> {
   const results = await Promise.all(interests.map(async interest => {
     const vectorStr = `[${interest.centroid.join(',')}]`;
-    const { data, error } = await supabase
+    const { data, error } = await client
       .rpc('match_titles_by_vector', {
         query_vector: vectorStr,
         match_limit: PER_CENTROID_CANDIDATE_LIMIT,
@@ -157,7 +173,7 @@ async function fetchMultiInterestPool(
   }
 
   const metadataIds = [...new Set(filtered.slice(0, 100).map(t => t.tmdb_id))];
-  const metadata = await fetchExtendedMetadata(metadataIds);
+  const metadata = await fetchExtendedMetadata(client, metadataIds);
 
   return { matched: filtered, metadata, fetchedAt: Date.now(), interleaved: true };
 }
@@ -318,13 +334,14 @@ function applyHardFilters(
 
 /** Fetch extended metadata for a list of tmdb_ids */
 async function fetchExtendedMetadata(
+  client: SupabaseClient,
   tmdbIds: number[],
 ): Promise<Map<string, ExtendedTitleRow>> {
   const map = new Map<string, ExtendedTitleRow>();
 
   if (tmdbIds.length === 0) return map;
 
-  const { data: rows, error } = await supabase
+  const { data: rows, error } = await client
     .from('titles')
     .select(TITLE_SELECT)
     .in('tmdb_id', tmdbIds);

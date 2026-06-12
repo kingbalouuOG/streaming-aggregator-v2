@@ -1,11 +1,33 @@
 # Videx API proxy — PLAT-2 (E&P brief §6, locked D2/D6).
-# Secrets (set once via `wrangler secret put`): TMDB_API_KEY, OMDB_API_KEY.
+# Secrets (set once via `wrangler secret put`): TMDB_API_KEY,
+# OMDB_API_KEY, SUPABASE_SERVICE_ROLE_KEY (PLAT-3).
 # Deployed to the workers.dev subdomain at prototype scale (plan Q2);
 # custom domain is a launch-prep item.
 
 name = "videx-api"
 main = "src/index.ts"
 compatibility_date = "2026-06-01"
+
+# nodejs_compat: @supabase/supabase-js (bundled for /v1/foryou, PLAT-3)
+# touches process.env/Buffer-adjacent paths at runtime.
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Public project URL (not a secret — it ships in the client bundle too).
+SUPABASE_URL = "https://fmusugdcnnwiuzkbjquo.supabase.co"
+
+# PLAT-3 W3: per-user feed cache. Key = userId : taste_vector_updated_at
+# : sliderHash : sorted services; TTL 20 min. An interaction that moves
+# the taste vector bumps updated_at and busts the entry naturally.
+[[kv_namespaces]]
+binding = "FORYOU_CACHE"
+id = "e9afd10acedc493e9b9603d4426495fd"
+
+# PLAT-3 W5: nightly stale-profile recompute (taste vector replay +
+# centroid k-means), off the For You hot path. 04:00 UTC — clear of the
+# 06:00 UTC sync-incremental pg_cron.
+[triggers]
+crons = ["0 4 * * *"]
 
 [observability]
 enabled = true

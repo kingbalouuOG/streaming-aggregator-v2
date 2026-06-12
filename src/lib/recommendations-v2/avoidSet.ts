@@ -27,9 +27,11 @@
  * retrieval RPC.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import { getAuthUserId, isSupabaseActive } from '../storage';
-import { AVOID_SET_EVENTS, AVOID_SET_SIZE } from '@/lib/taste-v2/types';
+import type { UserScope } from '../server/userScope';
+import { AVOID_SET_EVENTS, AVOID_SET_SIZE } from '../taste-v2/types';
 import { getCachedEmbeddings, setCachedEmbeddings, computeNorm } from './embeddingCache';
 import type { CachedEmbedding, EmbeddingMap } from './embeddingCache';
 import type { ScoredCandidate } from './types';
@@ -96,6 +98,71 @@ export async function fetchAvoidSet(): Promise<CachedEmbedding[]> {
 
   if (map.size > 0) setCachedEmbeddings(cacheKey, map);
   return [...map.values()];
+}
+
+// ─── Scoped (server) variant — PLAT-3, absorbed from the ADR-011
+// mirror. user_interactions goes through UserScope (user-owned table,
+// service-role contract); titles uses the raw client. Cache is a
+// module-scope Map instead of localStorage — instance lifetime is the
+// eviction, identical to the Edge original's behaviour. The Map is
+// dead weight in the client bundle until the D4 window closes and the
+// client variant above is deleted.
+
+const instanceCache = new Map<string, CachedEmbedding[]>();
+
+export async function fetchAvoidSetScoped(
+  scope: UserScope,
+  client: SupabaseClient,
+): Promise<CachedEmbedding[]> {
+  const { data, error } = await scope
+    .select('user_interactions', 'content_id, media_type, created_at')
+    .in('event_type', [...AVOID_SET_EVENTS])
+    .not('content_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(AVOID_SET_SIZE);
+
+  if (error) {
+    console.error('[AvoidSet] negatives query failed:', error.message);
+    return [];
+  }
+  const rows = (data ?? []) as { content_id: number; media_type: string; created_at: string | null }[];
+  if (rows.length === 0) return [];
+
+  const latestTs = rows[0].created_at ? new Date(rows[0].created_at).getTime() : 0;
+  const cacheKey = `${scope.userId}:${latestTs}:${rows.length}`;
+
+  const cached = instanceCache.get(cacheKey);
+  if (cached && cached.length > 0) return cached;
+
+  const wanted = new Set(rows.map(r => `${r.media_type}-${r.content_id}`));
+  const tmdbIds = [...new Set(rows.map(r => r.content_id))];
+
+  const { data: titleRows, error: embError } = await client
+    .from('titles')
+    .select('tmdb_id, media_type, embedding')
+    .in('tmdb_id', tmdbIds)
+    .not('embedding', 'is', null);
+
+  if (embError || !titleRows) {
+    console.error('[AvoidSet] embedding fetch failed:', embError?.message);
+    return [];
+  }
+
+  const map: EmbeddingMap = new Map();
+  for (const row of titleRows as { tmdb_id: number; media_type: string; embedding: unknown }[]) {
+    const key = `${row.media_type}-${row.tmdb_id}`;
+    if (!wanted.has(key)) continue; // movie/tv id collision guard
+    if (row.embedding == null) continue;
+    const emb = typeof row.embedding === 'string' ? JSON.parse(row.embedding) : row.embedding;
+    if (Array.isArray(emb) && emb.length > 0) {
+      const vec = new Float32Array(emb as number[]);
+      map.set(key, { vec, norm: computeNorm(vec) });
+    }
+  }
+
+  const result = [...map.values()];
+  if (result.length > 0) instanceCache.set(cacheKey, result);
+  return result;
 }
 
 /**

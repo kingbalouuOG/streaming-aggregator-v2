@@ -1,27 +1,31 @@
-# workers/api — Cloudflare Worker (PLAT-2 lands here)
+# workers/api — videx-api Cloudflare Worker
 
-Created empty in REPO-1 (E&P brief §4.3-3) so PLAT-2 lands into an
-agreed location. Plain folder, not a workspace split — locked decision
-D6 (orchestration v0.8 §11): workspace split only if a second app
+The platform's server-side surface (E&P brief §6–7, locked D2/D6).
+Plain folder, not a workspace split — D6: split only if a second app
 target ever appears.
 
-What arrives in PLAT-2 (brief §6):
+Routes (src/index.ts, Hono):
 
-- Hono app deployed via wrangler, CI deploy on merge.
+- `GET /v1/health` — deploy smoke probe.
 - `GET /v1/title/:type/:id` — merged TMDb detail + OMDB ratings,
-  CDN-cached (`s-maxage=86400, stale-while-revalidate=86400`).
-- `GET /v1/discover` / `/v1/search` / `/v1/trending` — shorter s-maxage.
-- TMDb + OMDB keys become Worker secrets; `VITE_TMDB_API_KEY` /
-  `VITE_OMDB_API_KEY` leave the client bundle.
+  24h CDN cache (PLAT-2).
+- `GET /v1/tmdb/*` — allowlisted TMDb passthrough, per-class TTLs
+  (src/rules.ts, unit-tested from the root vitest rig) (PLAT-2).
+- `GET /v1/foryou` — server-side For You render (PLAT-3). Verifies the
+  Supabase JWT against the project JWKS (src/auth.ts), then runs the
+  engine imported DIRECTLY from `src/lib/{recommendations-v2,taste-v2}`
+  via `src/lib/server/foryouRender.ts` — the single engine tree;
+  ADR-014 superseded the ADR-011 mirror. Per-user KV feed cache
+  (FORYOU_CACHE, 20 min TTL, keyed user : taste_vector_updated_at :
+  sliderHash : services).
 
-PLAT-3 then adds `GET /v1/foryou` (single server-side engine + feed
-cache), importing `src/lib/recommendations-v2/` directly — wrangler
-bundles from anywhere in the repo, which is what dissolves the ADR-011
-`_shared/` mirror.
+Scheduled (wrangler.toml [triggers], 04:00 UTC): nightly stale-profile
+recompute — `src/lib/server/staleRecompute.ts` (PLAT-3 W5).
 
-PLAT-2 status: LIVE code. Hono app at src/index.ts, pure routing/cache
-rules at src/rules.ts (unit-tested from the root vitest rig), deploys
-via .github/workflows/deploy-worker.yml on merge (soft-skips until the
-Cloudflare repo secrets exist). Worker secrets: TMDB_API_KEY +
-OMDB_API_KEY via wrangler secret put. Local dev: npm run dev in this
-folder (wrangler dev); bundle check: npm run check.
+Secrets (`wrangler secret put`, pipe from a file): TMDB_API_KEY,
+OMDB_API_KEY, SUPABASE_SERVICE_ROLE_KEY. SUPABASE_URL is a [vars]
+entry. Deploys via .github/workflows/deploy-worker.yml on merge.
+
+Local dev: `npm run dev` (use `.dev.vars` for secrets — gitignored);
+bundle check: `npm run check`; cron test:
+`npx wrangler dev --test-scheduled` + curl `/__scheduled?cron=0+4+*+*+*`.

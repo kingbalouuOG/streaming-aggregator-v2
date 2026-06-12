@@ -11,15 +11,11 @@ import {
   getV2TasteProfile,
   updateV2TasteVector,
   getInterestCentroids,
-  saveInterestCentroids,
   updateInterestCentroidVector,
 } from '@/lib/taste-v2/tasteProfileV2';
 import {
   applyInteractionIncremental,
   applyInteractionToCentroids,
-  recomputeFromInteractions,
-  recomputeInterestCentroids,
-  needsRecomputation,
 } from '@/lib/taste-v2/interactionUpdate';
 import type { TasteProfileV2 } from '@/lib/taste-v2/types';
 import { invalidateRecommendationCache } from '@/lib/storage/recommendations';
@@ -33,32 +29,16 @@ export function useTasteProfile() {
   const [profile, setProfile] = useState<TasteProfileV2 | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Load profile and check for stale recomputation
+  // Load profile. The >24h stale recompute that used to run here
+  // (awaited, on the launch hot path) moved to the videx-api Worker's
+  // nightly cron in PLAT-3 W5 (src/lib/server/staleRecompute.ts) —
+  // worst-case staleness is now ~28h instead of "until next launch",
+  // and the launch path never replays the event log again.
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
         const p = await getV2TasteProfile();
-        if (cancelled) return;
-
-        if (p?.tasteVector && needsRecomputation(p.updatedAt)) {
-          // ENG-1: refresh interest centroids in the same stale window.
-          // Fire-and-forget — k-means over the event log must never block
-          // the profile load (and PLAT-3 moves this off-path entirely).
-          // < 8 distinct positives → null → existing centroids kept.
-          recomputeInterestCentroids()
-            .then(interests => (interests ? saveInterestCentroids(interests) : undefined))
-            .catch(e => console.error('[useTasteProfile] centroid recompute failed:', e));
-
-          // Full recompute from user_interactions event log
-          const recomputed = await recomputeFromInteractions(p.tasteVector);
-          if (recomputed && !cancelled) {
-            await updateV2TasteVector(recomputed, p.interactionCount);
-            setProfile({ ...p, tasteVector: recomputed, updatedAt: new Date().toISOString() });
-            return;
-          }
-        }
-
         if (!cancelled) setProfile(p);
       } catch (err) {
         console.error('[useTasteProfile] Error loading:', err);

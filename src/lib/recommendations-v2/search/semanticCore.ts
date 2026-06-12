@@ -6,9 +6,11 @@
 // 60/25/15 weights from strategy annex §4, and returns the ranked
 // list.
 //
-// Lives in `_shared/` so both the client (src/lib/recommendations-v2/
-// search/semanticRetrieval.ts) and any future Edge consumer can
-// drive the same algorithm.
+// PLAT-3: relocated from supabase/functions/_shared/ (where it was the
+// one REVERSE-direction shared module — client importing from the Edge
+// tree) into the engine tree as part of dissolving the ADR-011 mirror.
+// The client adapter (./semanticRetrieval.ts) drives it; a server
+// consumer can import it the same way the Worker imports the engine.
 //
 // What this module does NOT do:
 //   - Embed the query. Caller provides the 1536D vector.
@@ -19,8 +21,20 @@
 // Weights are exported as named constants so the eval rig can tune
 // them without code churn elsewhere.
 
-// deno-lint-ignore no-explicit-any
-type SupabaseLike = any;
+/** Minimal structural client — one RPC + one table read. Keeps the
+ *  eval rig free to pass a bare supabase-js client OR a stub. */
+interface SupabaseResult {
+  data: unknown;
+  error: { message: string } | null;
+}
+interface SupabaseLike {
+  rpc(fn: string, args: Record<string, unknown>): PromiseLike<SupabaseResult>;
+  from(table: string): {
+    select(columns: string): {
+      in(column: string, values: readonly unknown[]): PromiseLike<SupabaseResult>;
+    };
+  };
+}
 
 export const WEIGHT_RELEVANCE = 0.60;
 export const WEIGHT_TASTE = 0.25;

@@ -14,6 +14,7 @@ import type { BrowseStateSnapshot } from "./components/BrowsePage";
 import { FilterSheet } from "./components/FilterSheet";
 import type { FilterState } from "./lib/search/filterState";
 import { useAppStore, type AppActions } from "./lib/store/appStore";
+import { prefetchForYouFeed } from "./lib/recommendations-v2/edgeRender";
 import type { OnboardingData } from "./components/OnboardingFlow";
 
 // ── PLAT-1 code-splitting (plan §2, D5: React.lazy only — no router) ──
@@ -81,7 +82,6 @@ import { useWatchlist } from "./hooks/useWatchlist";
 import { useHomeContent } from "./hooks/useHomeContent";
 import { useUpcoming } from "./hooks/useUpcoming";
 import { providerIdsToServiceIds, providerIdToServiceId } from "./lib/adapters/platformAdapter";
-import { warmRenderForYou } from "./lib/recommendations-v2/edgeWarmup";
 import type { ServiceId } from "./components/platformLogos";
 import { App as CapApp } from "@capacitor/app";
 import { useTasteProfile } from "./hooks/useTasteProfile";
@@ -173,10 +173,9 @@ function AppContent() {
 
   // --- Prune stale cache entries on startup ---
 
-  // Warmup ref needs to be at component top-level (Hooks rule). The
-  // useEffect that consumes it is below, after connectedServices is
-  // declared, since we need user services to fire the warmup.
-  const warmedRef = useRef(false);
+  // Prefetch ref at component top-level (Hooks rule); the effect that
+  // consumes it is below, after connectedServices is declared.
+  const prefetchedRef = useRef(false);
 
   // --- User preferences (onboarding, profile) ---
   const userId = auth.loading ? null : (auth.user?.id ?? null);
@@ -265,19 +264,18 @@ function AppContent() {
     useAppStore.getState().setConnectedServices(connectedServices, connectedServiceIds);
   }, [connectedServices, connectedServiceIds]);
 
-  // --- Warm the For You Edge Function (IN-466 Variant A) ---
-  // Fire-and-forget hit on render-foryou-rows itself once auth + prefs
-  // have resolved. Edge Function instances are per-function, so warming
-  // a noop function doesn't help — we have to warm the function we
-  // actually want hot. Cost: one extra full pipeline run per app
-  // session. Gain: first For You navigation hits ~800ms warm instead
-  // of 5-12s cold. Logic lives in edgeWarmup.ts.
+  // --- Boot-time For You feed prefetch (PLAT-3 device pass 1) ---
+  // Replaces the IN-466 Variant A Edge warmup, but earns its keep
+  // differently: the request materialises the user's KV feed entry on
+  // the Worker, so the For You navigation is a ~175ms cache hit
+  // instead of a 9-15s first-ever render. Fire-and-forget once auth +
+  // prefs resolve.
   useEffect(() => {
-    if (warmedRef.current) return;
+    if (prefetchedRef.current) return;
     if (auth.loading || userPrefs.loading) return;
     if (!auth.session || connectedServices.length === 0) return;
-    warmedRef.current = true;
-    void warmRenderForYou(connectedServices);
+    prefetchedRef.current = true;
+    prefetchForYouFeed(connectedServices);
   }, [auth.loading, auth.session, userPrefs.loading, connectedServices.join(',')]);
 
   // PLAT-1: idle-prefetch every lazy page chunk once startup settles.

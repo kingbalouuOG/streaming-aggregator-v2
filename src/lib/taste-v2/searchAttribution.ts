@@ -15,7 +15,7 @@
  *    DB and walks them in lockstep with taste-relevant events,
  *    applying `isWithinAttributionWindow` for the same gating.
  *
- * Constants live in `./types.ts` (mirrored to `_shared/taste-v2/`).
+ * Constants live in `./types.ts` (single-sourced since PLAT-3).
  * This module is client-only — Edge Functions never run incremental
  * updates, so no mirror is required here.
  */
