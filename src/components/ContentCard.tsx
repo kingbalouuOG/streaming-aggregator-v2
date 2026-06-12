@@ -5,36 +5,12 @@ import { ImageSkeleton } from "./ImageSkeleton";
 import { ServiceStack } from "./ServiceBadge";
 import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
-import type { ServiceId } from "./platformLogos";
+// ContentItem's canonical definition moved to @/lib/types/content
+// (NATIVE-1 W2) — lib modules import it there; this re-export keeps
+// every existing `from "./ContentCard"` import working.
+import type { ContentItem, ServiceId } from "@/lib/types/content";
 
-export interface ContentItem {
-  id: string;
-  title: string;
-  image: string;
-  /** TMDb backdrop URL (16:9). Optional — set by contentAdapter from
-   *  the upstream `backdrop_path`. Used by the WideCard variant. */
-  backdrop?: string;
-  services: ServiceId[];
-  rating?: number;
-  year?: number;
-  type?: "movie" | "tv" | "doc";
-  matchPercentage?: number;
-  runtime?: number;
-  addedAt?: number;
-  genre?: string;
-  /** Plot synopsis from TMDb. Used as a stopgap standfirst on the
-   *  MagazineHero until editorial copy lands (IN-V3-001). */
-  overview?: string;
-  language?: string;
-  genreIds?: number[];
-  originalLanguage?: string;
-  popularity?: number;
-  voteCount?: number;
-  /** ENG-1 Workstream C: true for exploration-slot picks in Recommended
-   *  For You. ContentRow writes it into card_impressions.metadata so
-   *  ENG-2 can measure exploration CTR separately. No visual treatment. */
-  exploration?: boolean;
-}
+export type { ContentItem } from "@/lib/types/content";
 
 /**
  * Visual size variants per docs/design/design-system.md §4.

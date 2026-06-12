@@ -8,7 +8,7 @@
  *         Rent/buy deduplication against all streaming services is handled upstream in detailAdapter.ts.
  */
 
-import type { ServiceId } from '@/components/platformLogos';
+import type { ServiceId } from '@/lib/types/content';
 import type { RentalOption } from '@/lib/adapters/detailAdapter';
 
 export interface ClassifiedProviders {

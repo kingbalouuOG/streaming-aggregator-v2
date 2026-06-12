@@ -8,7 +8,7 @@
 // data spans UK/US/MPAA/TV schemas with no clean mapping). Add back
 // in a later phase if parental controls or a real user need surfaces.
 
-import type { ServiceId } from "../../components/platformLogos";
+import type { ServiceId } from "../types/content";
 
 // ─── Types ────────────────────────────────────────────────────────
 

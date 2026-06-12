@@ -11,7 +11,7 @@ import { getAuthUserId } from './storage';
 import type { Database } from './database.types';
 import { providerIdToServiceId, serviceIdToProviderId } from './adapters/platformAdapter';
 import { UK_PROVIDERS_ARRAY } from './constants/platforms';
-import type { ServiceId } from '@/components/platformLogos';
+import type { ServiceId } from '@/lib/types/content';
 
 // Re-use app types
 import type { WatchlistItem, WatchlistMetadataInput } from './storage/watchlist';

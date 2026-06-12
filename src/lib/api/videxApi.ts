@@ -14,8 +14,9 @@
 import { getMovieDetails, getTVDetails } from './tmdb';
 import { getRatings, parseOmdbBody, type RatingsData, type OmdbRawBody } from './omdb';
 import type { TMDbDetailResponse } from '../adapters/detailAdapter';
+import { env } from '../env';
 
-const PROXY_URL = import.meta.env.VITE_API_PROXY_URL as string | undefined;
+const PROXY_URL = env.API_PROXY_URL;
 
 /** TMDb detail fields the detail pipeline reads beyond the adapter's view. */
 export interface MergedTitleTmdb extends TMDbDetailResponse {

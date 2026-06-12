@@ -5,9 +5,11 @@
  * Extends Phase 3 types with pipeline stages, scored candidates, and row configuration.
  */
 
-import type { ContentItem } from '@/components/ContentCard';
+import type { ContentItem } from '@/lib/types/content';
 import type { SliderState } from '@/lib/taste-v2/types';
 import type { FilterSets } from './hardFilters';
+import type { SelectedAnchor } from './anchorSelection';
+import type { AnchorRoomLabel } from './anchorRoomLabels';
 
 // ── Phase 3 types (preserved for backward compat during transition) ──
 
@@ -236,3 +238,34 @@ export const EXTENDED_TITLE_SELECT =
   'cast_top_5, director, rt_score, imdb_rating';
 
 export type { ContentItem };
+
+/**
+ * Anchored mood-room preview — the For You row card payload. Moved here
+ * from useAnchorMoodRooms (NATIVE-1 W2) so lib modules (edgeRender)
+ * stop type-importing from src/hooks; the hook re-exports it.
+ */
+export interface AnchorRoomPreview {
+  /** Composite id, stable across the week: "anchor:{media_type}-{tmdb_id}". */
+  id: string;
+  /** Selection metadata — flows into impression metadata on detail. */
+  anchor: SelectedAnchor;
+  /** Title of the anchor. Used as the v1 fallback "If you love {title}" label. */
+  anchorTitle: string;
+  /** Anchor's release year — used for label disambiguation if needed. */
+  anchorYear: number | null;
+  /** Anchor's media type. */
+  anchorMediaType: 'movie' | 'tv';
+  /** Up to 4 ContentItems for the 2×2 card grid. */
+  thumbnails: ContentItem[];
+  /** Total titles in the room post-filter (for "X titles" copy if shown). */
+  titleCount: number;
+  /**
+   * LLM-generated thematic label (IN-463). Populated asynchronously
+   * after the room renders — cards initially show "If you love {anchor}"
+   * and swap to the thematic label when the cache read or Edge
+   * Function call resolves. Null while loading or on failure.
+   */
+  llmLabel: AnchorRoomLabel | null;
+  /** Top room titles passed to the Edge Function for label generation. */
+  topTitlesForLabel: { title: string; year: number | null }[];
+}

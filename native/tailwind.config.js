@@ -1,0 +1,85 @@
+/**
+ * NATIVE-1 W2 (D-N2): Tailwind v3 config for NativeWind 4. The web tree
+ * stays on Tailwind v4 — these tokens are ported from src/index.css
+ * `@theme` + the dark-theme block; docs/design/design-system.md remains
+ * the source of truth. Dark palette only for NATIVE-1: theme switching
+ * (light "paper" mode) arrives with NativeWind vars() in NATIVE-2/3.
+ * Revisit the whole file at the NativeWind v5 (TW v4) upgrade.
+ */
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ['./src/**/*.{ts,tsx}'],
+  presets: [require('nativewind/preset')],
+  theme: {
+    extend: {
+      colors: {
+        // Semantic (dark values: --surface=--bg etc.)
+        background: '#0a0a0f',
+        foreground: '#f5f1e8',
+        card: '#14141c',
+        secondary: 'rgba(245,241,232,0.05)',
+        muted: 'rgba(245,241,232,0.05)',
+        'muted-foreground': 'rgba(245,241,232,0.62)',
+        'faint-foreground': 'rgba(245,241,232,0.40)',
+        accent: 'rgba(245,241,232,0.05)',
+        border: 'rgba(245,241,232,0.10)',
+        // Brand
+        primary: {
+          DEFAULT: '#e85d25',
+          soft: 'rgba(232,93,37,0.14)',
+          edge: 'rgba(232,93,37,0.42)',
+          'on-soft': '#ff8d5a',
+          foreground: '#ffffff',
+        },
+        destructive: '#d4183d',
+        success: '#10b981',
+        danger: '#ef4444',
+        star: '#fbbf24',
+        // Atmosphere accents (mood rooms)
+        atm: {
+          amber: '#d97706',
+          rose: '#be185d',
+          teal: '#0d9488',
+          violet: '#7c3aed',
+          forest: '#166534',
+          slate: '#475569',
+        },
+        // Service brand colors
+        svc: {
+          netflix: '#e50914',
+          prime: '#00a8e1',
+          disney: '#113ccf',
+          apple: '#1d1d1f',
+          now: '#0072ec',
+          paramount: '#0064ff',
+          skygo: '#0072ec',
+          bbc: '#f54b3a',
+          itvx: '#2470ff',
+        },
+      },
+      fontSize: {
+        headline: '28px',
+        title: '22px',
+        section: '18px',
+        body: '13px',
+        meta: '13px',
+        kicker: '11px',
+      },
+      borderRadius: {
+        xs: '4px',
+        sm: '6px',
+        md: '10px',
+        lg: '14px',
+        xl: '20px',
+        card: '12px',
+        pill: '9999px',
+      },
+      fontFamily: {
+        // Loaded via expo-font in W4 (@expo-google-fonts dm-sans/fraunces)
+        sans: ['DMSans_400Regular'],
+        display: ['Fraunces_600SemiBold'],
+      },
+    },
+  },
+  plugins: [],
+};

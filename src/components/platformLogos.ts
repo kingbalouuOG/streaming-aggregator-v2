@@ -13,17 +13,12 @@ import imgITVX from "@/assets/itvx.png";
 import imgChannel4 from "@/assets/channel4.png";
 
 // ── Service ID type ─────────────────────────────────────────────────
-export type ServiceId =
-  | "netflix"
-  | "prime"
-  | "apple"
-  | "disney"
-  | "now"
-  | "skygo"
-  | "paramount"
-  | "bbc"
-  | "itvx"
-  | "channel4";
+// Canonical definition moved to @/lib/types/content (NATIVE-1 W2) so
+// lib modules stop type-importing from components. Re-exported here so
+// existing component-side imports keep working.
+import { SERVICE_DISPLAY_NAMES, type ServiceId } from "@/lib/types/content";
+
+export type { ServiceId } from "@/lib/types/content";
 
 // ── Platform definition ─────────────────────────────────────────────
 export interface PlatformDef {
@@ -45,7 +40,7 @@ export interface PlatformDef {
 export const PLATFORMS: PlatformDef[] = [
   {
     id: "netflix",
-    name: "Netflix",
+    name: SERVICE_DISPLAY_NAMES.netflix,
     description: "Movies & Series",
     logo: imgNetflix,
     bg: "bg-red-600",
@@ -55,7 +50,7 @@ export const PLATFORMS: PlatformDef[] = [
   },
   {
     id: "prime",
-    name: "Prime Video",
+    name: SERVICE_DISPLAY_NAMES.prime,
     description: "Amazon Originals",
     logo: imgPrime,
     bg: "bg-sky-700",
@@ -65,7 +60,7 @@ export const PLATFORMS: PlatformDef[] = [
   },
   {
     id: "apple",
-    name: "Apple TV+",
+    name: SERVICE_DISPLAY_NAMES.apple,
     description: "Apple Originals",
     logo: imgApple,
     bg: "bg-gray-800",
@@ -75,7 +70,7 @@ export const PLATFORMS: PlatformDef[] = [
   },
   {
     id: "disney",
-    name: "Disney+",
+    name: SERVICE_DISPLAY_NAMES.disney,
     description: "Disney, Marvel, Star Wars",
     logo: imgDisney,
     bg: "bg-blue-800",
@@ -85,7 +80,7 @@ export const PLATFORMS: PlatformDef[] = [
   },
   {
     id: "now",
-    name: "NOW",
+    name: SERVICE_DISPLAY_NAMES.now,
     description: "Sky Cinema & HBO",
     logo: imgNow,
     bg: "bg-teal-700",
@@ -95,7 +90,7 @@ export const PLATFORMS: PlatformDef[] = [
   },
   {
     id: "skygo",
-    name: "Sky Go",
+    name: SERVICE_DISPLAY_NAMES.skygo,
     description: "Live TV & Sky Originals",
     logo: imgSkyGo,
     bg: "bg-sky-600",
@@ -105,7 +100,7 @@ export const PLATFORMS: PlatformDef[] = [
   },
   {
     id: "paramount",
-    name: "Paramount+",
+    name: SERVICE_DISPLAY_NAMES.paramount,
     description: "CBS & Paramount",
     logo: imgParamount,
     bg: "bg-blue-600",
@@ -115,7 +110,7 @@ export const PLATFORMS: PlatformDef[] = [
   },
   {
     id: "bbc",
-    name: "BBC iPlayer",
+    name: SERVICE_DISPLAY_NAMES.bbc,
     description: "BBC Originals & Live",
     logo: imgBBC,
     bg: "bg-pink-800",
@@ -125,7 +120,7 @@ export const PLATFORMS: PlatformDef[] = [
   },
   {
     id: "itvx",
-    name: "ITVX",
+    name: SERVICE_DISPLAY_NAMES.itvx,
     description: "ITV Originals & Live",
     logo: imgITVX,
     bg: "bg-lime-500",
@@ -135,7 +130,7 @@ export const PLATFORMS: PlatformDef[] = [
   },
   {
     id: "channel4",
-    name: "Channel 4",
+    name: SERVICE_DISPLAY_NAMES.channel4,
     description: "Channel 4 & Film4",
     logo: imgChannel4,
     bg: "bg-lime-300",

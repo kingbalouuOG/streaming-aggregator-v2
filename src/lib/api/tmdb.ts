@@ -2,12 +2,13 @@ import axios from 'axios';
 import { getCachedData, setCachedData, createTMDbCacheKey } from './apiQueryCache';
 import { logError, ErrorType, type ErrorTypeValue } from '../utils/errorHandler';
 import { networkNameToProviderId } from '../constants/platforms';
+import { env } from '../env';
 
 // PLAT-2: when VITE_API_PROXY_URL is set, every TMDb read routes through
 // the videx-api Worker's allowlisted passthrough — the key is injected
 // server-side and (post device-smoke) leaves the client bundle entirely.
 // Unsetting the env var is the rollback lever back to direct TMDb.
-const PROXY_URL = import.meta.env.VITE_API_PROXY_URL as string | undefined;
+const PROXY_URL = env.API_PROXY_URL;
 const USE_PROXY = !!PROXY_URL;
 // PLAT-2 commit 6: the TMDb key no longer exists in client code — the
 // Worker injects it server-side. Direct mode (PROXY_URL unset) is now a

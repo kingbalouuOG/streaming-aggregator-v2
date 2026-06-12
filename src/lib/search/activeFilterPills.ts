@@ -3,9 +3,8 @@
 // the × is tapped, so the renderer (BrowsePage results header) stays
 // dumb and just maps over the list.
 
-import { PLATFORMS } from "@/components/platformLogos";
 import { defaultFor, type FilterState } from "@/lib/search/filterState";
-import type { ServiceId } from "@/components/platformLogos";
+import { SERVICE_DISPLAY_NAMES, type ServiceId } from "@/lib/types/content";
 
 export interface ActiveFilterPillEntry {
   key: string;
@@ -53,8 +52,7 @@ export function buildActiveFilterPills(
     if (count === 0) {
       label = "No services";
     } else if (count === 1) {
-      const name = PLATFORMS.find((p) => p.id === filters.services[0])?.name;
-      label = name ?? "1 service";
+      label = SERVICE_DISPLAY_NAMES[filters.services[0]] ?? "1 service";
     } else {
       label = `${count} services`;
     }

@@ -15,7 +15,7 @@ import { useItemAvailability } from "@/hooks/useItemAvailability";
 import { useTasteRanking } from "@/hooks/useTasteRanking";
 import { providerIdsToServiceIds } from "@/lib/adapters/platformAdapter";
 import { GENRE_NAME_TO_ID } from "@/lib/constants/genres";
-import { useFilterUrlSync } from "@/lib/search/useFilterUrlSync";
+import { useFilterUrlSync } from "@/hooks/useFilterUrlSync";
 import {
   getRecentSearches,
   addRecentSearch,

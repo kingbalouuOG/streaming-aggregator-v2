@@ -7,8 +7,8 @@
 import { supabase } from '../supabase';
 import { getCachedData, setCachedData, CACHE_PREFIXES } from './apiQueryCache';
 import { saServiceToServiceId } from '../adapters/platformAdapter';
-import type { ContentItem } from '@/components/ContentCard';
-import type { ServiceId } from '@/components/platformLogos';
+import type { ContentItem } from '@/lib/types/content';
+import type { ServiceId } from '@/lib/types/content';
 import { buildPosterUrl, buildBackdropUrl } from './tmdb';
 import { GENRE_NAMES } from '../constants/genres';
 import { isoToLanguageName } from '../adapters/contentAdapter';

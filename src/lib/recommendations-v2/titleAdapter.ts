@@ -6,7 +6,7 @@
 
 import { buildPosterUrl } from '../api/imageUrls';
 import { GENRE_NAMES } from '../constants/genres';
-import type { ContentItem } from '@/components/ContentCard';
+import type { ContentItem } from '@/lib/types/content';
 import type { TitleRow } from './types';
 
 /** Convert a titles table row to a ContentItem */

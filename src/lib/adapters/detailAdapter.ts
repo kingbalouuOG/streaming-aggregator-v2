@@ -4,7 +4,7 @@
  * to the DetailData interface used by DetailPage.tsx.
  */
 
-import type { ServiceId } from '@/components/platformLogos';
+import type { ServiceId } from '@/lib/types/content';
 import type { StreamingLink } from '../api/supabaseContent';
 import type { RatingsData } from '../api/omdb';
 import { buildBackdropUrl, buildPosterUrl, buildImageUrl } from '../api/tmdb';

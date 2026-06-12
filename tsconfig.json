@@ -20,5 +20,9 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  // *.native.ts are the React Native platform shadows of shared lib
+  // modules (NATIVE-1). They import RN-only packages that don't exist
+  // in this tree; native/tsconfig.json type-checks them instead.
+  "exclude": ["src/**/*.native.ts"]
 }

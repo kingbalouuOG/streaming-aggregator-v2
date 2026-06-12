@@ -8,7 +8,7 @@
 
 import { getContentWatchProviders } from '@/lib/api/tmdb';
 import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
-import type { ServiceId } from '@/components/platformLogos';
+import type { ServiceId } from '@/lib/types/content';
 
 // ─────────────────────────────────────────────────────────────
 // Types

@@ -418,3 +418,9 @@ Cross-refs: wiki/concepts/architecture/taste-vector.md + recommendation-pipeline
 - Updated: wiki/concepts/operations/phase-history.md (UX-1 row), wiki/registers/cheatsheet.md (UX-1 row)
 - Notable: the frame-forensics debugging method (screenrecord + OpenCV brightness/diff timelines + scripted launches) solved three stacked first-load bugs the user could only describe as "flash and twitch" - it is now the house method for device-visual issues. Keep-alive tabs supersede the PLAT-1-era remount-per-switch model for Home + For You.
 - Full source-page ingest deferred to the next human raw/ snapshot drop (REPO-1 precedent)
+
+## [2026-06-12] ingest | phase-native-1-summary.md
+- New page: wiki/concepts/operations/phase-native-1.md
+- Updated: index.md (phase list)
+- Notable: Capacitor -> RN migration decided same day UX-1 closed ("not perfect, but better" = WebView ceiling). Device evidence: native p99 frame time 15ms vs Capacitor 57ms on identical scroll scripts. Production appId verified as app.videx.streaming (older com.videx.app notes wrong). Metro-on-Windows junction pattern is the canonical shared-tree mount for native/.
+- phase-history.md + cheatsheet.md rows deferred to phase close (Joe device verdict pending)

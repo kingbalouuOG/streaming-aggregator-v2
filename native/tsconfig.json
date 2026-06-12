@@ -1,0 +1,31 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    // Mirror Metro's platform-extension resolution: './env' resolves
+    // env.native.ts here (env.ts contains import.meta — web/Worker only).
+    "moduleSuffixes": [".android", ".native", ""],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@/assets/*": [
+        "./assets/*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "nativewind-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    // Web-resolution variants + vitest suites of the shared tree —
+    // type-checked by the ROOT tsconfig, not the native one.
+    "src/lib/env.ts",
+    "src/lib/**/__tests__/**"
+  ]
+}

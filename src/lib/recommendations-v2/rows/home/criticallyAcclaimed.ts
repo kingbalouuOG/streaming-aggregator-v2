@@ -13,7 +13,7 @@ import { titleRowToContentItem } from '../../titleAdapter';
 import { CRITICALLY_ACCLAIMED_ROW_ENABLED, parseRtScore } from '../../weights';
 import { EXTENDED_TITLE_SELECT } from '../../types';
 import type { ExtendedTitleRow } from '../../types';
-import type { ContentItem } from '@/components/ContentCard';
+import type { ContentItem } from '@/lib/types/content';
 
 /**
  * Fetch critically acclaimed titles for the Home surface.

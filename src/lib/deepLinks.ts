@@ -4,7 +4,7 @@
  * Prefers SA API exact deep links, falls back to service search URLs.
  */
 
-import type { ServiceId } from '@/components/platformLogos';
+import type { ServiceId } from '@/lib/types/content';
 
 export interface DeepLinkResult {
   url: string;

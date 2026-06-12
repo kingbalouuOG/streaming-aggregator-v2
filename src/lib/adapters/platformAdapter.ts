@@ -4,7 +4,7 @@
  * SA API service slugs (strings), and the UI's ServiceId strings.
  */
 
-import type { ServiceId } from '@/components/platformLogos';
+import type { ServiceId } from '@/lib/types/content';
 import { mapProviderIdToCanonical } from '../constants/platforms';
 
 // TMDb provider_id → ServiceId
