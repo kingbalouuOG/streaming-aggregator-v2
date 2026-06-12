@@ -29,9 +29,12 @@
  * without a user_id column (titles, streaming_availability,
  * mood_room_anchor_labels) use the raw client directly.
  *
- * TODO(IN-466 follow-up, carried): if a server route ever needs to
- * WRITE to user-owned tables, add scoped `insert/update/delete` verbs
- * here rather than letting callers reach past the wrapper.
+ * Write verbs (PLAT-3 W5, closing the IN-466 follow-up): the nightly
+ * stale-recompute cron writes taste_profiles + user_interest_centroids.
+ * `update`/`upsert`/`deleteWhere` enforce the user_id scoping the same
+ * way `select` does — upsert INJECTS user_id into every row, update and
+ * deleteWhere pre-apply the filter. Callers still never reach past the
+ * wrapper to `client.from()` for user-owned tables.
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -75,6 +78,19 @@ export interface UserScope {
   select: (table: string, columns: string) => ScopedQuery;
   /** Pre-scoped count-head: applies .eq('user_id', userId) automatically. */
   countHead: (table: string) => ScopedQuery;
+  /** Scoped upsert: user_id is INJECTED into every row (a row that
+   *  tried to carry someone else's user_id gets overwritten). */
+  upsert: (
+    table: string,
+    rows: Record<string, unknown> | Record<string, unknown>[],
+    opts?: { onConflict?: string },
+  ) => PromiseLike<ScopedResult>;
+  /** Scoped update: applies .eq('user_id', userId); chain further
+   *  filters on the returned query. */
+  update: (table: string, values: Record<string, unknown>) => ScopedQuery;
+  /** Scoped delete: applies .eq('user_id', userId); chain further
+   *  filters (e.g. .gte('slot', k)) on the returned query. */
+  deleteWhere: (table: string) => ScopedQuery;
 }
 
 export function withUserScope(client: SupabaseClient, userId: string): UserScope {
@@ -90,6 +106,27 @@ export function withUserScope(client: SupabaseClient, userId: string): UserScope
       return client
         .from(table)
         .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId) as unknown as ScopedQuery;
+    },
+    upsert(table, rows, opts) {
+      const withUser = (Array.isArray(rows) ? rows : [rows]).map((r) => ({
+        ...r,
+        user_id: userId,
+      }));
+      return client
+        .from(table)
+        .upsert(withUser, opts) as unknown as PromiseLike<ScopedResult>;
+    },
+    update(table, values) {
+      return client
+        .from(table)
+        .update(values)
+        .eq('user_id', userId) as unknown as ScopedQuery;
+    },
+    deleteWhere(table) {
+      return client
+        .from(table)
+        .delete()
         .eq('user_id', userId) as unknown as ScopedQuery;
     },
   };

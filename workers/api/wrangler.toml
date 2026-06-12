@@ -23,5 +23,11 @@ SUPABASE_URL = "https://fmusugdcnnwiuzkbjquo.supabase.co"
 binding = "FORYOU_CACHE"
 id = "e9afd10acedc493e9b9603d4426495fd"
 
+# PLAT-3 W5: nightly stale-profile recompute (taste vector replay +
+# centroid k-means), off the For You hot path. 04:00 UTC — clear of the
+# 06:00 UTC sync-incremental pg_cron.
+[triggers]
+crons = ["0 4 * * *"]
+
 [observability]
 enabled = true

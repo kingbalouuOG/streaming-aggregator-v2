@@ -41,6 +41,7 @@ import {
   withUserScope,
 } from '../../../src/lib/server/userScope';
 import { getV2TasteProfileScoped } from '../../../src/lib/taste-v2/tasteProfileV2';
+import { recomputeStaleProfiles } from '../../../src/lib/server/staleRecompute';
 
 type Env = {
   TMDB_API_KEY: string;
@@ -267,4 +268,26 @@ app.get('/v1/tmdb/*', async (c) => {
   });
 });
 
-export default app;
+// ── Nightly stale-profile recompute (PLAT-3 W5) ──────────────────────
+// Cron trigger (wrangler.toml [triggers], 04:00 UTC): the >24h taste
+// recompute the client used to run at app launch, moved off the hot
+// path per brief §7.2-4. Report lands in observability logs.
+async function scheduled(
+  _controller: ScheduledController,
+  env: Env,
+): Promise<void> {
+  const client = createServiceRoleClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  const report = await recomputeStaleProfiles(client);
+  console.log(
+    `[stale-recompute] scanned=${report.scanned} vectors=${report.vectorsRecomputed} `
+    + `centroids=${report.centroidsRefreshed} errors=${report.errors.length}`,
+  );
+  for (const e of report.errors) {
+    console.error(`[stale-recompute] ${e.userId}: ${e.message}`);
+  }
+}
+
+export default {
+  fetch: app.fetch,
+  scheduled,
+};

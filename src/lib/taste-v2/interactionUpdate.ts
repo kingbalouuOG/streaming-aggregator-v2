@@ -5,8 +5,10 @@
  * The user_interactions event log is the source of truth.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import { getAuthUserId } from '../storage';
+import { withUserScope, type UserScope } from '../server/userScope';
 import { l2Normalise, addScaled, isZeroVector, rawCosineSimilarity } from './vectorOps';
 import {
   INTERACTION_WEIGHTS,
@@ -117,28 +119,60 @@ export async function recomputeFromInteractions(
 ): Promise<TasteVectorV2 | null> {
   const userId = getAuthUserId();
   if (!userId) return null;
+  // The scoped impl applies the same .eq('user_id', userId) this
+  // function always carried; on the client RLS double-guards it.
+  return recomputeFromInteractionsScoped(supabase, withUserScope(supabase, userId), bootstrapVector);
+}
 
+interface ReplayInteractionRow {
+  content_id: number | null;
+  media_type: string | null;
+  event_type: string;
+  metadata: unknown;
+  created_at: string | null;
+  session_id: string | null;
+}
+
+interface ReplaySearchRow {
+  created_at: string | null;
+  session_id: string | null;
+}
+
+interface EmbeddingTitleRow {
+  tmdb_id: number;
+  media_type: string;
+  embedding: string | number[] | null;
+}
+
+/**
+ * Scoped (server) implementation — PLAT-3 W5. The single body both
+ * runtimes share: the client entry above delegates with the singleton;
+ * the nightly Worker cron calls it per stale user with the
+ * service-role client.
+ */
+export async function recomputeFromInteractionsScoped(
+  client: SupabaseClient,
+  scope: UserScope,
+  bootstrapVector: TasteVectorV2 | null,
+): Promise<TasteVectorV2 | null> {
   // Fetch all taste-relevant interactions + the search rows we need for
   // attribution boosting. Two queries because the taste set filters on
   // `content_id IS NOT NULL` and search rows have content_id NULL.
   const [interactionsResult, searchesResult] = await Promise.all([
-    supabase
-      .from('user_interactions')
-      .select('content_id, media_type, event_type, metadata, created_at, session_id')
-      .eq('user_id', userId)
+    scope
+      .select('user_interactions', 'content_id, media_type, event_type, metadata, created_at, session_id')
       .in('event_type', [...TASTE_RELEVANT_EVENTS])
       .not('content_id', 'is', null)
       .order('created_at', { ascending: true }),
-    supabase
-      .from('user_interactions')
-      .select('created_at, session_id')
-      .eq('user_id', userId)
+    scope
+      .select('user_interactions', 'created_at, session_id')
       .eq('event_type', 'search')
       .not('session_id', 'is', null)
       .order('created_at', { ascending: true }),
   ]);
 
-  const { data: interactions, error } = interactionsResult;
+  const interactions = interactionsResult.data as ReplayInteractionRow[] | null;
+  const error = interactionsResult.error;
   if (error) {
     console.error('[InteractionUpdate] Failed to fetch interactions:', error.message);
     return null;
@@ -152,7 +186,7 @@ export async function recomputeFromInteractions(
   // we hit a taste-relevant event during the replay, we pick the most
   // recent search timestamp in the same session and test the window.
   const searchesBySession = new Map<string, number[]>();
-  for (const row of searchesResult.data ?? []) {
+  for (const row of (searchesResult.data ?? []) as ReplaySearchRow[]) {
     if (!row.session_id || !row.created_at) continue;
     const ts = new Date(row.created_at).getTime();
     const arr = searchesBySession.get(row.session_id) ?? [];
@@ -174,7 +208,7 @@ export async function recomputeFromInteractions(
   });
 
   // Batch fetch embeddings
-  const { data: titleRows, error: embedError } = await supabase
+  const { data: titleRows, error: embedError } = await client
     .from('titles')
     .select('tmdb_id, media_type, embedding')
     .in('tmdb_id', tmdbIds)
@@ -187,7 +221,8 @@ export async function recomputeFromInteractions(
 
   // Build embedding lookup
   const embeddingMap = new Map<string, number[]>();
-  for (const row of (titleRows || [])) {
+  for (const row of ((titleRows || []) as EmbeddingTitleRow[])) {
+    if (row.embedding == null) continue;
     const key = `${row.media_type}-${row.tmdb_id}`;
     const emb: number[] = typeof row.embedding === 'string'
       ? JSON.parse(row.embedding)
@@ -368,17 +403,24 @@ export async function recomputeInterestCentroids(): Promise<
 > {
   const userId = getAuthUserId();
   if (!userId) return null;
+  return recomputeInterestCentroidsScoped(supabase, withUserScope(supabase, userId));
+}
 
+/** Scoped (server) implementation — PLAT-3 W5; see
+ *  recomputeFromInteractionsScoped for the delegation rationale. */
+export async function recomputeInterestCentroidsScoped(
+  client: SupabaseClient,
+  scope: UserScope,
+): Promise<{ centroid: TasteVectorV2; weight: number }[] | null> {
   const positiveEvents = [...TASTE_RELEVANT_EVENTS].filter(e => !NEGATIVE_EVENTS.has(e));
 
-  const { data: interactions, error } = await supabase
-    .from('user_interactions')
-    .select('content_id, media_type, event_type, metadata, created_at')
-    .eq('user_id', userId)
+  const { data, error } = await scope
+    .select('user_interactions', 'content_id, media_type, event_type, metadata, created_at')
     .in('event_type', positiveEvents)
     .not('content_id', 'is', null)
     .order('created_at', { ascending: true });
 
+  const interactions = data as ReplayInteractionRow[] | null;
   if (error || !interactions) {
     console.error('[InteractionUpdate] recomputeInterestCentroids fetch failed:', error?.message);
     return null;
@@ -410,7 +452,7 @@ export async function recomputeInterestCentroids(): Promise<
 
   // Batch fetch embeddings for the unique titles
   const tmdbIds = [...new Set([...massByKey.keys()].map(k => parseInt(k.split('-')[1], 10)))];
-  const { data: titleRows, error: embedError } = await supabase
+  const { data: titleRows, error: embedError } = await client
     .from('titles')
     .select('tmdb_id, media_type, embedding')
     .in('tmdb_id', tmdbIds)
@@ -422,7 +464,8 @@ export async function recomputeInterestCentroids(): Promise<
   }
 
   const embeddingMap = new Map<string, number[]>();
-  for (const row of titleRows) {
+  for (const row of titleRows as EmbeddingTitleRow[]) {
+    if (row.embedding == null) continue;
     const emb: number[] = typeof row.embedding === 'string'
       ? JSON.parse(row.embedding)
       : row.embedding;

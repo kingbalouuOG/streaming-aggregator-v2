@@ -430,3 +430,67 @@ export async function getSliderStateScoped(scope: UserScope): Promise<SliderStat
     variety: row.slider_variety ?? DEFAULT_SLIDERS.variety,
   };
 }
+
+// ── Scoped (server) write variants — PLAT-3 W5, for the nightly
+// stale-recompute cron. Writes go through the UserScope verbs (user_id
+// injected/filtered by the wrapper). No invalidateV2ProfileCache calls:
+// the client-side 5-min cache lives in browser memory; server writes
+// are picked up there naturally on its next expiry, and the Worker's
+// KV feed-cache key embeds taste_vector_updated_at, so these writes
+// bust the feed cache by construction.
+
+/** Mirror of updateV2TasteVector: vector + count + timestamp only,
+ *  preserves all other columns. */
+export async function updateV2TasteVectorScoped(
+  scope: UserScope,
+  vector: TasteVectorV2,
+  interactionCount: number,
+): Promise<void> {
+  const { error } = await scope.update('taste_profiles', {
+    taste_vector_v2: `[${vector.join(',')}]`,
+    taste_vector_updated_at: new Date().toISOString(),
+    taste_vector_interaction_count: interactionCount,
+  });
+
+  if (error) {
+    console.error('[TasteV2] updateV2TasteVectorScoped failed:', error.message);
+    throw new Error(error.message);
+  }
+}
+
+/** Mirror of saveInterestCentroids: slots 0..K-1 upserted, higher slots
+ *  from a previous larger K deleted. updated_at owned by the touch
+ *  trigger (migration 044). */
+export async function saveInterestCentroidsScoped(
+  scope: UserScope,
+  centroids: { centroid: TasteVectorV2; weight: number }[],
+): Promise<void> {
+  if (centroids.length === 0 || centroids.length > MAX_INTEREST_CENTROIDS) {
+    console.error('[TasteV2] saveInterestCentroidsScoped: invalid count', centroids.length);
+    return;
+  }
+
+  const rows = centroids.map((c, i) => ({
+    slot: i,
+    centroid: `[${c.centroid.join(',')}]`,
+    weight: c.weight,
+  }));
+
+  const { error: upsertError } = await scope.upsert(
+    'user_interest_centroids',
+    rows,
+    { onConflict: 'user_id,slot' },
+  );
+  if (upsertError) {
+    console.error('[TasteV2] saveInterestCentroidsScoped upsert failed:', upsertError.message);
+    throw new Error(upsertError.message);
+  }
+
+  const { error: deleteError } = await scope
+    .deleteWhere('user_interest_centroids')
+    .gte('slot', centroids.length);
+  if (deleteError) {
+    console.error('[TasteV2] saveInterestCentroidsScoped cleanup failed:', deleteError.message);
+    throw new Error(deleteError.message);
+  }
+}
