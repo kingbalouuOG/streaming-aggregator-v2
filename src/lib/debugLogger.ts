@@ -3,8 +3,10 @@
  * Dev-only: no-ops in production. Non-blocking: fire-and-forget. Still calls console.* too.
  */
 
+import { env } from './env';
+
 const DEBUG_SERVER = 'http://localhost:3001';
-const IS_DEV = import.meta.env?.DEV;
+const IS_DEV = env.DEV;
 
 // Buffer entries and flush periodically to reduce HTTP overhead
 let buffer: LogEntry[] = [];

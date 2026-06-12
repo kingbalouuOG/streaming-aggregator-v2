@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
+import { env } from './env';
 
 // Phase 5 Step 9: Database generic re-enabled. The 47-error backlog
 // (Json/unknown mismatches and nullability) is fixed per-file in
@@ -18,8 +19,8 @@ let _client: SupabaseClient<Database> | null = null;
 
 function getClient(): SupabaseClient<Database> {
   if (!_client) {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const supabaseUrl = env.SUPABASE_URL;
+    const supabaseAnonKey = env.SUPABASE_ANON_KEY;
     if (!supabaseUrl || !supabaseAnonKey) {
       throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY environment variables');
     }

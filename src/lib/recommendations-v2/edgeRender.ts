@@ -20,8 +20,9 @@ import type { ContentItem } from '@/components/ContentCard';
 import type { SliderState } from '@/lib/taste-v2/types';
 import type { CandidatePool, ExtendedTitleRow, MatchedTitle, PipelineContext } from './types';
 import type { AnchorRoomPreview } from '@/hooks/useAnchorMoodRooms';
+import { env } from '../env';
 
-const PROXY_URL = import.meta.env.VITE_API_PROXY_URL as string | undefined;
+const PROXY_URL = env.API_PROXY_URL;
 // First-ever render for a user+services key runs ~9-15s (cold DB
 // caches — same physics the Edge path had). Abandoning it at 10s just
 // pays the equally-cold client pipeline on top (device pass 1 finding:

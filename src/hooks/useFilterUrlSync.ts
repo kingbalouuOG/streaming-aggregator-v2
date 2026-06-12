@@ -15,9 +15,9 @@
 // free to use the hash for their own purposes later without collision.
 
 import { useEffect, useRef } from "react";
-import type { ServiceId } from "../../components/platformLogos";
-import type { FilterState } from "./filterState";
-import { deserialize, hash as hashState, serialize } from "./filterState";
+import type { ServiceId } from "@/components/platformLogos";
+import type { FilterState } from "@/lib/search/filterState";
+import { deserialize, hash as hashState, serialize } from "@/lib/search/filterState";
 
 const HASH_PREFIX = "search?";
 
