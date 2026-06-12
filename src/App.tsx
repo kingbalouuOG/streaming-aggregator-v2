@@ -3,6 +3,7 @@ import { toast, Toaster } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { Loader2 } from "lucide-react";
 import { CategoryFilter } from "./components/CategoryFilter";
+import { Reveal } from "./components/Reveal";
 import { ContentRow } from "./components/ContentRow";
 // FeaturedHeroCarousel — replaced on Home by <MagazineHero>; the file
 // stays for now until the Phase 5 FeaturedHero matrix row formally
@@ -941,7 +942,7 @@ function AppContent() {
                       (it) => it.image && !watchedIds.has(it.id),
                     );
                     return heroItem ? (
-                      <div className="mb-4">
+                      <Reveal index={0} className="mb-4">
                         <MagazineHero
                           item={heroItem}
                           kicker="TODAY'S PICK"
@@ -957,7 +958,7 @@ function AppContent() {
                             heroItem.services.some((s) => connectedServiceIds.includes(s))
                           }
                         />
-                      </div>
+                      </Reveal>
                     ) : home.loading ? (
                       <div className="mb-4">
                         <div
@@ -975,22 +976,25 @@ function AppContent() {
                       reads from the editor_notes table once-per-day and
                       falls back to a baked-in sample when the table
                       isn't yet populated. */}
-                  <div className="editorial mb-4">
+                  <Reveal index={1} className="editorial mb-4">
                     <EditorsNote
                       kicker={home.editorNote.kicker}
                       teaser={home.editorNote.teaser}
                       body={home.editorNote.body}
                     />
-                  </div>
+                  </Reveal>
 
                   {/* Browse-by chips. Static (no sticky / no scroll-hide).
                       The trailing filter button is omitted — Home doesn't
                       need to surface filters at this level. */}
+                  <Reveal index={2}>
                   <CategoryFilter
                     categories={categories}
                     activeCategory={activeCategory}
                     onCategoryChange={setActiveCategory}
                   />
+
+                  </Reveal>
 
                   {/* Content rows */}
                   {home.loading ? (
@@ -998,7 +1002,7 @@ function AppContent() {
                       <Loader2 className="w-8 h-8 text-primary animate-spin" />
                     </div>
                   ) : (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+                    <Reveal index={3}>
                       {/* §5.3 — Recently added */}
                       <ContentRow
                         kicker="JUST IN"
@@ -1170,7 +1174,7 @@ function AppContent() {
                           loading={home.spotlightsLoading}
                         /> : null}
 
-                    </motion.div>
+                    </Reveal>
                   )}
                 </div>
               )}

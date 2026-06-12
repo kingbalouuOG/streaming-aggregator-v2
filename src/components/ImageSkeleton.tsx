@@ -152,7 +152,7 @@ export function ImageSkeleton({ src, alt, className = "", style, priority = fals
             // the dark theme (screen-recording frames, 8.4s). Transitions
             // off together with the blur when the sharp rendition lands.
             filter: blurred ? "blur(10px) brightness(0.5)" : "none",
-            transition: "filter 0.25s ease-out",
+            transition: "filter 0.45s ease-out",
           }}
           onLoad={handleLoad}
           onError={handleError}
