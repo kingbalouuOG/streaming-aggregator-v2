@@ -2,7 +2,9 @@ import axios from 'axios';
 import { getCachedData, setCachedData, createOMDbCacheKey } from './apiQueryCache';
 
 const BASE_URL = 'https://www.omdbapi.com/';
-const API_KEY = import.meta.env.VITE_OMDB_API_KEY;
+// PLAT-2 commit 6: OMDB key removed from client code — ratings come
+// through the Worker's /v1/title merge; this direct path survives only
+// as the proxy-unset fallback and degrades to no-ratings without a key.
 const DEBUG = __DEV__;
 const USE_CACHE = true;
 
@@ -55,7 +57,7 @@ export const getRatings = async (imdbId: string, type = 'movie'): Promise<{ succ
     if (DEBUG) console.log('[OMDb Request] GET', { imdbId, type });
 
     const response = await omdbClient.get('/', {
-      params: { i: imdbId, apikey: API_KEY, type },
+      params: { i: imdbId, type },
     });
 
     if (response.data.Response === 'False') {
