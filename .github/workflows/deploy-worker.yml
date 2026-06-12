@@ -2,7 +2,7 @@ name: Deploy API Worker
 
 # PLAT-2: deploys workers/api (the videx-api Cloudflare Worker) on merge
 # to main when the Worker's files changed. Soft-skips until the
-# Cloudflare secrets exist (house pattern — see foryou-parity.yml).
+# Cloudflare secrets exist (house soft-skip pattern).
 #
 # Required repo secrets:
 #   CLOUDFLARE_API_TOKEN  — API token with Workers edit scope

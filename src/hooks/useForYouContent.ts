@@ -244,7 +244,7 @@ export interface ForYouContentResult {
    */
   pool: CandidatePool | null;
   /**
-   * Anchor rooms pre-built by the render-foryou-rows Edge Function (IN-466).
+   * Anchor rooms pre-built by the server-side For You render (IN-466/PLAT-3).
    * When populated, useAnchorMoodRooms skips its anchor selection +
    * per-anchor room generation and renders these directly. Null on the
    * client-fallback path; the existing useAnchorMoodRooms flow runs.

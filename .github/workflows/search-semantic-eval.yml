@@ -24,7 +24,7 @@ on:
     paths:
       - 'src/lib/recommendations-v2/search/**'
       - 'supabase/functions/embed-query/**'
-      - 'supabase/functions/_shared/recommendations-v2/search/**'
+      - 'src/lib/recommendations-v2/search/**'
       - 'scripts/test/search-semantic-eval.ts'
       - 'scripts/test/search-semantic-fixtures.json'
       - '.github/workflows/search-semantic-eval.yml'

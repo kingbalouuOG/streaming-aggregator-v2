@@ -126,7 +126,7 @@ export function useAnchorMoodRooms(
   pool: CandidatePool | null,
   sliders: SliderState | null,
   /**
-   * IN-466: anchor rooms pre-built by the render-foryou-rows Edge Function.
+   * IN-466/PLAT-3: anchor rooms pre-built by the server-side For You render.
    * When provided, the hook skips the entire selectAnchors +
    * buildAnchoredRoom × 5 chain and renders these directly. Label
    * resolution still fires for any anchors without a cached label.

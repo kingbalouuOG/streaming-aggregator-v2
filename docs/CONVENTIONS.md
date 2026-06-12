@@ -50,7 +50,7 @@ and reality disagree, fix one of them in the same PR.
 
 ## Mirror rule (ADR-011 — until PLAT-3)
 
-A change to `src/lib/recommendations-v2/**` or `src/lib/taste-v2/**` that has a counterpart under `supabase/functions/_shared/` must be applied to both in the same commit; `shared-tree-drift` CI enforces tree-level lockstep on the PR. Client-only modules in those trees (e.g. `bootstrap.ts`, `interactionUpdate.ts`, `kmeans.ts`) have no mirror — use a `drift-allowed: <reason>` marker in the PR body when a PR touches only those. PLAT-3 deletes the entire apparatus; do not extend it.
+`src/lib/{recommendations-v2,taste-v2}` is the SINGLE engine tree (PLAT-3 / ADR-014): the videx-api Worker imports it directly, so there is no mirror, no `shared-tree-drift` CI, and no `drift-allowed:` marker. Engine modules must stay importable outside Vite — no module-scope `import.meta.env`, `localStorage`, or bare `__DEV__` reads (the lazy `supabase` singleton and the `*Scoped` data-access variants are the established patterns). The D4 one-release client-fallback window: until it closes, behaviour changes to the client pipeline functions in these trees should be mirrored in their `*Scoped` twins within the same file.
 
 ## Phase process
 

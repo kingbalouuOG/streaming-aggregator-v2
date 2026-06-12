@@ -1,7 +1,7 @@
 // Client-side semantic retrieval — Phase Search V2 Cluster B (B3).
 //
-// Thin adapter over the shared `_shared/recommendations-v2/search/
-// semanticRetrieval.ts` algorithm. The shared module does the work;
+// Thin adapter over the `./semanticCore.ts` algorithm (relocated
+// from _shared/ in PLAT-3). The core module does the work;
 // this wrapper:
 //   1. Calls the `embed-query` Edge function to embed the user's
 //      query string.
@@ -23,7 +23,7 @@ import {
   WEIGHT_RECENCY,
   type ScoredSemanticCandidate,
   type SemanticCandidateMeta,
-} from '../../../../supabase/functions/_shared/recommendations-v2/search/semanticRetrieval.ts';
+} from './semanticCore';
 import {
   buildPosterUrl,
   buildBackdropUrl,
@@ -79,9 +79,11 @@ export async function semanticSearch(input: SemanticSearchInput): Promise<Semant
   //    on the metadata returned by the shared module.
   const postFilter = buildPostFilter(filters);
 
-  // 3. Hand off to the shared ranker.
+  // 3. Hand off to the shared ranker. The cast sidesteps TS2589: the
+  //    typed singleton's postgrest generics explode when structurally
+  //    checked against the core's minimal SupabaseLike interface.
   const candidates = await runSemanticRetrieval(
-    supabase,
+    supabase as unknown as Parameters<typeof runSemanticRetrieval>[0],
     embedding,
     userTasteVector ?? null,
     postFilter,

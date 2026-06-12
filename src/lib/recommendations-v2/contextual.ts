@@ -25,8 +25,7 @@
  * all (legacy clients, missing viewing_context, etc.) reproduces the
  * Phase 4 0.5 placeholder behaviour by construction.
  *
- * Mirror at supabase/functions/_shared/recommendations-v2/contextual.ts.
- * Drift enforced by shared-tree-drift CI.
+ * Single-sourced here since PLAT-3 (the ADR-011 mirror is gone).
  */
 
 import type { PipelineContext, ScoredCandidate } from './types';

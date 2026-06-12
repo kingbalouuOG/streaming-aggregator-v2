@@ -11,7 +11,9 @@ export default tseslint.config(
       'android/**',
       '_archive/**',
       'node_modules/**',
-      'supabase/functions/**', // Deno runtime, separate type system — PLAT-3 dissolves this
+      'supabase/functions/**', // Deno runtime, separate type system (engine mirror gone since PLAT-3)
+      'workers/api/.wrangler-check/**', // wrangler dry-run bundle output
+      'workers/api/.wrangler/**',
       'tests/**',
       '.claude/**',
       'capacitor.config.ts',
