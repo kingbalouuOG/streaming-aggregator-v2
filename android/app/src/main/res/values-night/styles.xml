@@ -1,24 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- UX-1 W4: night-qualified copy of the launch/app themes. Samsung
+     One UI applies WebView force-dark + reports prefers-color-scheme
+     inconsistently when the launch theme is light-only, producing a
+     white-to-dark flash on boot. Identical values - the app is
+     dark-only - but the night qualifier stops the system substituting
+     a light default. -->
 <resources>
-
-    <!-- Base application theme. -->
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <!-- Customize your theme here. -->
-        <item name="colorPrimary">@color/colorPrimary</item>
-        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-        <item name="colorAccent">@color/colorAccent</item>
-    </style>
-
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
-        <!-- UX-1 W4: dark window behind the WebView so config changes /
-             first paint never show the AppCompat default white. -->
         <item name="android:windowBackground">#0a0a0f</item>
         <item name="android:navigationBarColor">#0a0a0f</item>
     </style>
-
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>

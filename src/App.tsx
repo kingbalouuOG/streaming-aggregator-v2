@@ -3,6 +3,7 @@ import { toast, Toaster } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { Loader2 } from "lucide-react";
 import { CategoryFilter } from "./components/CategoryFilter";
+import { Reveal } from "./components/Reveal";
 import { ContentRow } from "./components/ContentRow";
 // FeaturedHeroCarousel — replaced on Home by <MagazineHero>; the file
 // stays for now until the Phase 5 FeaturedHero matrix row formally
@@ -14,7 +15,8 @@ import type { BrowseStateSnapshot } from "./components/BrowsePage";
 import { FilterSheet } from "./components/FilterSheet";
 import type { FilterState } from "./lib/search/filterState";
 import { useAppStore, type AppActions } from "./lib/store/appStore";
-import { prefetchForYouFeed } from "./lib/recommendations-v2/edgeRender";
+import { queryClient } from "./lib/queryClient";
+import { fetchForYouRender, forYouRenderQueryKey } from "./hooks/useForYouContent";
 import type { OnboardingData } from "./components/OnboardingFlow";
 
 // ── PLAT-1 code-splitting (plan §2, D5: React.lazy only — no router) ──
@@ -173,9 +175,26 @@ function AppContent() {
 
   // --- Prune stale cache entries on startup ---
 
+  // UX-1: splash holds (launchAutoHide false) until the first real
+  // frame is on screen - two RAFs after mount = layout + paint done.
+  // The dynamic import keeps @capacitor/splash-screen out of the
+  // critical chunk; on web it resolves to a no-op shim.
+  useEffect(() => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      void import("@capacitor/splash-screen")
+        .then(({ SplashScreen }) => SplashScreen.hide({ fadeOutDuration: 220 }))
+        .catch(() => { /* web / plugin unavailable - nothing to hide */ });
+    }));
+  }, []);
+
   // Prefetch ref at component top-level (Hooks rule); the effect that
   // consumes it is below, after connectedServices is declared.
   const prefetchedRef = useRef(false);
+  // UX-1 keep-alive: Home + For You stay mounted (display-toggled) once
+  // visited - remounting their heavy trees caused the ~300ms blank +
+  // image re-pop twitch on every tab switch (screen-recording frames).
+  const visitedTabsRef = useRef(new Set<string>(["home"]));
+  visitedTabsRef.current.add(activeTab);
 
   // --- User preferences (onboarding, profile) ---
   const userId = auth.loading ? null : (auth.user?.id ?? null);
@@ -275,7 +294,13 @@ function AppContent() {
     if (auth.loading || userPrefs.loading) return;
     if (!auth.session || connectedServices.length === 0) return;
     prefetchedRef.current = true;
-    prefetchForYouFeed(connectedServices);
+    // UX-1 W2: prefetch THROUGH the page's query (same key + fetcher)
+    // so the For You mount attaches to this in-flight render instead of
+    // firing its own. Also primes the Worker's KV entry, as before.
+    void queryClient.prefetchQuery({
+      queryKey: forYouRenderQueryKey(connectedServices, home.sharedFilters ?? null),
+      queryFn: () => fetchForYouRender(connectedServices, home.sharedFilters ?? null),
+    });
   }, [auth.loading, auth.session, userPrefs.loading, connectedServices.join(',')]);
 
   // PLAT-1: idle-prefetch every lazy page chunk once startup settles.
@@ -854,10 +879,9 @@ function AppContent() {
           {showCalendar ? (
             <motion.div
               key="calendar"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1, transition: { duration: 0.21, ease: [0, 0, 0, 1] } }}
+              exit={{ opacity: 0, transition: { duration: 0.09, ease: [0.3, 0, 1, 1] } }}
             >
             <CalendarPage
               items={upcoming.items}
@@ -875,10 +899,9 @@ function AppContent() {
           ) : selectedItem ? (
             <motion.div
               key={`detail-${selectedItem.id}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1, transition: { duration: 0.21, ease: [0, 0, 0, 1] } }}
+              exit={{ opacity: 0, transition: { duration: 0.09, ease: [0.3, 0, 1, 1] } }}
             >
             <DetailPage
               itemId={selectedItem.id}
@@ -891,10 +914,9 @@ function AppContent() {
           ) : selectedAnchorRoom ? (
             <motion.div
               key={`anchor-room-${selectedAnchorRoom.id}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1, transition: { duration: 0.21, ease: [0, 0, 0, 1] } }}
+              exit={{ opacity: 0, transition: { duration: 0.09, ease: [0.3, 0, 1, 1] } }}
             >
             <MoodRoomPage
               kind="anchor"
@@ -916,14 +938,13 @@ function AppContent() {
             </motion.div>
           ) : (
               <motion.div
-                key={`tab-${activeTab}`}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.2, ease: "easeInOut" }}
+                key="tabs"
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1, transition: { duration: 0.21, ease: [0, 0, 0, 1] } }}
+                exit={{ opacity: 0, transition: { duration: 0.09, ease: [0.3, 0, 1, 1] } }}
               >
-              {activeTab === "home" && (
-                <>
+              {visitedTabsRef.current.has("home") && (
+                <div style={{ display: activeTab === "home" ? undefined : "none" }}>
                   {/* §5.1 — Magazine hero (single feature, replaces the
                       auto-rotating FeaturedHeroCarousel pending Phase 5
                       FeaturedHero matrix row). Picks the first popular,
@@ -933,7 +954,7 @@ function AppContent() {
                       (it) => it.image && !watchedIds.has(it.id),
                     );
                     return heroItem ? (
-                      <div className="mb-4">
+                      <Reveal index={0} className="mb-4">
                         <MagazineHero
                           item={heroItem}
                           kicker="TODAY'S PICK"
@@ -949,7 +970,7 @@ function AppContent() {
                             heroItem.services.some((s) => connectedServiceIds.includes(s))
                           }
                         />
-                      </div>
+                      </Reveal>
                     ) : home.loading ? (
                       <div className="mb-4">
                         <div
@@ -967,22 +988,25 @@ function AppContent() {
                       reads from the editor_notes table once-per-day and
                       falls back to a baked-in sample when the table
                       isn't yet populated. */}
-                  <div className="editorial mb-4">
+                  <Reveal index={1} className="editorial mb-4">
                     <EditorsNote
                       kicker={home.editorNote.kicker}
                       teaser={home.editorNote.teaser}
                       body={home.editorNote.body}
                     />
-                  </div>
+                  </Reveal>
 
                   {/* Browse-by chips. Static (no sticky / no scroll-hide).
                       The trailing filter button is omitted — Home doesn't
                       need to surface filters at this level. */}
+                  <Reveal index={2}>
                   <CategoryFilter
                     categories={categories}
                     activeCategory={activeCategory}
                     onCategoryChange={setActiveCategory}
                   />
+
+                  </Reveal>
 
                   {/* Content rows */}
                   {home.loading ? (
@@ -990,7 +1014,7 @@ function AppContent() {
                       <Loader2 className="w-8 h-8 text-primary animate-spin" />
                     </div>
                   ) : (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+                    <Reveal index={3}>
                       {/* §5.3 — Recently added */}
                       <ContentRow
                         kicker="JUST IN"
@@ -1162,12 +1186,13 @@ function AppContent() {
                           loading={home.spotlightsLoading}
                         /> : null}
 
-                    </motion.div>
+                    </Reveal>
                   )}
-                </>
+                </div>
               )}
 
-              {activeTab === "foryou" && (
+              {visitedTabsRef.current.has("foryou") && (
+                <div style={{ display: activeTab === "foryou" ? undefined : "none" }}>
                 <ForYouPage
                   sharedFilters={home.sharedFilters ?? null}
                   filterWatched={filterWatched}
@@ -1181,6 +1206,7 @@ function AppContent() {
                     })
                   }
                 />
+                </div>
               )}
 
               {activeTab === "browse" && (

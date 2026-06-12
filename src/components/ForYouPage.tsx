@@ -22,6 +22,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Lock, LockOpen } from 'lucide-react';
 import { motion } from 'motion/react';
+import { Reveal } from './Reveal';
 import { TasteSlider } from './TasteSlider';
 import { ContentRow } from './ContentRow';
 import { NumberedChart } from './NumberedChart';
@@ -420,7 +421,7 @@ export function ForYouPage({
             greeting + day; the Fraunces title is the editorial standfirst
             ("Edited for you."). Display name is hardcoded for now and
             will be threaded from the auth profile in a follow-up. */}
-        <div className="editorial mb-4 mt-2">
+        <Reveal index={0} className="editorial mb-4 mt-2">
           <Kicker>{`FOR ${(username ?? 'YOU').toUpperCase()} · ${getGreeting()}`}</Kicker>
           <h1
             className="mt-1"
@@ -437,10 +438,10 @@ export function ForYouPage({
           >
             Edited for you.
           </h1>
-        </div>
+        </Reveal>
 
         {/* §5.1 — Greeting + top pick */}
-        {topPick ? <div className="editorial mb-8">
+        {topPick ? <Reveal index={1} className="editorial mb-8">
             <MagazineHero
               item={topPick}
               kicker="TONIGHT'S PICK"
@@ -461,12 +462,13 @@ export function ForYouPage({
                 topPick.services.some((s) => connectedServiceIds.includes(s))
               }
             />
-          </div> : null}
+          </Reveal> : null}
 
         {/* §5.2 — Taste fingerprint card. Header (icon + title +
             metadata + Tune) and a 2-column grid of sliders.
             "327 ratings · updated this morning" is hardcoded — taste-v2
             surface to provide the real signal in a follow-up. */}
+        <Reveal index={2}>
         <div
           className="mx-5 mb-8 p-4"
           style={{
@@ -575,6 +577,7 @@ export function ForYouPage({
             })}
           </div>
         </div>
+        </Reveal>
 
         {/* §5.3 — Mood refiner. Hidden until the real taste-v2 wiring
             lands (see parking-lot IN-V3-003); the UI is finished but the

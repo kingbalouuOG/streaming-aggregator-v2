@@ -117,3 +117,6 @@ scripts/fingerprints/.backfill-failures.jsonl
 # PLAT-2 worker build artifacts
 workers/api/.wrangler-check/
 workers/api/.wrangler/
+_frames/
+_fwin*/
+*.mp4

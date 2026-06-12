@@ -6,6 +6,9 @@
     <title>Videx</title>
     <meta name="description" content="Your personal streaming guide" />
     <meta name="theme-color" content="#0a0a0f" />
+    <!-- UX-1 W4: inline so the very first paint (before bundled CSS
+         arrives) is already dark - kills the in-app navigation flash. -->
+    <style>html, body { background-color: #0a0a0f; }</style>
 
     <link rel="icon" type="image/svg+xml" href="/brand/videx-mark.svg" />
     <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />

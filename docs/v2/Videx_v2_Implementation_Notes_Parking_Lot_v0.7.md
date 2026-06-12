@@ -1951,6 +1951,18 @@ Two placeholders intentionally left in the drafts (`[your-contact-email-address 
 
 ---
 
+### IN-PX-61: First-load polish residuals (UX-1 "better, not perfect")
+
+**Source:** UX-1 close (2026-06-12). Joe's verdict on the final build: "not perfect, but better".
+
+**Detail:** UX-1 fixed the structural problems (remount blank+twitch, bright-LQIP flash, splash gap, skeleton-instead-of-persisted-feed). What remains is degree, not kind: cold-boot splash hold is ~3s warm / longer after force-stop (the JS boot+auth gate — could be profiled and trimmed); the Reveal cascade timing (60ms stagger / 320ms rise) was set from M3 defaults, not tuned with Joe; first-session image loads still pop row thumbnails in below the hero (could extend the dark-ghost treatment or add fetchpriority tiering). Next pass should start by asking Joe WHICH residual reads worst on device.
+
+**Phase target:** launch-prep polish pass, or fold into the next UX phase.
+
+**Status:** ⏳ Filed.
+
+---
+
 ## Onboarding implementation notes
 
 *(Specific to the v2 onboarding flow build — applies to Phase 3 where onboarding gets wired to backend logic)*

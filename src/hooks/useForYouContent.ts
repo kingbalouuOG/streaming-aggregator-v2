@@ -140,7 +140,30 @@ type ForYouRenderResult =
     }
   | { source: 'empty'; ctx: PipelineContext };
 
-async function fetchForYouRender(
+/** Canonical render-query key — shared by the hook and the App boot
+ *  prefetch (UX-1 W2) so an early tab-in ATTACHES to the in-flight
+ *  prefetch instead of firing a second full render. */
+export function forYouRenderQueryKey(
+  providerIds: number[],
+  // Kept in the signature so call sites read naturally, deliberately
+  // unused - see the key-identity note below.
+  _sharedFilters: FilterSets | null | undefined,
+): (string | number)[] {
+  // No sharedFilters component in the key (UX-1 first-load capture):
+  // the suffix differed between the boot prefetch ('own') and the page
+  // mount ('s<size>'), so the page could find neither the persisted
+  // entry nor the in-flight prefetch - skeleton on every cold tab-in.
+  // The Worker render ignores sharedFilters entirely; only the D4
+  // client-fallback path reads them, and its ranking difference does
+  // not justify a cache identity split.
+  return [
+    'foryou', 'render',
+    getAuthUserId() ?? 'anon',
+    providerIds.join(','),
+  ];
+}
+
+export async function fetchForYouRender(
   providerIds: number[],
   sharedFilters: FilterSets | null | undefined,
 ): Promise<ForYouRenderResult> {
@@ -406,12 +429,7 @@ export function useForYouContent(
   // availability-set size stands in, matching the old load() dep's
   // practical refetch triggers.
   const renderQuery = useQuery({
-    queryKey: [
-      'foryou', 'render',
-      getAuthUserId() ?? 'anon',
-      providerStr,
-      sharedFilters ? `s${sharedFilters.availableTmdbIds.size}` : 'own',
-    ],
+    queryKey: forYouRenderQueryKey(providerIds, sharedFilters),
     queryFn: () => fetchForYouRender(providerIds, sharedFilters),
     enabled: providerStr.length > 0,
     staleTime: 0,
@@ -438,6 +456,11 @@ export function useForYouContent(
     const result = renderQuery.data;
     if (!result) return;
 
+    // UX-1 W1 (Q2): never reflow under the user's thumb. If rows are
+    // already on screen and the user has scrolled, hold the fresh
+    // result - it stays in the query cache and applies on next mount.
+    if (poolRef.current && window.scrollY > 80) return;
+
     ctxRef.current = result.ctx;
 
     if (result.source === 'edge') {
@@ -463,7 +486,19 @@ export function useForYouContent(
       // Embeddings hit the 24h localStorage cache on warm sessions, so
       // this is usually instant; cold it's a background fetch that
       // upgrades the NEXT drag.
-      void (async () => {
+      //
+      // UX-1 W3: deferred to IDLE time. Preview instrumentation caught
+      // this block freezing the main thread ~4s on first mount (3MB
+      // embedding fetch + Float32Array conversion + 3MB sync
+      // localStorage write) - it upgrades slider drags, so it has no
+      // business inside the first-paint window. requestIdleCallback
+      // with a setTimeout fallback (WebView support varies); 1.5s cap
+      // so a busy main thread can't starve it forever.
+      const scheduleIdle = (fn: () => void) =>
+        typeof window.requestIdleCallback === 'function'
+          ? window.requestIdleCallback(() => fn(), { timeout: 1500 })
+          : window.setTimeout(fn, 800);
+      scheduleIdle(() => void (async () => {
         try {
           const scored = scoreCandidates(edge.pool, edge.sliders, 'foryou', result.ctx);
           const [embMap, avoidSet, seenIds] = await Promise.all([
@@ -480,7 +515,7 @@ export function useForYouContent(
         } catch {
           // Hydration is best-effort — re-rank falls back exactly as before.
         }
-      })();
+      })());
       return;
     }
 

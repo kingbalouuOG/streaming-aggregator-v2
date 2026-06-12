@@ -128,7 +128,13 @@ function ContentRowImpl({ title, items, kicker, kickerColor, standfirst, right, 
     "w-[160px] h-[268px]";
 
   return (
-    <section className="mb-6">
+    // UX-1 W5: below-fold rows skip render/layout work until scrolled
+    // near (research: web.dev/articles/content-visibility). The
+    // intrinsic-size reservation prevents scroll-anchor jumps.
+    <section
+      className="mb-6"
+      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 290px' }}
+    >
       {/* Section header */}
       <div className="px-5">
         <SectionHead

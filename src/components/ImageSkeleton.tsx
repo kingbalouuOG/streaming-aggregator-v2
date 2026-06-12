@@ -147,8 +147,15 @@ export function ImageSkeleton({ src, alt, className = "", style, priority = fals
           className={className}
           style={{
             ...style,
-            filter: blurred ? "blur(10px)" : "none",
-            transition: "filter 0.25s ease-out",
+            // UX-1: brightness clamp rides the blur phase - a BRIGHT
+            // backdrop's LQIP at hero size read as a white flash against
+            // the dark theme. 0.5 was not enough (first-load capture,
+            // t=14.55s: a mostly-sky backdrop at 50% still painted a
+            // pale slab, mean luminance 85 vs the page's 10). 0.35
+            // makes any placeholder a dark ghost that BRIGHTENS into
+            // the artwork via the 0.45s filter transition.
+            filter: blurred ? "blur(10px) brightness(0.35)" : "none",
+            transition: "filter 0.45s ease-out",
           }}
           onLoad={handleLoad}
           onError={handleError}
