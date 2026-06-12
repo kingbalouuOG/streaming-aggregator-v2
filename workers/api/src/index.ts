@@ -32,10 +32,22 @@ import {
   isValidTitleRequest,
   TITLE_TTL_SECONDS,
 } from './rules';
+import { verifySupabaseJwt } from './auth';
+// PLAT-3: the engine imports directly from src/lib — the
+// wrangler-bundles-from-anywhere property that dissolves ADR-011.
+import { renderForYou } from '../../../src/lib/server/foryouRender';
+import {
+  createServiceRoleClient,
+  withUserScope,
+} from '../../../src/lib/server/userScope';
 
 type Env = {
   TMDB_API_KEY: string;
   OMDB_API_KEY: string;
+  /** Public project URL — wrangler.toml [vars]. */
+  SUPABASE_URL: string;
+  /** Worker secret (wrangler secret put). */
+  SUPABASE_SERVICE_ROLE_KEY: string;
 };
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
@@ -137,6 +149,60 @@ app.get('/v1/title/:type/:id', async (c) => {
 
     return Response.json({ tmdb, omdb });
   });
+});
+
+// ── Server-side For You render (PLAT-3) ──────────────────────────────
+// GET /v1/foryou?services=netflix,prime&hour=20&dow=4
+// Authorization: Bearer <supabase user JWT> (verified against JWKS).
+// Response: ForYouPayload — byte-compatible with the retired Edge
+// function, including the scored pool for client-side slider re-ranks.
+// Per-user content: never CDN/Cache-API cached (W3 adds a KV feed
+// cache keyed on user + taste freshness instead).
+const MAX_SERVICES = 20;
+const SERVICE_ID_RE = /^[a-z0-9_-]{1,32}$/i;
+
+app.get('/v1/foryou', async (c) => {
+  const servicesRaw = c.req.query('services') ?? '';
+  const services = servicesRaw
+    ? servicesRaw.split(',').map((s) => s.trim()).filter(Boolean)
+    : [];
+  if (services.length > MAX_SERVICES) {
+    return c.json({ error: `services exceeds ${MAX_SERVICES}` }, 400);
+  }
+  if (services.some((s) => !SERVICE_ID_RE.test(s))) {
+    return c.json({ error: 'invalid service id' }, 400);
+  }
+
+  const parseBoundedInt = (raw: string | undefined, max: number): number | undefined | null => {
+    if (raw == null || raw === '') return undefined;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 0 || n > max) return null;
+    return n;
+  };
+  const hourOfDay = parseBoundedInt(c.req.query('hour'), 23);
+  if (hourOfDay === null) return c.json({ error: 'hour must be integer 0..23' }, 400);
+  const dayOfWeek = parseBoundedInt(c.req.query('dow'), 6);
+  if (dayOfWeek === null) return c.json({ error: 'dow must be integer 0..6' }, 400);
+
+  const token = (c.req.header('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
+  const userId = await verifySupabaseJwt(token, c.env.SUPABASE_URL);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
+  const scope = withUserScope(client, userId);
+
+  try {
+    const payload = await renderForYou(client, scope, {
+      services,
+      hourOfDay,
+      dayOfWeek,
+      userAgent: c.req.header('user-agent'),
+    });
+    return c.json(payload);
+  } catch (err) {
+    console.error('[foryou] uncaught error:', err);
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
 });
 
 // ── Allowlisted TMDb passthrough ──────────────────────────────────────

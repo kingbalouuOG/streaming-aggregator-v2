@@ -31,7 +31,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import { getAuthUserId, isSupabaseActive } from '../storage';
 import type { UserScope } from '../server/userScope';
-import { AVOID_SET_EVENTS, AVOID_SET_SIZE } from '@/lib/taste-v2/types';
+import { AVOID_SET_EVENTS, AVOID_SET_SIZE } from '../taste-v2/types';
 import { getCachedEmbeddings, setCachedEmbeddings, computeNorm } from './embeddingCache';
 import type { CachedEmbedding, EmbeddingMap } from './embeddingCache';
 import type { ScoredCandidate } from './types';

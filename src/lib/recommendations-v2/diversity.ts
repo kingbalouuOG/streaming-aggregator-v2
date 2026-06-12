@@ -11,7 +11,7 @@
  * as post-processing stages rather than scoring components.
  */
 
-import { TASTE_CLUSTERS } from '@/lib/taste-v2/tasteClusters';
+import { TASTE_CLUSTERS } from '../taste-v2/tasteClusters';
 import type { ScoredCandidate, ExtendedTitleRow } from './types';
 import type { EmbeddingMap, CachedEmbedding } from './embeddingCache';
 import { MAX_CONSECUTIVE_SAME_SERVICE } from './weights';
