@@ -147,11 +147,17 @@ export function forYouRenderQueryKey(
   providerIds: number[],
   sharedFilters: FilterSets | null | undefined,
 ): (string | number)[] {
+  // No sharedFilters component in the key (UX-1 first-load capture):
+  // the suffix differed between the boot prefetch ('own') and the page
+  // mount ('s<size>'), so the page could find neither the persisted
+  // entry nor the in-flight prefetch - skeleton on every cold tab-in.
+  // The Worker render ignores sharedFilters entirely; only the D4
+  // client-fallback path reads them, and its ranking difference does
+  // not justify a cache identity split.
   return [
     'foryou', 'render',
     getAuthUserId() ?? 'anon',
     providerIds.join(','),
-    sharedFilters ? `s${sharedFilters.availableTmdbIds.size}` : 'own',
   ];
 }
 
