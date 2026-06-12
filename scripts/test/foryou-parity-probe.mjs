@@ -100,7 +100,12 @@ if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   process.exit(1);
 }
 
-const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/render-foryou-rows`;
+// PLAT-3: the probe targets the videx-api Worker's GET /v1/foryou —
+// render-foryou-rows is retired. The golden committed at cutover was
+// generated from the EDGE path against identical DB state, so a green
+// run here IS the Edge≡Worker cross-implementation parity evidence
+// (brief §7.3 final pre-cutover run).
+const FORYOU_URL = ENV.FORYOU_URL ?? 'https://videx-api.kingbalouu.workers.dev/v1/foryou';
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
@@ -137,20 +142,17 @@ const tierName = { 1: 'behavioural', 2: 'cluster-rep', 3: 'top-finalScore' };
 
 async function callEdgeFunction() {
   const t0 = Date.now();
-  const res = await fetch(FUNCTION_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${USER_JWT}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ services: SERVICES }),
+  const params = new URLSearchParams({ services: SERVICES.join(',') });
+  const res = await fetch(`${FORYOU_URL}?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${USER_JWT}` },
   });
   const wallMs = Date.now() - t0;
   if (!res.ok) {
-    throw new Error(`Edge function HTTP ${res.status}: ${await res.text()}`);
+    throw new Error(`foryou Worker HTTP ${res.status}: ${await res.text()}`);
   }
   const data = await res.json();
-  return { data, wallMs, payloadBytes: Number(res.headers.get('content-length') ?? 0) };
+  const cacheState = res.headers.get('x-videx-cache') ?? 'n/a';
+  return { data, wallMs, cacheState, payloadBytes: Number(res.headers.get('content-length') ?? 0) };
 }
 
 async function fetchFilterSetsDirectly() {
