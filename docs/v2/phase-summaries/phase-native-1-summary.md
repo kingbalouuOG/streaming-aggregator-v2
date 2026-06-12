@@ -1,6 +1,6 @@
 # Phase NATIVE-1 — React Native shell bootstrap: Summary
 
-**Status:** Code complete 2026-06-12 (single-day phase); awaiting Joe's device verdict (the phase gate).
+**Status:** Complete, 2026-06-12 (single-day phase). Joe's device verdict: **"The animations and scrolling is amazing"** — gate passed; NATIVE-2 unlocked.
 **Branch:** `phase-native-1-expo-shell` (built in the `videx-native` worktree — LAUNCH-1 owned the main checkout in parallel).
 **Plan:** `docs/plans/2026-06-12-004-feat-phase-native-1-expo-shell-plan.md` (track NATIVE-1→4; decided after UX-1's "not perfect, but better" verdict established the WebView ceiling).
 
