@@ -1979,6 +1979,20 @@ Both are the recurring class IN-PX-54 was filed to prevent (a CI check that dele
 
 ---
 
+### IN-PX-63: Activate the /v1/foryou rate limit (free-plan no-op)
+
+**Source:** LAUNCH-1 W1 post-merge smoke (2026-06-12).
+
+**Detail:** The Cloudflare rate-limit binding (`FORYOU_RATELIMIT`, 30 req/60s, keyed on verified userId) is deployed and CI-confirmed (`env.FORYOU_RATELIMIT (30 requests/60s) Rate Limit`), but **does not enforce on the free Workers plan** — empirically: 60 concurrent authed requests all returned 200, zero 429s. The code (W1, IN-PX-60) is correct; it just needs the plan. Decision (Joe, 2026-06-12): **defer** — at beta scale (handful of hand-invited testers) the cost-amplification vector is negligible, and this is denial-of-wallet protection, not data security (auth + tenant isolation + membership-checked services are all already active).
+
+**Activation:** when Joe moves to **Workers Paid** ($5/mo — the PLAT-3 parked cost item, likely wanted for launch anyway), the binding should start enforcing with no code change. Re-run the burst smoke (31+ rapid authed curls → expect ~30 OK then 429) to confirm. If the binding still doesn't enforce on Paid, fall back to a KV fixed-window or Durable Object counter (DO is the strongly-consistent option; KV leaks under concurrent bursts but catches sustained loops — the real threat).
+
+**Phase target:** real launch (gates non-prototype/public users), tied to the Workers Paid upgrade.
+
+**Status:** ⏳ Filed — deferred by decision.
+
+---
+
 ## Onboarding implementation notes
 
 *(Specific to the v2 onboarding flow build — applies to Phase 3 where onboarding gets wired to backend logic)*
