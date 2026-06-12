@@ -69,7 +69,7 @@ import {
   getV2TasteProfileScoped,
   getInterestCentroidsScoped,
 } from '../taste-v2/tasteProfileV2';
-import { DEFAULT_SLIDERS, type SliderState } from '../taste-v2/types';
+import { DEFAULT_SLIDERS, type SliderState, type TasteProfileV2 } from '../taste-v2/types';
 import {
   buildEmbeddingCacheKey,
   computeNorm,
@@ -94,6 +94,14 @@ export interface RenderForYouInput {
   dayOfWeek?: number;
   /** Raw User-Agent header for device-platform inference. */
   userAgent?: string | null;
+  /**
+   * PLAT-3 W3: pre-fetched taste profile. The Worker reads the profile
+   * BEFORE the render to build its KV cache key (updated_at +
+   * sliderHash); passing it here avoids a duplicate Supabase read on
+   * cache misses. Omit (undefined) to let the render fetch it; null
+   * means "fetched, no profile row".
+   */
+  profile?: TasteProfileV2 | null;
 }
 
 export interface BecauseYouWatchedRow {
@@ -150,7 +158,9 @@ export async function renderForYou(
   const t_start = Date.now();
   const userId = scope.userId;
 
-  const profile = await getV2TasteProfileScoped(scope);
+  const profile = input.profile !== undefined
+    ? input.profile
+    : await getV2TasteProfileScoped(scope);
   if (!profile?.tasteVector) {
     // No taste vector → user hasn't completed onboarding. Empty payload;
     // the client shows its empty-state UI.

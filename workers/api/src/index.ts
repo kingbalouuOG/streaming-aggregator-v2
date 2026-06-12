@@ -35,11 +35,12 @@ import {
 import { verifySupabaseJwt } from './auth';
 // PLAT-3: the engine imports directly from src/lib — the
 // wrangler-bundles-from-anywhere property that dissolves ADR-011.
-import { renderForYou } from '../../../src/lib/server/foryouRender';
+import { renderForYou, type ForYouPayload } from '../../../src/lib/server/foryouRender';
 import {
   createServiceRoleClient,
   withUserScope,
 } from '../../../src/lib/server/userScope';
+import { getV2TasteProfileScoped } from '../../../src/lib/taste-v2/tasteProfileV2';
 
 type Env = {
   TMDB_API_KEY: string;
@@ -48,6 +49,8 @@ type Env = {
   SUPABASE_URL: string;
   /** Worker secret (wrangler secret put). */
   SUPABASE_SERVICE_ROLE_KEY: string;
+  /** PLAT-3 W3: per-user feed cache. */
+  FORYOU_CACHE: KVNamespace;
 };
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
@@ -160,6 +163,9 @@ app.get('/v1/title/:type/:id', async (c) => {
 // cache keyed on user + taste freshness instead).
 const MAX_SERVICES = 20;
 const SERVICE_ID_RE = /^[a-z0-9_-]{1,32}$/i;
+// 20 min — mid-range of the brief's 15–30. Stale-feed worst case is one
+// TTL; vector-moving interactions bust earlier via the key timestamp.
+const FORYOU_CACHE_TTL_SECONDS = 20 * 60;
 
 app.get('/v1/foryou', async (c) => {
   const servicesRaw = c.req.query('services') ?? '';
@@ -192,13 +198,45 @@ app.get('/v1/foryou', async (c) => {
   const scope = withUserScope(client, userId);
 
   try {
-    const payload = await renderForYou(client, scope, {
+    // Feed cache (brief §7.2-3). The profile read happens BEFORE the
+    // cache lookup because the key embeds taste_vector_updated_at —
+    // an interaction that moves the vector busts the entry naturally
+    // (the embedding-cache invalidation trick, reused). Sliders are
+    // hashed separately: slider saves don't bump the vector timestamp.
+    const profile = await getV2TasteProfileScoped(scope);
+    const s = profile?.sliders;
+    const sliderHash = s
+      ? `${s.catalogueAge}.${s.comfortZone}.${s.contentMix}.${s.variety}`
+      : 'none';
+    const cacheKey =
+      `foryou:v1:${userId}:${profile?.updatedAt ?? 0}:${sliderHash}:${[...services].sort().join(',')}`;
+
+    const cached = await c.env.FORYOU_CACHE.get(cacheKey, 'text');
+    if (cached) {
+      return new Response(cached, {
+        headers: { 'Content-Type': 'application/json', 'x-videx-cache': 'hit' },
+      });
+    }
+
+    const payload: ForYouPayload = await renderForYou(client, scope, {
       services,
       hourOfDay,
       dayOfWeek,
       userAgent: c.req.header('user-agent'),
+      profile,
     });
-    return c.json(payload);
+
+    // Don't cache the no-taste-vector empty payload — the user is mid
+    // onboarding and a 20-minute-stale empty feed is the worst outcome.
+    const body = JSON.stringify(payload);
+    if (profile?.tasteVector) {
+      c.executionCtx.waitUntil(
+        c.env.FORYOU_CACHE.put(cacheKey, body, { expirationTtl: FORYOU_CACHE_TTL_SECONDS }),
+      );
+    }
+    return new Response(body, {
+      headers: { 'Content-Type': 'application/json', 'x-videx-cache': 'miss' },
+    });
   } catch (err) {
     console.error('[foryou] uncaught error:', err);
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);

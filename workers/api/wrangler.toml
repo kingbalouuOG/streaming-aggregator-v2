@@ -16,5 +16,12 @@ compatibility_flags = ["nodejs_compat"]
 # Public project URL (not a secret — it ships in the client bundle too).
 SUPABASE_URL = "https://fmusugdcnnwiuzkbjquo.supabase.co"
 
+# PLAT-3 W3: per-user feed cache. Key = userId : taste_vector_updated_at
+# : sliderHash : sorted services; TTL 20 min. An interaction that moves
+# the taste vector bumps updated_at and busts the entry naturally.
+[[kv_namespaces]]
+binding = "FORYOU_CACHE"
+id = "e9afd10acedc493e9b9603d4426495fd"
+
 [observability]
 enabled = true
