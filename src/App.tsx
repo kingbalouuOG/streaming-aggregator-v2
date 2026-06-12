@@ -177,6 +177,11 @@ function AppContent() {
   // Prefetch ref at component top-level (Hooks rule); the effect that
   // consumes it is below, after connectedServices is declared.
   const prefetchedRef = useRef(false);
+  // UX-1 keep-alive: Home + For You stay mounted (display-toggled) once
+  // visited - remounting their heavy trees caused the ~300ms blank +
+  // image re-pop twitch on every tab switch (screen-recording frames).
+  const visitedTabsRef = useRef(new Set<string>(["home"]));
+  visitedTabsRef.current.add(activeTab);
 
   // --- User preferences (onboarding, profile) ---
   const userId = auth.loading ? null : (auth.user?.id ?? null);
@@ -920,13 +925,13 @@ function AppContent() {
             </motion.div>
           ) : (
               <motion.div
-                key={`tab-${activeTab}`}
+                key="tabs"
                 initial={{ opacity: 0, scale: 0.92 }}
                 animate={{ opacity: 1, scale: 1, transition: { duration: 0.21, ease: [0, 0, 0, 1] } }}
                 exit={{ opacity: 0, transition: { duration: 0.09, ease: [0.3, 0, 1, 1] } }}
               >
-              {activeTab === "home" && (
-                <>
+              {visitedTabsRef.current.has("home") && (
+                <div style={{ display: activeTab === "home" ? undefined : "none" }}>
                   {/* §5.1 — Magazine hero (single feature, replaces the
                       auto-rotating FeaturedHeroCarousel pending Phase 5
                       FeaturedHero matrix row). Picks the first popular,
@@ -1167,10 +1172,11 @@ function AppContent() {
 
                     </motion.div>
                   )}
-                </>
+                </div>
               )}
 
-              {activeTab === "foryou" && (
+              {visitedTabsRef.current.has("foryou") && (
+                <div style={{ display: activeTab === "foryou" ? undefined : "none" }}>
                 <ForYouPage
                   sharedFilters={home.sharedFilters ?? null}
                   filterWatched={filterWatched}
@@ -1184,6 +1190,7 @@ function AppContent() {
                     })
                   }
                 />
+                </div>
               )}
 
               {activeTab === "browse" && (

@@ -147,7 +147,11 @@ export function ImageSkeleton({ src, alt, className = "", style, priority = fals
           className={className}
           style={{
             ...style,
-            filter: blurred ? "blur(10px)" : "none",
+            // UX-1: brightness clamp rides the blur phase - a BRIGHT
+            // backdrop's LQIP at hero size read as a white flash against
+            // the dark theme (screen-recording frames, 8.4s). Transitions
+            // off together with the blur when the sharp rendition lands.
+            filter: blurred ? "blur(10px) brightness(0.5)" : "none",
             transition: "filter 0.25s ease-out",
           }}
           onLoad={handleLoad}
