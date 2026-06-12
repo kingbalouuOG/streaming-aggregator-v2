@@ -413,3 +413,8 @@ Cross-refs: wiki/concepts/architecture/taste-vector.md + recommendation-pipeline
 - Updated: wiki/concepts/operations/phase-history.md (PLAT-3 row), wiki/registers/cheatsheet.md (PLAT-3 row; mirror note replaced with single-tree rule)
 - Notable: the final parity run caught REAL mirror drift (pre-ADR-013 cluster reps in _shared/taste-v2/tasteClusters.ts, never flagged by shared-tree-drift CI) — the Edge served anchor selection from stale data for a month. Concrete validation of the ADR-014 thesis.
 - NOT yet re-edited: adr-011/adr-012 pages and architecture pages still describe the mirror/Edge arrangement as current — full re-edit rides the next raw/ snapshot drop (REPO-1 precedent); ADR-014 + the phase-history row are the authoritative correction until then.
+
+## [2026-06-12] ingest | phase-ux-1-summary.md (light pass)
+- Updated: wiki/concepts/operations/phase-history.md (UX-1 row), wiki/registers/cheatsheet.md (UX-1 row)
+- Notable: the frame-forensics debugging method (screenrecord + OpenCV brightness/diff timelines + scripted launches) solved three stacked first-load bugs the user could only describe as "flash and twitch" - it is now the house method for device-visual issues. Keep-alive tabs supersede the PLAT-1-era remount-per-switch model for Home + For You.
+- Full source-page ingest deferred to the next human raw/ snapshot drop (REPO-1 precedent)
