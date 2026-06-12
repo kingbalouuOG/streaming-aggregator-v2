@@ -44,6 +44,7 @@ Single-page lookup table for "which phase, which branch, which migration, what s
 | REPO-1 | `phase-repo-1-hygiene` | merged 2026-06-10 (PR #15) | 2026-06-10 | 046 (applied) | Repo hygiene: docs reorganisation (`docs/v3-design/` → `docs/design/`), `npm test` single entry (146 tests), `no-explicit-any` → error, `title_genres`/`title_credits` dropped. |
 | PLAT-1 | `phase-plat-1-client-data-layer` | closed (PR #16) | 2026-06-10 | — | TanStack Query everywhere (cache.ts deleted), React.lazy + idle prefetch, TanStack Virtual ×3 surfaces, LQIP images, Zustand store + memo. Bundle −44.5%. |
 | PLAT-2 | `phase-plat-2-api-proxy` | closed 2026-06-12 | 2026-06-11 | — | `workers/api/` Worker (Hono) live on workers.dev: merged `/v1/title` (24h CDN, warm 114ms) + allowlisted `/v1/tmdb/*` passthrough. TMDb/OMDB keys out of the client bundle (dist-grep acceptance). Device smoke 188 reqs all Ok. Joe rotates both keys post-merge. |
+| PLAT-3 | `phase-plat-3-single-engine` | closed 2026-06-12 | 2026-06-12 | — | Single engine: Worker imports src/lib directly (ADR-014 supersedes ADR-011/012). `/v1/foryou` + KV feed cache (~175ms hits) + nightly recompute cron. Mirror + drift CI + parity CI + render-foryou-rows DELETED (~3,700 LOC). Client pipeline survives one release (IN-PX-59). Joe deletes the deployed Edge fn post-merge. |
 | 6 | (planned) | not started | — | — | Launch: APK release build, pre-launch blocker review, solicitor-reviewed legal docs, cryptographic JWT rotation if tooling allows. |
 | 7 (post-v2) | — | not started | — | — | Conversational discovery on top of v2. See [v3 forward-planning](../concepts/forward-planning/v3-conversational-discovery.md). |
 
@@ -164,7 +165,7 @@ ENG-1 additions outside the formula: avoid-set penalty (`finalScore −= 0.15 ·
 - **Sliders Option C dual-access**: Profile + For You modal/tray, shared state.
 - **Detail view alone is NOT positive** (anchor only).
 - **Negative dwell session cap −1.0**.
-- **Edge Function shared modules** in `supabase/functions/_shared/` (mirror tax paid one final time in ENG-1; PLAT-3 deletes the apparatus).
+- **Single engine tree** `src/lib/{recommendations-v2,taste-v2}` — the videx-api Worker imports it directly (ADR-014; the `_shared/` mirror is gone). Engine modules must stay importable outside Vite.
 - **Multi-interest centroids K ≤ 3** (ENG-1, E&P D3); negative events feed the avoid set, taste vectors are positive-only.
 
 ## Cross-links

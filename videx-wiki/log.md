@@ -407,3 +407,9 @@ Cross-refs: wiki/concepts/architecture/taste-vector.md + recommendation-pipeline
 - Updated: wiki/concepts/operations/phase-history.md (PLAT-2 row; PLAT-1 row closed with PR #16), wiki/registers/cheatsheet.md (PLAT-2 row; PLAT-1 status closed)
 - Notable: first non-Supabase production surface (Cloudflare Worker `videx-api`); TMDb/OMDB keys are server-side Worker secrets only — client bundle provably keyless (dist grep). PLAT-3 lands `GET /v1/foryou` in the same Worker and dissolves the ADR-011 `_shared/` mirror.
 - Full source-page ingest deferred to the next human raw/ snapshot drop (REPO-1 precedent)
+
+## [2026-06-12] ingest | phase-plat-3-summary.md + ADR-014 (light pass)
+- Added: wiki/concepts/decisions/adr-014-single-server-engine.md (supersedes ADR-011/012 — both remain as historical record)
+- Updated: wiki/concepts/operations/phase-history.md (PLAT-3 row), wiki/registers/cheatsheet.md (PLAT-3 row; mirror note replaced with single-tree rule)
+- Notable: the final parity run caught REAL mirror drift (pre-ADR-013 cluster reps in _shared/taste-v2/tasteClusters.ts, never flagged by shared-tree-drift CI) — the Edge served anchor selection from stale data for a month. Concrete validation of the ADR-014 thesis.
+- NOT yet re-edited: adr-011/adr-012 pages and architecture pages still describe the mirror/Edge arrangement as current — full re-edit rides the next raw/ snapshot drop (REPO-1 precedent); ADR-014 + the phase-history row are the authoritative correction until then.
