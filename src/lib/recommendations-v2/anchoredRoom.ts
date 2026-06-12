@@ -18,6 +18,7 @@
  * two near-duplicate functions).
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import { applyAnchorHardFilters } from './hardFilters';
 import { titleRowToContentItem } from './titleAdapter';
@@ -85,6 +86,19 @@ export interface BuildAnchoredRoomResult {
 export async function buildAnchoredRoom(
   opts: BuildAnchoredRoomOptions,
 ): Promise<BuildAnchoredRoomResult> {
+  return buildAnchoredRoomScoped(supabase, opts);
+}
+
+/**
+ * Scoped (server) variant — PLAT-3. Identical body, explicit client
+ * (the ADR-011 mirror's only divergence for this module); the client
+ * entry point above is a thin delegation so there is exactly one
+ * implementation.
+ */
+export async function buildAnchoredRoomScoped(
+  client: SupabaseClient,
+  opts: BuildAnchoredRoomOptions,
+): Promise<BuildAnchoredRoomResult> {
   const {
     anchorTmdbId,
     anchorMediaType,
@@ -95,7 +109,7 @@ export async function buildAnchoredRoom(
   } = opts;
 
   // 1. Fetch anchor embedding.
-  const { data: anchorRows, error: anchorError } = await supabase
+  const { data: anchorRows, error: anchorError } = await client
     .from('titles')
     .select('embedding')
     .eq('tmdb_id', anchorTmdbId)
@@ -122,7 +136,7 @@ export async function buildAnchoredRoom(
 
   // 2. Vector search.
   const vectorStr = `[${embedding.join(',')}]`;
-  const { data: matchedRaw, error: rpcError } = await supabase
+  const { data: matchedRaw, error: rpcError } = await client
     .rpc('match_titles_by_vector', {
       query_vector: vectorStr,
       match_limit: matchLimit,
@@ -151,7 +165,7 @@ export async function buildAnchoredRoom(
   // 5. Cap and hydrate.
   const top = filtered.slice(0, limit);
   const tmdbIds = [...new Set(top.map((t) => t.tmdb_id))];
-  const metadata = await fetchExtendedMetadata(tmdbIds);
+  const metadata = await fetchExtendedMetadata(client, tmdbIds);
 
   const items: ContentItem[] = [];
   for (const match of top) {
@@ -166,12 +180,13 @@ export async function buildAnchoredRoom(
 
 
 async function fetchExtendedMetadata(
+  client: SupabaseClient,
   tmdbIds: number[],
 ): Promise<Map<string, ExtendedTitleRow>> {
   const map = new Map<string, ExtendedTitleRow>();
   if (tmdbIds.length === 0) return map;
 
-  const { data: rows, error } = await supabase
+  const { data: rows, error } = await client
     .from('titles')
     .select(TITLE_SELECT)
     .in('tmdb_id', tmdbIds);

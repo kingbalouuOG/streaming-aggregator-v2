@@ -27,7 +27,7 @@ import {
 import {
   buildPosterUrl,
   buildBackdropUrl,
-} from '@/lib/api/tmdb';
+} from '@/lib/api/imageUrls';
 import { GENRE_NAMES } from '@/lib/constants/genres';
 import { isoToLanguageName } from '@/lib/adapters/contentAdapter';
 import type { ContentItem } from '@/components/ContentCard';

@@ -252,11 +252,7 @@ export const getTVRecommendations = (tvId: number, page = 1) =>
     return response.data;
   }, { results: [] });
 
-export const buildImageUrl = (path: string | null, size = 'w500'): string | null => {
-  if (!path) return null;
-  return `https://image.tmdb.org/t/p/${size}${path}`;
-};
-
-export const buildPosterUrl = (path: string | null, size = 'w342') => buildImageUrl(path, size);
-export const buildBackdropUrl = (path: string | null, size = 'w1280') => buildImageUrl(path, size);
-export const buildLogoUrl = (path: string | null, size = 'w92') => buildImageUrl(path, size);
+// Image URL builders moved to ./imageUrls (PLAT-3 W1) so the engine
+// tree can use them without dragging the axios client into the Worker
+// bundle. Re-exported here for the existing client call sites.
+export { buildImageUrl, buildPosterUrl, buildBackdropUrl, buildLogoUrl } from './imageUrls';

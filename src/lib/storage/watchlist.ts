@@ -2,7 +2,10 @@ import storage, { isSupabaseActive } from '../storage';
 import { invalidateRecommendationCache } from './recommendations';
 import * as supa from '../supabaseStorage';
 
-const DEBUG = __DEV__;
+// typeof guard: __DEV__ is a Vite define; in non-Vite bundles (videx-api
+// Worker imports this module transitively, PLAT-3) the bare identifier
+// would throw ReferenceError at module init.
+const DEBUG = typeof __DEV__ !== 'undefined' && __DEV__;
 
 const WATCHLIST_KEY = '@app_watchlist';
 const HIDDEN_GEMS_CACHE_KEY = '@app_hidden_gems';

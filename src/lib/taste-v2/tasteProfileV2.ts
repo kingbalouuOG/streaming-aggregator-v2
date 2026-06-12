@@ -7,6 +7,7 @@
 
 import { supabase } from '../supabase';
 import { getAuthUserId, isSupabaseActive } from '../storage';
+import type { UserScope } from '../server/userScope';
 import type {
   TasteProfileV2,
   TasteVectorV2,
@@ -312,4 +313,120 @@ export async function saveSliderState(sliders: SliderState): Promise<void> {
     console.error('[TasteV2] saveSliderState failed:', error.message);
     throw error;
   }
+}
+
+// ─── Scoped (server) read variants — PLAT-3, absorbed from the ADR-011
+// mirror so the videx-api Worker imports THIS tree. No module-level
+// profileCache: server requests are independent and the 5-min client
+// cache exists only to dedupe parallel hooks. Write paths are not
+// ported — the foryou render is read-only (the IN-466 contract).
+
+interface TasteProfileRow {
+  taste_vector_v2: string | number[] | null;
+  taste_vector_updated_at: string | null;
+  taste_vector_interaction_count: number | null;
+  taste_vector_bootstrapped_from: string | null;
+  selected_clusters: unknown;
+  slider_catalogue_age: number | null;
+  slider_comfort_zone: number | null;
+  slider_content_mix: number | null;
+  slider_variety: number | null;
+}
+
+export async function getV2TasteProfileScoped(scope: UserScope): Promise<TasteProfileV2 | null> {
+  const { data, error } = await scope
+    .select(
+      'taste_profiles',
+      'taste_vector_v2, taste_vector_updated_at, taste_vector_interaction_count, '
+      + 'taste_vector_bootstrapped_from, selected_clusters, '
+      + 'slider_catalogue_age, slider_comfort_zone, slider_content_mix, slider_variety',
+    )
+    .maybeSingle();
+
+  if (error) {
+    console.error('[TasteV2] getV2TasteProfileScoped failed:', error.message);
+    return null;
+  }
+  if (!data) return null;
+
+  const row = data as unknown as TasteProfileRow;
+
+  // PostgREST returns pgvector as a JSON string — parse it
+  let tasteVector: TasteVectorV2 | null = null;
+  if (row.taste_vector_v2) {
+    tasteVector = typeof row.taste_vector_v2 === 'string'
+      ? JSON.parse(row.taste_vector_v2) as TasteVectorV2
+      : row.taste_vector_v2;
+  }
+
+  return {
+    tasteVector,
+    updatedAt: row.taste_vector_updated_at || null,
+    interactionCount: row.taste_vector_interaction_count ?? 0,
+    bootstrappedFrom: row.taste_vector_bootstrapped_from as BootstrapSource | null,
+    selectedClusters: Array.isArray(row.selected_clusters) ? row.selected_clusters as string[] : [],
+    sliders: {
+      catalogueAge: row.slider_catalogue_age ?? DEFAULT_SLIDERS.catalogueAge,
+      comfortZone: row.slider_comfort_zone ?? DEFAULT_SLIDERS.comfortZone,
+      contentMix: row.slider_content_mix ?? DEFAULT_SLIDERS.contentMix,
+      variety: row.slider_variety ?? DEFAULT_SLIDERS.variety,
+    },
+  };
+}
+
+interface CentroidRow {
+  slot: number;
+  centroid: string | number[];
+  weight: number;
+  updated_at: string;
+}
+
+/**
+ * Scoped read of interest centroids, ordered by slot (ENG-1, migration
+ * 044). [] = single-centroid fallback path. Read-only — centroid writes
+ * (bootstrap, EMA, k-means refresh) stay client-side until W5 moves the
+ * batch recompute server-side.
+ */
+export async function getInterestCentroidsScoped(scope: UserScope): Promise<InterestCentroid[]> {
+  const { data, error } = await scope
+    .select('user_interest_centroids', 'slot, centroid, weight, updated_at')
+    .order('slot', { ascending: true });
+
+  if (error) {
+    console.error('[TasteV2] getInterestCentroidsScoped failed:', error.message);
+    return [];
+  }
+
+  return ((data ?? []) as unknown as CentroidRow[])
+    .map(row => {
+      const centroid: TasteVectorV2 = typeof row.centroid === 'string'
+        ? JSON.parse(row.centroid) as TasteVectorV2
+        : row.centroid;
+      return {
+        slot: row.slot,
+        centroid,
+        weight: row.weight,
+        updatedAt: row.updated_at,
+      };
+    })
+    .filter(c => Array.isArray(c.centroid) && c.centroid.length > 0);
+}
+
+export async function getSliderStateScoped(scope: UserScope): Promise<SliderState> {
+  const { data, error } = await scope
+    .select(
+      'taste_profiles',
+      'slider_catalogue_age, slider_comfort_zone, slider_content_mix, slider_variety',
+    )
+    .maybeSingle();
+
+  if (error || !data) return { ...DEFAULT_SLIDERS };
+
+  const row = data as unknown as TasteProfileRow;
+  return {
+    catalogueAge: row.slider_catalogue_age ?? DEFAULT_SLIDERS.catalogueAge,
+    comfortZone: row.slider_comfort_zone ?? DEFAULT_SLIDERS.comfortZone,
+    contentMix: row.slider_content_mix ?? DEFAULT_SLIDERS.contentMix,
+    variety: row.slider_variety ?? DEFAULT_SLIDERS.variety,
+  };
 }

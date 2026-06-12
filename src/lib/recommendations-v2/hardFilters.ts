@@ -5,10 +5,12 @@
  * Reuses existing Phase 0 infrastructure (getDismissedIds is already done).
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import { getAuthUserId, isSupabaseActive } from '../storage';
 import { getWatchlist } from '../storage/watchlist';
 import { getDismissedIds } from '../storage/recommendations';
+import type { UserScope } from '../server/userScope';
 import type { MatchedTitle } from './types';
 
 /**
@@ -149,12 +151,10 @@ export interface FilterSets {
 /**
  * Build all filter sets in parallel for the ranker.
  *
- * NOTE: signature INTENTIONALLY diverges from the Edge mirror at
- * supabase/functions/_shared/recommendations-v2/hardFilters.ts which
- * takes `(client, scope, serviceIds)` because it can't use the Supabase
- * client singleton or the localStorage-backed getAuthUserId(). Drift CI
- * catches file-level drift; this comment exists so the next person to
- * "fix the mirror" doesn't break the divergence.
+ * Client variant: uses the Supabase singleton, getAuthUserId() and the
+ * localStorage-backed watchlist/dismissed stores. The `*Scoped` twins
+ * below are the server variants (PLAT-3) — same outputs, explicit
+ * client + UserScope inputs, table reads instead of localStorage.
  */
 export async function buildFilterSets(serviceIds: string[]): Promise<FilterSets> {
   const [dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds] = await Promise.all([
@@ -168,6 +168,113 @@ export async function buildFilterSets(serviceIds: string[]): Promise<FilterSets>
 }
 
 export { getDismissedIds };
+
+// ─── Scoped (server) variants — PLAT-3, absorbed from the ADR-011
+// mirror so the videx-api Worker imports THIS tree. Differences from
+// the client functions above, carried over from the Edge mirror:
+// - No localStorage cache for available_tmdb_ids: server instances
+//   don't share state safely, and the RPC round-trip is sub-50ms
+//   inside the provider network anyway.
+// - Watchlist reads the `watchlist` Supabase table (not localStorage).
+//   Offline edge case: an offline add that hasn't synced yet won't be
+//   filtered out server-side until the next render after sync.
+// - All user-owned reads go through UserScope (defence-in-depth for
+//   service-role access; see src/lib/server/userScope.ts).
+// When the D4 one-release client-fallback window closes, the client
+// variants above get deleted and these become the only implementation.
+
+interface InteractionIdRow {
+  content_id: number | null;
+  media_type: string | null;
+}
+
+export async function getThumbsDownIdsScoped(scope: UserScope): Promise<Set<string>> {
+  try {
+    const { data, error } = await scope
+      .select('user_interactions', 'content_id, media_type')
+      .eq('event_type', 'thumbs_down');
+
+    if (error || !data) return new Set();
+
+    return new Set(
+      (data as InteractionIdRow[])
+        .filter((r) => r.content_id != null && r.media_type != null)
+        .map((r) => `${r.media_type}-${r.content_id}`),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+export async function getDismissedIdsScoped(scope: UserScope): Promise<Set<string>> {
+  try {
+    const { data, error } = await scope
+      .select('user_interactions', 'content_id, media_type')
+      .eq('event_type', 'not_interested');
+
+    if (error || !data) return new Set();
+
+    return new Set(
+      (data as InteractionIdRow[])
+        .filter((r) => r.content_id != null && r.media_type != null)
+        .map((r) => `${r.media_type}-${r.content_id}`),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Server watchlist read. Note: the `watchlist` table uses `tmdb_id`
+ * (not `content_id` like `user_interactions`); the shared filter-set
+ * keys still use the `${mediaType}-${id}` format.
+ */
+export async function getWatchlistIdsScoped(scope: UserScope): Promise<Set<string>> {
+  try {
+    const { data, error } = await scope.select('watchlist', 'tmdb_id, media_type');
+    if (error || !data) return new Set();
+
+    return new Set(
+      (data as { tmdb_id: number | null; media_type: string | null }[])
+        .filter((r) => r.tmdb_id != null && r.media_type != null)
+        .map((r) => `${r.media_type}-${r.tmdb_id}`),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+export async function getAvailableTmdbIdsScoped(
+  client: SupabaseClient,
+  serviceIds: string[],
+): Promise<Set<number>> {
+  if (serviceIds.length === 0) return new Set();
+
+  try {
+    const { data, error } = await client.rpc('get_available_tmdb_ids', {
+      service_ids: serviceIds,
+    });
+    if (error || !data) return new Set();
+    const ids = Array.isArray(data) ? data : [];
+    return new Set<number>(ids as unknown as number[]);
+  } catch {
+    return new Set();
+  }
+}
+
+export async function buildFilterSetsScoped(
+  client: SupabaseClient,
+  scope: UserScope,
+  serviceIds: string[],
+): Promise<FilterSets> {
+  const [dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds] = await Promise.all([
+    getDismissedIdsScoped(scope),
+    getThumbsDownIdsScoped(scope),
+    getWatchlistIdsScoped(scope),
+    getAvailableTmdbIdsScoped(client, serviceIds),
+  ]);
+  return { dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds };
+}
 
 
 /**
