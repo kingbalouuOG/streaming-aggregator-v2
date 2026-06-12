@@ -163,7 +163,14 @@ app.get('/v1/title/:type/:id', async (c) => {
 // Per-user content: never CDN/Cache-API cached (W3 adds a KV feed
 // cache keyed on user + taste freshness instead).
 const MAX_SERVICES = 20;
-const SERVICE_ID_RE = /^[a-z0-9_-]{1,32}$/i;
+// Canonical UK service ids (src/components/platformLogos.ts ServiceId).
+// Membership-checked, not just shape-checked: unknown ids would mint
+// unlimited KV cache keys and force a full render per request - the
+// security review's cost-amplification vector (PLAT-3 hardening).
+const VALID_SERVICE_IDS = new Set([
+  'netflix', 'prime', 'apple', 'disney', 'now',
+  'skygo', 'paramount', 'bbc', 'itvx', 'channel4',
+]);
 // 20 min — mid-range of the brief's 15–30. Stale-feed worst case is one
 // TTL; vector-moving interactions bust earlier via the key timestamp.
 const FORYOU_CACHE_TTL_SECONDS = 20 * 60;
@@ -176,8 +183,8 @@ app.get('/v1/foryou', async (c) => {
   if (services.length > MAX_SERVICES) {
     return c.json({ error: `services exceeds ${MAX_SERVICES}` }, 400);
   }
-  if (services.some((s) => !SERVICE_ID_RE.test(s))) {
-    return c.json({ error: 'invalid service id' }, 400);
+  if (services.some((s) => !VALID_SERVICE_IDS.has(s.toLowerCase()))) {
+    return c.json({ error: 'unknown service id' }, 400);
   }
 
   const parseBoundedInt = (raw: string | undefined, max: number): number | undefined | null => {
@@ -239,8 +246,10 @@ app.get('/v1/foryou', async (c) => {
       headers: { 'Content-Type': 'application/json', 'x-videx-cache': 'miss' },
     });
   } catch (err) {
+    // Log the real error; return a generic body - postgrest messages
+    // can leak table/column/constraint names (security review LOW-1).
     console.error('[foryou] uncaught error:', err);
-    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    return c.json({ error: 'internal error' }, 500);
   }
 });
 
