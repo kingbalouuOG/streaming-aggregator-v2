@@ -46,6 +46,9 @@ android/.idea/
 *.aab
 *.jks
 *.keystore
+# LAUNCH-1 W2: release signing credentials (passwords + keystore path).
+android/keystore.properties
+keystore.properties
 
 # Debug logs
 debug.log
