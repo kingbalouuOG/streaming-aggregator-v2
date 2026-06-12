@@ -120,6 +120,11 @@ scripts/fingerprints/.backfill-failures.jsonl
 # PLAT-2 worker build artifacts
 workers/api/.wrangler-check/
 workers/api/.wrangler/
+# Screen-recording frame-forensics scratch dirs (device-debug only).
 _frames/
 _fwin*/
+_ff*/
+_fq/
+_fv/
+_fz/
 *.mp4
