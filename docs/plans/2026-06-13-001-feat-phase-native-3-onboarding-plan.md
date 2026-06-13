@@ -10,45 +10,49 @@ NATIVE-2 shipped the core loop but For You leans on two stand-ins: a hardcoded `
 
 ## The native flow (differs from web by design)
 
-Web onboarding is 5 steps starting with account creation. **Native splits auth out** — the W6 `AuthScreen` already does sign-up. So native onboarding is the **4 taste steps**, gated after sign-in:
+The provided design screenshots (`C:\Users\User\Pictures\Videx\V2 Onboarding\`) show the current app's onboarding as a **5-step flow with a top progress bar ("Step N · Title … N/5")**, where **Step 1 IS account creation** ("Join VIDEX"). To match the current design, native onboarding is the **full 5 steps**. The returning-user sign-in stays in the W6 `AuthScreen` ("Welcome back."); the **"Create one" link on that screen enters this 5-step flow** (Step 1 creates the account via `supabase.auth.signUp`).
 
 ```
-AuthGate (W6): signed in?  ──no──►  AuthScreen
-       │ yes
-       ▼
-hasCompletedOnboarding()?  ──no──►  OnboardingFlow (steps 1–4)  ──complete──►  tabs
+AuthScreen (W6): "Welcome back." sign-in ──"Create one"──►  OnboardingFlow (steps 1–5)
+       │ sign-in success                                          │ step 5 complete
+       ▼                                                          ▼
+AuthGate: signed in + hasCompletedOnboarding()? ──no──► OnboardingFlow ──► tabs
        │ yes
        ▼
      tabs
 ```
 
-| Step | Screen | Collects | Shared lib it feeds |
+| Step | Screen (screenshot) | Collects | Shared lib it feeds |
 |---|---|---|---|
-| 1 Services | service grid (the 10 UK services over junctioned logos) | `serviceIds: string[]` | `saveUserPreferences` → `user_services` |
-| 2 Watched grid | 3 rounds × 6 posters ("tap what you've watched & enjoyed") | `{tmdbId, mediaType}[]` (0–18) | feeds the bootstrap |
-| 3 Taste clusters | 16-cluster grid from `TASTE_CLUSTERS`, pick ≥3 | `clusterIds: string[]` | feeds the bootstrap |
-| 4 Sliders + summary | 4 sliders (catalogueAge, comfortZone, contentMix, variety) + prose | `SliderState` | `saveSliderState` |
+| 1 Create Account | "Join VIDEX" — email/username/password + optional age range + viewing context + ToS | sign-up creds; `ageRange?`, `viewingContext?` | `supabase.auth.signUp` |
+| 2 Connect Services | "Your streaming services" 2-col grid + Select All | `serviceIds: string[]` | `saveUserPreferences` → `user_services` |
+| 3 Watch History | "Round 1 of 3" — 6 posters/round, 3 rounds, "See different titles" / skip | `{tmdbId, mediaType}[]` (0–18) | feeds the bootstrap |
+| 4 Your Tastes | "What do you love to watch?" 16-cluster grid (emoji cards), pick ≥3, "N selected" badge | `clusterIds: string[]` | feeds the bootstrap |
+| 5 Fine-Tune | "Almost there 🎉" — summary card (Genres/Titles/Services stats) + 4 sliders w/ "Leaning X" captions | `SliderState` | `saveSliderState` |
 
-On completion, a native `useCompleteOnboarding` mirrors the web `useUserPreferences.completeOnboarding` orchestration verbatim (all shared lib):
+On completion (after Step 5's "Start exploring VIDEX"), a native `useCompleteOnboarding` mirrors the web `useUserPreferences.completeOnboarding` orchestration verbatim (all shared lib):
 `bootstrapTasteVector(...)` → `saveV2TasteVector(vector, 0, 'onboarding_v2')`; `bootstrapInterestCentroids(...)` → `saveInterestCentroids(...)`; `saveSliderState(...)`; set `profiles.onboarding_completed = true`. Writes the same `taste_profiles` / `user_interest_centroids` / `user_services` rows as web — so a profile built on native is identical to one built on web.
 
 ## Design fidelity (Joe's requirement: match the current app as closely as possible)
 
-There are no separate design PNGs or a design-system onboarding section — **the authoritative reference is the live app's own onboarding UI**, which is the web `src/components/OnboardingFlow.tsx` step components (the same code the current Capacitor app renders). Each native step is ported against its web counterpart's exact layout, tokens, copy, and spacing — the method that made NATIVE-2's Home read as Videx:
+**Two authoritative references, used together:**
+1. **Visual targets — the provided screenshots** in `C:\Users\User\Pictures\Videx\V2 Onboarding\` (`Step 1`…`Step 5.png`). These are the pixel-level design goal — match layout, colour, selected states (orange border + filled check), progress bar, copy, and spacing.
+2. **Code/behaviour reference — the web step components** in `src/components/OnboardingFlow.tsx`, which render that exact design and call the shared lib.
 
-| Native step | Web reference (authoritative design) |
-|---|---|
-| Services | `OnboardingFlow.tsx` `StepServices` (L807) |
-| Watched grid | `StepWatchedGrid` (L908) |
-| Clusters | `StepClusters` (L1006) |
-| Sliders + summary | `StepTasteSummary` (L1110) |
-| Step chrome (header/progress) | `StepHeader` (L63) + the flow shell (L420+) |
+| Native step | Screenshot | Web code reference |
+|---|---|---|
+| 1 Create Account | `Step 1.png` | `StepAccount` (L544) |
+| 2 Connect Services | `Step 2.png` | `StepServices` (L807) |
+| 3 Watch History | `Step 3.png` | `StepWatchedGrid` (L908) |
+| 4 Your Tastes | `Step 4.png` | `StepClusters` (L1006) |
+| 5 Fine-Tune | `Step 5.png` | `StepTasteSummary` (L1110) |
+| Step chrome (header/progress) | all | `StepHeader` (L63) + flow shell (L420+) |
 
-**Reference capture:** before/while building each step I capture a ground-truth screenshot of the current onboarding (web app via the Vite preview, and/or the live Capacitor build on device) and keep a **side-by-side per step** — the same screenshot-diff discipline from NATIVE-2 W3 (which Joe verified matched production). "Matches the current app" is a per-step acceptance criterion, not a nice-to-have. The end-of-track design-review pass still applies on top, but each step should already land close.
+Other reference sets in that folder for later phases: `Home + For You\`, `V2 Menu\`, `V2 Profile\`. **Process:** build each step against its screenshot, then a **side-by-side device-vs-screenshot diff** before moving on (the NATIVE-2 W3 method Joe verified). "Matches the current app" is a per-step acceptance criterion. The end-of-track design-review pass still applies on top.
 
 ## Locked decisions (proposed — confirm or veto)
 
-- **D1 — Auth split:** native onboarding is steps 1–4 only; account creation stays in the W6 AuthScreen. The gate adds a `hasCompletedOnboarding()` check inside the signed-in branch of `AuthGate`.
+- **D1 — Full 5-step flow (revised after seeing the screenshots):** native onboarding is the 5 steps in the design, **Step 1 = account creation** (the sign-up path; calls `supabase.auth.signUp`, collects username + optional age/viewing-context). The W6 `AuthScreen` keeps the returning-user **sign-in**; its "Create one" link enters this flow. `AuthGate` also routes a signed-in-but-not-onboarded user (e.g. interrupted mid-flow) back in via `hasCompletedOnboarding()`.
 - **D2 — Reuse the entire bootstrap/prefs lib** (`bootstrapTasteVector`, `bootstrapInterestCentroids`, `saveV2TasteVector`, `saveInterestCentroids`, `saveSliderState`, `saveUserPreferences`, `hasCompletedOnboarding` — all in `src/lib`). Native writes identical Supabase rows. Zero engine reimplementation.
 - **D3 — Placement (the W6 gotcha rule):** all onboarding React files live in real native dirs (`native/src/components/onboarding/`, `native/src/app/`, `native/src/hooks/`) — never under the `native/src/lib` junction.
 - **D4 — Motion:** step transitions via Reanimated (the M3 vocabulary from NATIVE-1), not framer-motion.
@@ -57,12 +61,13 @@ There are no separate design PNGs or a design-system onboarding section — **th
 
 ## Work items
 
-- **W0 — Reference capture:** screenshot the current onboarding (each step) from the web app via the Vite preview and/or the live Capacitor build; stash as the per-step design targets. Front-loaded so every subsequent step builds against a picture, not a guess.
-- **W1 — Gate + flow scaffold:** `hasCompletedOnboarding()` check in `AuthGate`; `OnboardingFlow` container matching `StepHeader`/shell chrome (step state, progress indicator, Reanimated step transitions, back handling).
-- **W2 — Services step:** service-selection grid matched to web `StepServices`; persists via `saveUserPreferences`.
-- **W3 — Watched grid step:** matched to `StepWatchedGrid` — dual popularity query (movies vote_count ≥5000 / TV ≥1500), 6 posters × 3 rounds, interleaved + shuffled; collects selections. Reuses `PosterGridCard`/expo-image.
-- **W4 — Clusters step:** matched to `StepClusters` — 16-cluster grid from `TASTE_CLUSTERS` (name/adjective/mood copy), min-3 validation.
-- **W5 — Sliders step:** matched to `StepTasteSummary` — 4 sliders + the prose summary; `SliderState` (a native slider — `@react-native-community/slider` or a Reanimated custom track).
+Design targets are the provided screenshots (`…\Pictures\Videx\V2 Onboarding\Step N.png`) — no capture step needed.
+
+- **W1 — Flow scaffold + Step 1 (Create Account):** `OnboardingFlow` container with the top progress bar + back arrow chrome (matched to `Step 1.png`), Reanimated step transitions; Step 1 "Join VIDEX" — fields + optional age range / viewing-context chips + ToS links → `supabase.auth.signUp`. `AuthScreen` "Create one" enters the flow; `AuthGate` resumes a not-onboarded session.
+- **W2 — Connect Services (`Step 2.png`):** 2-col service grid (logo card + name + description + check, orange-border selected) + Select All; persists via `saveUserPreferences`.
+- **W3 — Watch History (`Step 3.png`):** "Round N of 3" — dual popularity query (movies vote_count ≥5000 / TV ≥1500), 6 posters/round × 3 rounds interleaved + shuffled, "See different titles" + skip; collects selections.
+- **W4 — Your Tastes (`Step 4.png`):** 16-cluster emoji-card grid from `TASTE_CLUSTERS`, "N selected" badge, min-3 validation.
+- **W5 — Fine-Tune (`Step 5.png`):** summary card (Genres/Titles/Services stats + prose) + 4 sliders with "Leaning X" captions; `SliderState` (`@react-native-community/slider` or a Reanimated custom track).
 - **W6 — Completion orchestration:** native `useCompleteOnboarding` (bootstrap + saves + flag + analytics), then route to Home and refetch.
 - **W7 — Real service prefs:** `useUserServices`; wire into Home + For You; delete the two `DEV_SERVICES` constants.
 
@@ -81,7 +86,7 @@ Web untouched (this phase adds only native files + reuses shared lib — no `src
 
 ## Open questions (recommendations inline)
 
-- **Q1 — Watched grid scope:** match web (3 rounds × 6 = up to 18) — recommended (bootstrap quality depends on signal) — vs trim to 2 rounds for a faster native first run.
+- ~~Q1 — Watched grid scope~~ **RESOLVED by the screenshot** (`Step 3.png` shows "Round 1 of 3"): match the design — 3 rounds × 6.
 - **Q2 — Onboarding-only phase?** Keep NATIVE-3 strictly onboarding + service-prefs (recommended) vs fold in other deferred items (Browse filter sheet, detail rating/report). Recommend separate phases — this one is already cohesive.
 - **Q3 — Re-onboarding existing accounts:** ignore for now (existing profiles work) vs add a "retake" entry point in Profile. Recommend defer to a later phase.
 
