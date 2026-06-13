@@ -27,10 +27,10 @@ export function PosterCard({ item, onPress }: PosterCardProps) {
           recyclingKey={item.id}
         />
       </View>
-      <Text numberOfLines={1} className="mt-2 text-body font-bold text-foreground">
+      <Text numberOfLines={1} className="mt-2 font-sans-bold text-body text-foreground">
         {item.title}
       </Text>
-      <Text numberOfLines={1} className="mt-0.5 text-meta text-muted-foreground">
+      <Text numberOfLines={1} className="mt-0.5 font-sans text-meta text-muted-foreground">
         {[item.year, item.genre].filter(Boolean).join(' · ')}
       </Text>
     </Pressable>

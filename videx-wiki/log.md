@@ -424,3 +424,9 @@ Cross-refs: wiki/concepts/architecture/taste-vector.md + recommendation-pipeline
 - Updated: index.md (phase list)
 - Notable: Capacitor -> RN migration decided same day UX-1 closed ("not perfect, but better" = WebView ceiling). Device evidence: native p99 frame time 15ms vs Capacitor 57ms on identical scroll scripts. Production appId verified as app.videx.streaming (older com.videx.app notes wrong). Metro-on-Windows junction pattern is the canonical shared-tree mount for native/.
 - phase-history.md + cheatsheet.md rows deferred to phase close (Joe device verdict pending)
+
+## [2026-06-13] ingest | phase-native-2-summary.md
+- New page: wiki/concepts/operations/phase-native-2.md
+- Updated: index.md (phase list)
+- Notable: edgeRender.readAccessToken made isomorphic (sync localStorage scan -> async supabase.auth.getSession()) — the unlock for native For You auth; also removes a web localStorage dep. Native For You uses the Worker render path ONLY (client fallback not ported). W1-W3 device-verified; W4-W6 build-green pending Joe review.
+- phase-history.md + cheatsheet.md rows deferred to phase close (Joe device verdict pending)

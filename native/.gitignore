@@ -47,3 +47,4 @@ src/lib
 
 # Local env (mirrored from root .env by hand)
 .env
+src/assets
