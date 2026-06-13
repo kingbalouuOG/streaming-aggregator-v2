@@ -1,6 +1,6 @@
 # Phase NATIVE-2 — Design fidelity + core loop: Summary
 
-**Status:** Code-complete 2026-06-13; awaiting Joe's signed-in review. Home (W1–W3) and the **AuthScreen (W6) are device-verified**; the signed-in screens (Detail/Watchlist/Browse/For You) are build-green and behind the auth gate — Joe signs in (joegreenwas@gmail.com) to review them, since CC must not handle the password.
+**Status:** COMPLETE — Joe's device verdict 2026-06-13: *"Looking really good. The interactions and general feel of the app are significantly better, and load time seems to be better."* Gate passed; PR opened; proceeding to NATIVE-3. Joe flagged residual **font + navigation polish** for a dedicated **end-of-track design-review pass** (not a blocker).
 
 > **On-device crash found & fixed during verification** (commit `262ad2f`): launch crashed with a `useState`-of-null TypeError. `auth.tsx` had been written to `native/src/lib/auth.tsx`, but **that path is the junction to the shared engine tree** — Metro resolved its `react` to the ROOT copy, a second React instance with a null hooks dispatcher. Moved to `native/src/providers/auth.tsx`. **Rule: only PURE modules under `native/src/lib`; React-hook files live elsewhere in `native/src`.** Neither tsc nor `expo export` caught it — only running the app did. Lesson: a green bundle is not a running app; device-smoke every screen.
 **Branch:** `phase-native-2-core-loop` (stacked on NATIVE-1 / PR #23; rebase onto main when #23 merges).
@@ -40,4 +40,5 @@ Web: tsc 0, vitest 154/154, lint 0 errors, vite build green. Native: tsc 0, `exp
 
 ## Follow-ups
 
-Joe's device pass on `Videx Dev` (Home/Detail/Watchlist/Browse/For You + sign-in with joegreenwas@gmail.com, deep-link tap on a Where-to-Watch row). Then NATIVE-3 (onboarding + the deferred items above).
+- **Design-review pass (end of NATIVE track):** Joe flagged font + navigation polish during the device review — collected here for a dedicated visual pass once the screens are all in, rather than piecemeal now. Candidate items: type scale/weight tuning across screens, tab-bar styling and transitions, header treatments. To be itemised against `design-system.md` at review time.
+- **NATIVE-3 (next phase):** onboarding (services + taste quiz — unblocks real service prefs + For You for new accounts) plus the deferred items above (Browse filter sheet/semantic, detail rating/report/instrumentation, For You richer rows, password recovery, light theme, query persistence, native ESLint config).
