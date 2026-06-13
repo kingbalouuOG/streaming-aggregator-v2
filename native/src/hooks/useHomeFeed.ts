@@ -28,7 +28,18 @@ async function fetchHomeFeed(): Promise<HomeFeed> {
   const rows = charts.map((row) => ({ ...row, items: [...row.items] }));
   const firstWithItems = rows.find((row) => row.items.length > 0);
   if (firstWithItems) {
-    hero = firstWithItems.items.shift() ?? null;
+    const lead = firstWithItems.items.shift() ?? null;
+    if (lead) {
+      // The per-service chart guarantees this title is watchable on
+      // firstWithItems.serviceId — surface it first so the hero's
+      // "Play on {service}" pill + badge always render (the adapted
+      // ContentItem.services can come back empty from the cache).
+      const svc = firstWithItems.serviceId as ServiceId;
+      const services = lead.services.includes(svc)
+        ? lead.services
+        : [svc, ...lead.services];
+      hero = { ...lead, services };
+    }
   }
 
   return { hero, rows };
