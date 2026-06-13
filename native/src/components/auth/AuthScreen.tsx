@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { ArrowRight, Eye, EyeOff, Lock, Mail, Popcorn } from 'lucide-react-native';
 import { useState } from 'react';
 import {
@@ -14,42 +15,30 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/providers/auth';
 
-// Native auth screen (NATIVE-2 W6) — sign in / sign up toggle, matching
-// the web "Welcome back." design. Password recovery deferred to NATIVE-3.
-
-type Mode = 'signin' | 'signup';
+// Native sign-in screen ("Welcome back."). NATIVE-3 W1: sign-UP moved
+// into onboarding Step 1, so this is sign-in only; "Create one" enters
+// the onboarding flow.
 
 export function AuthScreen() {
-  const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState<Mode>('signin');
+  const router = useRouter();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const isSignup = mode === 'signup';
 
   const submit = async () => {
     if (busy) return;
     setError(null);
-    setNotice(null);
     if (!email.trim() || !password) {
       setError('Enter your email and password.');
       return;
     }
     setBusy(true);
     try {
-      if (isSignup) {
-        const { error: e, needsConfirmation } = await signUp(email.trim(), password);
-        if (e) setError(e);
-        else if (needsConfirmation)
-          setNotice('Check your email to confirm your account, then sign in.');
-      } else {
-        const { error: e } = await signIn(email.trim(), password);
-        if (e) setError(e);
-      }
+      const { error: e } = await signIn(email.trim(), password);
+      if (e) setError(e);
     } finally {
       setBusy(false);
     }
@@ -60,9 +49,7 @@ export function AuthScreen() {
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          contentContainerClassName="grow px-6 pt-10"
-          keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerClassName="grow px-6 pt-10" keyboardShouldPersistTaps="handled">
           {/* Logo */}
           <View className="items-center">
             <View
@@ -76,15 +63,13 @@ export function AuthScreen() {
               <Popcorn size={40} color="#ffffff" strokeWidth={2} />
             </View>
             <Text className="mt-4 font-sans-bold text-kicker uppercase tracking-[1.6px] text-primary">
-              {isSignup ? 'Create account' : 'Sign in'}
+              Sign in
             </Text>
             <Text className="mt-2 font-display-black text-[40px] leading-[44px] text-foreground">
-              {isSignup ? 'Get started.' : 'Welcome back.'}
+              Welcome back.
             </Text>
             <Text className="mt-2 text-center font-sans text-body text-muted-foreground">
-              {isSignup
-                ? 'Create an account to build your watchlist and tune your taste.'
-                : 'Sign in to pick up where you left off.'}
+              Sign in to pick up where you left off.
             </Text>
           </View>
 
@@ -125,12 +110,7 @@ export function AuthScreen() {
             </View>
           </View>
 
-          {error ? (
-            <Text className="mt-3 font-sans text-meta text-danger">{error}</Text>
-          ) : null}
-          {notice ? (
-            <Text className="mt-3 font-sans text-meta text-primary-on-soft">{notice}</Text>
-          ) : null}
+          {error ? <Text className="mt-3 font-sans text-meta text-danger">{error}</Text> : null}
 
           {/* Submit */}
           <Pressable
@@ -141,28 +121,19 @@ export function AuthScreen() {
               <ActivityIndicator color="#ffffff" />
             ) : (
               <>
-                <Text className="font-sans-bold text-section text-white">
-                  {isSignup ? 'Create account' : 'Sign In'}
-                </Text>
+                <Text className="font-sans-bold text-section text-white">Sign In</Text>
                 <ArrowRight size={20} color="#ffffff" />
               </>
             )}
           </Pressable>
 
-          {/* Mode toggle */}
+          {/* Create account → onboarding */}
           <View className="mt-auto flex-row justify-center py-6">
             <Text className="font-sans text-body text-muted-foreground">
-              {isSignup ? 'Already have an account? ' : "Don't have an account? "}
+              Don&apos;t have an account?{' '}
             </Text>
-            <Pressable
-              onPress={() => {
-                setMode(isSignup ? 'signin' : 'signup');
-                setError(null);
-                setNotice(null);
-              }}>
-              <Text className="font-sans-bold text-body text-primary">
-                {isSignup ? 'Sign in' : 'Create one'}
-              </Text>
+            <Pressable onPress={() => router.push('/onboarding')}>
+              <Text className="font-sans-bold text-body text-primary">Create one</Text>
             </Pressable>
           </View>
         </ScrollView>
