@@ -15,8 +15,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ContentRow } from '@/components/ContentRow';
 import { SectionHead } from '@/components/SectionHead';
+import { WatchlistActions } from '@/components/WatchlistActions';
 import { WhereToWatch } from '@/components/WhereToWatch';
 import { useContentDetail } from '@/hooks/useContentDetail';
+import type { ContentItem } from '@/lib/types/content';
 
 export default function DetailRoute() {
   const router = useRouter();
@@ -88,6 +90,20 @@ export default function DetailRoute() {
     detail.language,
   ].filter(Boolean);
 
+  // Minimal ContentItem for the watchlist toggle. Prefer the poster
+  // passed in via params (cards pass the 2:3 poster); fall back to the
+  // detail hero image.
+  const watchlistItem: ContentItem = {
+    id: detail.id,
+    title: detail.title,
+    image: params.image ?? detail.heroImage,
+    services: detail.allServices,
+    year: detail.year,
+    type: detail.mediaType,
+    rating: detail.imdbRating || undefined,
+    overview: detail.description,
+  };
+
   return (
     <View className="flex-1 bg-background">
       <ScrollView contentContainerClassName="pb-10" showsVerticalScrollIndicator={false}>
@@ -139,6 +155,9 @@ export default function DetailRoute() {
               ) : null}
             </View>
           ) : null}
+
+          {/* Watchlist actions */}
+          <WatchlistActions item={watchlistItem} />
 
           {/* Genre tags */}
           {detail.genres.length > 0 ? (
