@@ -12,7 +12,7 @@ related:
 
 # Phase NATIVE-2 — Design fidelity + core loop
 
-Second phase of the Capacitor → React Native migration. Brings the native app from "one Home screen" (NATIVE-1) to the full core loop + Videx brand typography. Code-complete 2026-06-13; W1–W3 verified on device, W4–W6 build-green pending Joe's review.
+Second phase of the Capacitor → React Native migration. Brings the native app from "one Home screen" (NATIVE-1) to the full core loop + Videx brand typography. Code-complete 2026-06-13; Home (W1–W3) and AuthScreen (W6) verified on device, signed-in screens build-green pending Joe's signed-in review.
 
 ## What shipped
 
@@ -32,6 +32,10 @@ Second phase of the Capacitor → React Native migration. Brings the native app 
 - `editorNote` fetch moved to `src/lib/api/editorNote.ts` so web and native render the same note (ADR-014 pattern: copy nothing).
 - Second junction `native/src/assets → src/assets` for shared logo PNGs.
 - Watchlist stores raw TMDb image paths (extracted from full URLs on add) so native rows stay consistent with web/Supabase data.
+
+## Gotcha — junction placement crashes React
+
+`native/src/lib` and `native/src/assets` are junctions into the shared tree. A React-hook file (`auth.tsx`) accidentally written under `native/src/lib` resolved its `react` import to the ROOT `node_modules` (not `native/node_modules`) → a **second React instance with a null hooks dispatcher** → `useState`-of-null crash at launch. Pure shared-lib modules are unaffected (no hooks). **Rule: only PURE modules under the junctioned paths; React components live in real native dirs (`native/src/{components,hooks,providers,app}`).** tsc + `expo export` both passed — only running on device surfaced it. Lesson: a green bundle is not a running app.
 
 ## Deferred to NATIVE-3
 

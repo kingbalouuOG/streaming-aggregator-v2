@@ -1,6 +1,8 @@
 # Phase NATIVE-2 — Design fidelity + core loop: Summary
 
-**Status:** Code-complete 2026-06-13; awaiting Joe's on-device review (the phase gate). Home (W1–W3) verified on device; Detail/auth/Watchlist/Browse/For You (W4–W6) are build-green (tsc 0, bundles, release APK runs) but NOT yet device-verified — the phone disconnected partway through and Joe's review is the on-device pass.
+**Status:** Code-complete 2026-06-13; awaiting Joe's signed-in review. Home (W1–W3) and the **AuthScreen (W6) are device-verified**; the signed-in screens (Detail/Watchlist/Browse/For You) are build-green and behind the auth gate — Joe signs in (joegreenwas@gmail.com) to review them, since CC must not handle the password.
+
+> **On-device crash found & fixed during verification** (commit `262ad2f`): launch crashed with a `useState`-of-null TypeError. `auth.tsx` had been written to `native/src/lib/auth.tsx`, but **that path is the junction to the shared engine tree** — Metro resolved its `react` to the ROOT copy, a second React instance with a null hooks dispatcher. Moved to `native/src/providers/auth.tsx`. **Rule: only PURE modules under `native/src/lib`; React-hook files live elsewhere in `native/src`.** Neither tsc nor `expo export` caught it — only running the app did. Lesson: a green bundle is not a running app; device-smoke every screen.
 **Branch:** `phase-native-2-core-loop` (stacked on NATIVE-1 / PR #23; rebase onto main when #23 merges).
 **Plan:** `docs/plans/2026-06-12-005-feat-phase-native-2-core-loop-plan.md`.
 
