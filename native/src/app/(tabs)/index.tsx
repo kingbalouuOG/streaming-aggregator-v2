@@ -19,6 +19,7 @@ import { EditorNoteCard } from '@/components/EditorNoteCard';
 import { MagazineHero } from '@/components/MagazineHero';
 import { Reveal } from '@/components/Reveal';
 import { useHomeFeed } from '@/hooks/useHomeFeed';
+import type { ContentItem } from '@/lib/types/content';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -31,6 +32,15 @@ export default function HomeScreen() {
     staleTime: EDITOR_NOTE_CACHE_TTL_MS,
   });
   const note = editorNote.data ?? FALLBACK_NOTE;
+
+  const openDetail = useCallback(
+    (item: ContentItem) =>
+      router.push({
+        pathname: '/detail/[id]',
+        params: { id: item.id, title: item.title, image: item.image },
+      }),
+    [router],
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -73,7 +83,12 @@ export default function HomeScreen() {
         contentContainerClassName="pb-8">
         {hero ? (
           <Reveal index={0}>
-            <MagazineHero item={hero} standfirst={hero.overview} />
+            <MagazineHero
+              item={hero}
+              standfirst={hero.overview}
+              onSelect={openDetail}
+              onMoreInfo={openDetail}
+            />
           </Reveal>
         ) : null}
 
@@ -87,7 +102,12 @@ export default function HomeScreen() {
 
         {rows.map((row, i) => (
           <Reveal key={row.serviceId} index={i + 3}>
-            <ContentRow kicker="Top on" title={row.serviceName} items={row.items} />
+            <ContentRow
+              kicker="Top on"
+              title={row.serviceName}
+              items={row.items}
+              onItemPress={openDetail}
+            />
           </Reveal>
         ))}
 
