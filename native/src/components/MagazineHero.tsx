@@ -57,6 +57,12 @@ export function MagazineHero({
           priority="high"
         />
 
+        {/* Top scrim — keeps the status-bar icons readable over bright art */}
+        <LinearGradient
+          colors={['rgba(10,10,15,0.6)', 'rgba(10,10,15,0)']}
+          style={{ position: 'absolute', left: 0, right: 0, top: 0, height: insets.top + 44 }}
+        />
+
         {/* Bottom gradient — read the title block */}
         <LinearGradient
           colors={['rgba(10,10,15,0)', 'rgba(10,10,15,0.55)', 'rgba(10,10,15,0.95)']}
