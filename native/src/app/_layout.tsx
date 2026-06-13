@@ -16,9 +16,13 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 
-// Root layout: fonts + query provider + a Stack so screens (Detail)
-// can push OVER the tab bar. The tab bar itself lives in (tabs)/_layout.
+import { AuthScreen } from '@/components/auth/AuthScreen';
+import { AuthProvider, useAuth } from '@/lib/auth';
+
+// Root layout: fonts + query provider + auth gate + a Stack so screens
+// (Detail) can push OVER the tab bar. The tab bar lives in (tabs)/_layout.
 const BG = '#0a0a0f';
 
 // Hold the splash until fonts are in — Fraunces/DM Sans ARE the brand
@@ -58,17 +62,39 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: BG },
-        }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen
-          name="detail/[id]"
-          options={{ animation: 'slide_from_right' }}
-        />
-      </Stack>
+      <AuthProvider>
+        <AuthGate />
+      </AuthProvider>
     </QueryClientProvider>
+  );
+}
+
+// Signed-out → AuthScreen; signed-in → the router Stack. Onboarding
+// (services + taste quiz) is NATIVE-3; existing accounts land straight
+// on the tabs.
+function AuthGate() {
+  const { session, initializing } = useAuth();
+
+  if (initializing) {
+    return (
+      <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color="#e85d25" />
+      </View>
+    );
+  }
+
+  if (!session) {
+    return <AuthScreen />;
+  }
+
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: BG },
+      }}>
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="detail/[id]" options={{ animation: 'slide_from_right' }} />
+    </Stack>
   );
 }
