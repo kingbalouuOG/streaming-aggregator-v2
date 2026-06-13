@@ -1,31 +1,13 @@
 import { ArrowRight, Check } from 'lucide-react-native';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
+import { GenreIconTile } from '@/components/GenreIconTile';
+import { CLUSTER_GLYPHS } from '@/lib/constants/genreGlyphs';
 import { MIN_CLUSTERS, TASTE_CLUSTERS } from '@/lib/taste-v2/tasteClusters';
 
 // Onboarding Step 4 — "What do you love to watch?" (matches Step 4.png).
-// 16 emoji cluster cards (2-col), orange-selected, "N selected" badge,
-// pick ≥3. Names come from the authoritative TASTE_CLUSTERS data; the
-// emoji map matches the screenshot.
-
-const CLUSTER_EMOJI: Record<string, string> = {
-  'feel-good-funny': '😄',
-  'action-adrenaline': '💥',
-  'dark-thrillers': '🔪',
-  'rom-coms-love-stories': '💕',
-  'epic-scifi-fantasy': '🚀',
-  'horror-supernatural': '👻',
-  'mind-bending-mysteries': '🔍',
-  'heartfelt-drama': '🎭',
-  'true-crime-real-stories': '📰',
-  'anime-animation': '🎨',
-  'prestige-award-winners': '🏆',
-  'history-war': '⚔️',
-  'reality-entertainment': '📺',
-  'cult-indie': '🎬',
-  'family-kids': '👨‍👩‍👧',
-  'westerns-frontier': '🤠',
-};
+// 16 cluster cards (2-col) using the same custom GenreIconTile glyphs as
+// the live app, orange-selected, "N selected" badge, pick ≥3.
 
 interface StepClustersProps {
   selected: string[];
@@ -68,7 +50,7 @@ export function StepClusters({ selected, onToggle, onContinue }: StepClustersPro
                       ? 'flex-row items-center gap-2.5 rounded-card border border-primary bg-primary-soft p-3'
                       : 'flex-row items-center gap-2.5 rounded-card border border-border bg-card p-3 active:bg-secondary'
                   }>
-                  <Text style={{ fontSize: 20 }}>{CLUSTER_EMOJI[c.id] ?? '🎞️'}</Text>
+                  <GenreIconTile glyph={CLUSTER_GLYPHS[c.id]} size={36} />
                   <Text
                     numberOfLines={2}
                     className={

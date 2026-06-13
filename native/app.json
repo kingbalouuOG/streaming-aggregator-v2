@@ -37,6 +37,13 @@
             "imageWidth": 76
           }
         }
+      ],
+      [
+        "expo-navigation-bar",
+        {
+          "style": "light",
+          "enforceContrast": false
+        }
       ]
     ],
     "experiments": {
