@@ -72,7 +72,9 @@ export default function HomeScreen() {
     );
   }
 
-  const { hero, rows } = feed.data;
+  const { hero, rows, recentlyAdded, spotlights } = feed.data;
+  // Reveal index counter so cascade stays ordered across variable rows.
+  let revealIdx = 2;
 
   return (
     <View className="flex-1 bg-background">
@@ -100,12 +102,34 @@ export default function HomeScreen() {
           <BrowseChips onSelect={() => router.push('/browse')} />
         </Reveal>
 
-        {rows.map((row, i) => (
-          <Reveal key={row.serviceId} index={i + 3}>
+        {recentlyAdded.length > 0 ? (
+          <Reveal index={(revealIdx += 1)}>
+            <ContentRow
+              kicker="Just in"
+              title="Recently added."
+              items={recentlyAdded}
+              onItemPress={openDetail}
+            />
+          </Reveal>
+        ) : null}
+
+        {rows.map((row) => (
+          <Reveal key={row.serviceId} index={(revealIdx += 1)}>
             <ContentRow
               kicker="Top on"
               title={row.serviceName}
               items={row.items}
+              onItemPress={openDetail}
+            />
+          </Reveal>
+        ))}
+
+        {spotlights.map((sp) => (
+          <Reveal key={sp.clusterName} index={(revealIdx += 1)}>
+            <ContentRow
+              kicker="Spotlight"
+              title={`${sp.clusterName}.`}
+              items={sp.items}
               onItemPress={openDetail}
             />
           </Reveal>
