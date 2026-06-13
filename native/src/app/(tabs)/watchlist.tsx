@@ -1,11 +1,11 @@
 import { FlashList } from '@shopify/flash-list';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Bookmark } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PosterGridCard } from '@/components/PosterGridCard';
 import { useWatchlist, watchlistItemToContentItem } from '@/hooks/useWatchlist';
 import type { ContentItem } from '@/lib/types/content';
 
@@ -57,7 +57,7 @@ export default function WatchlistScreen() {
           data={visible}
           numColumns={2}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <GridPoster item={item} onPress={openDetail} />}
+          renderItem={({ item }) => <PosterGridCard item={item} onPress={openDetail} />}
           contentContainerStyle={{ padding: 14 }}
           showsVerticalScrollIndicator={false}
         />
@@ -90,28 +90,6 @@ function SegmentButton({
             : 'font-sans-medium text-body text-muted-foreground'
         }>
         {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function GridPoster({ item, onPress }: { item: ContentItem; onPress: (item: ContentItem) => void }) {
-  return (
-    <Pressable onPress={() => onPress(item)} className="flex-1 p-1.5 active:opacity-80">
-      <View className="overflow-hidden rounded-card bg-card">
-        <Image
-          source={item.image ? { uri: item.image } : undefined}
-          style={{ width: '100%', aspectRatio: 2 / 3 }}
-          contentFit="cover"
-          transition={200}
-          recyclingKey={item.id}
-        />
-      </View>
-      <Text numberOfLines={1} className="mt-2 font-sans-bold text-body text-foreground">
-        {item.title}
-      </Text>
-      <Text numberOfLines={1} className="mt-0.5 font-sans text-meta text-muted-foreground">
-        {[item.year, item.type === 'tv' ? 'TV' : 'Film'].filter(Boolean).join(' · ')}
       </Text>
     </Pressable>
   );
