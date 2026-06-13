@@ -19,7 +19,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 import { AuthScreen } from '@/components/auth/AuthScreen';
-import { AuthProvider, useAuth } from '@/lib/auth';
+import { AuthProvider, useAuth } from '@/providers/auth';
 
 // Root layout: fonts + query provider + auth gate + a Stack so screens
 // (Detail) can push OVER the tab bar. The tab bar lives in (tabs)/_layout.

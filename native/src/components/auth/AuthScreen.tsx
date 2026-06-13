@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/providers/auth';
 
 // Native auth screen (NATIVE-2 W6) — sign in / sign up toggle, matching
 // the web "Welcome back." design. Password recovery deferred to NATIVE-3.
