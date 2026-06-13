@@ -87,8 +87,16 @@ Web untouched (this phase adds only native files + reuses shared lib — no `src
 ## Open questions (recommendations inline)
 
 - ~~Q1 — Watched grid scope~~ **RESOLVED by the screenshot** (`Step 3.png` shows "Round 1 of 3"): match the design — 3 rounds × 6.
-- **Q2 — Onboarding-only phase?** Keep NATIVE-3 strictly onboarding + service-prefs (recommended) vs fold in other deferred items (Browse filter sheet, detail rating/report). Recommend separate phases — this one is already cohesive.
-- **Q3 — Re-onboarding existing accounts:** ignore for now (existing profiles work) vs add a "retake" entry point in Profile. Recommend defer to a later phase.
+- **Q2 — RESOLVED (Joe):** onboarding-only phase; other deferred items get their own phases.
+- **Q3 — RESOLVED (Joe):** defer re-onboarding existing accounts to a later phase.
+
+## Routing (decided from the web flow)
+
+Refactor the W6 conditional gate to the canonical expo-router **always-mounted navigator + redirect** pattern, so the onboarding route owns its step state and the `signUp` mid-flow doesn't remount it:
+- Root `Stack`: `(tabs)`, `auth`, `onboarding`, `detail/[id]`.
+- `(tabs)/_layout` guard: `!session` → `<Redirect href="/auth">`; `session && !onboarded` → `<Redirect href="/onboarding">`; else Tabs.
+- `auth.tsx` = sign-in only (`AuthScreen`); "Create one" → `router.push('/onboarding')`. Sign-up moves OUT of AuthScreen into onboarding Step 1.
+- `onboarding.tsx` = `OnboardingFlow`. Step 1 `signUp` (email confirmation off, verified in web flow); already-signed-in users enter at Step 2 (`skipAuth`). On completion → invalidate the onboarded-status query → guard routes to `(tabs)`.
 
 ## Out of scope
 
