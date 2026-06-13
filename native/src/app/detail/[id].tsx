@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ContentRow } from '@/components/ContentRow';
+import { SectionHead } from '@/components/SectionHead';
 import { WhereToWatch } from '@/components/WhereToWatch';
 import { useContentDetail } from '@/hooks/useContentDetail';
 
@@ -171,6 +172,47 @@ export default function DetailRoute() {
             <WhereToWatch detail={detail} />
           </View>
         </View>
+
+        {/* Cast */}
+        {detail.cast.length > 0 ? (
+          <View className="mt-6">
+            <View className="px-5">
+              <SectionHead kicker="ON SCREEN" title="Cast." />
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
+              {detail.cast.map((member, i) => (
+                <View key={`${member.name}-${i}`} className="w-[76px] items-center">
+                  <View className="mb-2 h-[68px] w-[68px] items-center justify-center overflow-hidden rounded-xl bg-card">
+                    {member.image ? (
+                      <Image
+                        source={{ uri: member.image }}
+                        style={{ width: '100%', height: '100%' }}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <Text className="font-display text-section text-muted-foreground">
+                        {member.name[0]}
+                      </Text>
+                    )}
+                  </View>
+                  <Text
+                    numberOfLines={1}
+                    className="text-center font-sans-bold text-[11px] text-foreground">
+                    {member.name}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    className="mt-0.5 text-center font-sans text-[10px] text-muted-foreground">
+                    {member.character}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
 
         {/* More like this */}
         {similar.length > 0 ? (
