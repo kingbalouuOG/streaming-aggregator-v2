@@ -430,3 +430,8 @@ Cross-refs: wiki/concepts/architecture/taste-vector.md + recommendation-pipeline
 - Updated: index.md (phase list)
 - Notable: edgeRender.readAccessToken made isomorphic (sync localStorage scan -> async supabase.auth.getSession()) — the unlock for native For You auth; also removes a web localStorage dep. Native For You uses the Worker render path ONLY (client fallback not ported). W1-W3 device-verified; W4-W6 build-green pending Joe review.
 - phase-history.md + cheatsheet.md rows deferred to phase close (Joe device verdict pending)
+
+## [2026-06-13] ingest | phase-native-3-summary.md
+- New page: wiki/concepts/operations/phase-native-3.md
+- Updated: index.md (phase list)
+- Notable: 5-step onboarding (account/services/watched/clusters/sliders); useCompleteOnboarding mirrors web completeOnboarding -> identical Supabase rows; useUserServices retires DEV_SERVICES. Routing refactored to always-mounted-nav + redirect. adb cannot focus RN TextInputs (Steps 2-5 + completion pending Joe end-to-end test). @react-native-community/slider needs expo prebuild.
