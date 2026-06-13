@@ -28,4 +28,6 @@ Mapped from `useHomeContent.ts`. Two curated row types are missing from native a
 
 ## Gates
 
-Native tsc 0, `expo export` bundles, release APK builds. Device: a signed-in account's Home shows Recently Added + ≥1 genre spotlight named after a selected cluster. Web untouched (native-only changes + shared-lib reads). Joe's device review on return.
+Native tsc 0, `expo export` bundles, release APK builds. Web untouched (native-only changes + shared-lib reads).
+
+**DEVICE-VERIFIED 2026-06-13:** signed-in Home renders "Just in / Recently added." plus personalised spotlights ("History & War.", "Feel-Good & Funny." with genre-appropriate titles, ordered by the account's selected clusters); dark nav bar confirmed (NATIVE-3 fix); hero status-bar scrim present; no crash. Joe's review on return.
