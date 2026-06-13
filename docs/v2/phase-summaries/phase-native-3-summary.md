@@ -26,6 +26,18 @@ Every step built against its `V2 Onboarding` screenshot + the web `OnboardingFlo
 - **Not yet device-run:** Steps 2–5 full flow + completion/bootstrap + For You from a fresh profile. `adb input tap` cannot focus RN TextInputs to drive the account form (automation limitation, not a bug — real touch works), and the signed-in `skipAuth` path needs a session/password CC doesn't have. **This is Joe's end-to-end test.**
 - Gates: native tsc 0, `expo export` bundles, release APK builds (incl. the `@react-native-community/slider` native module via `expo prebuild`).
 
+## Post-test feedback fixes (Joe's device run, 2026-06-13)
+
+Joe ran the full onboarding end-to-end — it works (watched grid → clusters → completion → personalised Home). Four points raised; fixes committed (`0ff0bba`):
+1. **Cluster icons** were emoji → ported the real `GenreIconTile` custom glyphs (glyph DATA moved to `src/lib/constants/genreGlyphs.ts`, shared; native renders via `react-native-svg`).
+2. **White bottom nav bar** → `expo-navigation-bar` plugin (`style: light` + `enforceContrast: false`); dark bar, light icons. (`androidNavigationBar` app.json key is deprecated under edge-to-edge.)
+3. **Status bar unreadable over the bright hero** → top scrim gradient on `MagazineHero`.
+4. **Nav spacing/icons** → deferred to the end-of-track design-review pass (Joe's bucket).
+
+## NATIVE-3.5 — Home composition (DECIDED, next phase)
+
+Joe's call: native Home currently renders only the per-service "Top On" charts; the web Home (`useHomeContent`) also has **recommended / critically-acclaimed / genre-spotlight** rows. Port those in a dedicated **NATIVE-3.5** phase AFTER NATIVE-3 merges, before NATIVE-4 cutover. Keeps onboarding cohesive.
+
 ## Deferred (later phases)
 
 Browse filter sheet + semantic mood chips, detail rating/report/instrumentation, light theme, query persistence, password recovery, re-onboarding existing accounts (Q3), the design-review polish pass, the NATIVE-4 cutover. Username server-availability check (green tick is format-only for now).
