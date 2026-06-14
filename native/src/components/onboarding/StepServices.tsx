@@ -2,24 +2,14 @@ import { ArrowRight, Check } from 'lucide-react-native';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { ServiceBadge } from '@/components/ServiceBadge';
+import { SERVICE_CATALOG } from '@/constants/serviceCatalog';
 import type { ServiceId } from '@/lib/types/content';
 
 // Onboarding Step 2 — "Your streaming services" (matches Step 2.png).
 // 2-col grid of service cards (logo + name + description + check),
 // orange border when selected, Select All, Continue.
 
-const SERVICES: { id: ServiceId; name: string; description: string }[] = [
-  { id: 'netflix', name: 'Netflix', description: 'Movies & Series' },
-  { id: 'prime', name: 'Prime Video', description: 'Amazon Originals' },
-  { id: 'disney', name: 'Disney+', description: 'Disney, Marvel, Star Wars' },
-  { id: 'bbc', name: 'BBC iPlayer', description: 'BBC Originals & Live' },
-  { id: 'itvx', name: 'ITVX', description: 'ITV Originals & Live' },
-  { id: 'channel4', name: 'Channel 4', description: 'Channel 4 & Film4' },
-  { id: 'now', name: 'NOW', description: 'Sky Cinema & HBO' },
-  { id: 'skygo', name: 'Sky Go', description: 'Live TV & Sky Originals' },
-  { id: 'apple', name: 'Apple TV+', description: 'Apple Originals' },
-  { id: 'paramount', name: 'Paramount+', description: 'CBS & Paramount' },
-];
+const SERVICES = SERVICE_CATALOG;
 
 interface StepServicesProps {
   selected: ServiceId[];
