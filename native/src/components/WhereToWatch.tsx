@@ -5,6 +5,7 @@ import { Pressable, Text, View } from 'react-native';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import type { DetailData, RentalOption } from '@/lib/adapters/detailAdapter';
 import { getDeepLink } from '@/lib/deepLinks';
+import { exitDwell, getCurrentDwellSeconds } from '@/lib/instrumentation/dwellTimer';
 import { openDeepLink } from '@/lib/openDeepLink';
 import { SERVICE_DISPLAY_NAMES, type ServiceId } from '@/lib/types/content';
 import { classifyProviders } from '@/lib/utils/providerClassifier';
@@ -45,13 +46,18 @@ export function WhereToWatch({ detail, userServices }: WhereToWatchProps) {
   const open = async (service: ServiceId, saUrl: string | null) => {
     const link = getDeepLink(service, saUrl, detail.title, detail.year);
     const { tmdbId } = parseContentItemId(detail.id);
-    await openDeepLink(link.url, {
-      contentId: tmdbId,
-      mediaType: detail.mediaType,
-      serviceId: service,
-      dwellSecondsBeforeClick: 0,
-      linkType: link.type,
-    });
+    const dwellSecondsBeforeClick = getCurrentDwellSeconds();
+    try {
+      await openDeepLink(link.url, {
+        contentId: tmdbId,
+        mediaType: detail.mediaType,
+        serviceId: service,
+        dwellSecondsBeforeClick,
+        linkType: link.type,
+      });
+    } finally {
+      exitDwell('deep_link_click');
+    }
   };
 
   return (
