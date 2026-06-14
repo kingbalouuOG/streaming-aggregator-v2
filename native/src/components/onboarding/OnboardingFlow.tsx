@@ -10,6 +10,7 @@ import { useInvalidateOnboardingStatus } from '@/hooks/useOnboardingStatus';
 import { useWatchedGrid, TITLES_PER_ROUND, type WatchedGridTitle } from '@/hooks/useWatchedGrid';
 import { ONBOARDING_EVENTS } from '@/lib/analytics/events';
 import { logOnboardingEvent } from '@/lib/analytics/logger';
+import { ALL_SERVICE_IDS } from '@/constants/serviceCatalog';
 import type { ServiceId } from '@/lib/types/content';
 import { DEFAULT_SLIDERS, type SliderState } from '@/lib/taste-v2/types';
 import { useAuth } from '@/providers/auth';
@@ -118,7 +119,7 @@ export function OnboardingFlow() {
     setServices((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
   const selectAllServices = () =>
     setServices((prev) =>
-      prev.length === ALL_SERVICES.length ? [] : [...ALL_SERVICES],
+      prev.length === ALL_SERVICE_IDS.length ? [] : [...ALL_SERVICE_IDS],
     );
 
   const segments = useMemo(() => Array.from({ length: TOTAL }, (_, i) => i <= step), [step]);
@@ -193,15 +194,3 @@ export function OnboardingFlow() {
   );
 }
 
-const ALL_SERVICES: ServiceId[] = [
-  'netflix',
-  'prime',
-  'disney',
-  'bbc',
-  'itvx',
-  'channel4',
-  'now',
-  'skygo',
-  'apple',
-  'paramount',
-];
