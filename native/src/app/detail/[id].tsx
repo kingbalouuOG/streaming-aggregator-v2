@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ContentRow } from '@/components/ContentRow';
+import { DetailEngagement } from '@/components/DetailEngagement';
 import { SectionHead } from '@/components/SectionHead';
 import { WatchlistActions } from '@/components/WatchlistActions';
 import { WhereToWatch } from '@/components/WhereToWatch';
@@ -158,6 +159,15 @@ export default function DetailRoute() {
 
           {/* Watchlist actions */}
           <WatchlistActions item={watchlistItem} />
+
+          {/* Engagement: thumbs / not-interested / report (+ dwell + detail_view) */}
+          <DetailEngagement
+            itemId={detail.id}
+            title={detail.title}
+            mediaType={detail.mediaType}
+            services={detail.allServices}
+            onBack={back}
+          />
 
           {/* Genre tags */}
           {detail.genres.length > 0 ? (

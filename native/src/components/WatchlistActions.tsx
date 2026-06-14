@@ -1,7 +1,9 @@
 import { Check, Eye, Plus } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 
+import { trackTasteInteraction } from '@/instrumentation/trackInteraction';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
+import { setLastAction } from '@/lib/instrumentation/dwellTimer';
 import { useWatchlist, useWatchlistMutations } from '@/hooks/useWatchlist';
 import type { ContentItem } from '@/lib/types/content';
 
@@ -18,11 +20,18 @@ export function WatchlistActions({ item }: { item: ContentItem }) {
   const entry = items?.find((i) => i.id === tmdbId && i.type === mediaType);
   const bookmarked = !!entry;
   const watched = entry?.status === 'watched';
+  const meta = { contentId: tmdbId, contentType: mediaType, title: item.title, genreIds: item.genreIds };
 
   return (
     <View className="mt-4 flex-row gap-2.5">
       <Pressable
-        onPress={() => toggle.mutate(item)}
+        onPress={() => {
+          if (!bookmarked) {
+            setLastAction('added_to_watchlist');
+            void trackTasteInteraction(meta, 'watchlist_add');
+          }
+          toggle.mutate(item);
+        }}
         className={
           bookmarked
             ? 'flex-1 flex-row items-center justify-center gap-2 rounded-card bg-primary py-3 active:opacity-90'
@@ -47,6 +56,10 @@ export function WatchlistActions({ item }: { item: ContentItem }) {
         onPress={() => {
           // Marking watched implies it's in the list — add first if needed.
           if (!bookmarked) toggle.mutate(item);
+          if (!watched) {
+            setLastAction('marked_watched');
+            void trackTasteInteraction(meta, 'watched');
+          }
           setStatus.mutate({ id: item.id, status: watched ? 'want_to_watch' : 'watched' });
         }}
         className={

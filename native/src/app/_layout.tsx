@@ -11,13 +11,17 @@ import {
   Fraunces_700Bold,
   Fraunces_800ExtraBold,
 } from '@expo-google-fonts/fraunces';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 
 import { AuthProvider } from '@/providers/auth';
+import { QUERY_CACHE_BUSTER, queryPersister } from '@/queryPersist';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Root layout: fonts + query provider + a single always-mounted Stack.
 // Auth/onboarding gating is done by REDIRECTS in the (tabs) guard
@@ -35,7 +39,9 @@ export default function RootLayout() {
     () =>
       new QueryClient({
         defaultOptions: {
-          queries: { retry: 2, refetchOnWindowFocus: false },
+          // gcTime must be >= the persister maxAge or queries get GC'd
+          // before they can be restored from disk.
+          queries: { retry: 2, refetchOnWindowFocus: false, gcTime: DAY_MS },
         },
       }),
   );
@@ -60,7 +66,9 @@ export default function RootLayout() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{ persister: queryPersister, maxAge: DAY_MS, buster: QUERY_CACHE_BUSTER }}>
       <StatusBar style="light" />
       <AuthProvider>
         <Stack
@@ -75,6 +83,6 @@ export default function RootLayout() {
           <Stack.Screen name="profile/[section]" options={{ animation: 'slide_from_right' }} />
         </Stack>
       </AuthProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }

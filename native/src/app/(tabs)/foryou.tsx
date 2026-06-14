@@ -82,7 +82,7 @@ export default function ForYouScreen() {
 
         {rows.map((row, i) => (
           <Reveal key={row.key} index={i + 1}>
-            <ContentRow title={row.title} items={row.items} onItemPress={openDetail} />
+            <ContentRow title={row.title} items={row.items} onItemPress={openDetail} surface="for_you" />
           </Reveal>
         ))}
       </ScrollView>
