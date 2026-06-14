@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 import { setAuthState } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
+import { clearQueryCache } from '@/queryPersist';
 
 // Native auth provider (NATIVE-2 W6). Wraps the supabase-js auth surface
 // and keeps the storage layer's auth-state routing (setAuthState) in
@@ -85,6 +86,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async signOut() {
         await supabase.auth.signOut();
+        // Wipe the persisted query cache so the next user on this device
+        // never sees the previous user's cached feeds.
+        clearQueryCache();
       },
     }),
     [session, initializing],

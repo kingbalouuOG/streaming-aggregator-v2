@@ -109,6 +109,7 @@ export default function HomeScreen() {
               title="Recently added."
               items={recentlyAdded}
               onItemPress={openDetail}
+              surface="home"
             />
           </Reveal>
         ) : null}
@@ -120,6 +121,7 @@ export default function HomeScreen() {
               title={row.serviceName}
               items={row.items}
               onItemPress={openDetail}
+              surface="home"
             />
           </Reveal>
         ))}
@@ -131,6 +133,7 @@ export default function HomeScreen() {
               title={`${sp.clusterName}.`}
               items={sp.items}
               onItemPress={openDetail}
+              surface="home"
             />
           </Reveal>
         ))}
