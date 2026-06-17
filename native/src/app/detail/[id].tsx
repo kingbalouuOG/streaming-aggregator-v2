@@ -3,19 +3,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Star } from 'lucide-react-native';
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ContentRow } from '@/components/ContentRow';
 import { DetailEngagement } from '@/components/DetailEngagement';
 import { SectionHead } from '@/components/SectionHead';
+import { DetailSkeleton } from '@/components/Skeleton';
 import { WatchlistActions } from '@/components/WatchlistActions';
 import { WhereToWatch } from '@/components/WhereToWatch';
 import { useContentDetail } from '@/hooks/useContentDetail';
@@ -33,51 +27,35 @@ export default function DetailRoute() {
   const heroHeight = (width * 5) / 4;
   const back = () => router.back();
 
-  // Loading: paint the known title/image from the card immediately
-  // (passed as params), spinner for the enriched body — same instant-
-  // header trick as the web detail page.
-  if (isLoading || !data) {
+  // Error: clean message + back affordance (no card-poster hero).
+  if (isError) {
     return (
       <View className="flex-1 bg-background">
-        <View style={{ width, height: heroHeight }} className="bg-card">
-          {params.image ? (
-            <Image
-              source={{ uri: params.image }}
-              style={{ width: '100%', height: '100%' }}
-              contentFit="cover"
-            />
-          ) : null}
-          <LinearGradient
-            colors={['rgba(10,10,15,0)', 'rgba(10,10,15,0.55)', 'rgba(10,10,15,0.95)']}
-            locations={[0.35, 0.7, 1]}
-            style={{ position: 'absolute', inset: 0 }}
-          />
-          <BackButton onPress={back} top={insets.top + 12} />
-          {params.title ? (
-            <Text
-              className="absolute inset-x-5 bottom-5 font-display-black text-white"
-              style={{ fontSize: 36, lineHeight: 38, letterSpacing: -0.7 }}>
-              {params.title}
-            </Text>
-          ) : null}
+        <BackButton onPress={back} top={insets.top + 12} />
+        <View className="flex-1 items-center justify-center px-8">
+          <Text className="text-center font-standfirst text-section text-foreground">
+            Something went wrong
+          </Text>
+          <Text className="mt-2 text-center font-sans text-body text-muted-foreground">
+            {error instanceof Error ? error.message : 'Failed to load details.'}
+          </Text>
+          <Pressable onPress={back} className="mt-4">
+            <Text className="font-sans-bold text-body text-primary">Go back</Text>
+          </Pressable>
         </View>
-        {isError ? (
-          <View className="items-center px-8 pt-10">
-            <Text className="text-center font-standfirst text-section text-foreground">
-              Something went wrong
-            </Text>
-            <Text className="mt-2 text-center font-sans text-body text-muted-foreground">
-              {error instanceof Error ? error.message : 'Failed to load details.'}
-            </Text>
-            <Pressable onPress={back} className="mt-4">
-              <Text className="font-sans-bold text-body text-primary">Go back</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <View className="items-center pt-10">
-            <ActivityIndicator color="#e85d25" />
-          </View>
-        )}
+      </View>
+    );
+  }
+
+  // Loading: a neutral skeleton — NOT the card poster blown up to hero size.
+  // The old "instant header" painted params.image full-bleed, then swapped to
+  // the backdrop when data landed, which read as a jarring image flash. The
+  // app is fast now, so the skeleton fades straight into the real page.
+  if (isLoading || !data) {
+    return (
+      <View className="flex-1">
+        <DetailSkeleton />
+        <BackButton onPress={back} top={insets.top + 12} />
       </View>
     );
   }

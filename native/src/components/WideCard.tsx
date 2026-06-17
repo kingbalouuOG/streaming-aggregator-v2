@@ -43,7 +43,7 @@ export function WideCard({
         />
         {services[0] ? (
           <View className="absolute left-2 top-2">
-            <ServiceBadge service={services[0]} size="xs" ring />
+            <ServiceBadge service={services[0]} size="xs" />
           </View>
         ) : null}
         <View className="absolute inset-x-0 bottom-0 p-3">

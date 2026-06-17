@@ -2,7 +2,7 @@ import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import { ChevronDown, Search, Sparkles, SlidersHorizontal, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BrowsePresearch, type Mood } from '@/components/BrowsePresearch';
@@ -17,6 +17,7 @@ import {
 } from '@/components/browseFilters';
 import { FilterSheet } from '@/components/FilterSheet';
 import { PosterGridCard } from '@/components/PosterGridCard';
+import { PosterGridSkeleton } from '@/components/Skeleton';
 import { useBrowseDiscover } from '@/hooks/useBrowseDiscover';
 import { useSearch, type SearchCategory } from '@/hooks/useSearch';
 import { useSemanticFlag, useSemanticSearch } from '@/hooks/useSemanticSearch';
@@ -251,9 +252,7 @@ export default function BrowseScreen() {
       {presearch ? (
         <BrowsePresearch onBuild={() => setSheetOpen(true)} onMood={handleMood} />
       ) : loading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#e85d25" />
-        </View>
+        <PosterGridSkeleton />
       ) : shown.length > 0 ? (
         <FlashList
           data={shown}
