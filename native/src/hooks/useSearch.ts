@@ -12,8 +12,9 @@ import { extractYearFromQuery, reRankSearchResults } from '@/lib/utils/searchUti
 
 // Native keyword search (NATIVE-2 W5b) — Mode A: TMDb /search/movie +
 // /search/tv in parallel with a Postgres ILIKE pass, merged + re-ranked
-// through the SAME shared lib the web useSearch uses. Mode C (semantic
-// mood chips) and the full filter sheet are deferred.
+// through the SAME shared lib the web useSearch uses. Semantic ("Mode C")
+// mood search ships separately via useSemanticSearch (Browse moods, behind
+// the search_semantic flag); this hook stays keyword-only.
 
 export type SearchCategory = 'All' | 'Movies' | 'TV' | 'Docs';
 

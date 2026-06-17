@@ -115,10 +115,14 @@ export async function semanticRetrieval(
   // pgvector's <=> returns 0..2). Convert to similarity in 0..1:
   // similarity = 1 - distance/2 keeps the relationship monotonic
   // and well-bounded.
-  const distancesByTmdbId = new Map<number, number>();
+  // Key by (tmdb_id, media_type): titles.tmdb_id is NOT unique — a movie and
+  // a TV title can share an id but are distinct rows with different
+  // embeddings, so keying on tmdb_id alone cross-wires their distances +
+  // taste-fit and emits a phantom wrong-media-type candidate.
+  const distancesByKey = new Map<string, number>();
   const idsForMeta: Array<{ tmdb_id: number; media_type: string }> = [];
   for (const row of matched as Array<{ tmdb_id: number; media_type: string; distance: number }>) {
-    distancesByTmdbId.set(row.tmdb_id, row.distance);
+    distancesByKey.set(`${row.tmdb_id}:${row.media_type}`, row.distance);
     idsForMeta.push({ tmdb_id: row.tmdb_id, media_type: row.media_type });
   }
   if (idsForMeta.length === 0) return [];
@@ -135,7 +139,9 @@ export async function semanticRetrieval(
 
   const scored: ScoredSemanticCandidate[] = [];
   for (const row of rows as Array<SemanticCandidateMeta & { embedding: unknown }>) {
-    const dist = distancesByTmdbId.get(row.tmdb_id);
+    // .in('tmdb_id', …) can return the sibling media_type for a colliding id;
+    // skip any (id, media_type) that wasn't an actual vector match.
+    const dist = distancesByKey.get(`${row.tmdb_id}:${row.media_type}`);
     if (dist === undefined) continue;
     const meta: SemanticCandidateMeta = {
       tmdb_id: row.tmdb_id,

@@ -53,7 +53,7 @@ export default function HomeScreen() {
     } finally {
       setRefreshing(false);
     }
-  }, [feed]);
+  }, [feed.refetch]);
 
   if (feed.isLoading) {
     return (

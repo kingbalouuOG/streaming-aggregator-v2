@@ -7,9 +7,10 @@ import { DEFAULT_FILTERS, type BrowseFilters } from './browseFilters';
 // Browse empty state (web BrowsePage artboard 01) — shown before the user
 // types or applies a filter. Two journeys: the orange "Build your search"
 // CTA (opens FilterSheet for a filter-only /discover browse) and a 2×2 mood
-// grid. On web the moods seed a semantic query; native has no semantic
-// search, so each mood maps to a filter PRESET that drives the same
-// /discover path. Recents are web-only (no native recent-search store yet).
+// grid. Each mood carries BOTH a semantic phrase (used when the
+// search_semantic flag is on) and a filter PRESET (the flag-off fallback) —
+// see useSemanticSearch + browse.tsx. Recents are web-only (no native
+// recent-search store yet).
 
 const ATM = { teal: '#0d9488', amber: '#d97706', violet: '#7c3aed', rose: '#be185d' };
 

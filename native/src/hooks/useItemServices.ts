@@ -14,11 +14,14 @@ export function useItemServices(item: ContentItem, max = 3): ServiceId[] {
   const has = item.services.length > 0;
   const { tmdbId, mediaType } = parseContentItemId(item.id);
   const { data } = useQuery({
+    // Cache the FULL resolved list under a max-agnostic key, then slice per
+    // caller — so the hero (max 4) and cards (max 3) share one cache entry
+    // instead of racing to fill it with different lengths.
     queryKey: ['native', 'itemServices', mediaType, tmdbId],
-    queryFn: () => getCachedServices(String(tmdbId), mediaType, max),
+    queryFn: () => getCachedServices(String(tmdbId), mediaType, 10),
     enabled: !has && tmdbId > 0,
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
-  return has ? item.services : (data ?? []);
+  return (has ? item.services : (data ?? [])).slice(0, max);
 }
