@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_feedback: {
+        Row: {
+          context: Json | null
+          created_at: string | null
+          id: string
+          message: string
+          rating: number | null
+          user_id: string
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string | null
+          id?: string
+          message: string
+          rating?: number | null
+          user_id: string
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string | null
+          id?: string
+          message?: string
+          rating?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_feedback_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       availability_reports: {
         Row: {
           created_at: string | null

@@ -18,8 +18,8 @@ import { clearQueryCache } from '@/queryPersist';
 // shared-lib modules (storage, supabase) are fine to import from there;
 // React-hook components are not.
 //
-// Deferred to NATIVE-3: password recovery (needs a deep-link flow),
-// username availability checks, account deletion.
+// forgotPassword sends the reset email; the in-app deep-link reset screen
+// + account deletion remain deferred.
 
 interface AuthState {
   session: Session | null;
@@ -31,6 +31,9 @@ interface AuthState {
     username?: string,
   ) => Promise<{ error: string | null; needsConfirmation: boolean }>;
   signOut: () => Promise<void>;
+  forgotPassword: (email: string) => Promise<{ error: string | null }>;
+  checkUsernameAvailable: (username: string) => Promise<boolean>;
+  deleteAccount: () => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -89,6 +92,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Wipe the persisted query cache so the next user on this device
         // never sees the previous user's cached feeds.
         clearQueryCache();
+      },
+      async forgotPassword(email) {
+        // Sends the reset email (Supabase Site URL handles the link). The
+        // in-app deep-link reset screen is still deferred.
+        const { error } = await supabase.auth.resetPasswordForEmail(email);
+        return { error: error?.message ?? null };
+      },
+      async checkUsernameAvailable(username) {
+        const { data, error } = await supabase.rpc('username_available', {
+          check_username: username,
+        });
+        if (error) {
+          console.error('[Auth] checkUsername error:', error);
+          return false;
+        }
+        return data === true;
+      },
+      async deleteAccount() {
+        const { error } = await supabase.rpc('delete_own_account');
+        if (error) return { error: error.message };
+        // Deletion also ends the session; mirror signOut's cache wipe.
+        await supabase.auth.signOut();
+        clearQueryCache();
+        return { error: null };
       },
     }),
     [session, initializing],

@@ -1,24 +1,47 @@
 import { useRouter } from 'expo-router';
 import { Sparkles } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ContentRow } from '@/components/ContentRow';
+import { ForYouSkeleton } from '@/components/ForYouSkeleton';
 import { MagazineHero } from '@/components/MagazineHero';
+import { MoodRooms } from '@/components/MoodRooms';
 import { Reveal } from '@/components/Reveal';
+import { SectionHead } from '@/components/SectionHead';
+import { TasteFingerprint } from '@/components/TasteFingerprint';
+import { WatchlistListRow } from '@/components/WatchlistListRow';
+import { WideCard } from '@/components/WideCard';
 import { useForYou } from '@/hooks/useForYou';
+import { DEFAULT_SLIDERS } from '@/lib/taste-v2/types';
 import type { ContentItem } from '@/lib/types/content';
+import { useAuth } from '@/providers/auth';
 
-// NATIVE-2 W5c — For You. Leads with a MagazineHero of the top pick,
-// then the simple ContentItem[] rows from the Worker payload. The
-// anchor-room / because-you-watched / person rows are deferred (richer
-// card types); v1 ships the four flat rows.
+// For You — editorial composition (web ForYouPage), rendered entirely from
+// the videx-api Worker payload (useForYou → WorkerRenderPayload):
+// greeting → top pick → taste fingerprint → in-your-mood → continue
+// exploring → because-you-watched → from-your-watchlist → outside-your-usual.
+// Mood rooms (anchorRooms) render between the fingerprint and the rows.
+
+function greetingLabel(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  if (h < 22) return 'Good evening';
+  return 'Late night';
+}
 
 export default function ForYouScreen() {
   const router = useRouter();
+  const { session } = useAuth();
   const { data, isLoading, refetch } = useForYou();
   const [refreshing, setRefreshing] = useState(false);
+
+  const name =
+    ((session?.user?.user_metadata?.username as string | undefined) ?? '') ||
+    session?.user?.email?.split('@')[0] ||
+    'you';
 
   const openDetail = useCallback(
     (item: ContentItem) =>
@@ -39,27 +62,27 @@ export default function ForYouScreen() {
   }, [refetch]);
 
   if (isLoading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator color="#e85d25" />
-      </View>
-    );
+    return <ForYouSkeleton />;
   }
 
   if (!data) {
     return <NotReady onRetry={onRefresh} />;
   }
 
-  // Lead with the top recommended pick; the rest stays in the row.
-  const recommended = [...data.recommendedForYou];
+  // Defensive defaults — a fresh Worker payload carries all of these; guard
+  // against a partial shape so a missing field can't crash a section.
+  const {
+    recommendedForYou = [],
+    sliders = DEFAULT_SLIDERS,
+    anchorRooms = [],
+    hiddenGems = [],
+    becauseYouWatched = [],
+    fromYourWatchlist = [],
+    outsideYourUsual = [],
+  } = data;
+  const recommended = [...recommendedForYou];
   const hero = recommended.shift() ?? null;
-
-  const rows: { key: string; title: string; items: ContentItem[] }[] = [
-    { key: 'recommended', title: 'Recommended for you', items: recommended },
-    { key: 'hidden', title: 'Hidden gems', items: data.hiddenGems },
-    { key: 'outside', title: 'Outside your usual', items: data.outsideYourUsual },
-    { key: 'watchlist', title: 'From your watchlist', items: data.fromYourWatchlist },
-  ].filter((r) => r.items.length > 0);
+  let idx = 0;
 
   return (
     <View className="flex-1 bg-background">
@@ -67,12 +90,22 @@ export default function ForYouScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#e85d25" />
         }
-        contentContainerClassName="pb-8">
+        contentContainerClassName="pb-10">
+        {/* Greeting */}
+        <SafeAreaView edges={['top']}>
+          <View className="px-5 pb-1 pt-2">
+            <Text className="font-sans-bold text-kicker uppercase tracking-[1.6px] text-primary">
+              For {name} · {greetingLabel()}
+            </Text>
+            <Text className="mt-1 font-display text-headline text-foreground">Edited for you.</Text>
+          </View>
+        </SafeAreaView>
+
         {hero ? (
-          <Reveal index={0}>
+          <Reveal index={idx++}>
             <MagazineHero
               item={hero}
-              kicker="FOR YOU"
+              kicker="Tonight's pick"
               standfirst={hero.overview}
               onSelect={openDetail}
               onMoreInfo={openDetail}
@@ -80,11 +113,82 @@ export default function ForYouScreen() {
           </Reveal>
         ) : null}
 
-        {rows.map((row, i) => (
-          <Reveal key={row.key} index={i + 1}>
-            <ContentRow title={row.title} items={row.items} onItemPress={openDetail} surface="for_you" />
+        <Reveal index={idx++}>
+          <TasteFingerprint sliders={sliders} />
+        </Reveal>
+
+        {recommended.length > 0 ? (
+          <Reveal index={idx++}>
+            <ContentRow
+              kicker="In your mood"
+              title="Picked for you tonight."
+              items={recommended}
+              onItemPress={openDetail}
+              surface="for_you"
+            />
+          </Reveal>
+        ) : null}
+
+        {hiddenGems.length > 0 ? (
+          <Reveal index={idx++}>
+            <ContentRow
+              kicker="Keep going"
+              title="Continue exploring."
+              items={hiddenGems}
+              onItemPress={openDetail}
+              surface="for_you"
+            />
+          </Reveal>
+        ) : null}
+
+        {anchorRooms.length > 0 ? (
+          <Reveal index={idx++}>
+            <MoodRooms rooms={anchorRooms} onItemPress={openDetail} />
+          </Reveal>
+        ) : null}
+
+        {becauseYouWatched.map((row) => (
+          <Reveal key={row.anchor.id} index={idx++}>
+            <ContentRow
+              kicker={`Because you watched ${row.anchor.title}`}
+              title="More like this."
+              items={row.items}
+              onItemPress={openDetail}
+              surface="for_you"
+            />
           </Reveal>
         ))}
+
+        {fromYourWatchlist.length > 0 ? (
+          <Reveal index={idx++}>
+            <View>
+              <View className="mt-7 px-5">
+                <SectionHead kicker="Your shelf" title="From your watchlist." />
+              </View>
+              {fromYourWatchlist.slice(0, 8).map((item) => (
+                <WatchlistListRow key={item.id} item={item} onPress={openDetail} />
+              ))}
+            </View>
+          </Reveal>
+        ) : null}
+
+        {outsideYourUsual.length > 0 ? (
+          <Reveal index={idx++}>
+            <View className="mt-7">
+              <View className="px-5">
+                <SectionHead kicker="Outside your usual" title="A little further afield." />
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, gap: 12 }}>
+                {outsideYourUsual.map((item) => (
+                  <WideCard key={item.id} item={item} onPress={openDetail} />
+                ))}
+              </ScrollView>
+            </View>
+          </Reveal>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -100,12 +204,9 @@ function NotReady({ onRetry }: { onRetry: () => void }) {
         Your For You feed is warming up
       </Text>
       <Text className="mt-2 text-center font-sans text-body text-muted-foreground">
-        Once your taste profile is set up, personalised picks land here. Onboarding arrives in a
-        later build.
+        Once your taste profile is set up, personalised picks land here.
       </Text>
-      <Pressable
-        onPress={onRetry}
-        className="mt-5 rounded-card bg-primary px-5 py-3 active:opacity-90">
+      <Pressable onPress={onRetry} className="mt-5 rounded-card bg-primary px-5 py-3 active:opacity-90">
         <Text className="font-sans-bold text-body text-white">Try again</Text>
       </Pressable>
     </SafeAreaView>

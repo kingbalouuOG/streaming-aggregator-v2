@@ -3,18 +3,21 @@ import { Pressable, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
+import { useIsBookmarked, useWatchlistMutations } from '@/hooks/useWatchlist';
 import { setCardClickContext } from '@/lib/instrumentation/clickContext';
 import {
   recordImpression,
   type ImpressionSurface,
 } from '@/lib/instrumentation/impressionBatcher';
 import type { ContentItem } from '@/lib/types/content';
+import { cardMeta, PosterOverlays } from './PosterOverlays';
 
 // Poster card — the "default" 160px variant from the web ContentCard
-// (design-system.md §4). expo-image gives memory+disk caching + a 200ms
-// cross-fade. NATIVE-POLISH W2: records an impression when shown on a
-// ranked surface and stashes click-context on tap (positional-bias
-// training data) — both no-op for guests and when no surface is passed.
+// (design-system.md §4). Carries the full ContentCard anatomy (service
+// stack / glass bookmark / gold rating pill) via PosterOverlays. expo-image
+// gives memory+disk caching + a 200ms cross-fade. NATIVE-POLISH W2: records
+// an impression when shown on a ranked surface and stashes click-context on
+// tap (positional-bias training data) — both no-op for guests / no surface.
 
 interface PosterCardProps {
   item: ContentItem;
@@ -24,6 +27,9 @@ interface PosterCardProps {
 }
 
 export function PosterCard({ item, onPress, surface, position }: PosterCardProps) {
+  const bookmarked = useIsBookmarked(item.id);
+  const { toggle } = useWatchlistMutations();
+
   useEffect(() => {
     if (!surface) return;
     const { tmdbId } = parseContentItemId(item.id);
@@ -48,12 +54,19 @@ export function PosterCard({ item, onPress, surface, position }: PosterCardProps
           transition={200}
           recyclingKey={item.id}
         />
+        <PosterOverlays
+          item={item}
+          bookmarked={bookmarked}
+          onToggleBookmark={() => toggle.mutate(item)}
+        />
       </View>
-      <Text numberOfLines={1} className="mt-2 font-sans-bold text-body text-foreground">
+      <Text numberOfLines={1} className="mt-2 font-card text-body text-foreground">
         {item.title}
       </Text>
-      <Text numberOfLines={1} className="mt-0.5 font-sans text-meta text-muted-foreground">
-        {[item.year, item.genre].filter(Boolean).join(' · ')}
+      <Text
+        numberOfLines={1}
+        className="mt-0.5 font-sans-medium text-[11px] uppercase tracking-[0.3px] text-muted-foreground">
+        {cardMeta(item)}
       </Text>
     </Pressable>
   );

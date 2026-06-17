@@ -54,10 +54,18 @@ export function ReportSheet({ visible, onClose, tmdbId, mediaType, services, onR
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View className="flex-1 justify-end bg-black/60">
-        <SafeAreaView edges={['bottom']} className="rounded-t-[20px] bg-card">
-          <View className="flex-row items-center justify-between px-5 pt-4">
-            <Text className="font-display-bold text-section text-foreground">Report availability</Text>
-            <Pressable onPress={onClose} hitSlop={8}>
+        <SafeAreaView edges={['bottom']} className="rounded-t-[20px]" style={{ backgroundColor: '#13131a' }}>
+          <View className="items-center pt-3">
+            <View style={{ width: 38, height: 4, borderRadius: 999, backgroundColor: 'rgba(245,241,232,0.18)' }} />
+          </View>
+          <View
+            className="flex-row items-start justify-between px-5 pb-3 pt-3"
+            style={{ borderBottomWidth: 0.5, borderBottomColor: 'rgba(245,241,232,0.10)' }}>
+            <View>
+              <Text className="font-sans-bold text-kicker uppercase tracking-[1.6px] text-primary">Feedback</Text>
+              <Text className="mt-0.5 font-display-bold text-title text-foreground">Report a problem.</Text>
+            </View>
+            <Pressable onPress={onClose} hitSlop={8} className="mt-1">
               <X size={20} color="rgba(245,241,232,0.62)" />
             </Pressable>
           </View>

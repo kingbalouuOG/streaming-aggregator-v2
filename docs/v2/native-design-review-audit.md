@@ -1,118 +1,155 @@
 # Native vs Existing App — Design & Code Review Audit
 
-**Date:** 2026-06-13. **Purpose:** support Joe's design-review pass aligning the native (RN) app to the existing app's UI. **Method:** 4 parallel code-review agents (Home/For You · Detail/Browse/Watchlist · Onboarding/Auth · Profile/Settings) comparing `native/src/**` against `src/**` and the `Pictures\Videx` reference screenshots, plus on-device captures. **No code was changed** — this is the audit only.
+**Date:** 2026-06-13 · **Rev v2:** 2026-06-15 — reconciled against the authoritative design handoff.
+**Purpose:** support Joe's design-review pass aligning the native (RN) app to the existing app's UI.
+**Method:** 4 parallel code-review agents (Home/For You · Detail/Browse/Watchlist · Onboarding/Auth · Profile/Settings) comparing `native/src/**` against `src/**` and the `Pictures\Videx` reference screenshots, plus on-device captures. **Rev v2** folds in Joe's **design handoff** (`Downloads\Videx-design-references\design_handoff_videx\`) — machine-readable tokens (`tokens.json`/`tokens.css`) + the `videx-design-system.html` change matrix — which is now the top source of truth. **No code has been changed** — this is the audit only.
 
-## 0. Source of truth (read first — it flips many findings)
+**Scope decision (Joe, 2026-06-15): PHASED.** Track 1 (now) restyles the surfaces native already has → unblocks the NATIVE-4 cutover. Track 2 (tracked follow-on) builds the missing editorial surfaces. See §4.
 
-Two agents independently found the **reference screenshots disagree with the current web code**: the web `OnboardingFlow.tsx` looks *older* than the screenshots, while `ProfilePage.tsx` was refactored to an "editorial hairline" style *newer* than the screenshots. The web code is mid-refactor and internally inconsistent.
+## 0. Source of truth (read first — it flips several findings)
 
-**Resolution: the `Pictures\Videx` screenshots are the target** — they're Joe's captures of the live app (memory `reference_design_screenshots.md`: "current-app visual targets"). Confirmed against the existing-app `Home.png`. Therefore:
-- A native↔screenshot divergence = **real, actionable.**
-- A native↔web-code divergence where native **matches the screenshot** = **NOT a defect** (stale web code). The native onboarding + carded Profile are correct against the screenshots.
-- Design-system token/quality bugs are real regardless of which UI is "ahead."
+Rev v1 had only the screenshots to go on and flagged that the web code was mid-refactor and internally inconsistent. **Rev v2 adds the authoritative spec:** the **design handoff** is "Editorial Direction A," the system Joe built the live app from. It ships machine-readable tokens and a change matrix mapping every component to Unchanged / UI-Update / Redesign / New. Verified: the live web app substantially implements it (`MagazineHero`, `EditorsNote`, `FreeTonight`, `MoodRoom*`, `NumberedChart`, `SectionHead`, `Kicker`, `WideCard`, `SpendDashboard` all exist in `src/components/`).
 
-**The native build is a strong structural match on most screens.** The gaps are: (1) one systemic token bug, (2) incomplete poster-card anatomy, (3) several missing Home sections + Profile sub-screens, (4) a few capability gaps.
+**Precedence, highest first (screenshots dropped — see warning):**
+1. **`tokens.json` / `videx-design-system.html`** (design handoff) — exact values (color, type, opsz, spacing, radii, motion, component anatomy). Wins on any numeric/values question.
+2. **Web `src/**`** — the *current* built reference; the live app the native port must match.
+
+> **⚠️ Screenshots removed as a source (Joe, 2026-06-15).** The `Pictures\Videx` captures are a STALE, pre-current-icons snapshot and mislead. Confirmed against web `ProfilePage.tsx`: the live app uses **monochrome** glyph tiles, **inline** stat pills, only the bookmark icon orange (others muted), a **Fraunces** header, and an **orange** Sign Out — where the screenshots show colored tiles, big stat cards, green/blue stat icons, a sans header, and a red Sign Out. **Any §2 finding phrased "screenshots show…" or "native matches the screenshot" is SUPERSEDED by the web component** — re-derive Profile + onboarding specifics from `src/components/*`. (In particular: native's carded Profile rows should become web's editorial **hairline list-rows**; the v1 claim "don't copy web's hairline" is reversed.)
+
+Consequences: a native↔spec divergence on a value is **real**. A native↔web divergence is a defect unless the design handoff says otherwise. **The aspect-ratio finding is corrected by the spec (see X3).**
+
+**The native build is a strong structural match on the surfaces it has.** The gaps are: (1) one systemic token bug (kicker color), (2) incomplete poster-card anatomy, (3) a typography system gap (Fraunces `opsz` per role), (4) missing editorial surfaces, (5) a few capability gaps.
+
+### 0.1 Authoritative tokens (from the handoff — implement these, stop eyeballing)
+
+| Group | Values |
+|---|---|
+| **Surfaces** | bg `#0a0a0f` · bg-elev `#111118` · bg-card `#161620` · bg-soft `#1e1e2a` |
+| **Text** | cream `#f5f1e8` · fg `#f0f0f5` · muted `#8888a0` · dim `rgba(240,240,245,.55)` |
+| **Brand** | primary `#e85d25` (RESERVED: kickers, primary CTAs, active nav, Editor's Note mark) · soft `rgba(232,93,37,.16)` · edge `rgba(232,93,37,.45)`. `#ff8d5a` is ONLY the "In your plan" cost-pill text — never a kicker. |
+| **Accents** (taste hues; mood chips/rooms only, never branding) | plum `#a16ed4` · teal `#3fb6a1` · gold `#e3b04b` · rose `#e16b8c` · blue `#5b8def` · sage `#7fb37b` |
+| **Type families** | display = Fraunces · ui = DM Sans · mono = JetBrains Mono |
+| **Type ramp** | hero 44 · display 32 · section 22 · standfirst 17 · card-title 13 · kicker 11 · body 13.5 · meta 10.5 · button 12 |
+| **Fraunces `opsz` per role (mandatory)** | hero 144 · display/dropcap 96 · section title 36 · body 18 · card title 12 |
+| **Spacing** | 2xs 4 · xs 8 · sm 12 (card gap) · md 16 · lg 22 (section gutter) · xl 32 (between sections) · 2xl 48 |
+| **Radii** | xs 6 · sm 10 (badges) · md 14 (cards, hero/primary CTA) · lg 20 (sheets) · pill 999 (chips, ratings, chip-buttons) |
+| **Motion** | ease-lift `cubic-bezier(.2,.7,.3,1)` · ease-snap `cubic-bezier(.2,.8,.2,1)` · fade 400 · press 150 · hover-lift 350 · sheet 250 · shimmer 2400 |
+| **Icon stroke** | 1.8 line · 2.4 active |
 
 ---
 
 ## 1. Cross-cutting fixes (highest leverage — fix once, helps everywhere)
 
-| # | Issue | Detail | Screens affected | Sev |
+| # | Issue | Detail (✅ confirmed / ⚠️ corrected / 🔧 refined by the spec) | Screens | Sev |
 |---|---|---|---|---|
-| X1 | **Salmon kicker, should be brand orange** | Native uses `text-primary-on-soft` (`#ff8d5a`) for section/row/note kickers; `#ff8d5a` is specced only for text *on a primary-soft fill*. Kickers should be `text-primary` (`#e85d25`). | Home, For You, Detail, Browse, Watchlist, Profile, EditorNote | **High** |
-| X2 | **Poster cards missing their anatomy** | `PosterCard`/`PosterGridCard` are bare poster+title+meta. The existing card (ContentCard) carries: top-left **service stack** (with badge-glow), top-right **glass bookmark** (+ watched tick), bottom-left **★ rating pill**. All absent natively. | every row + grid (Home, For You, Detail "more like this", Browse, Watchlist) | **High** |
-| X3 | **Poster aspect ratio wrong** | Native posters are `2:3` (0.667); the design is `5:7` (0.714). Every card is the wrong shape. | all poster surfaces | **High** |
-| X4 | **Active chip = solid cream, should be soft-orange** | Native active pills paint `bg-foreground` (cream) + dark text; design is `bg-primary-soft` + `text-primary` + orange-50% border. | Browse categories, Watchlist segments, (onboarding chips OK) | **High** |
-| X5 | **Card title/meta typography** | Native title 13px/700; design 14px/600. Meta native "YEAR · genre" 13px mixed-case; design "GENRE · YEAR" **11px/500 UPPERCASE** tracked, color faint (40% not 62%). | all poster cards | **High** |
-| X6 | **Missing font cuts** | Design uses **DM Sans 600** (card titles, Play CTA, rating pill, active chip) and **Fraunces 500** (editor-note teaser); native loads only DM Sans 400/500/700 + Fraunces 600/700/800 → weight substitutions. | global | **Med** |
-| X7 | **"See all" affordance + per-service kicker tint absent** | The existing `ContentRow`/SectionHead has a trailing "See all →" (visible on every row in `Home.png`) and supports a service-tinted kicker ("NEW ON NETFLIX"). Native ContentRow has neither (no `right` slot, no `kickerColor`). | Home, For You rows | **High** |
-| X8 | **Service badge sizes + "+N" overflow** | Native badge md=26 (should be 24), sm=18 (→20), lg=34 (→32); `contentFit="contain"` (→cover); stack `max=3` (→4); **no "+N" overflow pill**; no lettered fallback. | anywhere badges render | **Med** |
-| X9 | **CTA radius/size + selected-border opacity** | Native primary CTAs are `rounded-card` (12px) + 18px label; design is ~16px/pill + ~15px label. Native selected cards use full-strength `border-primary`; design uses `border-primary/50`. | onboarding, auth, sub-screens | **Med** |
-| X10 | **Solid `bg-card` vs translucent fills** | Native form fields/selectable cards use solid `#14141c`; the design uses translucent `bg-secondary`/`secondary/60` + `border-subtle` hairline (recessed look). | onboarding, auth, services grids | **Med** |
+| X1 | **Salmon kicker, should be brand orange** | ✅ Native uses `text-primary-on-soft` (`#ff8d5a`) for kickers; spec reserves `#ff8d5a` for the "In your plan" cost-pill text only. Kickers must be `text-primary` (`#e85d25`). | Home, For You, Detail, Browse, Watchlist, Profile, EditorNote | **High** |
+| X2 | **Poster cards missing their anatomy** | ✅ `PosterCard`/`PosterGridCard` are bare poster+title+meta. Spec ContentCard contract: top-left **ServiceStack** (≤3 then `+N`, 1.5px card-bg ring, −32% overlap), top-right **bookmark** (28×28, `rgba(0,0,0,.45)`+8px blur, outline→filled), bottom-left **gold ★ rating pill**. **No cost/plan pill on cards** (restraint principle). | every row + grid | **High** |
+| X3 | ~~Poster aspect ratio wrong~~ → **CORRECTED: native is right** | ⚠️ v1 said `2:3 → 5:7`. The spec pins the default ContentCard at **`2:3`** (`.demo-card { aspect-ratio: 2/3 }`); there is **no 5:7**. Native's existing `2:3` is correct — **retracted, no change.** Variants: `lead` **3:4.6**, `wide` **16:10** (the `wide` backdrop card is a *new* variant for Critics'/Outside-your-usual rows → Track 2). | all poster surfaces | ~~High~~ **Resolved** |
+| X4 | **Active chip fill — two different components** | 🔧 Native active pills paint `bg-foreground` (cream). Spec splits: **filter/category/segment chips** active = `bg-primary-soft` + `text-primary` + orange-45% border (the fix). **Mood chips** (For You) active = the **mood's own accent hue** at 12% bg / 45% border, *not* orange. | Browse categories, Watchlist segments (orange); For You mood chips (accent) | **High** |
+| X5 | **Card title/meta typography** | 🔧 Title: spec is **Fraunces 13 / 600, `opsz 12`** (native renders 13/**700**, weight is the bug — size 13 is right; v1's "14px" was wrong). Meta: **DM Sans 10.5 / 500 UPPERCASE** `GENRE · YEAR`, color `rgba(245,241,232,.55)`. | all poster cards | **High** |
+| X6 | **Typography system gap — weights + the `opsz` axis** | 🔧 Two parts. (a) *Easy:* load **DM Sans 600** + **Fraunces 500** (currently substituted). (b) *Hard, native-specific:* **Fraunces `opsz` must be set per role** (144/96/36/18/12). Web uses `font-variation-settings`; RN has no per-element equivalent → ship **pre-baked static Fraunces cuts** at those optical sizes (or prove an Expo variable-font path). The spec is emphatic: without opsz, Fraunces "looks generic." | global | **High** |
+| X7 | **"See all" affordance + per-service kicker tint absent** | ✅ Spec SectionHead has an optional right-aligned action (DM Sans 11/600 uppercase + `chev`) and a colour-prop kicker (service-tinted "NEW ON NETFLIX"). Native ContentRow has neither (no `right` slot, no `kickerColor`). | Home, For You rows | **High** |
+| X8 | **Service badge sizes + "+N" overflow** | 🔧 Spec: **standalone** ServiceBadge sm **28** / md **38** / lg **48**, radius `sm` (10px, ≈0.27×); **in-card stack** ≈22 with 1.5px ring + −32% overlap, **max 3 then `+N`**. Native md=26/sm=18/lg=34, `contentFit="contain"` (→cover), stack max=3 w/ no `+N`. | anywhere badges render | **Med** |
+| X9 | **CTA radius — context-split** | 🔧 v1 said "→ ~16px/pill." Spec: **hero & primary CTAs = 14px (`radius-md`) filled cream**; **pill (999px) only for chip-style buttons/ratings**. So native's `rounded-card` (14px) primary CTAs are essentially correct — keep 14px cream, don't pill them. Selected cards: spec uses `border-primary/50` (native uses full-strength). | onboarding, auth, hero, sub-screens | **Low** |
+| X10 | **Solid `bg-card` vs translucent fills** | ✅ Native form fields/selectable cards use solid `#14141c`; spec uses translucent `bg-soft`/alpha fills + hairline border (recessed look). | onboarding, auth, services grids | **Med** |
 
 ---
 
 ## 2. Per-screen findings (prioritized, de-duplicated)
 
 ### Home (`(tabs)/index.tsx`)
-- **HIGH — Missing sections.** Existing Home (`Home.png`) has: Recently Added → **Trending Across Your Services (numbered Top-5 chart)** → **Coming Soon** → **Critically Acclaimed** → Popular on each service → genre spotlights, every row with **"See all"**. Native has hero → editor's note → browse chips → "Top on {service}" → spotlights. Missing: the **numbered chart**, **Critically Acclaimed**, **Coming Soon/Calendar**, **editorial-spotlight lead card**, and the **See-all** affordance. (Free Tonight / WideCard Critics' row also absent.)
-- **HIGH — Per-service row copy.** Native "Top on" + bare service name; existing "RECENTLY ADDED TO YOUR SERVICE" / per-service rows with service-tinted kickers + sentence titles.
-- **MED — Hero extras.** Existing hero supports "IN YOUR PLAN" pill + badge drop-shadow halo + glass-blur action buttons; native omits all three. Native hero is non-interactive (no bookmark state).
-- **MED — Spacing.** Native hero→note→chips gaps are 24–28px; design ~16px. Row-to-row 28px vs 24px.
-- Note: native added an **Editor's Note card + Browse-by chips** near the top that the existing `Home.png` doesn't foreground — confirm placement with the live app.
+- **HIGH — Missing sections (→ Track 2).** Spec Home order: Magazine Hero → Editor's Note → filter chips → Recently Added (mosaic: 1 lead + 2 std) → **Trending ribbon (ranked 1–4, big Fraunces numerals)** → **Editorial Spotlight** → New-on-each-service rows → **Free Tonight** (iPlayer/ITVX/C4, leaf-green kicker) → **Critics' Picks** (`wide` cards) → **On the calendar** (date pills). Native has hero → note → chips → "Top on {service}" → genre spotlights. Missing: trending ribbon, editorial spotlight, free-tonight, critics/wide row, calendar strip, **See-all** on every row.
+- **HIGH — Per-service row copy.** Native "Top on" + bare name; spec PerServiceRow = ServiceBadge + service name + "See all", service-tinted kicker.
+- **MED — Hero extras.** Spec Magazine Hero: 16:11 backdrop, bottom gradient, kicker + Fraunces ~36/opsz96 title + italic standfirst, **primary CTA = 14px filled cream** + ghost "More info", bookmark top-right, 3 swipe dots, **auto-advance off**. Native hero omits the bookmark state + CTA treatment.
+- **MED — Spacing.** Section gutter should be **22px**, between-section **32px**, card gap **12px** (native gaps run wide).
+- Note: native's Editor's Note card is the **collapsed strip** only; spec adds tap-to-expand **bottom-sheet** w/ drop cap (→ Track 2).
 
 ### For You (`(tabs)/foryou.tsx`)
-- **HIGH — Heavily reduced** vs the existing For You (`For You.png`): native = 1 hero + ≤4 flat rows; existing has taste-fingerprint chips, mood-chip refiner, cover-story mood room, calendar strip, kickered rows. Known scope reduction.
-- **MED — Rows have no kickers** (just titles); existing rows carry taxonomic kickers.
+- **HIGH — Heavily reduced (→ Track 2, the biggest single gap).** Native = 1 `MagazineHero` + 4 flat `ContentRow`s (code comments the rest "deferred"). Spec For You is a **10-section editorial redesign**: greeting header → Top Pick (+reasoning) → **Taste Fingerprint** (6 archetype sparklines) → mood-chip refiner → filtered mood mosaic → **Cover-Story Mood Room** → **2×2 mood-tile grid** → because-you-watched (+"Why?") → **watchlist list-rows** (poster+meta+Play) → Outside-your-usual (`wide` band).
+- **MED — Rows have no kickers**; spec rows carry taxonomic kickers.
 
 ### Detail (`detail/[id].tsx` + WhereToWatch/WatchlistActions/DetailEngagement/ReportSheet)
-- **HIGH — RT badge is a 🍅 emoji**, should be the RT logo PNG (`src/assets/rotten-tomatoes-logo.png`); IMDb `★` should be the lucide Star. (Design system: "avoid emoji.")
+- **HIGH — RT badge is a 🍅 emoji**, should be the RT logo PNG (`src/assets/rotten-tomatoes-logo.png`); IMDb `★` should be the lucide Star. (Spec: avoid emoji.)
 - **HIGH — Hero status badge missing** (top-right watched/bookmarked chip).
-- **HIGH — ReportSheet is a different design**: missing grabber pill; native title "Report availability" (Fraunces 18) vs "FEEDBACK / Report a problem." (kicker + Fraunces 22); right-side check-circle rows vs left hollow-radio; multiline notes vs single-line; no submit-disabled gating.
-- **MED — Watchlist dual buttons**: native 13px labels (→14px), missing the watched→"Undo Watchlist" state and the distinct emerald "Watched" pill; no icon spring.
-- **MED — Thumbs/not-interested row**: native thumbs are 48×40 with a text-labelled "Not interested"; design is 32×32 icon-only, inline-right of the rating badges (one row). 
-- **MED — Description** 13px→14px; only show "Show more" when it actually overflows.
-- **MED — "More like this"** missing the "N titles" count + the cards lack X2 anatomy.
-- **LOW** — rating-badge radius (10→8px), cast avatar radius (20→16px) + tile bg (`card`→`secondary`), rent/buy trailing ExternalLink icon, meta separators.
+- **HIGH — ReportSheet design drift**: adopt the spec sheet chrome — `#13131a` surface, **38×4 grabber pill** 16px from top, kicker + close-button header w/ 14px bottom border, `vxSlideUp 250ms ease-snap`, scrim `rgba(0,0,0,.7)`+6px blur. Native is missing the grabber + uses Fraunces-18 title vs kicker+Fraunces-22; submit gating absent.
+- **MED — Availability** (per change matrix): deep-link pills become a **single grouped row with one primary CTA per service**.
+- **MED — Watchlist dual buttons**: 13→14px labels, add watched→"Undo" state + emerald "Watched" pill, icon spring.
+- **MED — Thumbs/not-interested**: spec 32×32 icon-only, inline-right of the rating badges; native is 48×40 with a text label.
+- **MED — Description** 13→14px; "Show more" only when it overflows.
+- **MED — "More like this"** missing "N titles" count + X2 card anatomy.
+- **LOW** — rating-badge radius 10→8, cast avatar radius 20→16 + tile bg card→soft, rent/buy trailing ExternalLink icon, meta separators.
 
-### Browse (`(tabs)/browse.tsx`)
-- **HIGH — Missing the whole filter system**: Edit-filters pill + FilterSheet (service/cost/runtime/genre/rating/language/watched), active-filter strip, "Build your search" CTA.
-- **HIGH — Missing sort control**, **mood chips** (empty state), **recent searches**, **as-you-type suggestions** + semantic CTA.
-- **MED — Search input**: text 13→14px, placeholder copy, search-icon opacity (62→40%), clear-X should be a pill chip.
-- **MED — Category pills**: X4 (active state) + missing the "FILTER" kicker above the row.
-- **MED — Result grid**: X2/X3/X5 (card anatomy, 2:3→5:7, title/meta), side padding 14→20px.
+### Browse (`(tabs)/browse.tsx`)  *(change matrix: UI Update — but the filter system is a Track-2 build)*
+- **HIGH — Missing the whole filter system (→ Track 2)**: Edit-filters pill + FilterSheet (service/cost/runtime/genre/rating/language/watched), active-filter strip, "Build your search" CTA.
+- **HIGH — Missing sort control, mood chips (empty state), recent searches, as-you-type suggestions + semantic CTA (→ Track 2).**
+- **MED — Search input**: 13→14px, placeholder copy, icon opacity 62→40%, clear-X as a pill chip.
+- **MED — Category pills**: X4 (filter-chip active = primary-soft) + add the "FILTER" kicker.
+- **MED — Result grid**: X2 + X5 anatomy/typography, side padding 14→**22px**. *(No aspect change — 2:3 stays, per X3.)*
 
 ### Watchlist (`(tabs)/watchlist.tsx`)
-- **HIGH — Missing list view + swipeable cards**, **category filter pills** (with counts), **sort control**.
+- **HIGH — Missing list view + swipeable cards (→ Track 2)**, category filter pills (w/ counts), sort control. Spec adds the shared **WatchlistListRow** (poster thumb + title + meta + Play).
 - **MED — Missing**: watched-progress bar, tab icon+count, dashed "Add titles" grid card.
-- **MED — Grid card** lacks X2 anatomy + remove/move button + (watched-tab) inline thumbs; 2:3→5:7.
+- **MED — Grid card** lacks X2 anatomy + remove/move button + (watched-tab) inline thumbs. *(2:3 stays.)*
 - **MED — Segment control** = X4; missing icon+count.
-- **MED — Header** introduces a 28px Fraunces "Watchlist" title the existing app doesn't have (chip-only header); and the **empty state** should be editorial (kicker + 28px headline + standfirst + "Browse content →"), not a centered icon tile.
+- **MED — Header/empty state** should be editorial (kicker + 28px headline + standfirst + "Browse content →"), not a centered icon tile.
 
-### Onboarding (5 steps) — **native largely MATCHES the screenshots** (copy, "Step N · Title" chrome, captions, summary card, slider captions). Web code is stale here; don't copy it. Real items:
-- **HIGH — Cluster names truncated** (data regression in `src/lib/taste-v2/tasteClusters.ts`): "Mind-Bending", "True Crime", "Rom-Coms & Love", "Award-Winners" — screenshots show the full names ("Mind-Bending Mysteries", "True Crime & Real Stories", "Rom-Coms & Love Stories", "Prestige & Award-Winners"). Affects Step 4 + Profile Your-Taste (shared data).
-- **HIGH — Username availability is format-only** (no server `checkUsernameAvailable`); a taken username passes onboarding then fails at signUp. Capability gap (see §3).
-- **MED — Step 2 selection check** is inline (right of text); screenshot shows it **top-right corner** of the card.
-- **MED — Step title weight inconsistent** (Step 1 = Fraunces 700, Steps 2–5 = 800); standardize.
-- **MED — Field fills** solid vs translucent (X10); **hero icon** flat `bg-primary` vs gradient.
+### Onboarding (5 steps) — **native largely MATCHES the screenshots** (change matrix: UI Update; web code is stale here, don't copy it). Real items:
+- **HIGH — Cluster names truncated** (data regression in `src/lib/taste-v2/tasteClusters.ts`): "Mind-Bending", "True Crime", "Rom-Coms & Love", "Award-Winners" → full names ("Mind-Bending Mysteries", "True Crime & Real Stories", "Rom-Coms & Love Stories", "Prestige & Award-Winners"). Affects Step 4 + Profile Your-Taste (shared data).
+- **HIGH — Username availability is format-only** (no server `checkUsernameAvailable`) — see §3.
+- **MED — Step 2 selection check** should be the card's **top-right corner** (native is inline-right).
+- **MED — Step title weight** inconsistent (Step 1 Fraunces 700 vs Steps 2–5 800) — standardize on the spec section role (Fraunces 600/opsz36 for step headlines).
+- **MED — Field fills** solid vs translucent (X10); hero icon flat vs gradient.
 - **MED — Step-shell padding** inconsistent (Step 1 `px-6`, Steps 2–5 `px-5`).
-- **LOW — Back button shows on Step 1** (screenshot has none until Step 2); chip radius should be pill (`rounded-pill`) not 12px; "{n}/5" counter should be tabular 12px; progress track empty-segment alpha 0.10→0.05; Step 5 "You can change any of this later in Profile" sub-copy missing; stat numerals should be sans/brand-orange not Fraunces/salmon.
+- **LOW** — Back button on Step 1 (none until Step 2); mood/age chip radius → pill; "{n}/5" tabular 12px; progress empty-segment alpha 0.10→0.05; Step 5 "You can change any of this later in Profile" sub-copy; stat numerals sans/brand-orange not Fraunces/salmon.
 
-### Auth / Sign-in (`auth/AuthScreen.tsx`) — no screenshot in the set; compared to web:
-- **HIGH — "Forgot password?" link missing** (+ no `forgotPassword` in the provider — capability gap).
-- **MED — Title** 40px/800 (vs headline 28px/600); **hero icon** flat (→gradient); **field fills** solid (→translucent); no focus border; no `canSubmit` (≥8-char) gating.
+### Auth / Sign-in (`auth/AuthScreen.tsx`) — change matrix: UI Update (brand mark added). Real items:
+- **HIGH — "Forgot password?" link missing** (+ no `forgotPassword` in the provider — §3). Spec ForgotPasswordScreen/ResetPasswordScreen exist on web.
+- **MED — Inputs** to spec: cream-on-bg-elev, 10px radius, DM Sans; Fraunces headline; translucent fills; focus border; `canSubmit` (≥8-char) gating. Add the Fraunces **V** brand mark at top.
 
-### Profile (`(tabs)/profile.tsx` + sub-screens + tab bar) — **native MATCHES the screenshots' carded layout** (web's hairline refactor is newer; don't copy it). Real items:
-- **HIGH — Row glyph tiles are monochrome cream/orange; screenshots show per-row COLORED tiles** (Account=blue, Streaming=purple, Spend=green, Taste=orange, Tune=amber, Appearance=indigo, Privacy=slate). Needs `GenreIconTile` to accept a tint (currently hard-codes `#e85d25`/`#f5f1e8`). Same colored treatment appears in the Privacy/Spend row glyphs.
-- **HIGH — Header typeface**: "Profile" + all sub-screen titles are Fraunces; screenshots are **DM Sans bold** (sans-serif). Change titles to `font-sans-bold`.
-- **HIGH — Browse tab icon is a Compass; should be a magnifying glass (Search)** (every screen).
-- **HIGH — Missing sub-screens**: **Monthly Spend** (full dashboard — `Spend analysis 1/2.png`) and **Privacy & Data** (intro + "what Videx learns" modal + Privacy/Terms links + Download-my-data + Delete-account confirm — `Privacy & data 1-3.png`) are "Coming soon" stubs. **Account Details** is read-only; screenshot shows editable Name/Email + "Save Changes".
-- **HIGH — Your Taste layout**: native lands on the full 16-cluster grid; screenshots show a **summary (prose + selected chips) + "Refine preferences" / "Retake taste quiz"** landing, grid only after Refine (+ a "{n} selected" pill and a MAX cap).
-- **HIGH — Appearance missing the "System" option** (screenshots show Light/Dark/System radio rows; native has Dark + disabled "Light — coming soon").
-- **MED — Main page**: "Member since {month year}" line missing; placeholder subtitles ("View your spend", "Genres you love") should be computed ("£39.95 / month", "6 genres selected", "Balanced across all sliders"); stat numerals should be DM Sans not Fraunces; avatar needs the 2px primary ring+offset.
-- **MED — Tab bar**: no active-state **filled** icons (Home/Watchlist/Profile); labels use system font not DM Sans 10px; inactive tint 0.62 (→0.40); no Watchlist unread dot.
-- **MED — Streaming Services sub-screen**: subtitle should be "Connected/Not connected" status (not the catalog description); unselected tiles should be dimmed (`opacity-60`).
-- **MED — Sub-screen header**: back button is a circle; screenshots show a rounded-square (10px). "Tune Recommendations" header should read "Tune Your Recommendations".
-- **LOW** — Tune slider end-label copy ("Best match regardless of age", "Focus on films/TV series"); Tune/Services explicit Save vs the screenshots' auto-save; data-source attribution footer.
+### Profile (`(tabs)/profile.tsx` + sub-screens + tab bar) — **native MATCHES the screenshots' carded layout** (web's hairline refactor is newer; don't copy). Real items:
+- **HIGH — Row glyph tiles are monochrome; screenshots show per-row COLORED tiles** (Account=blue, Streaming=purple, Spend=green, Taste=orange, Tune=amber, Appearance=indigo, Privacy=slate). `GenreIconTile` needs a tint prop (hard-codes `#e85d25`/`#f5f1e8`).
+- **HIGH — Header typeface**: "Profile" + sub-screen titles are Fraunces; screenshots are **DM Sans bold**. Change to `font-sans-bold`.
+- **HIGH — Browse tab icon is a Compass; should be the Search (magnifying glass)** — spec tab set is `home · sparkles · search · bookmark · user`, order Home·For You·Browse·Watchlist·Profile.
+- **HIGH — Missing sub-screens (→ Track 2)**: Monthly Spend dashboard (`Spend analysis 1/2.png`) + Privacy & Data (`Privacy & data 1-3.png`) are stubs; Account Details is read-only (screenshot shows editable Name/Email + Save).
+- **HIGH — Your Taste layout**: native lands on the 16-cluster grid; screenshots show a **summary + "Refine preferences" / "Retake taste quiz"** landing, grid only after Refine.
+- **HIGH — Appearance missing "System"** (Light/Dark/System rows; native has Dark + disabled Light).
+- **MED — Main page**: "Member since {month year}" missing; placeholder subtitles → computed ("£39.95 / month", "6 genres selected", "Balanced across all sliders"); stat numerals DM Sans not Fraunces; avatar 2px primary ring+offset.
+- **MED — Tab bar**: surface should be the spec blur — `rgba(13,13,20,.85)` + 20px blur/180% sat, top border `rgba(255,255,255,.08)`; **active icons filled** (bookmark→`bookmarkF`), stroke 2.4, label DM Sans 9.5/700, inactive tint 0.40; Watchlist count badge.
+- **MED — Streaming Services**: subtitle = "Connected/Not connected" status; unselected tiles dimmed (`opacity-60`).
+- **MED — Sub-screen header**: back button rounded-square (10px) not circle; "Tune Recommendations" → "Tune Your Recommendations".
+- **LOW** — Tune slider end-label copy; Tune/Services auto-save (vs explicit Save); data-source attribution footer.
 
 ---
 
 ## 3. Capability gaps (native auth provider exposes only signIn/signUp)
-- **`checkUsernameAvailable`** — needed for onboarding Step 1's real availability check (currently format-only). RPC exists (`username_available`, used by web `AuthContext`).
-- **`forgotPassword`** — needed for the Auth screen's "Forgot password?" link.
+- **`checkUsernameAvailable`** — onboarding Step 1's real availability check (RPC `username_available` exists, used by web `AuthContext`; change matrix keeps the uniqueness check).
+- **`forgotPassword`** — the Auth screen's "Forgot password?" link.
 
-Both are functional gaps, not just visual. Add to `native/src/providers/auth.tsx`.
+Both are functional gaps. Add to `native/src/providers/auth.tsx`.
 
 ---
 
-## 4. Recommended fix sequencing for the design-review phase
+## 4. Fix sequencing — PHASED (Joe's call, 2026-06-15)
 
-1. **Token + primitives pass (1 commit, fixes the most surface area):** X1 (kicker color), X6 (load DM Sans 600 + Fraunces 500), X8 (badge sizes/overflow), X9/X10 (CTA + fills), Profile header typeface, Browse tab icon. Cheap, global, high visual impact.
-2. **Poster card anatomy (1 focused piece):** X2 + X3 + X5 — bring `PosterCard`/`PosterGridCard` up to the ContentCard contract (service stack + bookmark + ★ pill, 5:7, 14px/uppercase meta). Fixes Home, For You, Detail, Browse, Watchlist cards at once.
-3. **ContentRow header:** X7 (See-all + per-service kicker tint + standfirst slot).
-4. **Profile colored glyph tiles** (X-profile) + computed subtitles + member-since + Appearance System row.
-5. **Per-screen detail fixes** (Detail RT logo + status badge + ReportSheet redesign + thumbs row; Browse/Watchlist active-pill states; onboarding cluster-name data fix + Step 2 check position + capability gaps).
-6. **Larger missing pieces (own phases):** Home missing sections (Charts/Critically Acclaimed/Coming Soon/See-all), Browse filter system + sort + moods + recents, Watchlist list-view + swipe, Profile Spend + Privacy + Account-edit screens, For You full composition.
+### Track 1 — Restyle pass (NOW, pre-cutover): style the surfaces native already has
+Goal: the existing native app *reads as the real Videx* so the NATIVE-4 cutover isn't blocked. No new surfaces.
 
-**Quick wins (visible, low-effort):** X1 kicker color, Browse tab icon (Compass→Search), RT emoji→logo, cluster-name data restore, Profile header typeface, "Member since" line, Appearance System row.
-**Big rocks (own phases):** poster-card anatomy, Home missing sections, Browse filter system, Watchlist list/swipe, Profile Spend + Privacy screens, For You composition.
+1. **Typography foundation (highest "native feel" lever):** X6 — load DM Sans 600 + Fraunces 500, **and stand up the Fraunces `opsz` approach** (generate static cuts at 144/96/36/18/12, map to roles in the type scale). Prep task: produce/verify the static Fraunces files.
+2. **Token + primitives pass (1 commit, most surface area):** X1 (kicker → `#e85d25`), X8 (badge sizes/`+N`/cover), X9 (keep 14px cream CTAs, `border-primary/50` selected), X10 (translucent fills), Profile header → DM Sans bold, Browse tab Compass→Search.
+3. **Poster card anatomy (1 focused piece):** X2 + X5 — bring `PosterCard`/`PosterGridCard` to the ContentCard contract (ServiceStack + glass bookmark + gold ★ pill; Fraunces 13/600 title; DM Sans 10.5/500 uppercase meta). **Aspect stays 2:3 (X3 retracted).** Fixes Home/For You/Detail/Browse/Watchlist cards at once.
+4. **ContentRow header:** X7 — See-all action slot + per-service `kickerColor` + standfirst slot. X4 filter-chip active = primary-soft.
+5. **Profile polish:** colored glyph tiles (tint prop) + computed subtitles + "Member since" + Appearance System row + tab-bar blur/active-fill.
+6. **Per-screen detail fixes:** Detail RT logo + status badge + ReportSheet chrome + thumbs row; Browse/Watchlist active-pill states; onboarding cluster-name data fix + Step 2 check position; capability gaps (§3).
+
+**Quick wins (visible, low-effort):** X1 kicker color, Browse tab icon, RT emoji→logo, cluster-name restore, Profile header typeface, "Member since", Appearance System row.
+
+### Track 2 — Editorial-parity (tracked follow-on): build the missing surfaces
+Maps to the change matrix's **New / Redesign** rows. Each is its own phase; sequence after Track 1 lands (before or after cutover, Joe's call per item).
+- **For You redesign** (the big one): Taste Fingerprint, mood-chip refiner, Cover-Story Mood Room + 2×2 grid, because-you-watched, watchlist list-rows, outside-your-usual.
+- **Home editorial surfaces:** Trending ribbon (numbered), Editorial Spotlight, Free Tonight, Critics'/`wide` row, Calendar strip, Editor's Note expand-to-sheet.
+- **Browse:** filter system + FilterSheet + sort + mood chips + recents + suggestions/semantic CTA.
+- **Watchlist:** list view + swipe + category filters + sort + WatchlistListRow.
+- **Profile:** Monthly Spend dashboard + Privacy & Data + Account-edit.
+- **Shared primitives Track 2 needs:** `WideCard` (16:10), the sheet chrome primitive, `CoverStoryRoom`, `TrendingRibbon`, `TasteFingerprint`, `CalendarStrip`, `WatchlistListRow` — and the `wide` ContentCard variant.
+
+> Authoritative values for all of the above live in `tokens.json` + `videx-design-system.html` (§0.1 summarizes). The reference JSX/HTML are prototypes — recreate in NativeWind, don't port. Only `logo-export/` is production-final artwork.

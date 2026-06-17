@@ -21,12 +21,30 @@ import { useAuth } from '@/providers/auth';
 
 export function AuthScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signIn, forgotPassword } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const forgot = async () => {
+    setError(null);
+    setNotice(null);
+    if (!email.trim()) {
+      setError('Enter your email first, then tap Forgot password.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error: e } = await forgotPassword(email.trim());
+      if (e) setError(e);
+      else setNotice(`Password reset link sent to ${email.trim()}.`);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async () => {
     if (busy) return;
@@ -65,7 +83,7 @@ export function AuthScreen() {
             <Text className="mt-4 font-sans-bold text-kicker uppercase tracking-[1.6px] text-primary">
               Sign in
             </Text>
-            <Text className="mt-2 font-display-black text-[40px] leading-[44px] text-foreground">
+            <Text className="mt-2 font-hero text-[40px] leading-[44px] text-foreground">
               Welcome back.
             </Text>
             <Text className="mt-2 text-center font-sans text-body text-muted-foreground">
@@ -110,7 +128,13 @@ export function AuthScreen() {
             </View>
           </View>
 
+          {/* Forgot password */}
+          <Pressable onPress={forgot} disabled={busy} className="mt-2 self-end" hitSlop={8}>
+            <Text className="font-sans-medium text-meta text-muted-foreground">Forgot password?</Text>
+          </Pressable>
+
           {error ? <Text className="mt-3 font-sans text-meta text-danger">{error}</Text> : null}
+          {notice ? <Text className="mt-3 font-sans text-meta text-success">{notice}</Text> : null}
 
           {/* Submit */}
           <Pressable

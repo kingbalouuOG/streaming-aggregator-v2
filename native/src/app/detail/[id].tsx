@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, Star } from 'lucide-react-native';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -63,7 +63,7 @@ export default function DetailRoute() {
         </View>
         {isError ? (
           <View className="items-center px-8 pt-10">
-            <Text className="text-center font-display text-section text-foreground">
+            <Text className="text-center font-standfirst text-section text-foreground">
               Something went wrong
             </Text>
             <Text className="mt-2 text-center font-sans text-body text-muted-foreground">
@@ -138,7 +138,7 @@ export default function DetailRoute() {
             <View className="mt-3 flex-row gap-2.5">
               {detail.imdbRating > 0 ? (
                 <View className="flex-row items-center gap-1.5 rounded-md bg-secondary px-2.5 py-1.5">
-                  <Text className="text-star">★</Text>
+                  <Star size={14} color="#e3b04b" fill="#e3b04b" strokeWidth={0} />
                   <Text className="font-sans-bold text-body text-foreground">
                     {detail.imdbRating.toFixed(1)}
                   </Text>
@@ -147,7 +147,11 @@ export default function DetailRoute() {
               ) : null}
               {detail.rottenTomatoes > 0 ? (
                 <View className="flex-row items-center gap-1.5 rounded-md bg-secondary px-2.5 py-1.5">
-                  <Text className="text-[13px]">🍅</Text>
+                  <Image
+                    source={require('../../assets/rotten-tomatoes-logo.png')}
+                    style={{ width: 16, height: 16 }}
+                    contentFit="contain"
+                  />
                   <Text className="font-sans-bold text-body text-foreground">
                     {detail.rottenTomatoes}%
                   </Text>
@@ -222,7 +226,7 @@ export default function DetailRoute() {
                         contentFit="cover"
                       />
                     ) : (
-                      <Text className="font-display text-section text-muted-foreground">
+                      <Text className="font-standfirst text-section text-muted-foreground">
                         {member.name[0]}
                       </Text>
                     )}

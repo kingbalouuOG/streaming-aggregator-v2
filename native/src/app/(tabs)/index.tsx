@@ -14,10 +14,14 @@ import {
   fetchEditorNote,
 } from '@/lib/api/editorNote';
 import { BrowseChips } from '@/components/BrowseChips';
+import { CalendarStrip } from '@/components/CalendarStrip';
 import { ContentRow } from '@/components/ContentRow';
+import { EditorialSpotlight } from '@/components/EditorialSpotlight';
 import { EditorNoteCard } from '@/components/EditorNoteCard';
+import { FreeTonight } from '@/components/FreeTonight';
 import { MagazineHero } from '@/components/MagazineHero';
 import { Reveal } from '@/components/Reveal';
+import { TrendingRibbon } from '@/components/TrendingRibbon';
 import { useHomeFeed } from '@/hooks/useHomeFeed';
 import type { ContentItem } from '@/lib/types/content';
 
@@ -62,7 +66,7 @@ export default function HomeScreen() {
   if (feed.isError || !feed.data) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-background px-8">
-        <Text className="text-center font-display text-section text-foreground">
+        <Text className="text-center font-standfirst text-section text-foreground">
           Couldn&apos;t load tonight&apos;s shelf
         </Text>
         <Text className="mt-2 text-center font-sans text-body text-muted-foreground">
@@ -72,7 +76,13 @@ export default function HomeScreen() {
     );
   }
 
-  const { hero, rows, recentlyAdded, spotlights } = feed.data;
+  const { hero, rows, recentlyAdded, spotlights, popular = [], upcoming = [] } = feed.data;
+  // Editorial spotlight: a popular title with a backdrop, distinct from the
+  // hero and (where possible) the trending top-5.
+  const spotlightPick =
+    popular.slice(5).find((p) => (p.backdrop || p.image) && p.id !== hero?.id) ??
+    popular.find((p) => (p.backdrop || p.image) && p.id !== hero?.id) ??
+    null;
   // Reveal index counter so cascade stays ordered across variable rows.
   let revealIdx = 2;
 
@@ -114,6 +124,24 @@ export default function HomeScreen() {
           </Reveal>
         ) : null}
 
+        {popular.length > 0 ? (
+          <Reveal index={(revealIdx += 1)}>
+            <FreeTonight items={popular} onItemPress={openDetail} />
+          </Reveal>
+        ) : null}
+
+        {popular.length > 0 ? (
+          <Reveal index={(revealIdx += 1)}>
+            <TrendingRibbon items={popular} onItemPress={openDetail} />
+          </Reveal>
+        ) : null}
+
+        {spotlightPick ? (
+          <Reveal index={(revealIdx += 1)}>
+            <EditorialSpotlight item={spotlightPick} onPress={openDetail} />
+          </Reveal>
+        ) : null}
+
         {rows.map((row) => (
           <Reveal key={row.serviceId} index={(revealIdx += 1)}>
             <ContentRow
@@ -125,6 +153,12 @@ export default function HomeScreen() {
             />
           </Reveal>
         ))}
+
+        {upcoming.length > 0 ? (
+          <Reveal index={(revealIdx += 1)}>
+            <CalendarStrip items={upcoming} onItemPress={openDetail} />
+          </Reveal>
+        ) : null}
 
         {spotlights.map((sp) => (
           <Reveal key={sp.clusterName} index={(revealIdx += 1)}>

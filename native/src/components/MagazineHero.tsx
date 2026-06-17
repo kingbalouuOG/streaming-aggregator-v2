@@ -4,7 +4,8 @@ import { Bookmark, Info, Play } from 'lucide-react-native';
 import { Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { SERVICE_DISPLAY_NAMES, type ContentItem, type ServiceId } from '@/lib/types/content';
+import { useItemServices } from '@/hooks/useItemServices';
+import { SERVICE_DISPLAY_NAMES, type ContentItem } from '@/lib/types/content';
 import { ServiceBadge, ServiceStack } from './ServiceBadge';
 
 // MagazineHero — native port of the web component (design-system §4).
@@ -38,7 +39,9 @@ export function MagazineHero({
   const height = (width * 5) / 4 + insets.top;
   const chromeTop = insets.top + 12;
 
-  const services = item.services as ServiceId[];
+  // Resolve lazily — hero picks sourced from TMDb adapters carry services: [],
+  // which would otherwise drop the badge AND the "Play on …" CTA target.
+  const services = useItemServices(item, 4);
   const primaryService = services[0];
 
   const meta: string[] = [];
@@ -72,8 +75,8 @@ export function MagazineHero({
 
         {/* Top-left: dash + kicker */}
         <View className="absolute left-4 flex-row items-center gap-2" style={{ top: chromeTop }}>
-          <View style={{ width: 14, height: 1.5, borderRadius: 1 }} className="bg-foreground" />
-          <Text className="font-sans-bold text-kicker uppercase tracking-[1.6px] text-foreground">
+          <View style={{ width: 14, height: 1.5, borderRadius: 1 }} className="bg-primary" />
+          <Text className="font-sans-bold text-kicker uppercase tracking-[1.6px] text-primary">
             {kicker}
           </Text>
         </View>

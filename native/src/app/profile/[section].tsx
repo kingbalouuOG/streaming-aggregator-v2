@@ -5,7 +5,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ProfileAccount } from '@/components/profile/ProfileAccount';
 import { ProfileAppearance } from '@/components/profile/ProfileAppearance';
+import { ProfilePrivacy } from '@/components/profile/ProfilePrivacy';
 import { ProfileServices } from '@/components/profile/ProfileServices';
+import { ProfileSpend } from '@/components/profile/ProfileSpend';
 import { ProfileTaste } from '@/components/profile/ProfileTaste';
 import { ProfileTune } from '@/components/profile/ProfileTune';
 
@@ -25,6 +27,10 @@ export default function ProfileSectionRoute() {
       return <ProfileTune />;
     case 'appearance':
       return <ProfileAppearance />;
+    case 'spend':
+      return <ProfileSpend />;
+    case 'privacy':
+      return <ProfilePrivacy />;
     default:
       return <Stub section={section ?? ''} />;
   }

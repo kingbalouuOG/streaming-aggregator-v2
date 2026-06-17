@@ -1,5 +1,5 @@
 import { ArrowRight, Check, Eye, EyeOff, Lock, Mail, Popcorn, Shuffle, User, Users } from 'lucide-react-native';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -16,8 +16,8 @@ import { useAuth } from '@/providers/auth';
 // Onboarding Step 1 — "Join VIDEX" (matches V2 Onboarding/Step 1.png).
 // Account creation: validated email/username/password/confirm, optional
 // age-range + viewing-context chips, ToS line, own Continue CTA → signUp.
-// Username server-availability check is deferred (NATIVE-3): a green tick
-// shows on valid FORMAT only.
+// Username availability is checked server-side (debounced username_available
+// RPC): the green tick + submit require the name to be both valid AND free.
 
 const AGE_RANGES = ['Under 18', '18–24', '25–34', '35–44', '45–54', '55+'];
 const VIEWING = [
@@ -34,7 +34,7 @@ export function StepAccount({
 }: {
   onAccountCreated: (ageRange: string | null, viewingContext: string | null) => void;
 }) {
-  const { signUp } = useAuth();
+  const { signUp, checkUsernameAvailable } = useAuth();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -45,13 +45,45 @@ export function StepAccount({
   const [viewing, setViewing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const usernameValid =
     username.length >= 3 && /^[a-z0-9]([a-z0-9_.]*[a-z0-9])?$/.test(username) && !/[_.]{2}/.test(username);
   const pwValid = password.length >= 8 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /[^a-zA-Z0-9]/.test(password);
   const confirmValid = confirm.length > 0 && confirm === password;
-  const canSubmit = emailValid && usernameValid && pwValid && confirmValid;
+  const canSubmit =
+    emailValid &&
+    usernameValid &&
+    usernameStatus !== 'taken' &&
+    usernameStatus !== 'checking' &&
+    pwValid &&
+    confirmValid;
+
+  // Debounced server availability check — only once the format is valid.
+  // 'idle' (a transient RPC error) does NOT hard-block submit; signUp still
+  // enforces uniqueness server-side.
+  useEffect(() => {
+    if (!usernameValid) {
+      setUsernameStatus('idle');
+      return;
+    }
+    setUsernameStatus('checking');
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const free = await checkUsernameAvailable(username);
+        if (!cancelled) setUsernameStatus(free ? 'available' : 'taken');
+      } catch {
+        if (!cancelled) setUsernameStatus('idle');
+      }
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [username, usernameValid]);
 
   const onUsername = (raw: string) => setUsername(raw.toLowerCase().replace(/\s/g, '').slice(0, 20));
 
@@ -110,7 +142,11 @@ export function StepAccount({
               autoCapitalize="none"
               className="flex-1 font-sans text-body text-foreground"
             />
-            {usernameValid ? <Check size={18} color="#10b981" /> : null}
+            {usernameStatus === 'checking' ? (
+              <ActivityIndicator size="small" color={MUTED} />
+            ) : usernameStatus === 'available' ? (
+              <Check size={18} color="#10b981" />
+            ) : null}
           </Field>
 
           <Field icon={<Lock size={18} color={MUTED} />} border={fieldBorder(password.length > 0, pwValid)}>
@@ -143,6 +179,10 @@ export function StepAccount({
             </Pressable>
           </Field>
         </View>
+
+        {usernameStatus === 'taken' ? (
+          <Text className="mt-1.5 font-sans text-meta text-danger">That username is taken — try another.</Text>
+        ) : null}
 
         {/* Optional: about you */}
         <Text className="mt-6 font-sans-bold text-body text-foreground">A little about you</Text>

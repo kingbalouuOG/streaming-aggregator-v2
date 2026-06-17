@@ -27,9 +27,17 @@ export interface GenreSpotlight {
   items: ContentItem[];
 }
 
+export interface UpcomingItem {
+  item: ContentItem;
+  /** ISO release date (YYYY-MM-DD). */
+  date: string;
+}
+
 export interface HomeFeed {
   hero: ContentItem | null;
   recentlyAdded: ContentItem[];
+  popular: ContentItem[];
+  upcoming: UpcomingItem[];
   rows: PerServiceChartRow[];
   spotlights: GenreSpotlight[];
 }
@@ -77,12 +85,99 @@ async function fetchRecentlyAdded(services: ServiceId[]): Promise<ContentItem[]>
   return out.slice(0, 18);
 }
 
+/** Popular pool — TMDb discover by popularity, providers-filtered. Feeds the
+ *  Trending ribbon, Free Tonight, and the editorial spotlight (the web reuses
+ *  `home.popular` across all three). */
+async function fetchPopular(services: ServiceId[]): Promise<ContentItem[]> {
+  const providerIds = serviceIdsToProviderIds(services);
+  if (providerIds.length === 0) return [];
+  const watchProviders = providerIds.join('|');
+
+  const [movieRes, tvRes] = await Promise.all([
+    discoverMovies({
+      with_watch_providers: watchProviders,
+      watch_region: 'GB',
+      sort_by: 'popularity.desc',
+      'vote_count.gte': 100,
+    }),
+    discoverTV({
+      with_watch_providers: watchProviders,
+      watch_region: 'GB',
+      sort_by: 'popularity.desc',
+      'vote_count.gte': 50,
+    }),
+  ]);
+
+  const movies = ((movieRes.data?.results ?? []) as TMDbContentResult[]).map(tmdbMovieToContentItem);
+  const tv = ((tvRes.data?.results ?? []) as TMDbContentResult[]).map(tmdbTVToContentItem);
+
+  const out: ContentItem[] = [];
+  const seen = new Set<string>();
+  const maxLen = Math.max(movies.length, tv.length);
+  for (let i = 0; i < maxLen; i++) {
+    for (const item of [movies[i], tv[i]]) {
+      if (item && item.image && !seen.has(item.id)) {
+        seen.add(item.id);
+        out.push(item);
+      }
+    }
+  }
+  return out;
+}
+
+/** Upcoming releases — TMDb discover within the next 30 days, providers-
+ *  filtered, ascending by date (web useUpcoming equivalent). */
+async function fetchUpcoming(services: ServiceId[]): Promise<UpcomingItem[]> {
+  const providerIds = serviceIdsToProviderIds(services);
+  if (providerIds.length === 0) return [];
+  const watchProviders = providerIds.join('|');
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const horizon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  const [movieRes, tvRes] = await Promise.all([
+    discoverMovies({
+      with_watch_providers: watchProviders,
+      watch_region: 'GB',
+      sort_by: 'primary_release_date.asc',
+      'primary_release_date.gte': todayStr,
+      'primary_release_date.lte': horizon,
+    }),
+    discoverTV({
+      with_watch_providers: watchProviders,
+      watch_region: 'GB',
+      sort_by: 'first_air_date.asc',
+      'first_air_date.gte': todayStr,
+      'first_air_date.lte': horizon,
+    }),
+  ]);
+
+  const out: UpcomingItem[] = [];
+  const seen = new Set<string>();
+  const add = (item: ContentItem, date: string | undefined) => {
+    if (item.image && date && !seen.has(item.id)) {
+      seen.add(item.id);
+      out.push({ item, date });
+    }
+  };
+  for (const r of (movieRes.data?.results ?? []) as (TMDbContentResult & { release_date?: string })[]) {
+    add(tmdbMovieToContentItem(r), r.release_date);
+  }
+  for (const r of (tvRes.data?.results ?? []) as (TMDbContentResult & { first_air_date?: string })[]) {
+    add(tmdbTVToContentItem(r), r.first_air_date);
+  }
+  out.sort((a, b) => a.date.localeCompare(b.date));
+  return out.slice(0, 12);
+}
+
 async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
-  const [charts, profile, filterSets, recentlyAdded] = await Promise.all([
+  const [charts, profile, filterSets, recentlyAdded, popular, upcoming] = await Promise.all([
     fetchPerServiceCharts(services),
     getV2TasteProfile(),
     buildFilterSets(services),
     fetchRecentlyAdded(services),
+    fetchPopular(services),
+    fetchUpcoming(services),
   ]);
 
   // Hero = first row's lead title, pulled OUT of its row so the same
@@ -120,7 +215,7 @@ async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
     }
   }
 
-  return { hero, recentlyAdded, rows, spotlights };
+  return { hero, recentlyAdded, popular, upcoming, rows, spotlights };
 }
 
 export function useHomeFeed() {

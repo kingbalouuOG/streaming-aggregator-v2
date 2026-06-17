@@ -1,11 +1,13 @@
 import { Image } from 'expo-image';
 import { Pressable, Text, View } from 'react-native';
 
+import { useIsBookmarked, useWatchlistMutations } from '@/hooks/useWatchlist';
 import type { ContentItem } from '@/lib/types/content';
+import { cardMeta, PosterOverlays } from './PosterOverlays';
 
 // Flexible-width 2:3 poster card for 2-column grids (Browse, Watchlist).
-// Differs from PosterCard (fixed 160px, horizontal rows) by filling its
-// grid column.
+// Same ContentCard anatomy as PosterCard (via PosterOverlays); differs only
+// in sizing — fills its grid column instead of a fixed 160px.
 
 export function PosterGridCard({
   item,
@@ -14,6 +16,9 @@ export function PosterGridCard({
   item: ContentItem;
   onPress: (item: ContentItem) => void;
 }) {
+  const bookmarked = useIsBookmarked(item.id);
+  const { toggle } = useWatchlistMutations();
+
   return (
     <Pressable onPress={() => onPress(item)} className="flex-1 p-1.5 active:opacity-80">
       <View className="overflow-hidden rounded-card bg-card">
@@ -24,14 +29,19 @@ export function PosterGridCard({
           transition={200}
           recyclingKey={item.id}
         />
+        <PosterOverlays
+          item={item}
+          bookmarked={bookmarked}
+          onToggleBookmark={() => toggle.mutate(item)}
+        />
       </View>
-      <Text numberOfLines={1} className="mt-2 font-sans-bold text-body text-foreground">
+      <Text numberOfLines={1} className="mt-2 font-card text-body text-foreground">
         {item.title}
       </Text>
-      <Text numberOfLines={1} className="mt-0.5 font-sans text-meta text-muted-foreground">
-        {[item.year, item.type === 'tv' ? 'TV' : item.type === 'doc' ? 'Doc' : 'Film']
-          .filter(Boolean)
-          .join(' · ')}
+      <Text
+        numberOfLines={1}
+        className="mt-0.5 font-sans-medium text-[11px] uppercase tracking-[0.3px] text-muted-foreground">
+        {cardMeta(item)}
       </Text>
     </Pressable>
   );

@@ -17,8 +17,12 @@ export const queryPersister = createSyncStoragePersister({
   throttleTime: 1000,
 });
 
-/** Bump when the cache shape changes incompatibly (discards old cache). */
-export const QUERY_CACHE_BUSTER = 'v1';
+/** Bump when the cache shape changes incompatibly (discards old cache).
+ *  v2: Track-2 Home/For You payloads gained fields (popular, upcoming, the
+ *  richer For You composition) — old persisted payloads lack them.
+ *  v3: FB2 build — new query families (semantic flag/search, item-services,
+ *  filter discover); start everyone clean on the feature-heavy build. */
+export const QUERY_CACHE_BUSTER = 'v3';
 
 /** Wipe the persisted cache — called on sign-out so a different user on
  *  the same device never sees the previous user's cached feeds. */

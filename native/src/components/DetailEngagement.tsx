@@ -74,19 +74,19 @@ export function DetailEngagement({ itemId, title, mediaType, genreIds, services,
           active={rating === 'up'}
           activeBg="bg-success"
           onPress={() => rate('up')}
-          icon={<ThumbsUp size={16} color={rating === 'up' ? '#fff' : 'rgba(245,241,232,0.62)'} fill={rating === 'up' ? '#fff' : 'transparent'} />}
+          icon={<ThumbsUp size={15} color={rating === 'up' ? '#fff' : 'rgba(245,241,232,0.62)'} fill={rating === 'up' ? '#fff' : 'transparent'} />}
         />
         <RateButton
           active={rating === 'down'}
           activeBg="bg-danger"
           onPress={() => rate('down')}
-          icon={<ThumbsDown size={16} color={rating === 'down' ? '#fff' : 'rgba(245,241,232,0.62)'} fill={rating === 'down' ? '#fff' : 'transparent'} />}
+          icon={<ThumbsDown size={15} color={rating === 'down' ? '#fff' : 'rgba(245,241,232,0.62)'} fill={rating === 'down' ? '#fff' : 'transparent'} />}
         />
         <Pressable
           onPress={notInterested}
-          className="h-10 flex-1 flex-row items-center justify-center gap-2 rounded-card border border-border bg-card active:bg-secondary">
+          accessibilityLabel="Not interested"
+          className="h-8 w-8 items-center justify-center rounded-md border border-border bg-card active:bg-secondary">
           <EyeOff size={15} color="rgba(245,241,232,0.62)" />
-          <Text className="font-sans-medium text-meta text-muted-foreground">Not interested</Text>
         </Pressable>
       </View>
 
@@ -134,8 +134,8 @@ function RateButton({
       onPress={onPress}
       className={
         active
-          ? `h-10 w-12 items-center justify-center rounded-card ${activeBg}`
-          : 'h-10 w-12 items-center justify-center rounded-card border border-border bg-card active:bg-secondary'
+          ? `h-8 w-8 items-center justify-center rounded-md ${activeBg}`
+          : 'h-8 w-8 items-center justify-center rounded-md border border-border bg-card active:bg-secondary'
       }>
       {icon}
     </Pressable>

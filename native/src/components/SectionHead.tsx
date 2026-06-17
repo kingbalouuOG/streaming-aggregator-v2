@@ -15,7 +15,7 @@ export function SectionHead({ kicker, title, right }: SectionHeadProps) {
   return (
     <View className="mb-3 flex-row items-end justify-between">
       <View>
-        <Text className="font-sans-bold text-kicker uppercase tracking-[1.6px] text-primary-on-soft">
+        <Text className="font-sans-bold text-kicker uppercase tracking-[1.6px] text-primary">
           {kicker}
         </Text>
         <Text className="mt-0.5 font-display-bold text-title text-foreground">{title}</Text>

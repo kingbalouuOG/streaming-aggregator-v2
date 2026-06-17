@@ -6,11 +6,6 @@ import {
   DMSans_700Bold,
   useFonts,
 } from '@expo-google-fonts/dm-sans';
-import {
-  Fraunces_600SemiBold,
-  Fraunces_700Bold,
-  Fraunces_800ExtraBold,
-} from '@expo-google-fonts/fraunces';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Stack } from 'expo-router';
@@ -50,9 +45,15 @@ export default function RootLayout() {
     DMSans_400Regular,
     DMSans_500Medium,
     DMSans_700Bold,
-    Fraunces_600SemiBold,
-    Fraunces_700Bold,
-    Fraunces_800ExtraBold,
+    // Fraunces optical-size cuts (scripts/generate-fraunces-cuts.py).
+    'Fraunces-Hero': require('../../assets/fonts/Fraunces-Hero.ttf'),
+    'Fraunces-Display': require('../../assets/fonts/Fraunces-Display.ttf'),
+    'Fraunces-Title': require('../../assets/fonts/Fraunces-Title.ttf'),
+    'Fraunces-Standfirst': require('../../assets/fonts/Fraunces-Standfirst.ttf'),
+    'Fraunces-Body': require('../../assets/fonts/Fraunces-Body.ttf'),
+    'Fraunces-Italic': require('../../assets/fonts/Fraunces-Italic.ttf'),
+    'Fraunces-Dropcap': require('../../assets/fonts/Fraunces-Dropcap.ttf'),
+    'Fraunces-Card': require('../../assets/fonts/Fraunces-Card.ttf'),
   });
 
   useEffect(() => {

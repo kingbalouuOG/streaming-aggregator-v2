@@ -28,13 +28,13 @@ export function BrowseChips({ active = 'All', onSelect }: BrowseChipsProps) {
               onPress={onSelect ? () => onSelect(cat) : undefined}
               className={
                 isActive
-                  ? 'rounded-pill bg-foreground px-4 py-2'
+                  ? 'rounded-pill border border-primary-edge bg-primary-soft px-4 py-2'
                   : 'rounded-pill border border-border bg-card px-4 py-2 active:bg-secondary'
               }>
               <Text
                 className={
                   isActive
-                    ? 'font-sans-bold text-body text-background'
+                    ? 'font-sans-bold text-body text-primary'
                     : 'font-sans-medium text-body text-muted-foreground'
                 }>
                 {cat}

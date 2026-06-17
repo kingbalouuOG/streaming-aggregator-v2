@@ -24,7 +24,7 @@ export function ContentRow({ title, kicker, items, onItemPress, surface }: Conte
   return (
     <View className="mt-7">
       {kicker ? (
-        <Text className="px-5 font-sans-bold text-kicker uppercase tracking-[1.6px] text-primary-on-soft">
+        <Text className="px-5 font-sans-bold text-kicker uppercase tracking-[1.6px] text-primary">
           {kicker}
         </Text>
       ) : null}
