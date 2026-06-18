@@ -1,7 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { setAuthState } from '@/lib/storage';
+import storage, { setAuthState } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import { clearQueryCache } from '@/queryPersist';
 
@@ -40,6 +40,17 @@ const AuthContext = createContext<AuthState | null>(null);
 
 function syncStorageAuth(session: Session | null) {
   setAuthState(!!session, session?.user?.id ?? null);
+}
+
+// Wipe per-user local state when a session ends (sign-out or account
+// deletion) so the next user on this device starts clean: the persisted
+// query cache (cached feeds) AND the one-time feedback-prompt bookkeeping
+// (device-global MMKV keys mirrored from useFeedbackPrompt.ts — kept in
+// sync there). Without the latter, user B inherits A's "already shown"
+// flag or banked foreground time.
+async function clearLocalUserState(): Promise<void> {
+  clearQueryCache();
+  await storage.multiRemove(['fb_prompt_shown', 'fb_fg_ms']);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -89,9 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async signOut() {
         await supabase.auth.signOut();
-        // Wipe the persisted query cache so the next user on this device
-        // never sees the previous user's cached feeds.
-        clearQueryCache();
+        await clearLocalUserState();
       },
       async forgotPassword(email) {
         // Sends the reset email (Supabase Site URL handles the link). The
@@ -112,9 +121,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async deleteAccount() {
         const { error } = await supabase.rpc('delete_own_account');
         if (error) return { error: error.message };
-        // Deletion also ends the session; mirror signOut's cache wipe.
+        // Deletion also ends the session; mirror signOut's local wipe.
         await supabase.auth.signOut();
-        clearQueryCache();
+        await clearLocalUserState();
         return { error: null };
       },
     }),
