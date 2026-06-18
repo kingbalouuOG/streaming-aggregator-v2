@@ -12,7 +12,8 @@ import { ProfileTaste } from '@/components/profile/ProfileTaste';
 import { ProfileTune } from '@/components/profile/ProfileTune';
 
 // Profile sub-screen router (NATIVE-4). Maps the section param to its
-// screen. Monthly Spend + Privacy & Data remain stubs (deferred).
+// screen. Every known section has a real screen (Monthly Spend + Privacy &
+// Data shipped post-NATIVE-4); Stub() only catches unknown sections.
 export default function ProfileSectionRoute() {
   const { section } = useLocalSearchParams<{ section: string }>();
 
@@ -32,13 +33,14 @@ export default function ProfileSectionRoute() {
     case 'privacy':
       return <ProfilePrivacy />;
     default:
-      return <Stub section={section ?? ''} />;
+      return <Stub />;
   }
 }
 
-function Stub({ section }: { section: string }) {
+// Fallback for an unrecognised section (every known one routes above).
+function Stub() {
   const router = useRouter();
-  const title = section === 'spend' ? 'Monthly Spend' : section === 'privacy' ? 'Privacy & Data' : 'Settings';
+  const title = 'Settings';
   return (
     <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-background">
       <View className="flex-row items-center gap-2 px-4 pt-2">

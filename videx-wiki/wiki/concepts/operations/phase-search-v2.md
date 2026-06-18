@@ -3,7 +3,7 @@ title: Phase Search V2 — Filtered + Semantic Search
 type: concept
 tags: [phase, phase-search-v2, search, semantic, filtered, feature-flag, embeddings, mode-a, mode-c]
 created: 2026-05-13
-updated: 2026-05-13
+updated: 2026-06-18
 sources:
   - docs/v2/phase-summaries/phase-search-v2-summary.md
   - docs/design/search/Phase_Search_V2_Kickoff.md
@@ -16,6 +16,7 @@ related:
   - wiki/concepts/architecture/signal-architecture.md
   - wiki/entities/codebase/migrations.md
   - wiki/entities/codebase/rpcs.md
+  - wiki/entities/codebase/hooks.md
   - wiki/registers/parking-lot.md
 ---
 
@@ -117,6 +118,14 @@ Filed as IN-PX-43 after Joe asked which search data was actually feeding the tas
 **Test coverage:** 13 pure-fn assertions at `src/lib/taste-v2/__tests__/searchAttribution.test.ts` — cache record/retrieve, session isolation, overwrite semantics, window boundary inclusive/exclusive, lower-bound guard against out-of-order replay.
 
 **Levels 2 and 3 stay deferred** — see IN-PX-44 (embed query directly, gated on 20-query fixture maturity) and IN-PX-45 (full Phase 3, gated on family-tester engagement data).
+
+## Native port (NATIVE track — live app)
+
+The semantic-search machinery shipped here carried over to the RN/Expo app (now the live product post-NATIVE-4 cutover):
+
+- **Browse moods → vector search behind `search_semantic`.** The native Browse mood path calls [`useSemanticSearch`/`useSemanticFlag`](../../entities/codebase/hooks.md#native-hooks), which reuses the **same** shared engine (`getFlag` → `embed-query` Edge fn → `match_titles_by_vector` → rank). The mood phrase **is** the query (`defaultFor([])` = no-op post-filter).
+- **Presets are the OFF fallback.** When the `search_semantic` flag is OFF for the user, Browse falls back to the deterministic mood-filter **presets** — the same per-user opt-in gate as the web (composite-PK `user_feature_flags`, migration 041). No rebuild to enable — a DB flag flip.
+- **Shipped eval gate = `scripts/search/eval-moods.ts`.** The native mood quality floor (rating>0, voteCount≥20, ≥40-min movies) mirrors this script, which is the **shipped** validation gate for the mood→vector path. This is distinct from **IN-PX-40** (the 20-query semantic-eval fixture), which remains the **later, broader** fixture gating the global flag-flip beyond Joe/prototype users — the B6 fixture is still a 2-query stub.
 
 ## Decisions resolved (locked during plan-mode)
 

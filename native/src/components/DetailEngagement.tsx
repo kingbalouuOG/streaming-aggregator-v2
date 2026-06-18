@@ -1,6 +1,7 @@
 import { Check, MessageSquare, ThumbsDown, ThumbsUp, EyeOff } from 'lucide-react-native';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 
 import { trackTasteInteraction } from '@/instrumentation/trackInteraction';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
@@ -34,13 +35,20 @@ export function DetailEngagement({ itemId, title, mediaType, genreIds, services,
   const [reportOpen, setReportOpen] = useState(false);
   const [reported, setReported] = useState(false);
 
-  // Dwell + detail_view anchor (IN-001/IN-002). exitDwell is idempotent.
-  useEffect(() => {
-    startDwell(tmdbId, mediaType);
-    emitDetailView(tmdbId, mediaType, title);
-    return () => exitDwell();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemId]);
+  // Dwell + detail_view anchor (IN-001/IN-002). Re-armed on every focus,
+  // not just mount: native stacks detail pages (a "More like this" tap
+  // pushes another /detail/[id], leaving this one mounted-but-blurred), so
+  // a mount-only effect would never restart the parent's dwell on return.
+  // useFocusEffect starts a fresh dwell each time the page regains focus —
+  // matching web, where every view is a fresh mount. exitDwell (on blur)
+  // is idempotent.
+  useFocusEffect(
+    useCallback(() => {
+      startDwell(tmdbId, mediaType);
+      emitDetailView(tmdbId, mediaType, title);
+      return () => exitDwell();
+    }, [tmdbId, mediaType, title]),
+  );
 
   const meta = { contentId: tmdbId, contentType: mediaType, title, genreIds };
 

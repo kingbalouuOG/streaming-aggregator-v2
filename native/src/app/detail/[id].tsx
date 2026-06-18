@@ -13,6 +13,8 @@ import { DetailSkeleton } from '@/components/Skeleton';
 import { WatchlistActions } from '@/components/WatchlistActions';
 import { WhereToWatch } from '@/components/WhereToWatch';
 import { useContentDetail } from '@/hooks/useContentDetail';
+import { useUserServices } from '@/hooks/useUserServices';
+import { serviceIdsToProviderIds } from '@/lib/adapters/platformAdapter';
 import type { ContentItem } from '@/lib/types/content';
 
 export default function DetailRoute() {
@@ -21,7 +23,16 @@ export default function DetailRoute() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  const { data, isLoading, isError, error } = useContentDetail(params.id);
+  // The user's connected services scope availability: they prioritise the
+  // detail's provider sort AND let "Where to Watch" surface the orange
+  // "Watch on X — On your stack" CTA for services the user actually has.
+  // Without this the section header ("On your stack.") contradicts a body
+  // that lists everything as "Not connected to your account."
+  const { data: userServices } = useUserServices();
+  const { data, isLoading, isError, error } = useContentDetail(
+    params.id,
+    serviceIdsToProviderIds(userServices ?? []),
+  );
   const [descExpanded, setDescExpanded] = useState(false);
 
   const heroHeight = (width * 5) / 4;
@@ -181,7 +192,7 @@ export default function DetailRoute() {
 
           {/* Where to Watch — the deep-link payoff */}
           <View className="mt-6">
-            <WhereToWatch detail={detail} />
+            <WhereToWatch detail={detail} userServices={userServices ?? []} />
           </View>
         </View>
 

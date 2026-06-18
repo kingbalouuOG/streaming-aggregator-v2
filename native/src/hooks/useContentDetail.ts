@@ -17,7 +17,8 @@ import type { ContentItem } from '@/lib/types/content';
 //  - "More like this" uses TMDb similar mapped straight to ContentItems;
 //    the embedding/taste-vector re-scoring (needs the pgvector batch
 //    query + taste profile) lands when For You goes native (W5/W6).
-//  - No dwell/impression instrumentation yet (needs auth, W6).
+// Dwell + detail_view instrumentation is handled by DetailEngagement,
+// which the detail route mounts alongside this hook's data.
 
 export interface ContentDetail {
   detail: DetailData;
