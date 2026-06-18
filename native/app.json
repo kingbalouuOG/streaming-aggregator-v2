@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Videx Dev",
+    "name": "Videx",
     "slug": "videx",
     "version": "2.0.0",
     "orientation": "portrait",
@@ -13,7 +13,8 @@
       "bundleIdentifier": "com.videx.app.dev"
     },
     "android": {
-      "package": "com.videx.app.dev",
+      "package": "app.videx.streaming",
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#0a0a0f",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
