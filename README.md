@@ -1,8 +1,8 @@
 # Videx - Streaming Aggregator
 
-A mobile-first streaming aggregator that combines content from multiple UK platforms into a single browsing interface. Built as a web app wrapped with Capacitor for native Android deployment.
+A mobile-first streaming aggregator that combines content from multiple UK platforms into a single browsing interface. The **live mobile app** is a React Native / Expo build under [`native/`](native/) (`app.videx.streaming`); the original React + Vite web app (`src/`) and a Cloudflare Worker (`workers/api/`) share the same `src/lib` engine. See **[Platform architecture](videx-wiki/wiki/concepts/architecture/platform-architecture.md)** for the one-repo / three-surface picture.
 
-**Conventions:** [docs/CONVENTIONS.md](docs/CONVENTIONS.md) — where things live, tests vs evals, lint rules, doc lifecycle, migration process, the ADR-011 mirror rule. Read it before contributing.
+**Conventions:** [docs/CONVENTIONS.md](docs/CONVENTIONS.md) — where things live, tests vs evals, lint rules, doc lifecycle, migration process, the single-engine-tree rule (ADR-014). Read it before contributing.
 
 ## Knowledge Base / Project Wiki
 
@@ -16,10 +16,13 @@ Netflix, Amazon Prime Video, Apple TV+, Disney+, NOW, Sky Go, Paramount+, BBC iP
 
 ## Tech Stack
 
-- **React 18** with TypeScript · **Vite 6** · **Tailwind CSS v4** · **Capacitor 8** (Android)
+- **Web** — React 18 + TypeScript · **Vite 6** · **Tailwind CSS v4**
+- **Native (the live app)** — React Native 0.85 / **Expo SDK 56** + NativeWind 4 · Android/Hermes (`native/`)
+- **Edge** — Cloudflare Worker (`workers/api/`): TMDb/OMDB proxy + server-rendered `/v1/foryou`
+- *Legacy:* the original Capacitor 8 Android wrapper of the web app remains in `android/`, superseded by the Expo build at the NATIVE-4 cutover
 - **Supabase** — authentication, database (pgvector), Edge Functions, cloud sync
 - **Motion** (`motion/react`), **Sonner**, **Lucide React**, **react-markdown** (in-app legal docs)
-- **Vitest + jsdom** — `npm test` is the single test entry (146 tests; suites live in `__tests__/` beside source in both `src/` and `scripts/`). CI: `tsc --noEmit` + lint + `npm test` on phase branches; build verification on main; `typegen-check`, `shared-tree-drift`, and the `foryou-parity` golden probe on ranking-related PRs.
+- **Vitest + jsdom** — `npm test` is the single test entry (suites in `__tests__/` beside source in `src/` and `scripts/`). CI: `tsc --noEmit` + lint + `npm test` on phase branches; build verification on main. (The `shared-tree-drift` + `foryou-parity` probes were retired at PLAT-3 with the `_shared/` mirror — ADR-014.)
 
 ### APIs
 
@@ -52,25 +55,18 @@ cp .env.example .env   # then add your API keys + Supabase credentials
 npm run dev
 ```
 
-### Android Deployment
+### Mobile build (the live app)
+
+The live Android app is the **Expo** project under [`native/`](native/) — see [`native/README.md`](native/README.md) for the full dev + release flow. In brief:
 
 ```bash
-npm run build
-npx cap sync android
-cd android && ./gradlew assembleDebug
-adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+cd native
+npm install                              # installs deps + creates the src/lib junction
+npx expo prebuild --platform android --clean
+cd android && ./gradlew bundleRelease    # signed AAB; release signing auto-applies via a config plugin
 ```
 
-### Live Reload (Development)
-
-For hot-reloading on a physical device over WiFi:
-
-```bash
-npm run dev
-LIVE_RELOAD=<your-lan-ip> npx cap sync android
-cd android && ./gradlew assembleDebug
-adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-```
+> The original Capacitor wrapper of the web app (`npm run build && npx cap sync android`) is **legacy** — superseded by the Expo build at the NATIVE-4 cutover.
 
 ## Project Structure
 
@@ -84,19 +80,22 @@ src/
   lib/
     api/                   TMDb / OMDB / SA clients + Supabase content queries + cache layer
     adapters/              External shapes → UI interfaces (content, detail, platform)
-    recommendations-v2/    Ranking pipeline — mirrored to supabase/functions/_shared/ (ADR-011, until PLAT-3)
+    recommendations-v2/    Ranking pipeline — imported directly by web, the Worker, and native (ADR-014, single tree)
     taste-v2/              Taste system: interest centroids, bootstrap, EMA + k-means updates
     storage/               Persistence (watchlist, preferences, interactions event log)
     instrumentation/       card_impressions batcher, session ids, click context
+native/                    LIVE Android app — React Native / Expo (app.videx.streaming). Holds
+                           src/{app,components,hooks,providers}; src/lib + src/assets are junctions
+                           to ../src/lib + ../src/assets. See native/README.md.
 scripts/                   Node tooling in named subfolders (evaluation/, enrichment/, embeddings/,
                            fingerprints/, mood_rooms/, test/); root holds only sync-content.ts,
                            debug-server.js, gen-android-icons.py
-workers/api/               Cloudflare Worker home — lands in PLAT-2 (README stub for now)
+workers/api/               videx-api Cloudflare Worker — TMDb/OMDB proxy + /v1/foryou (live)
 supabase/
   migrations/              Numbered schema migrations (apply process: see CONVENTIONS.md)
-  functions/               Edge Functions + _shared/ engine mirror (drift-checked in CI)
+  functions/               Edge Functions (the _shared/ engine mirror was removed at PLAT-3)
   queries/                 Operational SQL (dashboard, funnel, reports)
-android/                   Capacitor native project
+android/                   Legacy Capacitor wrapper of the web app (superseded by native/)
 docs/                      CONVENTIONS, design/ (design system + search briefs), legal/, plans/,
                            solutions/ (post-mortems), v2/ (strategy, orchestration, phase-summaries/)
 videx-wiki/                The knowledge base (see above)
@@ -123,7 +122,7 @@ Ratings, genre tags, availability with tappable deep links (Android App Links wh
 Want to Watch / Watched with thumbs ratings feeding the engine; changes invalidate recommendation caches.
 
 ### For You
-Personalised surface: Recommended For You (with two daily-rotating exploration slots), Hidden Gems, Outside Your Usual, Because You Watched, More From [Person], From Your Watchlist, plus title-anchored mood rooms. First paint is served by the `render-foryou-rows` Edge Function with a client-pipeline fallback (ADR-012). The taste-fingerprint card re-ranks instantly on slider drags from the cached candidate pool.
+Personalised surface: Recommended For You (with two daily-rotating exploration slots), Hidden Gems, Outside Your Usual, Because You Watched, More From [Person], From Your Watchlist, plus title-anchored mood rooms. First paint is served by the `videx-api` Worker's `/v1/foryou` route (imports `src/lib` directly — ADR-014, superseding the old `render-foryou-rows` Edge fn). The taste-fingerprint card re-ranks instantly on slider drags from the cached candidate pool.
 
 ### Profile
 Service management, cluster retake, slider tuning, theme, spend dashboard, and **Privacy & Data**: in-app Privacy Policy + ToS, GDPR data export (`export_user_data` RPC → JSON download), and type-to-confirm account deletion (`delete_own_account` RPC).
