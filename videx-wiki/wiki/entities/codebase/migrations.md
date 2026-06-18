@@ -3,12 +3,13 @@ title: Migration Changelog
 type: entity
 tags: [supabase, migrations, postgres]
 created: 2026-04-26
-updated: 2026-06-10
+updated: 2026-06-18
 sources:
   - raw/codebase-snapshots/migration-changelog.md
   - docs/v2/Videx_v2_Project_Orchestration_v0.8.md
   - raw/phase-summaries/phase-5.5-summary.md
   - docs/v2/phase-summaries/phase-eng-1-summary.md
+  - supabase/migrations/047_app_feedback.sql
 related:
   - wiki/entities/codebase/database-schema.md
   - wiki/concepts/operations/supabase-migration-workflow.md
@@ -69,6 +70,7 @@ Chronological list of every applied migration. Source of truth: `supabase/migrat
 | 044 | `044_user_interest_centroids.sql` | Phase ENG-1 (2026-06-10) | applied (by Joe via Studio) | `user_interest_centroids (user_id, slot 0–2, centroid vector(1536), weight, updated_at)`, PK `(user_id, slot)`, K ≤ 3 (E&P D3), owner-scoped RLS per 041 pattern, touch trigger, FK → `auth.users` CASCADE. Also CREATE OR REPLACEs `delete_own_account()` (042) and `export_user_data()` (043) to include the new user-scoped table (IN-PX-54 honoured at creation time). `taste_profiles.taste_vector_v2` continues as the single-centroid summary. Zero rows for a user = single-vector fallback path. |
 | 045 | `045_training_extract_view.sql` | Phase ENG-1 (2026-06-10) | applied (by Joe via Studio) | `v_training_examples` (`security_invoker = true` — base-table RLS applies): one row per `card_impressions` row LEFT JOIN LATERAL the first same-session positive outcome (`thumbs_up`/`watchlist_add`/`deep_link_click`/`watched` at-or-after `shown_at`). Fields: `label_positive`, `exploration` (Workstream C tag), `position`, `position_at_click` (clickContext stash). The ENG-2 dataset shape, defined at ENG-1 per brief §3.5. Known limitation: joins on `content_id` only (impressions lack media_type) — IN-PX-56. |
 | 046 | `046_drop_title_genres_credits.sql` | Phase REPO-1 (2026-06-10) | ✅ applied (by Joe via Studio, 2026-06-10 — confirmed by the post-046 live schema snapshot) | Drops the `title_genres` and `title_credits` tables — both created in 001, both intentionally never populated (static genre mapping per ADR-008; `cast_top_5`/`director` columns cover credits). Closes the deferred-items "drop when convenient" entry. Both confirmed 0 rows pre-drop; `database.types.ts` blocks removed in the same commit. |
+| 047 | `047_app_feedback.sql` | NATIVE track (feedback loop) | applied | `app_feedback` — in-app feedback (optional 1–5 `rating`, required `message` 1–2000 chars, `context jsonb` triage hints), RLS authenticated INSERT + read-own, immutable (no UPDATE/DELETE policies, like `user_interactions`), CASCADE on account delete (FK → `profiles(id)`; reachable via `delete_own_account()`); index `(user_id, created_at DESC)`. Pairs with the native FeedbackSheet (Profile → Send feedback + the one-time `useFeedbackPrompt` timed prompt). |
 
 ## Notes
 
@@ -81,3 +83,4 @@ Chronological list of every applied migration. Source of truth: `supabase/migrat
 - **Source-of-truth gap CLOSED Phase 5.5:** `delete_own_account` RPC is now captured in migration 042 with defensive explicit DELETEs.
 - **Phase ENG-1 (2026-06-10):** 044 + 045 applied by Joe via Studio — CC's `apply_migration` was permission-gated (production DDL is an explicit-Joe action). **Do NOT use `supabase db push`** while the migration ledger has gaps (033, 036–039, 040, 042–045 are absent from it — applied via Studio/MCP): a push would replay applied migrations and apply the intentionally-unapplied `040_editor_notes.sql` and the not-yet-applied `046_drop_title_genres_credits.sql`. Orchestration v0.8 §3.4 is the authoritative applied-status table, not the ledger.
 - **Phase REPO-1 (2026-06-10):** 046 written (drop `title_genres` + `title_credits`) and applied by Joe the same day — the regenerated `raw/codebase-snapshots/database-schema-snapshot.md` is a live production pull post-046. Ledger-gap list in the ENG-1 note above now extends through 046.
+- **NATIVE track:** 047 (`app_feedback`) backs the native in-app feedback loop — applied alongside the NATIVE-4 cutover (app id `app.videx.streaming`, v2.0.0). The ledger-gap caveat above extends through 047; orchestration v0.8 §3.4 remains the authoritative applied-status table — do **not** `supabase db push`.

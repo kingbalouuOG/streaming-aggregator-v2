@@ -3,11 +3,12 @@ title: Database Schema (Supabase)
 type: entity
 tags: [supabase, postgres, schema, pgvector, pg_partman]
 created: 2026-04-26
-updated: 2026-06-10
+updated: 2026-06-18
 sources:
   - raw/codebase-snapshots/database-schema-snapshot.md
   - raw/codebase-snapshots/migration-changelog.md
   - raw/v2-strategy/Videx_v2_Project_Orchestration_v0.8.md
+  - supabase/migrations/047_app_feedback.sql
 related:
   - wiki/entities/codebase/migrations.md
   - wiki/entities/codebase/rpcs.md
@@ -22,7 +23,7 @@ related:
 
 # Database Schema (Supabase)
 
-Snapshot of the Videx Supabase schema **as of migration 046** (REPO-1 close; regenerated from a live production `information_schema` pull, 2026-06-10). Source of truth: `supabase/migrations/` + orchestration v0.8 §3.4 for applied status. Use [migrations](migrations.md) for chronology, [RPC catalogue](rpcs.md) for callable functions. RLS is enabled on **every** public table.
+Snapshot of the Videx Supabase schema **as of migration 047** (the live-production `information_schema` pull is REPO-1-era / migration 046, 2026-06-10; `app_feedback` from migration 047 added from the migration source for the NATIVE feedback loop). Source of truth: `supabase/migrations/` + orchestration v0.8 §3.4 for applied status. Use [migrations](migrations.md) for chronology, [RPC catalogue](rpcs.md) for callable functions. RLS is enabled on **every** public table.
 
 ## Extensions
 
@@ -60,6 +61,7 @@ Snapshot of the Videx Supabase schema **as of migration 046** (REPO-1 close; reg
 | `user_feature_flags` | Per-user flags (041, Search V2 pattern). | PK `(user_id, flag_name)`, `enabled` |
 | `onboarding_events` | Funnel instrumentation. | `event_name`, `metadata jsonb` |
 | `availability_reports` | "Report incorrect availability" submissions. | `tmdb_id`, `service_id`, `report_type`, `notes` |
+| `app_feedback` | **NATIVE (047):** in-app product feedback backing the native FeedbackSheet — deliberate written commentary (distinct from the `user_interactions` behavioural log). Immutable (no UPDATE/DELETE). FK `user_id` → `profiles(id)` CASCADE. | `message` (1–2000 chars, required), `rating` (1–5, optional), `context jsonb` (surface/platform triage hints), `created_at` |
 
 ### Recommendation layer
 
@@ -109,4 +111,5 @@ See [RLS pattern](../../concepts/techniques/rls-pattern.md) and the [authenticat
 
 - Migration 021 intentionally skipped (rolled into 022).
 - `editor_notes` — `040_editor_notes.sql` in repo (Phase 6 PR-AD) but **NOT applied**; apply before Phase 6 editorial features go live.
-- The Supabase migration ledger has gaps (033, 036–046 applied via Studio/MCP): **orchestration v0.8 §3.4 is the authoritative applied-status record. Never `supabase db push`.**
+- The Supabase migration ledger has gaps (033, 036–047 applied via Studio/MCP): **orchestration v0.8 §3.4 is the authoritative applied-status record. Never `supabase db push`.**
+- `app_feedback` (047) is GDPR-deleted via **FK CASCADE only** — migration 044 (which CREATE OR REPLACEd `delete_own_account()`/`export_user_data()`) predates it, so the RPCs' explicit-DELETE / export lists don't yet enumerate it. The CASCADE through `profiles` covers deletion; an export-coverage refresh is a candidate fast-follow.

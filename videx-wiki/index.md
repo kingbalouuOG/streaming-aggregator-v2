@@ -9,7 +9,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Pre-launch blockers](wiki/registers/pre-launch-blockers.md) — What must happen before public launch.
 - [Deferred items](wiki/registers/deferred-items.md) — What's parked and the trigger to revisit.
 - [Acceptance gates](wiki/registers/acceptance-gates.md) — Every numerical threshold in one place.
-- [Next steps](wiki/registers/next-steps.md) — E&P track: REPO-1 close-out → PLAT-1/2/3 → launch → ENG-2.
+- [Next steps](wiki/registers/next-steps.md) — E&P + NATIVE tracks closed (live app `app.videx.streaming` v2.0.0); now internal-testing rollout → ENG-2.
 - [Cheatsheet](wiki/registers/cheatsheet.md) — Phases ↔ branches ↔ migrations ↔ features.
 - [Registers index](wiki/registers/README.md) — This category.
 
@@ -35,12 +35,12 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 
 ### Codebase
 
-- [Database Schema (Supabase)](wiki/entities/codebase/database-schema.md) — Snapshot of tables, extensions, triggers, RLS as of migration 032.
+- [Database Schema (Supabase)](wiki/entities/codebase/database-schema.md) — Snapshot of tables, extensions, triggers, RLS as of migration 047.
 - [Migration Changelog](wiki/entities/codebase/migrations.md) — Every applied migration (gap at 021 intentional).
 - [Supabase RPC Catalogue](wiki/entities/codebase/rpcs.md) — Every callable Supabase function.
 - [Module Map (src/)](wiki/entities/codebase/module-map.md) — Annotated `src/` tree plus runtime stack.
 - [Component Inventory](wiki/entities/codebase/components.md) — Every React component grouped by role.
-- [Hook Inventory](wiki/entities/codebase/hooks.md) — One row per `useX` hook.
+- [Hook Inventory](wiki/entities/codebase/hooks.md) — One row per `useX` hook (web + native sections).
 - [Event Taxonomy](wiki/entities/codebase/event-taxonomy.md) — Every emitted event, destination table, payload.
 
 ## Concepts
@@ -110,6 +110,8 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Phase NATIVE-1 — React Native shell bootstrap](wiki/concepts/operations/phase-native-1.md) — Capacitor → RN migration phase 1: Expo shell, shared engine tree via junction, device evidence.
 - [Phase NATIVE-2 — Design fidelity + core loop](wiki/concepts/operations/phase-native-2.md) — RN migration phase 2: Videx typography, Home parity, Detail + deep links, auth, Watchlist/Browse/For You.
 - [Phase NATIVE-3 — Onboarding + real service prefs](wiki/concepts/operations/phase-native-3.md) — RN migration phase 3: 5-step onboarding (account→services→watched→clusters→sliders), taste bootstrap, retires DEV_SERVICES.
+- [Phase NATIVE-3.5 — Home composition completion](wiki/concepts/operations/phase-native-3-5.md) — RN migration phase 3.5: ports the web Home's genre-spotlight + Recently-Added rows onto native Home.
+- [Phase NATIVE-4 + POLISH — Profile/settings, signal capture, cutover](wiki/concepts/operations/phase-native-4-and-polish.md) — RN migration finale: Profile/Sign-Out, engagement signal capture, MMKV query persistence, migration 047, and the app.videx.streaming v2.0.0 cutover to main.
 - [Sync pipeline runbook](wiki/concepts/operations/sync-pipeline.md)
 - [Embedding backfill runbook](wiki/concepts/operations/embedding-backfill.md)
 - [Edge Function deployment runbook](wiki/concepts/operations/edge-function-deployment.md)
