@@ -48,7 +48,11 @@ Single-page lookup table for "which phase, which branch, which migration, what s
 | PLAT-2 | `phase-plat-2-api-proxy` | closed 2026-06-12 | 2026-06-11 | — | `workers/api/` Worker (Hono) live on workers.dev: merged `/v1/title` (24h CDN, warm 114ms) + allowlisted `/v1/tmdb/*` passthrough. TMDb/OMDB keys out of the client bundle (dist-grep acceptance). Device smoke 188 reqs all Ok. Joe rotates both keys post-merge. |
 | PLAT-3 | `phase-plat-3-single-engine` | closed 2026-06-12 | 2026-06-12 | — | Single engine: Worker imports src/lib directly (ADR-014 supersedes ADR-011/012). `/v1/foryou` + KV feed cache (~175ms hits) + nightly recompute cron. Mirror + drift CI + parity CI + render-foryou-rows DELETED (~3,700 LOC). Client pipeline survives one release (IN-PX-59). Joe deletes the deployed Edge fn post-merge. |
 | UX-1 | `phase-ux-1-perceived-performance` | closed 2026-06-12 | 2026-06-12 | — | Keep-alive tabs (single-frame switches), persisted instant For You paint, idle-deferred hydration (4s freeze gone), M3 fade-through + Reveal cascade, LQIP dark-ghost clamp, splash-holds-til-paint. Frame-forensics method (am start NOT monkey). Residuals: IN-PX-61. |
-| 6 | (planned) | not started | — | — | Launch: APK release build, pre-launch blocker review, solicitor-reviewed legal docs, cryptographic JWT rotation if tooling allows. |
+| NATIVE-1 | `phase-native-1-expo-shell` | merged | 2026-06-12 | — | Capacitor → RN/Expo rebuild begins: Expo SDK 56 shell, shared `src/lib` via Metro junction. Device evidence: native p99 frame 15ms vs Capacitor 57ms. |
+| NATIVE-2 | `phase-native-2-core-loop` | merged | 2026-06-13 | — | Core loop + design fidelity: Videx typography, Home parity, Detail + Where-to-Watch deep links, auth/session, Watchlist/Browse/For You. |
+| NATIVE-3 (+3.5) | `phase-native-3-onboarding` (+`-3-5-home-composition`) | merged | 2026-06-13 | — | 5-step onboarding + taste bootstrap (retires DEV_SERVICES); then Home composition parity (genre spotlights + Recently Added). |
+| NATIVE-4 + POLISH | `phase-native-4-profile-settings`, `phase-native-polish-gaps` | merged → **LIVE** | 2026-06-18 | **047** | Profile/Sign-Out, signal capture, MMKV persistence, in-app feedback loop. **Cutover: app id → `app.videx.streaming` v2.0.0** (PRs #24→#28, then #30/#31). The Expo app is now the live product; the `videx-native` worktree was consolidated into `native/`. |
+| 6 / public launch | (gated) | in progress | — | — | Native app is live on the internal track. **Public** launch still gated by pre-launch blockers (headline: IN-XPS-014 solicitor review) + the `search_semantic` global flip. |
 | 7 (post-v2) | — | not started | — | — | Conversational discovery on top of v2. See [v3 forward-planning](../concepts/forward-planning/v3-conversational-discovery.md). |
 
 ## Migration → phase
@@ -101,6 +105,7 @@ Single-page lookup table for "which phase, which branch, which migration, what s
 | 044 | `044_user_interest_centroids.sql` | ENG-1 | K ≤ 3 interest centroids; extends delete/export RPCs. |
 | 045 | `045_training_extract_view.sql` | ENG-1 | `v_training_examples` view (ENG-2 dataset shape). |
 | 046 | `046_drop_title_genres_credits.sql` | REPO-1 | Applied 2026-06-10. Drops `title_genres` + `title_credits`. |
+| 047 | `047_app_feedback.sql` | NATIVE-POLISH | Applied. `app_feedback` (optional 1-5 rating + required message), RLS authenticated insert + read-own, immutable, CASCADE on account delete. Backs the native FeedbackSheet. |
 
 ## Service slug ↔ TMDb ↔ SA API ↔ deep links
 
@@ -170,6 +175,7 @@ ENG-1 additions outside the formula: avoid-set penalty (`finalScore −= 0.15 ·
 - **Negative dwell session cap −1.0**.
 - **Single engine tree** `src/lib/{recommendations-v2,taste-v2}` — the videx-api Worker imports it directly (ADR-014; the `_shared/` mirror is gone). Engine modules must stay importable outside Vite.
 - **Multi-interest centroids K ≤ 3** (ENG-1, E&P D3); negative events feed the avoid set, taste vectors are positive-only.
+- **Native app is the live product** — RN/Expo (`app.videx.streaming` v2.0.0) replaced the Capacitor WebView build at the NATIVE-4 cutover. ONE repo; the `videx-native` worktree was consolidated into `native/` (2026-06-18). See [Platform architecture](../concepts/architecture/platform-architecture.md).
 
 ## Cross-links
 
