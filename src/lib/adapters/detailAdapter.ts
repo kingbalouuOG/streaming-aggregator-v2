@@ -38,7 +38,7 @@ export interface TMDbDetailResponse {
   poster_path?: string | null;
   release_date?: string;
   first_air_date?: string;
-  genres?: Array<{ name: string }>;
+  genres?: Array<{ id: number; name: string }>;
   'watch/providers'?: { results?: Record<string, TMDbWatchProviderRegion> };
   networks?: Array<{ name: string }>;
   vote_average?: number;
@@ -87,6 +87,7 @@ export interface DetailData {
   rottenTomatoes: number;
   description: string;
   genres: string[];
+  genreIds: number[];
   services: ServiceId[];
   allServices: ServiceId[];
   rentalOptions: RentalOption[];
@@ -149,8 +150,9 @@ export function buildDetailData(
   const dateStr = tmdbDetail.release_date || tmdbDetail.first_air_date;
   const year = dateStr ? parseInt(dateStr.substring(0, 4), 10) : 0;
 
-  // Genres
+  // Genres — names for display, ids for engine attribution (thumbs signal).
   const genres = (tmdbDetail.genres || []).map((g) => g.name);
+  const genreIds = (tmdbDetail.genres || []).map((g) => g.id);
 
   // Streaming services from watch/providers (flatrate + free + ads = "available to stream")
   const providers = tmdbDetail['watch/providers']?.results?.GB;
@@ -277,6 +279,6 @@ export function buildDetailData(
   return {
     id, title, heroImage, year, contentRating,
     imdbRating, rottenTomatoes, description: tmdbDetail.overview || '',
-    genres, services, allServices, rentalOptions, serviceLinks, cast, runtime, seasons, language, mediaType,
+    genres, genreIds, services, allServices, rentalOptions, serviceLinks, cast, runtime, seasons, language, mediaType,
   };
 }

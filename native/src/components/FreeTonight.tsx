@@ -4,12 +4,9 @@ import type { ContentItem } from '@/lib/types/content';
 import { PosterCard } from './PosterCard';
 
 // "Free Tonight" — a small editorial strip of titles on the UK free
-// services (iPlayer / ITVX / Channel 4), lime-tinted. Only renders when the
-// popular pool actually contains free-service titles. Web FreeTonight.
-
-function isFree(item: ContentItem): boolean {
-  return item.services.some((s) => s === 'bbc' || s === 'itvx' || s === 'channel4');
-}
+// services (iPlayer / ITVX / Channel 4), lime-tinted. Items are scoped to the
+// free providers server-side (useHomeFeed → fetchFreeTonight), so this just
+// renders what it's handed. Web FreeTonight.
 
 export function FreeTonight({
   items,
@@ -18,7 +15,7 @@ export function FreeTonight({
   items: ContentItem[];
   onItemPress: (item: ContentItem) => void;
 }) {
-  const free = items.filter(isFree).slice(0, 10);
+  const free = items.slice(0, 10);
   if (free.length === 0) return null;
 
   return (

@@ -21,6 +21,9 @@ import type { ContentItem, ServiceId } from '@/lib/types/content';
 // personalised genre spotlights (the curated "For You on Home" rows).
 
 const SPOTLIGHT_COUNT = 3;
+// UK free-to-air services — "Free Tonight" is no-subscription content, so it's
+// scoped to these regardless of the user's selected stack.
+const FREE_UK_SERVICES: ServiceId[] = ['bbc', 'itvx', 'channel4'];
 
 export interface GenreSpotlight {
   clusterName: string;
@@ -37,9 +40,27 @@ export interface HomeFeed {
   hero: ContentItem | null;
   recentlyAdded: ContentItem[];
   popular: ContentItem[];
+  freeTonight: ContentItem[];
   upcoming: UpcomingItem[];
   rows: PerServiceChartRow[];
   spotlights: GenreSpotlight[];
+}
+
+// Interleave two provider-scoped result lists 1:1, dropping imageless +
+// duplicate items. Shared by the discover-backed Home rows.
+function interleaveDedupe(movies: ContentItem[], tv: ContentItem[], limit?: number): ContentItem[] {
+  const out: ContentItem[] = [];
+  const seen = new Set<string>();
+  const maxLen = Math.max(movies.length, tv.length);
+  for (let i = 0; i < maxLen; i++) {
+    for (const item of [movies[i], tv[i]]) {
+      if (item && item.image && !seen.has(item.id)) {
+        seen.add(item.id);
+        out.push(item);
+      }
+    }
+  }
+  return limit ? out.slice(0, limit) : out;
 }
 
 /** Recently Added — TMDb discover by release date, providers-filtered.
@@ -69,25 +90,11 @@ async function fetchRecentlyAdded(services: ServiceId[]): Promise<ContentItem[]>
 
   const movies = ((movieRes.data?.results ?? []) as TMDbContentResult[]).map(tmdbMovieToContentItem);
   const tv = ((tvRes.data?.results ?? []) as TMDbContentResult[]).map(tmdbTVToContentItem);
-
-  // Interleave 1:1, dedupe.
-  const out: ContentItem[] = [];
-  const seen = new Set<string>();
-  const maxLen = Math.max(movies.length, tv.length);
-  for (let i = 0; i < maxLen; i++) {
-    for (const item of [movies[i], tv[i]]) {
-      if (item && item.image && !seen.has(item.id)) {
-        seen.add(item.id);
-        out.push(item);
-      }
-    }
-  }
-  return out.slice(0, 18);
+  return interleaveDedupe(movies, tv, 18);
 }
 
 /** Popular pool — TMDb discover by popularity, providers-filtered. Feeds the
- *  Trending ribbon, Free Tonight, and the editorial spotlight (the web reuses
- *  `home.popular` across all three). */
+ *  Trending ribbon + the editorial spotlight (the web reuses `home.popular`). */
 async function fetchPopular(services: ServiceId[]): Promise<ContentItem[]> {
   const providerIds = serviceIdsToProviderIds(services);
   if (providerIds.length === 0) return [];
@@ -110,19 +117,36 @@ async function fetchPopular(services: ServiceId[]): Promise<ContentItem[]> {
 
   const movies = ((movieRes.data?.results ?? []) as TMDbContentResult[]).map(tmdbMovieToContentItem);
   const tv = ((tvRes.data?.results ?? []) as TMDbContentResult[]).map(tmdbTVToContentItem);
+  return interleaveDedupe(movies, tv);
+}
 
-  const out: ContentItem[] = [];
-  const seen = new Set<string>();
-  const maxLen = Math.max(movies.length, tv.length);
-  for (let i = 0; i < maxLen; i++) {
-    for (const item of [movies[i], tv[i]]) {
-      if (item && item.image && !seen.has(item.id)) {
-        seen.add(item.id);
-        out.push(item);
-      }
-    }
-  }
-  return out;
+/** Free Tonight — popular titles on the UK free-to-air services (iPlayer /
+ *  ITVX / Channel 4). Scoped server-side to those providers so the section
+ *  actually populates; the old client filter on item.services (empty from the
+ *  TMDb adapters) always produced nothing. */
+async function fetchFreeTonight(): Promise<ContentItem[]> {
+  const providerIds = serviceIdsToProviderIds(FREE_UK_SERVICES);
+  if (providerIds.length === 0) return [];
+  const watchProviders = providerIds.join('|');
+
+  const [movieRes, tvRes] = await Promise.all([
+    discoverMovies({
+      with_watch_providers: watchProviders,
+      watch_region: 'GB',
+      sort_by: 'popularity.desc',
+      'vote_count.gte': 50,
+    }),
+    discoverTV({
+      with_watch_providers: watchProviders,
+      watch_region: 'GB',
+      sort_by: 'popularity.desc',
+      'vote_count.gte': 30,
+    }),
+  ]);
+
+  const movies = ((movieRes.data?.results ?? []) as TMDbContentResult[]).map(tmdbMovieToContentItem);
+  const tv = ((tvRes.data?.results ?? []) as TMDbContentResult[]).map(tmdbTVToContentItem);
+  return interleaveDedupe(movies, tv, 12);
 }
 
 /** Upcoming releases — TMDb discover within the next 30 days, providers-
@@ -171,12 +195,13 @@ async function fetchUpcoming(services: ServiceId[]): Promise<UpcomingItem[]> {
 }
 
 async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
-  const [charts, profile, filterSets, recentlyAdded, popular, upcoming] = await Promise.all([
+  const [charts, profile, filterSets, recentlyAdded, popular, freeTonight, upcoming] = await Promise.all([
     fetchPerServiceCharts(services),
     getV2TasteProfile(),
     buildFilterSets(services),
     fetchRecentlyAdded(services),
     fetchPopular(services),
+    fetchFreeTonight(),
     fetchUpcoming(services),
   ]);
 
@@ -215,7 +240,7 @@ async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
     }
   }
 
-  return { hero, recentlyAdded, popular, upcoming, rows, spotlights };
+  return { hero, recentlyAdded, popular, freeTonight, upcoming, rows, spotlights };
 }
 
 export function useHomeFeed() {

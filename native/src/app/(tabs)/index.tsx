@@ -76,7 +76,7 @@ export default function HomeScreen() {
     );
   }
 
-  const { hero, rows, recentlyAdded, spotlights, popular = [], upcoming = [] } = feed.data;
+  const { hero, rows, recentlyAdded, spotlights, popular = [], freeTonight = [], upcoming = [] } = feed.data;
   // Editorial spotlight: a popular title with a backdrop, distinct from the
   // hero and (where possible) the trending top-5.
   const spotlightPick =
@@ -124,9 +124,9 @@ export default function HomeScreen() {
           </Reveal>
         ) : null}
 
-        {popular.length > 0 ? (
+        {freeTonight.length > 0 ? (
           <Reveal index={(revealIdx += 1)}>
-            <FreeTonight items={popular} onItemPress={openDetail} />
+            <FreeTonight items={freeTonight} onItemPress={openDetail} />
           </Reveal>
         ) : null}
 

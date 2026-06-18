@@ -147,6 +147,7 @@ export default function DetailRoute() {
             itemId={detail.id}
             title={detail.title}
             mediaType={detail.mediaType}
+            genreIds={detail.genreIds}
             services={detail.allServices}
             onBack={back}
           />
