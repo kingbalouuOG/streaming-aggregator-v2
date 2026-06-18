@@ -52,7 +52,14 @@ type Env = {
   SUPABASE_SERVICE_ROLE_KEY: string;
   /** PLAT-3 W3: per-user feed cache. */
   FORYOU_CACHE: KVNamespace;
+  /** LAUNCH-1 W1 (IN-PX-60): per-user rate limiter on /v1/foryou. */
+  FORYOU_RATELIMIT: RateLimit;
 };
+
+/** Cloudflare rate-limit binding surface (the `limit()` runtime API). */
+interface RateLimit {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const OMDB_BASE = 'https://www.omdbapi.com';
@@ -201,6 +208,17 @@ app.get('/v1/foryou', async (c) => {
   const token = (c.req.header('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
   const userId = await verifySupabaseJwt(token, c.env.SUPABASE_URL);
   if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  // LAUNCH-1 W1 (IN-PX-60): rate limit AFTER auth, keyed on the verified
+  // userId — so the budget can't be burned on another user's behalf, and
+  // the 401 above already shed unauthenticated load for free. 429 before
+  // any Supabase/pgvector cost. The client treats 429 as a worker
+  // failure → its existing fallback chain, so a human never sees a cliff;
+  // at 30/min sustained it's automation, not a person.
+  const { success: withinLimit } = await c.env.FORYOU_RATELIMIT.limit({ key: userId });
+  if (!withinLimit) {
+    return c.json({ error: 'rate limited' }, 429, { 'Retry-After': '60' });
+  }
 
   const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
   const scope = withUserScope(client, userId);

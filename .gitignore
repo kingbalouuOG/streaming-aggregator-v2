@@ -46,6 +46,9 @@ android/.idea/
 *.aab
 *.jks
 *.keystore
+# LAUNCH-1 W2: release signing credentials (passwords + keystore path).
+android/keystore.properties
+keystore.properties
 
 # Debug logs
 debug.log
@@ -120,6 +123,11 @@ scripts/fingerprints/.backfill-failures.jsonl
 # PLAT-2 worker build artifacts
 workers/api/.wrangler-check/
 workers/api/.wrangler/
+# Screen-recording frame-forensics scratch dirs (device-debug only).
 _frames/
 _fwin*/
+_ff*/
+_fq/
+_fv/
+_fz/
 *.mp4
