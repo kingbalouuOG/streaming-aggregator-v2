@@ -108,6 +108,8 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Phase ENG-1 — Multi-interest retrieval & signal quality](wiki/concepts/operations/phase-eng-1.md)
 - [Phase REPO-1 — Documentation & repo hygiene](wiki/concepts/operations/phase-repo-1.md)
 - [Phase NATIVE-1 — React Native shell bootstrap](wiki/concepts/operations/phase-native-1.md) — Capacitor → RN migration phase 1: Expo shell, shared engine tree via junction, device evidence.
+- [Phase NATIVE-2 — Design fidelity + core loop](wiki/concepts/operations/phase-native-2.md) — RN migration phase 2: Videx typography, Home parity, Detail + deep links, auth, Watchlist/Browse/For You.
+- [Phase NATIVE-3 — Onboarding + real service prefs](wiki/concepts/operations/phase-native-3.md) — RN migration phase 3: 5-step onboarding (account→services→watched→clusters→sliders), taste bootstrap, retires DEV_SERVICES.
 - [Sync pipeline runbook](wiki/concepts/operations/sync-pipeline.md)
 - [Embedding backfill runbook](wiki/concepts/operations/embedding-backfill.md)
 - [Edge Function deployment runbook](wiki/concepts/operations/edge-function-deployment.md)

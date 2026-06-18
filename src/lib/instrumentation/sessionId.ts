@@ -27,12 +27,20 @@ let initialised = false;
 const resetCallbacks = new Set<() => void>();
 
 function generateUuid(): string {
-  // crypto.randomUUID is available in modern WebViews and Node 19+.
-  // Capacitor 8 targets Android API 23+, but the WebView is the
-  // system WebView which on any device running Android 10+ supports
-  // crypto.randomUUID. If we ever need to support older devices we
-  // can polyfill here.
-  return crypto.randomUUID();
+  // crypto.randomUUID exists in modern WebViews/Node 19+ but NOT in Hermes
+  // (React Native) — a bare `crypto` reference there is a ReferenceError.
+  // A session id needs uniqueness, not cryptographic strength, so fall back
+  // to a Math.random v4 when crypto is unavailable. Accessed via globalThis
+  // so the absence is `undefined`, not a throw.
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (c && typeof c.randomUUID === 'function') {
+    return c.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0;
+    const v = ch === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 function ensureInitialised(): void {

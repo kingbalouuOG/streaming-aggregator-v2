@@ -20,6 +20,7 @@ import type { ContentItem } from '@/lib/types/content';
 import type { SliderState } from '@/lib/taste-v2/types';
 import type { AnchorRoomPreview, CandidatePool, ExtendedTitleRow, MatchedTitle, PipelineContext } from './types';
 import { env } from '../env';
+import { supabase } from '../supabase';
 
 const PROXY_URL = env.API_PROXY_URL;
 // First-ever render for a user+services key runs ~9-15s (cold DB
@@ -31,21 +32,18 @@ const PROXY_URL = env.API_PROXY_URL;
 const SAFETY_TIMEOUT_MS = 20_000;
 
 /**
- * Read the supabase-js auth token from localStorage. Returns null if
- * no session exists or the entry is malformed. (Lived in edgeWarmup.ts
- * until PLAT-3 deleted the warmup hack.)
+ * Read the current supabase access token via the official client API.
+ * Returns null if no session exists.
+ *
+ * Was a synchronous localStorage scan (`sb-<ref>-auth-token`) until
+ * NATIVE-2 W6 — that broke under Hermes (no localStorage) and tied the
+ * engine to a web storage shape. `getSession()` is isomorphic: on web
+ * it reads the same localStorage entry, on native it reads the MMKV
+ * session store the native client is configured with. Async now.
  */
-export function readAccessToken(): string | null {
-  const tokenKey = Object.keys(localStorage).find(
-    (k) => k.startsWith('sb-') && k.endsWith('-auth-token'),
-  );
-  if (!tokenKey) return null;
-  try {
-    const stored = JSON.parse(localStorage.getItem(tokenKey) ?? 'null');
-    return stored?.access_token ?? null;
-  } catch {
-    return null;
-  }
+export async function readAccessToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
 }
 
 interface BecauseYouWatchedRow {
@@ -96,7 +94,7 @@ export async function tryRenderForYouWorker(
     .filter(Boolean) as string[];
   if (services.length === 0) return null;
 
-  const accessToken = readAccessToken();
+  const accessToken = await readAccessToken();
   if (!accessToken) return null;
 
   const t0 = Date.now();

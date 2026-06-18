@@ -1,87 +1,89 @@
 import '../global.css';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Tabs } from 'expo-router/js-tabs';
+import {
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_700Bold,
+  useFonts,
+} from '@expo-google-fonts/dm-sans';
+import { QueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { Bookmark, Compass, House, Sparkles, User } from 'lucide-react-native';
-import { useState } from 'react';
-import type { ColorValue } from 'react-native';
+import { useEffect, useState } from 'react';
 
-// Dark-first shell (theme switching arrives with NATIVE-2/3). JS tabs
-// for now — NativeTabs (truly native bottom bar) is a NATIVE-2 polish
-// decision. Query persistence to MMKV is NATIVE-2 (the UX-1 instant-
-// For-You lesson) — a session-scoped client is enough for Home v0.
+import { AuthProvider } from '@/providers/auth';
+import { QUERY_CACHE_BUSTER, queryPersister } from '@/queryPersist';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Root layout: fonts + query provider + a single always-mounted Stack.
+// Auth/onboarding gating is done by REDIRECTS in the (tabs) guard
+// (NATIVE-3 W1) rather than conditionally swapping the navigator — so
+// the onboarding route owns its step state and signUp mid-flow doesn't
+// remount it.
 const BG = '#0a0a0f';
-const CARD = '#14141c';
-const CREAM_SOFT = 'rgba(245,241,232,0.62)';
-const PRIMARY = '#e85d25';
 
-type IconProps = { color: ColorValue; size: number };
+// Hold the splash until fonts are in — Fraunces/DM Sans ARE the brand;
+// a system-font flash is the native equivalent of the UX-1 white flash.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const [queryClient] = useState(
     () =>
       new QueryClient({
         defaultOptions: {
-          queries: { retry: 2, refetchOnWindowFocus: false },
+          // gcTime must be >= the persister maxAge or queries get GC'd
+          // before they can be restored from disk.
+          queries: { retry: 2, refetchOnWindowFocus: false, gcTime: DAY_MS },
         },
       }),
   );
 
+  const [fontsLoaded, fontsError] = useFonts({
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_700Bold,
+    // Fraunces optical-size cuts (scripts/generate-fraunces-cuts.py).
+    'Fraunces-Hero': require('../../assets/fonts/Fraunces-Hero.ttf'),
+    'Fraunces-Display': require('../../assets/fonts/Fraunces-Display.ttf'),
+    'Fraunces-Title': require('../../assets/fonts/Fraunces-Title.ttf'),
+    'Fraunces-Standfirst': require('../../assets/fonts/Fraunces-Standfirst.ttf'),
+    'Fraunces-Body': require('../../assets/fonts/Fraunces-Body.ttf'),
+    'Fraunces-Italic': require('../../assets/fonts/Fraunces-Italic.ttf'),
+    'Fraunces-Dropcap': require('../../assets/fonts/Fraunces-Dropcap.ttf'),
+    'Fraunces-Card': require('../../assets/fonts/Fraunces-Card.ttf'),
+  });
+
+  useEffect(() => {
+    if (fontsLoaded || fontsError) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsLoaded, fontsError]);
+
+  if (!fontsLoaded && !fontsError) {
+    return null; // splash stays up
+  }
+
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{ persister: queryPersister, maxAge: DAY_MS, buster: QUERY_CACHE_BUSTER }}>
       <StatusBar style="light" />
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          sceneStyle: { backgroundColor: BG },
-          tabBarStyle: {
-            backgroundColor: CARD,
-            borderTopColor: 'rgba(245,241,232,0.10)',
-          },
-          tabBarActiveTintColor: PRIMARY,
-          tabBarInactiveTintColor: CREAM_SOFT,
-        }}>
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: 'Home',
-            tabBarIcon: ({ color, size }: IconProps) => <House color={color} size={size ?? 22} />,
-          }}
-        />
-        <Tabs.Screen
-          name="foryou"
-          options={{
-            title: 'For You',
-            tabBarIcon: ({ color, size }: IconProps) => (
-              <Sparkles color={color} size={size ?? 22} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="browse"
-          options={{
-            title: 'Browse',
-            tabBarIcon: ({ color, size }: IconProps) => <Compass color={color} size={size ?? 22} />,
-          }}
-        />
-        <Tabs.Screen
-          name="watchlist"
-          options={{
-            title: 'Watchlist',
-            tabBarIcon: ({ color, size }: IconProps) => (
-              <Bookmark color={color} size={size ?? 22} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="profile"
-          options={{
-            title: 'Profile',
-            tabBarIcon: ({ color, size }: IconProps) => <User color={color} size={size ?? 22} />,
-          }}
-        />
-      </Tabs>
-    </QueryClientProvider>
+      <AuthProvider>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: BG },
+          }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="auth" options={{ animation: 'fade' }} />
+          <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
+          <Stack.Screen name="detail/[id]" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="profile/[section]" options={{ animation: 'slide_from_right' }} />
+        </Stack>
+      </AuthProvider>
+    </PersistQueryClientProvider>
   );
 }

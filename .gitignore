@@ -81,6 +81,9 @@ tmp/
 /*.jpg
 /*.jpeg
 
+# Native device-test scratch (frame-forensics screenshots, build logs)
+.audit/
+
 # VS Code Edge Tools per-workspace profile (auth state, history, etc.)
 .vscode/edge-profile/
 

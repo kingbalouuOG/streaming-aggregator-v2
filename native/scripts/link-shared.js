@@ -31,23 +31,30 @@ if (fs.existsSync(foojaySettings)) {
   }
 }
 
-const linkPath = path.join(__dirname, '..', 'src', 'lib');
-const target = path.resolve(__dirname, '..', '..', 'src', 'lib');
+// Mounts: shared lib tree + shared assets (service logo PNGs, NATIVE-2).
+const MOUNTS = [
+  ['lib', 'lib'],
+  ['assets', 'assets'],
+];
 
-if (!fs.existsSync(target)) {
-  console.error(`[link-shared] shared tree not found at ${target}`);
-  process.exit(1);
-}
+for (const [linkName, targetName] of MOUNTS) {
+  const linkPath = path.join(__dirname, '..', 'src', linkName);
+  const target = path.resolve(__dirname, '..', '..', 'src', targetName);
 
-try {
-  const stat = fs.lstatSync(linkPath);
-  if (stat.isSymbolicLink() || stat.isDirectory()) {
-    // Already mounted (junctions report as directories once followed).
-    process.exit(0);
+  if (!fs.existsSync(target)) {
+    console.error(`[link-shared] shared tree not found at ${target}`);
+    process.exit(1);
   }
-} catch {
-  // Doesn't exist — create it.
-}
 
-fs.symlinkSync(target, linkPath, 'junction'); // 'junction' is ignored on POSIX
-console.log(`[link-shared] ${linkPath} -> ${target}`);
+  let exists = false;
+  try {
+    const stat = fs.lstatSync(linkPath);
+    exists = stat.isSymbolicLink() || stat.isDirectory();
+  } catch {
+    // Doesn't exist — create it.
+  }
+  if (!exists) {
+    fs.symlinkSync(target, linkPath, 'junction'); // 'junction' is ignored on POSIX
+    console.log(`[link-shared] ${linkPath} -> ${target}`);
+  }
+}

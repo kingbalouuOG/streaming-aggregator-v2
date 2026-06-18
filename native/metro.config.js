@@ -34,4 +34,24 @@ config.resolver.nodeModulesPaths = [
   path.resolve(__dirname, '..', 'node_modules'),
 ];
 
+// Force a SINGLE copy of React/React Native (native's). Shared-tree modules
+// reach Metro through the src/lib junction; Metro realpaths those origins, so
+// a bare `react` import from a shared file would otherwise walk up to the REPO
+// ROOT's React 18 (the web app's) instead of native's React 19 — two Reacts ⇒
+// "Cannot read property 'useState' of null" at the first hook (AuthProvider).
+// nodeModulesPaths alone doesn't fix it (the realpathed origin walk wins), so
+// pin react/react-native/scheduler to native/node_modules regardless of origin.
+const FORCE_NATIVE_COPY = new Set(['react', 'react-native', 'scheduler']);
+const nativeOrigin = path.resolve(__dirname, 'node_modules', '.metro-origin.js');
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (FORCE_NATIVE_COPY.has(moduleName.split('/')[0])) {
+    return context.resolveRequest(
+      { ...context, originModulePath: nativeOrigin },
+      moduleName,
+      platform,
+    );
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = withNativeWind(config, { input: './src/global.css' });

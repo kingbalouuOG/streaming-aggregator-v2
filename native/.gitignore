@@ -25,6 +25,7 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+build-*.log
 
 # macOS
 .DS_Store
@@ -47,3 +48,8 @@ src/lib
 
 # Local env (mirrored from root .env by hand)
 .env
+src/assets
+
+# Scratch: Fraunces variable masters re-fetched by scripts/generate-fraunces-cuts.py
+# (the generated static cuts in assets/fonts/ ARE committed)
+.font-src/
