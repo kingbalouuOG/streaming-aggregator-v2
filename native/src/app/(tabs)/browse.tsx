@@ -269,7 +269,7 @@ export default function BrowseScreen() {
           filterOnly={filterOnlyMode}
           semantic={semanticMode}
           moodLabel={mood?.label}
-          tightened={activeCount > 0 && searching && (results?.length ?? 0) > 0}
+          tightened={Boolean(activeCount > 0 && searching && (results?.length ?? 0) > 0)}
         />
       )}
 
