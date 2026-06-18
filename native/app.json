@@ -15,6 +15,7 @@
     "android": {
       "package": "app.videx.streaming",
       "versionCode": 3,
+      "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#0a0a0f",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -29,6 +30,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withReleaseSigning",
       [
         "expo-splash-screen",
         {
