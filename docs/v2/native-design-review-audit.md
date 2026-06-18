@@ -1,6 +1,17 @@
 # Native vs Existing App — Design & Code Review Audit
 
 **Date:** 2026-06-13 · **Rev v2:** 2026-06-15 — reconciled against the authoritative design handoff.
+
+> **⚠️ Rev v3 — 2026-06-17 — SUPERSEDED IN PART.** Most of the "missing / → Track 2"
+> findings below have since SHIPPED on `phase-native-polish-gaps` and must NOT be read as
+> open gaps: the full Browse filter system + sort + mood chips + FilterSheet + **semantic
+> mood search** (behind the `search_semantic` flag), the richer For You composition
+> (TasteFingerprint / MoodRooms / WatchlistListRow / WideCard), the Detail RT badge (uses
+> the RT logo PNG, not an emoji), Profile Monthly Spend + Privacy as full screens, the
+> Search-icon Browse tab, the in-app feedback loop, and loading skeletons. The §4 Track-2
+> component list is all built + wired. Treat this doc as historical; the current launch
+> state is [`native-4-cutover-runbook.md`](native-4-cutover-runbook.md) + the pre-launch
+> audit. Genuinely-open items: typography/opsz polish + minor badge-anatomy nits.
 **Purpose:** support Joe's design-review pass aligning the native (RN) app to the existing app's UI.
 **Method:** 4 parallel code-review agents (Home/For You · Detail/Browse/Watchlist · Onboarding/Auth · Profile/Settings) comparing `native/src/**` against `src/**` and the `Pictures\Videx` reference screenshots, plus on-device captures. **Rev v2** folds in Joe's **design handoff** (`Downloads\Videx-design-references\design_handoff_videx\`) — machine-readable tokens (`tokens.json`/`tokens.css`) + the `videx-design-system.html` change matrix — which is now the top source of truth. **No code has been changed** — this is the audit only.
 
