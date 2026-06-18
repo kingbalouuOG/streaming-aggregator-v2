@@ -38,7 +38,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Database Schema (Supabase)](wiki/entities/codebase/database-schema.md) — Snapshot of tables, extensions, triggers, RLS as of migration 047.
 - [Migration Changelog](wiki/entities/codebase/migrations.md) — Every applied migration (gap at 021 intentional).
 - [Supabase RPC Catalogue](wiki/entities/codebase/rpcs.md) — Every callable Supabase function.
-- [Module Map (src/)](wiki/entities/codebase/module-map.md) — Annotated `src/` tree plus runtime stack.
+- [Module Map (src/)](wiki/entities/codebase/module-map.md) — Annotated web `src/` tree + runtime stack (native/`workers/` covered in Platform architecture).
 - [Component Inventory](wiki/entities/codebase/components.md) — Every React component grouped by role.
 - [Hook Inventory](wiki/entities/codebase/hooks.md) — One row per `useX` hook (web + native sections).
 - [Event Taxonomy](wiki/entities/codebase/event-taxonomy.md) — Every emitted event, destination table, payload.
@@ -51,6 +51,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 
 ### Architecture
 
+- [Platform architecture (one repo, three surfaces, one engine)](wiki/concepts/architecture/platform-architecture.md) — **Read first to orient.** Repo layout, the web/native/Worker surfaces sharing `src/lib`, native build env, and the 2026-06-18 single-folder consolidation (`videx-native` worktree retired).
 - [Two-surface architecture](wiki/concepts/architecture/two-surface-architecture.md) — Home (discovery) and For You (personalised) split.
 - [Home surface](wiki/concepts/architecture/home-surface.md) — Recency-led, lightly personalised, max 7-9 rows.
 - [For You surface](wiki/concepts/architecture/for-you-surface.md) — Heavy personalisation, sliders, mood rooms, max 7-8 rows.

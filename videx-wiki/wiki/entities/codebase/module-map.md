@@ -18,6 +18,8 @@ related:
 
 Annotated `src/` tree. Each module's role and primary callers. Source of truth: the repo itself.
 
+> **Scope:** this page maps the **web** `src/` tree (which also holds the shared `src/lib/` engine). For the whole-repo picture — `native/` (the live Expo app), `workers/api/` (the Cloudflare Worker), and how all three surfaces share `src/lib` — see [Platform architecture](../../concepts/architecture/platform-architecture.md). The runtime-stack table below is the **web** app's; native deps live in `native/package.json`.
+
 ## Top level
 
 - `App.tsx` — root shell, route state, theme + auth providers, global modals.

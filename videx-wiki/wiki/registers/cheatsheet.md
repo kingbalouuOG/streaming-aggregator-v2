@@ -3,7 +3,7 @@ title: Cheatsheet — phases, branches, migrations, features at a glance
 type: register
 tags: [register, cheatsheet, phases, migrations, branches]
 created: 2026-04-26
-updated: 2026-06-10
+updated: 2026-06-18
 sources:
   - raw/v2-strategy/Videx_v2_Project_Orchestration_v0.3.3.md
   - raw/codebase-snapshots/migration-changelog.md
@@ -19,6 +19,8 @@ related:
 ---
 
 # Cheatsheet
+
+> **New to the repo?** Read [Platform architecture](../concepts/architecture/platform-architecture.md) first — one repo, three surfaces (web · native · Worker), one shared `src/lib` engine. The Expo app under `native/` is the **live** product (`app.videx.streaming` v2.0.0) since the NATIVE-4 cutover; the old `videx-native` worktree was consolidated into this single folder on 2026-06-18.
 
 Single-page lookup table for "which phase, which branch, which migration, what shipped". For narrative detail, see the per-phase pages under [operations](../concepts/operations/phase-history.md).
 
