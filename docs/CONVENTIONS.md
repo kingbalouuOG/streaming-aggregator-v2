@@ -11,9 +11,10 @@ and reality disagree, fix one of them in the same PR.
 | `src/lib/` | Business logic — API clients, cache, storage, pure domain modules. No React. |
 | `src/lib/api/` | Third-party + Supabase data access (TMDb, OMDB, SA, content queries, cache layer). |
 | `src/lib/adapters/` | Data-model bridges: external/API shapes → UI interfaces. Wire-shape interfaces live next to the adapter that consumes them, typed to the fields actually accessed. |
-| `src/lib/recommendations-v2/`, `src/lib/taste-v2/` | The engine. **Mirrored** into `supabase/functions/_shared/` per ADR-011 — see Mirror rule below. |
+| `src/lib/recommendations-v2/`, `src/lib/taste-v2/` | The engine. **Single tree** (ADR-014): imported directly by web, the videx-api Worker, and native — no mirror. See Engine-tree rule below. |
 | `src/hooks/` | React service layer. Hooks orchestrate `lib/`; they do not contain business logic that `lib/` could own. |
 | `src/components/` | UI. Design citations point at `docs/design/design-system.md`. |
+| `native/` | The **live** RN/Expo mobile app (`app.videx.streaming`). React in `native/src/{app,components,hooks,providers}`; `native/src/lib` + `native/src/assets` are junctions to the shared tree — **never put React (hooks/components/providers) under `native/src/lib`** (dual-React crash). See the wiki `platform-architecture` page. |
 | `scripts/` | Node tooling, in named subfolders (`evaluation/`, `enrichment/`, `embeddings/`, `fingerprints/`, `mood_rooms/`, `test/`). **Nothing one-off lands at the root** — root is reserved for `sync-content.ts`, `debug-server.js`, `gen-android-icons.py`. Investigation artefacts are deleted when the investigation closes (git history preserves them). |
 | `workers/api/` | Cloudflare Worker (PLAT-2+). Plain folder, no workspace split (locked D6). |
 | `supabase/migrations/` | Schema evolution only — see Migrations below. |
@@ -29,7 +30,7 @@ and reality disagree, fix one of them in the same PR.
 ## Lint
 
 - `npm run lint` must be **0 errors** at all times. `@typescript-eslint/no-explicit-any` is **error** in `src/` (burned to zero in REPO-1 — keep it there; type via `database.types.ts` for Supabase rows and minimal wire interfaces for third-party APIs). `react/jsx-no-leaked-render` is error — `cond ? <X/> : null`, never bare `count && <X/>`.
-- `scripts/**` runs a relaxed profile (warn-level any/unused, CJS allowed for `debug-server.js`). `supabase/functions/**` is ignored (Deno) until PLAT-3 removes it.
+- `scripts/**` runs a relaxed profile (warn-level any/unused, CJS allowed for `debug-server.js`). `supabase/functions/**` is ignored (Deno). `native/**` lints via its own `expo lint` (config `native/eslint.config.mjs`; the repo-root config ignores `native/**`).
 
 ## Documents
 
@@ -48,7 +49,7 @@ and reality disagree, fix one of them in the same PR.
 - Every new user-scoped table updates `delete_own_account()` + `export_user_data()` in the same migration (IN-PX-54).
 - After applying: regenerate `src/lib/database.types.ts` (typegen-check CI enforces the match).
 
-## Mirror rule (ADR-011 — until PLAT-3)
+## Engine-tree rule (ADR-014)
 
 `src/lib/{recommendations-v2,taste-v2}` is the SINGLE engine tree (PLAT-3 / ADR-014): the videx-api Worker imports it directly, so there is no mirror, no `shared-tree-drift` CI, and no `drift-allowed:` marker. Engine modules must stay importable outside Vite — no module-scope `import.meta.env`, `localStorage`, or bare `__DEV__` reads (the lazy `supabase` singleton and the `*Scoped` data-access variants are the established patterns). The D4 one-release client-fallback window: until it closes, behaviour changes to the client pipeline functions in these trees should be mirrored in their `*Scoped` twins within the same file.
 
