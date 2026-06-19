@@ -9,8 +9,10 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0a0a0f",
     "ios": {
-      "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.videx.app.dev"
+      "icon": "./assets/images/icon-ios.png",
+      "bundleIdentifier": "app.videx.streaming",
+      "buildNumber": "1",
+      "supportsTablet": false
     },
     "android": {
       "package": "app.videx.streaming",
