@@ -14,7 +14,7 @@ import type { ContentItem } from '@/lib/types/content';
 
 export function WatchlistActions({ item }: { item: ContentItem }) {
   const { data: items } = useWatchlist();
-  const { toggle, setStatus } = useWatchlistMutations();
+  const { toggle, markWatched } = useWatchlistMutations();
 
   const { tmdbId, mediaType } = parseContentItemId(item.id);
   const entry = items?.find((i) => i.id === tmdbId && i.type === mediaType);
@@ -54,13 +54,14 @@ export function WatchlistActions({ item }: { item: ContentItem }) {
 
       <Pressable
         onPress={() => {
-          // Marking watched implies it's in the list — add first if needed.
-          if (!bookmarked) toggle.mutate(item);
           if (!watched) {
             setLastAction('marked_watched');
             void trackTasteInteraction(meta, 'watched');
           }
-          setStatus.mutate({ id: item.id, status: watched ? 'want_to_watch' : 'watched' });
+          // Single idempotent write — upserts the row as watched (adding it
+          // if unlisted). No second mutation racing an update against a
+          // not-yet-inserted row, so the status actually sticks.
+          markWatched.mutate({ item, watched });
         }}
         className={
           watched
