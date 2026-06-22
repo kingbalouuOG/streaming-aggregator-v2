@@ -46,14 +46,17 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "cross-env": "^7.0.3",
     "tailwindcss": "^3.4.19",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "postinstall": "node scripts/link-shared.js",
     "start": "expo start",
+    "start:dev": "cross-env APP_VARIANT=development expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
+    "android:dev": "cross-env APP_VARIANT=development expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint"

@@ -35,6 +35,38 @@ import type { TasteVectorV2, InterestCentroid } from './types';
 const LEARNING_RATE = 0.05;
 
 /**
+ * Fetch a title's 1536D embedding from the content cache. Returns null when
+ * the title isn't cached or has no embedding yet — callers decide whether to
+ * warn. Exported so a single interaction can fetch the embedding once and
+ * share it across the summary-vector and centroid update paths.
+ */
+export async function fetchTitleEmbedding(
+  tmdbId: number,
+  mediaType: 'movie' | 'tv',
+): Promise<number[] | null> {
+  const { data, error } = await supabase
+    .from('titles')
+    .select('embedding')
+    .eq('tmdb_id', tmdbId)
+    .eq('media_type', mediaType)
+    .not('embedding', 'is', null)
+    .maybeSingle();
+
+  if (error || !data?.embedding) return null;
+  return typeof data.embedding === 'string' ? JSON.parse(data.embedding) : data.embedding;
+}
+
+/**
+ * Whether an event type drives a taste-vector update (and therefore needs the
+ * title embedding). Mirrors the guards inside the apply* functions so callers
+ * can skip the embedding fetch — and its warning — for negative / non-scoring
+ * events.
+ */
+export function eventUsesEmbedding(eventType: string): boolean {
+  return !NEGATIVE_EVENTS.has(eventType) && INTERACTION_WEIGHTS[eventType] !== undefined;
+}
+
+/**
  * Apply a single interaction to the taste vector (incremental update).
  *
  * Fetches the title's 1536D embedding, blends it into the current vector
@@ -47,6 +79,7 @@ export async function applyInteractionIncremental(
   eventType: string,
   interactionCount: number,
   sessionId?: string | null,
+  prefetchedEmbedding?: number[] | null,
 ): Promise<{ vector: TasteVectorV2; newCount: number } | null> {
   // ENG-1 Workstream B: negatives never touch the vector — they feed the
   // score-time avoid set instead. Explicit guard on top of the weights
@@ -56,23 +89,19 @@ export async function applyInteractionIncremental(
   const weight = INTERACTION_WEIGHTS[eventType];
   if (weight === undefined) return null;
 
-  // Fetch the title's embedding
-  const { data, error } = await supabase
-    .from('titles')
-    .select('embedding')
-    .eq('tmdb_id', tmdbId)
-    .eq('media_type', mediaType)
-    .not('embedding', 'is', null)
-    .maybeSingle();
+  // Embedding — reuse the one the caller prefetched so a single interaction
+  // queries `titles` once and logs at most one "no embedding" warning. Falls
+  // back to fetching (and warning) when no caller supplies one.
+  const embedding = prefetchedEmbedding !== undefined
+    ? prefetchedEmbedding
+    : await fetchTitleEmbedding(tmdbId, mediaType);
 
-  if (error || !data?.embedding) {
-    console.warn('[InteractionUpdate] No embedding found for', mediaType, tmdbId);
+  if (!embedding) {
+    if (prefetchedEmbedding === undefined) {
+      console.warn('[InteractionUpdate] No embedding found for', mediaType, tmdbId);
+    }
     return null;
   }
-
-  const embedding: number[] = typeof data.embedding === 'string'
-    ? JSON.parse(data.embedding)
-    : data.embedding;
 
   // Apply confidence floor boost for early interactions
   const newCount = interactionCount + 1;
@@ -335,6 +364,7 @@ export async function applyInteractionToCentroids(
   eventType: string,
   interactionCount: number,
   sessionId?: string | null,
+  prefetchedEmbedding?: number[] | null,
 ): Promise<{ slot: number; vector: TasteVectorV2 } | null> {
   if (centroids.length === 0) return null;
   if (NEGATIVE_EVENTS.has(eventType)) return null;
@@ -342,22 +372,18 @@ export async function applyInteractionToCentroids(
   const weight = INTERACTION_WEIGHTS[eventType];
   if (weight === undefined || weight <= 0) return null;
 
-  const { data, error } = await supabase
-    .from('titles')
-    .select('embedding')
-    .eq('tmdb_id', tmdbId)
-    .eq('media_type', mediaType)
-    .not('embedding', 'is', null)
-    .maybeSingle();
+  // Embedding — reuse the caller's prefetched vector (shared with the
+  // summary-vector update) so we don't re-query `titles` or re-warn.
+  const embedding = prefetchedEmbedding !== undefined
+    ? prefetchedEmbedding
+    : await fetchTitleEmbedding(tmdbId, mediaType);
 
-  if (error || !data?.embedding) {
-    console.warn('[InteractionUpdate] No embedding found for', mediaType, tmdbId);
+  if (!embedding) {
+    if (prefetchedEmbedding === undefined) {
+      console.warn('[InteractionUpdate] No embedding found for', mediaType, tmdbId);
+    }
     return null;
   }
-
-  const embedding: number[] = typeof data.embedding === 'string'
-    ? JSON.parse(data.embedding)
-    : data.embedding;
 
   // Nearest centroid by raw cosine
   let best = centroids[0];

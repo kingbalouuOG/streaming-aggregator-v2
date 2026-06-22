@@ -92,9 +92,17 @@ Common: `npm install` (runs the junction/foojay postinstall). Env in `native/.en
 **Dev (Metro + fast refresh):**
 
 ```bash
-npm run start          # Metro / Expo dev server
-npm run android        # expo run:android — build + install a debug dev client
+npm run start:dev      # Metro / Expo dev server (APP_VARIANT=development)
+npm run android:dev    # build + install the "Videx Dev" app on a connected device
 ```
+
+The `:dev` scripts set `APP_VARIANT=development` (via `cross-env`), which
+`app.config.js` reads to build a **separate app** — name **"Videx Dev"**,
+package **`com.videx.app.dev`** — that installs *alongside* the Play release
+(`app.videx.streaming`). Use this to test on-device before shipping without
+touching the production app. The plain `npm run android` / `npm run start`
+build under the production id (only useful for release-id smoke tests, and a
+debug build there collides with the Play-signed app).
 
 **Release APK (standalone, no Metro):**
 
@@ -118,4 +126,6 @@ Other scripts: `npm run lint` (`expo lint`), `npm run ios`, `npm run web`.
 **Dev package-id history:** earlier native phases ran under **`com.videx.app.dev`** to keep
 the in-development client installable next to the shipping Capacitor app. NATIVE-4 cut the
 **Android** package over to `app.videx.streaming` at v2.0.0 (iOS retains the dev id for now).
-Older notes referencing `com.videx.app` are stale.
+Older notes referencing `com.videx.app` are stale. The `APP_VARIANT=development` build
+(`npm run android:dev`) restores `com.videx.app.dev` so the dev app still installs next to
+the Play release — see `app.config.js`.
