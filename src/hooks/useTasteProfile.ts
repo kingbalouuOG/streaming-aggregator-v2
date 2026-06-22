@@ -16,6 +16,8 @@ import {
 import {
   applyInteractionIncremental,
   applyInteractionToCentroids,
+  eventUsesEmbedding,
+  fetchTitleEmbedding,
 } from '@/lib/taste-v2/interactionUpdate';
 import type { TasteProfileV2 } from '@/lib/taste-v2/types';
 import { invalidateRecommendationCache } from '@/lib/storage/recommendations';
@@ -62,6 +64,17 @@ export function useTasteProfile() {
         genre_ids: contentMeta.genreIds || [],
       });
 
+      // Fetch the title embedding once and share it across both taste paths
+      // (summary vector + nearest centroid) — one `titles` query, and at most
+      // one "no embedding" warning per interaction.
+      const needsEmbedding = eventUsesEmbedding(action);
+      const embedding = needsEmbedding
+        ? await fetchTitleEmbedding(contentMeta.contentId, contentMeta.contentType)
+        : null;
+      if (needsEmbedding && !embedding) {
+        console.warn('[InteractionUpdate] No embedding found for', contentMeta.contentType, contentMeta.contentId);
+      }
+
       // Update v2 taste vector incrementally
       if (profile?.tasteVector) {
         const result = await applyInteractionIncremental(
@@ -71,6 +84,7 @@ export function useTasteProfile() {
           action,
           profile.interactionCount,
           getCurrentSessionId(),
+          embedding,
         );
 
         if (result) {
@@ -103,6 +117,7 @@ export function useTasteProfile() {
           action,
           profile?.interactionCount ?? 0,
           getCurrentSessionId(),
+          embedding,
         );
         if (centroidUpdate) {
           await updateInterestCentroidVector(centroidUpdate.slot, centroidUpdate.vector);
