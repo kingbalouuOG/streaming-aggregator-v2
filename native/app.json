@@ -53,6 +53,17 @@
       "typedRoutes": true,
       "reactCompiler": true,
       "tsconfigPaths": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "expo-navigation-bar": {
+        "enforceContrast": false,
+        "style": "light"
+      },
+      "eas": {
+        "projectId": "9b9b5960-22f4-40a5-89a4-80c0738cb526"
+      }
+    },
+    "owner": "kingbalouu"
   }
 }

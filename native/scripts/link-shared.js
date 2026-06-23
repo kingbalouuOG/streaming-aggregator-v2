@@ -41,20 +41,23 @@ for (const [linkName, targetName] of MOUNTS) {
   const linkPath = path.join(__dirname, '..', 'src', linkName);
   const target = path.resolve(__dirname, '..', '..', 'src', targetName);
 
-  if (!fs.existsSync(target)) {
-    console.error(`[link-shared] shared tree not found at ${target}`);
-    process.exit(1);
-  }
-
+  // Already mounted? — a junction locally, or REAL files shipped inside the
+  // EAS build archive (via .easignore). Check this BEFORE the target: on EAS
+  // cloud builds only `native/` is uploaded, so the monorepo parent
+  // (../../src) is absent and a target-first check would wrongly exit(1).
   let exists = false;
   try {
     const stat = fs.lstatSync(linkPath);
     exists = stat.isSymbolicLink() || stat.isDirectory();
   } catch {
-    // Doesn't exist — create it.
+    // Doesn't exist — fall through to create the junction.
   }
-  if (!exists) {
-    fs.symlinkSync(target, linkPath, 'junction'); // 'junction' is ignored on POSIX
-    console.log(`[link-shared] ${linkPath} -> ${target}`);
+  if (exists) continue;
+
+  if (!fs.existsSync(target)) {
+    console.error(`[link-shared] shared tree not found at ${target}`);
+    process.exit(1);
   }
+  fs.symlinkSync(target, linkPath, 'junction'); // 'junction' is ignored on POSIX
+  console.log(`[link-shared] ${linkPath} -> ${target}`);
 }
