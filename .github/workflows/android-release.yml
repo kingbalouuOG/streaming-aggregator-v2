@@ -20,6 +20,9 @@ name: Android Release (AAB)
 
 on:
   workflow_dispatch:
+  push:
+    branches: [release/native-2.0.1]
+    paths: ['native/**', 'src/**', '.github/workflows/android-release.yml']
 
 jobs:
   build:
