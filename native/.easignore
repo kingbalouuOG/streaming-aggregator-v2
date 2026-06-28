@@ -1,0 +1,49 @@
+# EAS upload ignore — REPLACES .gitignore for `eas build` archiving.
+#
+# The cloud build root is native/, and EAS does NOT upload the monorepo
+# parent. So the shared engine — which lives at ../src/{lib,assets} and is
+# mounted here as a gitignored junction — must be SHIPPED inside the archive.
+# We therefore do NOT ignore src/lib, src/assets, or the public-only .env
+# (EXPO_PUBLIC_* values) here, even though .gitignore does. Everything else
+# (deps, build outputs, signing secrets) stays excluded.
+
+# dependencies (EAS runs install on the server)
+node_modules/
+
+# Expo / build outputs
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# generated native projects (EAS prebuilds)
+/ios
+/android
+
+# signing secrets — NEVER upload
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+credentials.json
+
+# misc native / debug
+.kotlin/
+*.orig.*
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+build-*.log
+.DS_Store
+*.tsbuildinfo
+example
+.font-src/
+
+# local-only env overrides (the base .env carries only EXPO_PUBLIC_* and IS shipped)
+.env*.local
+
+# NOTE: src/lib, src/assets and .env are intentionally NOT listed — the cloud
+# build needs them. They remain gitignored via .gitignore for normal git use.
