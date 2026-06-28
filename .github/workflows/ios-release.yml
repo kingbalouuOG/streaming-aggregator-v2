@@ -1,0 +1,51 @@
+name: iOS Release (EAS build)
+
+# Builds the iOS app on EAS Build (cloud macOS), triggered from a Linux
+# runner. Running `eas build` from Windows fails at "Compressing project
+# files": eas-cli can't create the src/lib + src/assets junction symlinks
+# in the upload tarball on Windows (EPERM) — the same limitation that put
+# the Android build on a Linux runner. On Linux the postinstall recreates
+# those as real symlinks, so the upload to EAS succeeds. The build itself
+# runs on EAS; the iOS signing credentials (distribution certificate +
+# provisioning profile for app.videx.streaming) are already stored on EAS.
+#
+# Trigger: Actions tab -> "iOS Release (EAS build)" -> Run workflow.
+#
+# Prerequisites (one-time):
+#   - Repo secret EXPO_TOKEN: an Expo access token
+#     (expo.dev -> Account -> Settings -> Access tokens). Authenticates
+#     eas-cli non-interactively as the project owner.
+#   - EAS environment variables for the "production" environment — the
+#     EXPO_PUBLIC_* values (Supabase URL + anon key, API proxy URL). Set
+#     once via the EAS dashboard (Project -> Environment variables) or
+#     `eas env:create`. These are public (already in the shipped client);
+#     without them the JS bundle has no backend config.
+#
+# After a successful run, submit the build to TestFlight (separate, one
+# interactive Apple login, no junction involved — it only uploads the .ipa):
+#   cd native && npx eas-cli submit --platform ios --profile production --latest
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Checkout (full repo — native/ depends on ../src/lib)
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install native deps (postinstall makes ../src/lib + ../src/assets real symlinks)
+        working-directory: native
+        run: npm install
+
+      - name: EAS build (iOS, production) — runs on EAS, waits for the .ipa
+        working-directory: native
+        run: npx eas-cli@latest build --platform ios --profile production --non-interactive
