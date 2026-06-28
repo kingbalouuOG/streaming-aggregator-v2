@@ -12,7 +12,10 @@
       "icon": "./assets/images/icon-ios.png",
       "bundleIdentifier": "app.videx.streaming",
       "buildNumber": "1",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "app.videx.streaming",
