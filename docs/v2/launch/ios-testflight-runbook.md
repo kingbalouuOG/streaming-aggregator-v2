@@ -1,35 +1,39 @@
-# iOS / TestFlight deployment runbook (internal-testing phase)
+# iOS / TestFlight deployment runbook
 
-The Videx native app (Expo SDK 56) reaches iPhone testers via **TestFlight**. The dev machine is Windows, so iOS builds run on **EAS Build** (Expo's cloud Macs) — there is no local iOS build. The iOS app is the *same Expo codebase* as Android (near-parity), built for App Store distribution.
+The Videx iOS app is the **same Expo SDK 56 codebase as Android**, shipped to iPhone testers via **TestFlight**. **iOS builds run on EAS Build through a GitHub Actions Linux runner** (`.github/workflows/ios-release.yml`) — they **cannot** be built from the Windows dev machine: `eas build` fails at *"Compressing project files"* because eas-cli can't create the `src/lib` + `src/assets` junction symlinks in the upload tarball on Windows (`EPERM`). On Linux they're real symlinks, so the upload succeeds; the build itself runs on EAS's macOS. (Same reason the Android release build is on a Linux runner.)
 
-## Prerequisites (one-time)
+First iOS TestFlight build shipped 2026-06-28.
 
-1. **Apple Developer Program** membership ($99/yr) — required for TestFlight + App Store Connect. Enrol at https://developer.apple.com/programs/. Approval can take 24–48h. **This is the critical path** — everything else is ready.
-2. **Expo account** (free) — sign in with `npx eas-cli login`. The EAS Build free tier is enough to start (slower queue).
-3. No global install needed — use `npx eas-cli@latest`.
+## One-time setup (already done — kept for a new machine / account / re-bootstrap)
 
-## Config already in place (this repo)
+1. **Apple Developer Program** — enrolled (Joe Green, Individual; Apple **Team `CT8F3578W8`**).
+2. **iOS signing credentials** — provisioned once by running `eas build -p ios` interactively from a terminal (`cd native` → Apple ID login + 2FA → EAS **created and stored** the distribution certificate + provisioning profile for `app.videx.streaming`). This part works from Windows — it only fails *later*, at the upload step, after the credentials exist. Every CI build afterwards reuses the stored creds, so **no Apple login is needed in CI**.
+3. **GitHub repo secret `EXPO_TOKEN`** — an Expo access token (expo.dev → Account → Settings → Access tokens). Authenticates eas-cli non-interactively as the project owner.
+4. **EAS environment variables (`production` environment)** — `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_API_PROXY_URL` (the public client values). Set via the EAS dashboard (Project → Environment variables) or `eas env:create`. Without them the JS bundle has no backend config. They live on EAS, **not** in git — `native/.env` is gitignored and isn't uploaded to the cloud build, so the local-`.env` trick the Android gradle build uses does **not** carry over to EAS.
+5. **App.json encryption flag** — `ios.infoPlist.ITSAppUsesNonExemptEncryption = false` (standard-encryption export compliance; stops the build prompting).
+6. **App Store Connect API Key** — generated automatically on the **first** `eas submit` (answer **Yes** to "Generate a new App Store Connect API Key?"). EAS creates it, stores it, and reuses it for every future submit. Revocable in App Store Connect → Users and Access → Integrations.
 
-- `native/eas.json` — `production` (App Store/TestFlight), `preview` (internal ad-hoc), `development` profiles; `appVersionSource: local`.
-- `native/app.json` → `ios`: `bundleIdentifier: app.videx.streaming` (matches Android), `buildNumber: "1"`, `supportsTablet: false`, and an opaque **no-alpha** icon (`assets/images/icon-ios.png`) so it passes App Store's icon rule.
+## Each TestFlight build
 
-## Build → TestFlight (after enrolment), run from `native/`
+1. **Bump the build number** — `native/app.json` → `ios.buildNumber` (every TestFlight upload needs a unique value). Or set `"autoIncrement": true` on the `production` profile to let EAS manage it.
+2. **Trigger the build** — GitHub → **Actions → "iOS Release (EAS build)" → Run workflow → branch `main`.** ~20–40 min; the EAS build URL prints in the run log.
+3. **Submit to TestFlight** — once the run is green, from a terminal:
+   ```
+   cd native
+   npx eas-cli@latest submit --platform ios --profile production --latest
+   ```
+   This uploads only the finished `.ipa`, so there's **no junction problem** — it runs fine from Windows.
+4. **App Store Connect → TestFlight** — the build appears after a few minutes' processing. Add testers: **Internal** (≤100, instant) or **External** (≤10,000 via email/link; the *first* external build needs a one-time ~24h Apple beta review).
 
-1. `npx eas-cli login` — sign in to Expo.
-2. `npx eas-cli build:configure` — links the project to EAS (first time; writes `extra.eas.projectId` into app.json — **commit that change**).
-3. `npx eas-cli build --platform ios --profile production` — EAS prompts to log in to **Apple** and auto-provisions the iOS distribution certificate + provisioning profile, and registers the `app.videx.streaming` App ID. ~20–40 min on the free queue → produces an `.ipa`.
-4. `npx eas-cli submit --platform ios --profile production --latest` — uploads to App Store Connect / TestFlight (first run asks for an App Store Connect API key or your Apple login; if the App Store Connect app entry doesn't exist yet, create it there first under the same bundle id).
-5. **App Store Connect → TestFlight** (build appears after ~5–15 min processing):
-   - **Internal testing** — ≤100 testers, instant, no review. Add testers (must be users on your App Store Connect team) → they're invited.
-   - **External testing** — ≤10,000 via email or a public link, but the **first build needs a ~24h Apple "beta review."** Create a group, add tester emails / share the link.
-6. Testers install **TestFlight** from the App Store, accept the invite, install Videx.
+## Gotchas we actually hit
 
-## Subsequent builds
+- **Run eas from `native/`, not the repo root.** The root has no Expo project — eas there generates a stray `eas.json`/`app.json`, prompts for a fresh bundle id, and dies with *"Cannot find `expo-modules-autolinking`"*.
+- **The workflow must be on `main`** (the default branch) or `workflow_dispatch` shows no "Run workflow" button. (It first lived only on `release/native-2.0.1`, so it was un-triggerable — PR #38 moved it to main.)
+- **You can't build iOS locally on Windows** (the junction/symlink upload `EPERM`) → always use the CI workflow.
+- **`eas submit` from the terminal is fine** — it uploads the `.ipa`, not the project tree, so no junction is involved.
 
-Each TestFlight upload needs a **unique build number**: bump `app.json` `ios.buildNumber`, then repeat steps 3–4. (Or set `"autoIncrement": true` on the `production` profile in eas.json to let EAS manage it.)
+## Config / facts
 
-## Known iOS notes (fine for a feedback build)
-
-- **Deep links** ("Watch on {service}") open the service's `https` URL via `Linking.openURL` — on iOS that resolves to Safari or the service's Universal Link (frequently opens the app directly). No iOS-specific deep-link work was needed; the `intent://` path is Android-only and unused.
-- **Splash screen** still uses the old `splash-icon.png` (pre-funnel logo) on both platforms — cosmetic; update `native/assets/images/splash-icon.png` when convenient.
-- **Android is untouched** — it still builds the signed AAB via local gradle + the `withReleaseSigning` plugin. EAS is iOS-only here. The Android-only config (`expo-navigation-bar`, the release-signing plugin) is inert during iOS builds.
+- Bundle id `app.videx.streaming` (same string as the Android package — separate registries). `supportsTablet: false`; opaque no-alpha icon `native/assets/images/icon-ios.png`; splash via the cross-platform `expo-splash-screen` plugin.
+- EAS project `@kingbalouu/videx`; Apple Team `CT8F3578W8`.
+- Deep links work on iOS unchanged (`https` via `Linking.openURL`). The Android release build is independent (local gradle + the `withReleaseSigning` config plugin).
