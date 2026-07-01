@@ -1,28 +1,28 @@
 name: Android Release (AAB)
 
-# Builds the signed production Android App Bundle on a clean Linux runner.
-# This sidesteps the Windows-local problems we hit: the CMake/ninja
-# "build.ninja still dirty" regeneration loop, and eas-cli's inability to
-# package the junction-based shared tree (symlink EPERM). On Linux the
-# shared tree mounts as a real symlink and the NDK build is well-behaved.
+# Builds the signed production Android App Bundle on a clean Linux runner
+# (this sidesteps the Windows-local problems: the CMake/ninja "build.ninja
+# still dirty" regeneration loop, and eas-cli's inability to package the
+# junction-based shared tree — symlink EPERM). Then, ON A VERSION TAG, it
+# submits the AAB to Google Play's internal testing track.
 #
-# Trigger: manual (Actions tab → "Run workflow"), or:
-#   gh workflow run android-release.yml --ref release/native-2.0.1
-# Output: the AAB is attached to the run as the "videx-release-aab" artifact.
+# Triggers:
+#   • push a tag `v*`  (e.g. `git tag v2.0.2 && git push --tags`) → build + submit to Play
+#   • manual "Run workflow"                                        → build-only (artifact, no submit)
 #
-# Required repository secrets (see the runbook / README):
+# Required repository secrets (Settings → Secrets and variables → Actions):
 #   ANDROID_KEYSTORE_BASE64       base64 of the upload keystore (videx-release, 99:CE:FF:7E)
 #   VIDEX_UPLOAD_STORE_PASSWORD   keystore store password
 #   VIDEX_UPLOAD_KEY_PASSWORD     key password (alias videx-key)
 #   EXPO_PUBLIC_SUPABASE_URL      } public client config (EXPO_PUBLIC_*),
 #   EXPO_PUBLIC_SUPABASE_ANON_KEY }  inlined into the JS bundle at build time
 #   EXPO_PUBLIC_API_PROXY_URL     }
+#   PLAY_SERVICE_ACCOUNT_JSON     Google Play service-account JSON (raw file contents) — submit step
 
 on:
   workflow_dispatch:
   push:
-    branches: [release/native-2.0.1]
-    paths: ['native/**', 'src/**', '.github/workflows/android-release.yml']
+    tags: ['v*']
 
 jobs:
   build:
@@ -84,3 +84,14 @@ jobs:
           name: videx-release-aab
           path: native/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
+
+      # Submit to Google Play — ONLY on a version tag (manual runs stay build-only).
+      - name: Submit to Google Play (internal testing track)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: app.videx.streaming
+          releaseFiles: native/android/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
