@@ -25,6 +25,16 @@ First iOS TestFlight build shipped 2026-06-28.
    This uploads only the finished `.ipa`, so there's **no junction problem** — it runs fine from Windows.
 4. **App Store Connect → TestFlight** — the build appears after a few minutes' processing. Add testers: **Internal** (≤100, instant) or **External** (≤10,000 via email/link; the *first* external build needs a one-time ~24h Apple beta review).
 
+## Automated release (both platforms, on a git tag)
+
+For a normal release you don't need the manual steps above — pushing a version tag builds **and** submits both apps via GitHub Actions:
+
+1. Bump `native/app.json`: `version` (marketing), `android.versionCode` (+1), `ios.buildNumber` (+1); commit to `main`.
+2. `git tag v2.0.2 && git push origin v2.0.2`.
+3. On the tag, [`ios-release.yml`](../../../.github/workflows/ios-release.yml) builds on EAS → submits to **TestFlight**, and [`android-release.yml`](../../../.github/workflows/android-release.yml) builds the AAB → submits to Play's **internal** track.
+
+Manual **"Run workflow"** (workflow_dispatch) on either is now **build-only** (no submit) — for testing a build. iOS submit reuses the **EAS-stored** ASC API key (no secret needed); Android submit needs a `PLAY_SERVICE_ACCOUNT_JSON` repo secret (Play Console → *Setup → API access*).
+
 ## Gotchas we actually hit
 
 - **Run eas from `native/`, not the repo root.** The root has no Expo project — eas there generates a stray `eas.json`/`app.json`, prompts for a fresh bundle id, and dies with *"Cannot find `expo-modules-autolinking`"*.
