@@ -228,24 +228,18 @@ def fetch_embeddings(cur) -> list[TitleRow]:
 def fetch_title_genres_bulk(cur, tmdb_ids_by_media: dict[str, list[int]]) -> dict[tuple[int, str], list[str]]:
     """Return {(tmdb_id, media_type): [genre_name, ...]} for the given titles.
 
-    Called once per run for the most-central titles selected for labelling,
-    not for every title in the catalogue.
+    Historically this queried the `title_genres` cache table, but that table
+    was a v1-era artefact that was never populated (always count(*) = 0) and
+    was dropped in migration 046 (REPO-1). Querying it now raises
+    "relation title_genres does not exist", which crashed the monthly cron.
+
+    Since the table was always empty, genre_map has always resolved to []
+    for every title (the labeller passed Gate 3 with empty genres), so the
+    faithful, no-op behaviour is to return an empty map without a DB round
+    trip. If real genres are ever wanted here, source them from
+    `titles.genre_ids` (mapped to names) rather than reviving this table.
     """
-    out: dict[tuple[int, str], list[str]] = {}
-    for media_type, ids in tmdb_ids_by_media.items():
-        if not ids:
-            continue
-        cur.execute(
-            """
-            SELECT tmdb_id, genre_name
-            FROM title_genres
-            WHERE media_type = %s AND tmdb_id = ANY(%s)
-            """,
-            (media_type, ids),
-        )
-        for tmdb_id, genre_name in cur:
-            out.setdefault((int(tmdb_id), media_type), []).append(genre_name)
-    return out
+    return {}
 
 
 def fetch_previous_run(cur) -> list[PreviousClusterRow]:
