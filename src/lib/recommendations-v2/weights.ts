@@ -281,11 +281,14 @@ export const AVOID_PENALTY_GAMMA = 0.15;
 // ── ENG-1 Workstream C: exploration slot ──
 
 /** Exploration candidates reserved per Recommended For You render */
-export const EXPLORATION_COUNT = 2;
+export const EXPLORATION_COUNT = 3;
 
-/** 0-indexed splice positions (1-indexed: 6 and 14 — visible without
- *  displacing the head of the row). Per plan Q3, confirmed by Joe. */
-export const EXPLORATION_SLOT_POSITIONS = [5, 13];
+/** 0-indexed splice positions (1-indexed: 3, 6 and 14). The lead position
+ *  puts one daily-rotating pick above the fold so the feed visibly moves
+ *  day-to-day, while the head two cards stay fully personalised. Bumped
+ *  from [5, 13] (2 picks, both below the fold) in the freshness pass —
+ *  run the recs eval rig after tuning. */
+export const EXPLORATION_SLOT_POSITIONS = [2, 5, 13];
 
 /** Taste-score percentile band [low, high) the exploration candidates are
  *  sampled from — moderate similarity: novel but not random. */

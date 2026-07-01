@@ -147,6 +147,29 @@ export const discoverTV = (params: Record<string, unknown> = {}) => {
   }, { results: [] });
 };
 
+// Real-world momentum feed. Unlike discover?sort_by=popularity.desc (a
+// near-static global ranking), /trending reflects a rolling window that
+// TMDb refreshes daily, so the source genuinely churns. It has NO
+// watch-provider filter, so callers that need "on the user's services"
+// scoping must intersect the results against getAvailableTmdbIds() and
+// fall back to the provider-scoped discover query. timeWindow: 'day' |
+// 'week' ('week' = smoother 7-day rolling window).
+export const getTrendingMovies = (timeWindow: 'day' | 'week' = 'week') =>
+  cachedRequest(`trending_movie_${timeWindow}`, {}, async () => {
+    const response = await tmdbClient.get(`/trending/movie/${timeWindow}`, {
+      params: { region: 'GB' },
+    });
+    return response.data;
+  }, { results: [] });
+
+export const getTrendingTV = (timeWindow: 'day' | 'week' = 'week') =>
+  cachedRequest(`trending_tv_${timeWindow}`, {}, async () => {
+    const response = await tmdbClient.get(`/trending/tv/${timeWindow}`, {
+      params: { region: 'GB' },
+    });
+    return response.data;
+  }, { results: [] });
+
 export const getMovieDetails = (movieId: number) =>
   cachedRequest(`movie_${movieId}`, {}, async () => {
     const response = await tmdbClient.get(`/movie/${movieId}`, {

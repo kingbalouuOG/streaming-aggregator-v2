@@ -7,8 +7,9 @@ import {
   type TMDbContentResult,
 } from '@/lib/adapters/contentAdapter';
 import { serviceIdsToProviderIds } from '@/lib/adapters/platformAdapter';
-import { discoverMovies, discoverTV } from '@/lib/api/tmdb';
-import { buildFilterSets } from '@/lib/recommendations-v2/hardFilters';
+import { discoverMovies, discoverTV, getTrendingMovies, getTrendingTV } from '@/lib/api/tmdb';
+import { buildFilterSets, getAvailableTmdbIds } from '@/lib/recommendations-v2/hardFilters';
+import { dailyPick, dailyShuffleTopN } from '@/lib/utils/dailyShuffle';
 import { fetchGenreSpotlight } from '@/lib/recommendations-v2/rows/home/genreSpotlight';
 import { fetchPerServiceCharts } from '@/lib/recommendations-v2/rows/home/perServiceChart';
 import type { PerServiceChartRow } from '@/lib/recommendations-v2/rows/home/perServiceChart';
@@ -93,9 +94,14 @@ async function fetchRecentlyAdded(services: ServiceId[]): Promise<ContentItem[]>
   return interleaveDedupe(movies, tv, 18);
 }
 
-/** Popular pool — TMDb discover by popularity, providers-filtered. Feeds the
- *  Trending ribbon + the editorial spotlight (the web reuses `home.popular`). */
-async function fetchPopular(services: ServiceId[]): Promise<ContentItem[]> {
+// Below this many service-available trending titles we treat the
+// intersection as too thin (sparse content cache) and backfill from the
+// provider-scoped popularity query so the ribbon never collapses.
+const MIN_TRENDING_ITEMS = 8;
+
+/** Provider-scoped popularity pool — the pre-freshness behaviour, now the
+ *  fallback/backfill source for the trending ribbon. */
+async function fetchPopularByProvider(services: ServiceId[]): Promise<ContentItem[]> {
   const providerIds = serviceIdsToProviderIds(services);
   if (providerIds.length === 0) return [];
   const watchProviders = providerIds.join('|');
@@ -118,6 +124,46 @@ async function fetchPopular(services: ServiceId[]): Promise<ContentItem[]> {
   const movies = ((movieRes.data?.results ?? []) as TMDbContentResult[]).map(tmdbMovieToContentItem);
   const tv = ((tvRes.data?.results ?? []) as TMDbContentResult[]).map(tmdbTVToContentItem);
   return interleaveDedupe(movies, tv);
+}
+
+/** Popular pool — real TMDb trending (rolling weekly window that TMDb
+ *  refreshes daily), filtered to titles on the user's services via the
+ *  availability set. Trending has no provider filter of its own, so we
+ *  intersect here and backfill from the provider-scoped popularity query
+ *  when the intersection is thin. Feeds the Trending ribbon + editorial
+ *  spotlight (the web reuses `home.popular`). */
+async function fetchPopular(
+  services: ServiceId[],
+  availableTmdbIds: Set<number>,
+): Promise<ContentItem[]> {
+  const providerIds = serviceIdsToProviderIds(services);
+  if (providerIds.length === 0) return [];
+
+  const [movieRes, tvRes] = await Promise.all([
+    getTrendingMovies('week'),
+    getTrendingTV('week'),
+  ]);
+
+  // Empty availability set = "skip availability filtering" (matches the
+  // ranker's hard-filter convention) — keep everything in that case.
+  const onServices = (r: TMDbContentResult) =>
+    availableTmdbIds.size === 0 || availableTmdbIds.has(r.id);
+
+  const movies = ((movieRes.data?.results ?? []) as TMDbContentResult[])
+    .filter(onServices)
+    .map(tmdbMovieToContentItem);
+  const tv = ((tvRes.data?.results ?? []) as TMDbContentResult[])
+    .filter(onServices)
+    .map(tmdbTVToContentItem);
+  const trending = interleaveDedupe(movies, tv);
+
+  if (trending.length >= MIN_TRENDING_ITEMS) return trending;
+
+  // Backfill: trending first (preserving momentum order), then the
+  // provider-scoped popular tail for anything not already present.
+  const fallback = await fetchPopularByProvider(services);
+  const seen = new Set(trending.map((i) => i.id));
+  return [...trending, ...fallback.filter((i) => !seen.has(i.id))];
 }
 
 /** Free Tonight — popular titles on the UK free-to-air services (iPlayer /
@@ -195,24 +241,40 @@ async function fetchUpcoming(services: ServiceId[]): Promise<UpcomingItem[]> {
 }
 
 async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
-  const [charts, profile, filterSets, recentlyAdded, popular, freeTonight, upcoming] = await Promise.all([
+  // Resolved once up front so fetchPopular can filter trending to the
+  // user's services; buildFilterSets below reuses the same localStorage
+  // cache entry (no duplicate RPC), and it's skipped entirely on warm loads.
+  const availableTmdbIds = await getAvailableTmdbIds(services);
+
+  const [charts, profile, filterSets, recentlyAdded, popularRaw, freeTonight, upcoming] = await Promise.all([
     fetchPerServiceCharts(services),
     getV2TasteProfile(),
     buildFilterSets(services),
     fetchRecentlyAdded(services),
-    fetchPopular(services),
+    fetchPopular(services, availableTmdbIds),
     fetchFreeTonight(),
     fetchUpcoming(services),
   ]);
 
-  // Hero = first row's lead title, pulled OUT of its row so the same
-  // title doesn't lead the hero and row one.
+  // Daily rotation (#2): reshuffle the top of the trending pool by UTC day
+  // so the ribbon + editorial spotlight visibly move day-to-day even when
+  // the underlying trending set is stable. Head-only shuffle keeps quality.
+  const popular = dailyShuffleTopN(popularRaw, 20, 'home:popular');
+
+  // Hero = "Today's Pick", pulled OUT of the first per-service row so the
+  // same title doesn't lead the hero and row one. Rotates daily among the
+  // row's top 5 contenders (#2) while leaving the ranked row intact.
   let hero: ContentItem | null = null;
   const rows = charts.map((row) => ({ ...row, items: [...row.items] }));
   const firstWithItems = rows.find((row) => row.items.length > 0);
   if (firstWithItems) {
-    const lead = firstWithItems.items.shift() ?? null;
+    const lead =
+      dailyPick(firstWithItems.items, 5, `home:hero:${firstWithItems.serviceId}`) ??
+      firstWithItems.items[0] ??
+      null;
     if (lead) {
+      const leadIdx = firstWithItems.items.findIndex((i) => i.id === lead.id);
+      if (leadIdx >= 0) firstWithItems.items.splice(leadIdx, 1);
       const svc = firstWithItems.serviceId as ServiceId;
       const leadServices = lead.services.includes(svc) ? lead.services : [svc, ...lead.services];
       hero = { ...lead, services: leadServices };
