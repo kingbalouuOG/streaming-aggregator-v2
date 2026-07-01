@@ -3,7 +3,7 @@ title: For You surface
 type: concept
 tags: [for-you, surface, personalised, sliders, mood-rooms, anchored-rooms, edge-function]
 created: 2026-04-26
-updated: 2026-04-30
+updated: 2026-07-01
 sources:
   - raw/v2-strategy/Videx_v2_Home_and_ForYou_Composition_Hypothesis_v0.4.md
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.7.md
@@ -24,7 +24,7 @@ Personalised mode. Heavy ranking, sliders, mood rooms. Service-filtered. Maximum
 ## Row composition (in order)
 
 0. **Sliders entry point** — collapsed "Tune your recommendations" affordance. Opens as bottom-sheet tray (`SliderTray.tsx`).
-1. **Recommended For You** — top ~20 from full pipeline (taste 62.5% / recency 25% / contextual 12.5% scoring + content-mix → genre-spread → de-cluster post-processing).
+1. **Recommended For You** — top ~20 from full pipeline (taste 62.5% / recency 25% / contextual 12.5% scoring + content-mix → genre-spread → de-cluster post-processing). Includes the **exploration slot** (see below).
 2. **Mood Rooms for Tonight** — title-anchored. 5 anchored rooms per weekly refresh, named "If you love {anchor}". Anchor selection from a tiered ladder (behavioural intersection → cluster representatives → top-finalScore fallback). Rooms generated on demand via `buildAnchoredRoom`; 30 titles per room. (Phase 4.5 redirect, April 2026 — replaced the original global-cosine-ranked row from Gates 1–4.)
 3. **Hidden Gems** — popularity 2-20, vote_count ≥ 50, vote_average ≥ 7.0; genre cap 2 per genre; max 15.
 4. **Because You Watched [Title]** — anchors satisfy BOTH `watchlist_add` (or `watched`) AND `thumbs_up` in last 60 days. Top 2 anchors. Per-anchor neighbours via `buildAnchoredRoom` (shared primitive with row 2; Phase 4.5 redirect migrated this row from `fetchAnchorNeighbours`). Anchor metadata fetched separately (watchlist hard filter excludes from main pool).
@@ -44,6 +44,14 @@ Personalised mode. Heavy ranking, sliders, mood rooms. Service-filtered. Maximum
 ## Phase 4 implementation note
 
 Brief lists 5 Stage 2 weights summing to 1.0. Phase 4 ships 3 scoring components (62.5/25/12.5: taste/recency/contextual placeholder) + 2 post-processing stages (genre-spread, service de-clustering). MMR deferred to Phase 5 (would require ~3MB transfer + ~23M float ops per page load). Pluggable for Phase 5 swap. Strategy §5.2 carries the implementation note.
+
+## Exploration slot (ENG-1 Workstream C)
+
+Structural filter-bubble defence inside **row 1**. Reserves a few positions for titles with zero prior impressions (not among the user's most-recent-1,000 in a 90-day window), sampled from the moderate-similarity taste band `[0.40, 0.70]`, popularity-weighted. Sampling is seeded from `${userId}:${UTC-day}` → stable within a day, **rotates daily** (this is the main day-to-day novelty in For You when the taste vector is idle). Picks carry `exploration: true` into `card_impressions.metadata` so ENG-2 can read exploration CTR from the training extract.
+
+Constants in `src/lib/recommendations-v2/weights.ts`; both render paths read them (server `src/lib/server/foryouRender.ts` and client fallback `src/hooks/useForYouContent.ts`). Selection logic + splice are pure (`recommendations-v2/exploration.ts`), unit-tested.
+
+- **2026-07-01 freshness bump:** `EXPLORATION_COUNT` 2→3, `EXPLORATION_SLOT_POSITIONS` `[5,13]`→`[2,5,13]` (1-indexed cards 3/6/14) — one rotating pick now sits above the fold; the head two cards stay fully personalised. Retrieval-neutral (see [eval-harness](../operations/eval-harness.md) run 3); slot composition is validated by live CTR (ENG-2), not an offline gate. Report: `docs/v2/phase-summaries/content-freshness-2026-07-01.md`.
 
 ## Cold-start behaviour
 
