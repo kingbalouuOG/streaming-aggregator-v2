@@ -73,7 +73,8 @@ Reference: EAS project `@kingbalouu/videx` (`projectId 9b9b5960…`); Apple Team
 **Re‑creating the Play service account** (Google removed the old "Setup → API access" page):
 1. Google Cloud Console → *IAM & Admin → Service Accounts* → create one → *Keys → Add key → JSON* (download).
 2. Play Console → *Users and permissions → Invite new users* → paste the service‑account email → grant **"Release to testing tracks"**.
-3. Put the JSON's full contents in the `PLAY_SERVICE_ACCOUNT_JSON` repo secret.
+3. **Enable the Google Play Android Developer API** in that same Google Cloud project: *APIs & Services → Library →* search **"Google Play Android Developer API"** *→ Enable* (direct: `console.developers.google.com/apis/api/androidpublisher.googleapis.com`). Without this, submit fails with *"…API has not been used in project N before or it is disabled."* Give it a few minutes to propagate.
+4. Put the JSON's full contents in the `PLAY_SERVICE_ACCOUNT_JSON` repo secret.
 
 ---
 
@@ -92,6 +93,7 @@ Reference: EAS project `@kingbalouu/videx` (`projectId 9b9b5960…`); Apple Team
 |---|---|
 | Tag pushed, no run started | Trigger is `push: tags: ['v*']` — the tag must start with `v`. |
 | Android submit `403` / permission | Service account lacks "Release to testing tracks" — re‑grant in Play → Users and permissions. |
+| Android submit: `…API has not been used … or it is disabled` | Enable the **Google Play Android Developer API** in the service account's Google Cloud project (the error gives the exact link); wait a few minutes to propagate. |
 | Android `Version code N has already been used` | Bump `android.versionCode`. |
 | iOS submit rejects the build number | Bump `ios.buildNumber` (must be unique on TestFlight). |
 | iOS submit: `Set ascAppId in the submit profile` | Non‑interactive submit needs the App Store Connect app ID — it's committed in `eas.json` → `submit.production.ios.ascAppId` (`6785395342`). |
