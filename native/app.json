@@ -2,7 +2,7 @@
   "expo": {
     "name": "Videx",
     "slug": "videx",
-    "version": "2.0.1",
+    "version": "2.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "videx",
@@ -11,7 +11,7 @@
     "ios": {
       "icon": "./assets/images/icon-ios.png",
       "bundleIdentifier": "app.videx.streaming",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "app.videx.streaming",
-      "versionCode": 4,
+      "versionCode": 5,
       "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#0a0a0f",
