@@ -55,16 +55,16 @@ cp .env.example .env   # then add your API keys + Supabase credentials
 npm run dev
 ```
 
-### Mobile build (the live app)
+### Mobile release (the live app)
 
-The live Android app is the **Expo** project under [`native/`](native/) — see [`native/README.md`](native/README.md) for the full dev + release flow. In brief:
+The live app is the **Expo** project under [`native/`](native/), shipped to **both stores by CI**. To cut a release: bump the version in `native/app.json`, merge to `main`, then push a `v*` tag — GitHub Actions builds and submits to Play internal + TestFlight automatically.
 
 ```bash
-cd native
-npm install                              # installs deps + creates the src/lib junction
-npx expo prebuild --platform android --clean
-cd android && ./gradlew bundleRelease    # signed AAB; release signing auto-applies via a config plugin
+# after bumping version / versionCode / buildNumber in native/app.json and merging to main:
+git tag v2.0.2 && git push origin v2.0.2   # → Android AAB to Play + iOS IPA to TestFlight
 ```
+
+**Full steps + one-time setup: [docs/v2/launch/release-runbook.md](docs/v2/launch/release-runbook.md).** A local `cd native/android && ./gradlew bundleRelease` still produces a one-off signed AAB (see [`native/README.md`](native/README.md)), but CI is the supported path — the Windows-local NDK build is fragile.
 
 > The original Capacitor wrapper of the web app (`npm run build && npx cap sync android`) is **legacy** — superseded by the Expo build at the NATIVE-4 cutover.
 
