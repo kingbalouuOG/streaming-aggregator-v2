@@ -3,7 +3,7 @@ title: Home surface
 type: concept
 tags: [home, surface, recency, hero-carousel]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-07-01
 sources:
   - raw/v2-strategy/Videx_v2_Home_and_ForYou_Composition_Hypothesis_v0.3.md
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
@@ -52,3 +52,12 @@ Rendered row content cached per user 30-60 minutes. Underlying TMDb/OMDB/SA API 
 
 - Removed v3 Phase 3 rows (For You, Hidden Gems, Highest Rated, multi-genre LazyGenreSection) — moved to For You or subsumed by new rows.
 - Critically Acclaimed ships disabled behind feature flag.
+
+## Content-freshness pass (native, 2026-07-01)
+
+Home felt static week-to-week: the native `Trending` ribbon had drifted to `discover?sort_by=popularity.desc` (a near-static global ranking) rather than the row-3 **intent** ("TMDb 7-day rolling popularity"), and nothing rotated day-to-day. Two native changes (`src/lib/api/tmdb.ts`, `native/src/hooks/useHomeFeed.ts`, `src/lib/utils/dailyShuffle.ts`):
+
+- **#1 — real trending, re-scoped to services.** `fetchPopular` now calls `/trending/{movie,tv}/week` (`getTrendingMovies`/`getTrendingTV`) and **filters to the user's services** via `getAvailableTmdbIds` (trending has no provider filter of its own), backfilling from the old provider-scoped popularity query when the intersection is thin (`< 8`). Realigns the ribbon with the row-3 design intent.
+- **#2 — daily UTC-seeded rotation.** `dailyShuffleTopN` reshuffles the top 20 of the trending pool each UTC day (moves ribbon + editorial spotlight); `dailyPick` rotates the hero ("Today's Pick") among the lead per-service row's top 5, leaving the ranked row intact. Seed `${salt}:${UTC-day}` — stable within a day (no re-render flicker), rotates at 00:00 UTC (aligns with the existing midnight-UTC cache invalidation).
+
+Web got the `#2` shuffle only (`src/hooks/useHomeContent.ts`); `#1` is a follow-up there since web's popular row uses the paginated `useSectionData` path. Report: `docs/v2/phase-summaries/content-freshness-2026-07-01.md`.

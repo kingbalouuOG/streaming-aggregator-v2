@@ -3,7 +3,7 @@ title: Evaluation harness reference
 type: concept
 tags: [evaluation, harness, ndcg, cluster-coherence, service-discrimination, rank-eval]
 created: 2026-04-26
-updated: 2026-06-10
+updated: 2026-07-01
 sources:
   - raw/reference/eval-harness-reference.md
 related:
@@ -61,6 +61,10 @@ Thresholds (per source; values that gate any release are in script header):
 ## ENG-1 eval harness
 
 **Script**: `scripts/evaluation/eng1-eval.ts` (`npm run eval:eng1`, Phase ENG-1). Self-contained: in-memory centroids via the production pure modules + live `match_titles_by_vector` RPC. Sections: τ-matrix (pairwise cluster-rep cosines), synthetic recall/coverage, γ sweep for the avoid-set penalty, real-profile checks. Cold-HNSW warmup + retry built in. ENG-1 outcomes: coverage PASS, parity PASS, τ = 0.80 and γ = 0.15 confirmed; recall@500 carried forward (synthetic holdout too small). Report: `docs/v2/phase-summaries/eng1-eval-2026-06-10.md`.
+
+> ⚠ **Scope gap — the harness does NOT gate the exploration *slot* (count/position).** It imports the retrieval constants (`PER_CENTROID_CANDIDATE_LIMIT`, `DEFAULT_CANDIDATE_LIMIT`, `AVOID_PENALTY_GAMMA`) but not `EXPLORATION_COUNT` / `EXPLORATION_SLOT_POSITIONS`. So the "exploration change → eng1-eval" trigger below only covers exploration *selection*/retrieval quality; changing how many exploration cards show or where is retrieval-neutral and passes unchanged. The real signal for slot composition is **live exploration CTR** (ENG-2, read from `card_impressions.metadata`) — there is no offline gate for it.
+
+**Run 3 (2026-07-01)** — regression check for the content-freshness pass's `weights.ts` edit (`EXPLORATION_COUNT` 2→3, positions `[5,13]`→`[2,5,13]`). All sections identical to runs 1–2 (deterministic harness): τ=0.80 → 0 merges, coverage 3 (PASS), γ=0.15 suppression 2→0 positives Δ0 (PASS). Confirms the freshness pass is retrieval-neutral. Report: `docs/v2/phase-summaries/content-freshness-2026-07-01.md`.
 
 ## When to run each
 

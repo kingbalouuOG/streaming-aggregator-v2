@@ -6,6 +6,7 @@ import { prefetchServices } from '@/lib/utils/serviceCache';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import { buildFilterSets, type FilterSets } from '@/lib/recommendations-v2/hardFilters';
+import { dailyShuffleTopN } from '@/lib/utils/dailyShuffle';
 import { fetchPerServiceCharts, type PerServiceChartRow } from '@/lib/recommendations-v2/rows/home/perServiceChart';
 import { fetchCriticallyAcclaimed } from '@/lib/recommendations-v2/rows/home/criticallyAcclaimed';
 import { fetchGenreSpotlight } from '@/lib/recommendations-v2/rows/home/genreSpotlight';
@@ -265,7 +266,12 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
 
     return {
       recentlyAdded: dedupList(recentlyAdded.items),
-      popular: dedupList(popular.items),
+      // #2 daily rotation: reshuffle the top of the popular pool by UTC day
+      // so the row visibly moves day-to-day. (#1 — swapping this discover
+      // popularity source for real TMDb trending — landed on native first;
+      // web still reads discover here because its popular row is built on
+      // the paginated useSectionData path. Follow-up if web stays a target.)
+      popular: dailyShuffleTopN(dedupList(popular.items), 20, 'home:popular'),
     };
   }, [recentlyAdded.items, popular.items]);
 
