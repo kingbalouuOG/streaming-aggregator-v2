@@ -1,32 +1,27 @@
-name: iOS Release (EAS build)
+name: iOS Release (EAS build → TestFlight)
 
 # Builds the iOS app on EAS Build (cloud macOS), triggered from a Linux
-# runner. Running `eas build` from Windows fails at "Compressing project
-# files": eas-cli can't create the src/lib + src/assets junction symlinks
-# in the upload tarball on Windows (EPERM) — the same limitation that put
-# the Android build on a Linux runner. On Linux the postinstall recreates
-# those as real symlinks, so the upload to EAS succeeds. The build itself
-# runs on EAS; the iOS signing credentials (distribution certificate +
-# provisioning profile for app.videx.streaming) are already stored on EAS.
+# runner, then — ON A VERSION TAG — submits it to TestFlight via `eas submit`.
+# Running from Linux (not Windows) is required: eas-cli can't create the
+# src/lib + src/assets junction symlinks in the upload tarball on Windows
+# (EPERM). On Linux the postinstall recreates those as real symlinks, so the
+# upload to EAS succeeds. The iOS distribution cert + provisioning profile
+# AND the App Store Connect API key are already stored on EAS (created during
+# the first manual `eas submit`), so CI needs no Apple login and no .p8.
 #
-# Trigger: Actions tab -> "iOS Release (EAS build)" -> Run workflow.
+# Triggers:
+#   • push a tag `v*`  (e.g. `git tag v2.0.2 && git push --tags`) → build + submit to TestFlight
+#   • manual "Run workflow"                                        → build-only (no submit)
 #
-# Prerequisites (one-time):
-#   - Repo secret EXPO_TOKEN: an Expo access token
-#     (expo.dev -> Account -> Settings -> Access tokens). Authenticates
-#     eas-cli non-interactively as the project owner.
-#   - EAS environment variables for the "production" environment — the
-#     EXPO_PUBLIC_* values (Supabase URL + anon key, API proxy URL). Set
-#     once via the EAS dashboard (Project -> Environment variables) or
-#     `eas env:create`. These are public (already in the shipped client);
-#     without them the JS bundle has no backend config.
-#
-# After a successful run, submit the build to TestFlight (separate, one
-# interactive Apple login, no junction involved — it only uploads the .ipa):
-#   cd native && npx eas-cli submit --platform ios --profile production --latest
+# Required repository secret:
+#   EXPO_TOKEN   Expo access token (expo.dev → Account → Settings → Access tokens)
+# Also required (one-time, already set): the EAS "production" environment
+#   variables (EXPO_PUBLIC_*), and the EAS-stored iOS cert + ASC API key.
 
 on:
   workflow_dispatch:
+  push:
+    tags: ['v*']
 
 jobs:
   build:
@@ -49,3 +44,11 @@ jobs:
       - name: EAS build (iOS, production) — runs on EAS, waits for the .ipa
         working-directory: native
         run: npx eas-cli@latest build --platform ios --profile production --non-interactive
+
+      # Submit to TestFlight — ONLY on a version tag (manual runs stay build-only).
+      # Uses the App Store Connect API key already stored on EAS, so there is no
+      # .p8 in the repo and no Apple login here — just EXPO_TOKEN.
+      - name: Submit to TestFlight
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: native
+        run: npx eas-cli@latest submit --platform ios --latest --profile production --non-interactive
