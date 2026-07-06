@@ -11,14 +11,14 @@
  * UTC) and `embed-new-titles` (06:45 UTC) crons then pick up the new rows.
  *
  * The anti-join is done in-DB via the `list_missing_title_ids` RPC
- * (migration 049) so this function stays memory-light — it never pulls
+ * (migration 054) so this function stays memory-light — it never pulls
  * the full streaming_availability/titles tables into Deno the way the
  * one-off script does.
  *
  * Per-invocation budget: BATCH_LIMIT rows. At 260 ms per TMDb call that is
  * ~78 s for 300 rows, comfortably under the Edge Function wall-clock
  * limit. If more than BATCH_LIMIT are pending, subsequent scheduled runs
- * clear the backlog (see the weekly cron in migration 049). `remaining`
+ * clear the backlog (see the weekly cron in migration 054). `remaining`
  * in the response body shows whether the queue is keeping up.
  *
  * Deploy: npx supabase functions deploy backfill-missing-titles --project-ref fmusugdcnnwiuzkbjquo
@@ -207,7 +207,7 @@ async function runBackfillBatch(): Promise<RunStats> {
 
 Deno.serve(async (req) => {
   // JWT check — same pattern as enrich-new-titles/index.ts:157-172. The
-  // migration-049 cron passes a service-role bearer (Vault-sourced);
+  // migration-054 cron passes a service-role bearer (Vault-sourced);
   // reject anything else.
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {

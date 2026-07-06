@@ -75,4 +75,4 @@ Full step-by-step + caveats are in the runbook. This is the highest-value remain
 
 ## What I did NOT need you for (landed in the PR)
 
-- IN-PX-29 rate-limit, IN-PX-30 JWT guard, IN-PX-50 backfill function+cron, pricing refresh, IN-461 carve-out, backup workflow, pg_partman verification, wiki/register updates. **Deploy steps** for the two new migrations (048, 049) and the new Edge Function are in the PR description — those are `supabase db push` / `supabase functions deploy` when you next deploy, not dashboard clicks.
+- IN-PX-29 rate-limit, IN-PX-30 JWT guard, IN-PX-50 backfill function+cron, pricing refresh, IN-461 carve-out, backup workflow, pg_partman verification, wiki/register updates. **Deploy steps** for the two new migrations (053, 054) and the new Edge Function are in the PR description — those are `supabase db push` / `supabase functions deploy` when you next deploy, not dashboard clicks.

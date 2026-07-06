@@ -1,6 +1,6 @@
 -- ============================================
 -- H0 Stream D — rate-limit username_available (IN-PX-29)
--- Migration 048
+-- Migration 053
 -- ============================================
 --
 -- `username_available(check_username text)` (migration 038) is a
