@@ -17,6 +17,9 @@ name: Android Release (AAB)
 #   EXPO_PUBLIC_SUPABASE_URL      } public client config (EXPO_PUBLIC_*),
 #   EXPO_PUBLIC_SUPABASE_ANON_KEY }  inlined into the JS bundle at build time
 #   EXPO_PUBLIC_API_PROXY_URL     }
+#   EXPO_PUBLIC_SENTRY_DSN        Sentry DSN (crash reporting) — inlined into the JS bundle
+#   SENTRY_AUTH_TOKEN             OPTIONAL — enables source-map upload (project:releases + org:read
+#                                 scope). If unset, the build skips the upload and still succeeds.
 #   PLAY_SERVICE_ACCOUNT_JSON     Google Play service-account JSON (raw file contents) — submit step
 
 on:
@@ -56,6 +59,7 @@ jobs:
             echo "EXPO_PUBLIC_SUPABASE_URL=${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}"
             echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}"
             echo "EXPO_PUBLIC_API_PROXY_URL=${{ secrets.EXPO_PUBLIC_API_PROXY_URL }}"
+            echo "EXPO_PUBLIC_SENTRY_DSN=${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}"
           } > .env
 
       - name: Restore upload keystore (path the signing plugin expects)
@@ -73,6 +77,13 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_VIDEX_UPLOAD_STORE_PASSWORD: ${{ secrets.VIDEX_UPLOAD_STORE_PASSWORD }}
           ORG_GRADLE_PROJECT_VIDEX_UPLOAD_KEY_PASSWORD: ${{ secrets.VIDEX_UPLOAD_KEY_PASSWORD }}
+          # Sentry source-map upload during bundleRelease. Runs ONLY when
+          # SENTRY_AUTH_TOKEN is set; otherwise auto-upload is disabled so the
+          # build still succeeds (org/project/url come from the sentry.properties
+          # that prebuild wrote from app.json). Runtime crash capture is
+          # unaffected either way — that comes from EXPO_PUBLIC_SENTRY_DSN.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_DISABLE_AUTO_UPLOAD: ${{ secrets.SENTRY_AUTH_TOKEN == '' && 'true' || 'false' }}
         run: ./gradlew bundleRelease --no-daemon --stacktrace
 
       - name: Verify signing fingerprint (expect SHA256 99:CE:FF:7E…)
