@@ -475,3 +475,8 @@ Joe approved the first product-level strategy + roadmap (built 5–6 Jul from pr
 - Annotated: wiki/registers/deferred-items.md (roadmap owns sequencing; stale "iOS launch" row closed) and wiki/registers/pre-launch-blockers.md (items 15–18 closed by NATIVE-4; IN-XPS-014 = H0 0.1).
 - Updated: index.md (Sources + Forward planning + Registers lines).
 - External: Notion "Videx Roadmap" (Feb 2026) marked superseded with pointer; new Notion summary page created under the Videx project.
+
+## [2026-07-06] ingest | Decision 6 — solicitor review deferred to H2 monetisation gate
+Joe's call after a practical-blocker analysis: neither the stores nor UK GDPR require lawyer-vetted policies (they require a policy URL, accurate disclosures, working data rights, and the ICO fee). Roadmap v1.0 updated in place (Decision 6, H0 0.1 rewritten as a DIY launch-compliance checklist, §5 compliance gates moved to a single H2-entry solicitor pass bundling consumer terms + affiliate disclosures, new Low residual-risk row).
+- Updated: wiki/registers/next-steps.md (0.1 row + exit gate), wiki/registers/pre-launch-blockers.md (header note — item 29 re-scoped), wiki/registers/parking-lot.md (IN-XPS-014 status), wiki/sources/strategy-roadmap-2026-07.md (six decisions; register impact).
+- The Stream C solicitor briefing pack is parked for the H2 engagement; Stream C's live session redirected to the DIY checklist.
