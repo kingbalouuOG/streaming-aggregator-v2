@@ -28,6 +28,8 @@ related:
 
 # Deferred items register
 
+> **2026-07-06:** Sequencing is now owned by the approved [Product Strategy & Roadmap v1.0](../sources/strategy-roadmap-2026-07.md) — its Appendix B maps register items to roadmap slots (mood-rooms surface → H2 stretch; search-as-signal L2/L3 → post-IN-PX-40; CF/two-tower thresholds unchanged; **sports hardened from "only with a partner" to a plain no**; v3 conversational discovery reframed as H3 Bet 1 "Videx answers you anywhere" with Graphiti+Kuzu demoted to an implementation option). This register remains the per-item detail reference.
+
 Things explicitly parked, with the trigger to revisit each. Distinct from [pre-launch blockers](pre-launch-blockers.md) (must happen) and [open questions](open-questions.md) (need validation). Refreshed 2026-06-10 against Phases 5 → REPO-1 + the E&P brief.
 
 ## Scheduled by the E&P track (deferred to a named phase)
@@ -65,7 +67,7 @@ Things explicitly parked, with the trigger to revisit each. Distinct from [pre-l
 |---|---|---|
 | Dedicated mood rooms browse surface (grid of all global rooms) | Strategy §5.2; Composition Hypothesis v0.4 §3.6 (uses **global** HDBSCAN rooms, not anchored) | Once anchored-row engagement data is in. |
 | Save for Later distinction (vs Watchlist) | Detail Page Spec v0.3.2 §2.8 | Onboarding/design tests surface a clear need. |
-| iOS launch | Strategy (Capacitor section); risks register R-012 | Android v1.0 ships and stabilises. (Would also fix the Prime Video deep-link gap — Universal Links work on iOS.) |
+| ~~iOS launch~~ ✅ **Done** (2026-06/07: RN/Expo app on TestFlight via EAS CI; public App Store review is roadmap H0 0.12) | Strategy (Capacitor section); risks register R-012 | ~~Android v1.0 ships and stabilises~~ — row kept for the record; the Capacitor framing is historical (NATIVE track replaced it) |
 | Spend Dashboard slider keyboard alternative | Accessibility checklist | Pre-web-launch. |
 | `SliderTray` keyboard fallback | Accessibility checklist | Pre-web-launch. |
 

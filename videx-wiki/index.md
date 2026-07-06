@@ -9,7 +9,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Pre-launch blockers](wiki/registers/pre-launch-blockers.md) — What must happen before public launch.
 - [Deferred items](wiki/registers/deferred-items.md) — What's parked and the trigger to revisit.
 - [Acceptance gates](wiki/registers/acceptance-gates.md) — Every numerical threshold in one place.
-- [Next steps](wiki/registers/next-steps.md) — E&P + NATIVE tracks closed (live app `app.videx.streaming` v2.0.0); now internal-testing rollout → ENG-2.
+- [Next steps](wiki/registers/next-steps.md) — Roadmap v1.0 H0 "Prove it & equip it" (Jul–Sep 2026): legal + measurement + notifications/share into v1 → quiet store release.
 - [Cheatsheet](wiki/registers/cheatsheet.md) — Phases ↔ branches ↔ migrations ↔ features.
 - [Registers index](wiki/registers/README.md) — This category.
 
@@ -150,11 +150,12 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 
 ### Forward planning
 
-- [Monetisation strategy exploration v0.1](wiki/concepts/forward-planning/monetisation-strategy.md) — exploratory.
-- [V3 Conversational Discovery & Semantic Search Strategy v0.1](wiki/concepts/forward-planning/v3-conversational-discovery.md) — exploratory.
+- [Monetisation strategy exploration v0.1](wiki/concepts/forward-planning/monetisation-strategy.md) — ⚠ superseded 2026-07-06; absorbed into Roadmap v1.0 §5.
+- [V3 Conversational Discovery & Semantic Search Strategy v0.1](wiki/concepts/forward-planning/v3-conversational-discovery.md) — ⚠ superseded 2026-07-06; absorbed into Roadmap v1.0 H3 Bet 1.
 
 ## Sources
 
+- [Product Strategy & Roadmap v1.0 (July 2026)](wiki/sources/strategy-roadmap-2026-07.md) — **THE working strategy + roadmap (approved 2026-07-06)**; H0–H3 horizons, monetisation model, four H3 vision bets. Consult before prioritising anything.
 - [Glossary](wiki/sources/glossary.md) — `raw/reference/glossary.md`.
 - [Codebase Snapshots](wiki/sources/codebase-snapshots.md) — Eight extracts under `raw/codebase-snapshots/`.
 - [V2 Strategy README](wiki/sources/v2-strategy-readme.md) — `raw/v2-strategy/README.md`.

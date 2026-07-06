@@ -2,10 +2,10 @@
 title: V3 Conversational Discovery & Semantic Search Strategy v0.1 (forward-planning)
 type: concept
 tags: [forward-planning, exploratory, v3, conversational, knowledge-graph, graphiti, kuzu]
-status: exploratory / pre-spike
+status: superseded (absorbed into Product Strategy & Roadmap v1.0, H3 Bet 1, approved 2026-07-06)
 horizon: post-v2 (Phase 7 / v3)
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-07-06
 sources:
   - raw/forward-planning/Videx_v3_Conversational_Discovery_Semantic_Search_Strategy_v0_1.md
 related:
@@ -16,7 +16,7 @@ related:
 
 # V3 Conversational Discovery & Semantic Search Strategy v0.1
 
-> **Status: exploratory / pre-spike.** Prerequisites: v2 live, Phase 6 complete, Tier 1 metrics baseline established.
+> **⚠ SUPERSEDED 2026-07-06** by the approved [Product Strategy & Roadmap v1.0](../../sources/strategy-roadmap-2026-07.md), H3 Bet 1 ("Agents — the callable taste layer"). The reframe: the "Videx 3.0" moment is **"Videx answers you anywhere"** — Videx's own conversational surface *and* a per-user MCP server callable from ChatGPT/Claude/Gemini (assistants share the MCP substrate; Tubi's April-2026 single-catalogue ChatGPT app left the cross-service slot empty). **Graphiti + Kuzu is demoted from headline to implementation option**, evaluated at build time. Trigger unchanged in spirit: public-traffic Tier-1 baseline + H2 retention holds. The architecture exploration below remains the best reference for the knowledge-graph option.
 
 ## Problem
 

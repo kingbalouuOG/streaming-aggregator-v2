@@ -466,3 +466,12 @@ Reflecting `docs/v2/phase-summaries/content-freshness-2026-07-01.md` — three c
 - Updated: `wiki/concepts/architecture/for-you-surface.md` — new "Exploration slot" section documenting the ENG-1 Workstream C daily-seeded slot; 2026-07-01 bump `EXPLORATION_COUNT` 2→3 + positions `[5,13]`→`[2,5,13]` (one pick above the fold).
 - Updated: `wiki/concepts/operations/eval-harness.md` — ENG-1 run 3 (freshness regression check, retrieval-neutral, all gates green) + ⚠ scope-gap note that eng1-eval does NOT gate exploration slot count/position (that's live CTR / ENG-2).
 - Cross-refs: eval-harness ↔ for-you-surface; all three cite the new phase-summary doc. No new pages → index.md unchanged. `#1` web parity left as a documented follow-up.
+
+## [2026-07-06] ingest | Product Strategy & Roadmap v1.0 (approved)
+Joe approved the first product-level strategy + roadmap (built 5–6 Jul from production data, market research, three critique passes, and an independent H3 vision review). Source of truth: `docs/strategy/Videx_Product_Strategy_and_Roadmap_v1.0.md`; snapshot at `raw/forward-planning/Videx_Product_Strategy_and_Roadmap_v1.0_2026-07.md` (status: locked).
+- New page: wiki/sources/strategy-roadmap-2026-07.md (key claims, register impact).
+- Superseded: wiki/concepts/forward-planning/monetisation-strategy.md (absorbed into roadmap §5 — freemium rejection retired, Premium MAU-gated at 5–8K band) and wiki/concepts/forward-planning/v3-conversational-discovery.md (absorbed into H3 Bet 1 — Graphiti+Kuzu demoted to implementation option). Banners added, pages kept for historical reasoning.
+- Rewritten: wiki/registers/next-steps.md around H0 "Prove it & equip it" (Jul–Sep: legal, measurement, notifications v1 + share v1 into v1, shakeout, quiet store release).
+- Annotated: wiki/registers/deferred-items.md (roadmap owns sequencing; stale "iOS launch" row closed) and wiki/registers/pre-launch-blockers.md (items 15–18 closed by NATIVE-4; IN-XPS-014 = H0 0.1).
+- Updated: index.md (Sources + Forward planning + Registers lines).
+- External: Notion "Videx Roadmap" (Feb 2026) marked superseded with pointer; new Notion summary page created under the Videx project.
