@@ -174,6 +174,59 @@ interface EmbeddingTitleRow {
 }
 
 /**
+ * Dedup interaction rows to one per (content_id, media_type, event_type)
+ * identity, keeping the most recent occurrence (latest created_at).
+ *
+ * Integrity fix (roadmap 0.5). Neither taste path deduped, so a tester's
+ * four repeated mark-watched taps applied `watched` 4× and skewed his
+ * vector — the UI double-tap was fixed in PR #35, this closes the data
+ * layer, and it stops a future history importer from mass-replaying
+ * duplicates into the same hole. The event log stays immutable: every
+ * tap is still a row; the taste replay just collapses repeats.
+ *
+ * Rule — apply once per identity, keep latest:
+ *  - "once per identity" so repeats don't multiply a title's weight;
+ *  - "keep latest" so decay measures recency from the most recent signal
+ *    (a rewatch refreshes the title). This is the SAME rule the
+ *    incremental path enforces via hasPriorInteraction(), so a vector
+ *    built tap-by-tap matches one the recompute rebuilds.
+ *  - Distinct event_types on one title stay distinct (thumbs_up + watched
+ *    still sum to the combined 1.5 signal).
+ *  - Rows missing content_id/media_type pass through untouched (callers
+ *    already filter these, so this is belt-and-braces).
+ *
+ * Order is not preserved; callers that care (the summary-vector replay's
+ * confidence floor) re-sort by created_at.
+ */
+export function dedupeInteractionsByIdentity<
+  T extends {
+    content_id: number | null;
+    media_type: string | null;
+    event_type: string;
+    created_at: string | null;
+  },
+>(rows: T[]): T[] {
+  const latestByIdentity = new Map<string, T>();
+  const passthrough: T[] = [];
+  for (const row of rows) {
+    if (row.content_id == null || row.media_type == null) {
+      passthrough.push(row);
+      continue;
+    }
+    const key = `${row.media_type}-${row.content_id}-${row.event_type}`;
+    const existing = latestByIdentity.get(key);
+    if (!existing) {
+      latestByIdentity.set(key, row);
+      continue;
+    }
+    const existingAt = existing.created_at ? new Date(existing.created_at).getTime() : -Infinity;
+    const rowAt = row.created_at ? new Date(row.created_at).getTime() : -Infinity;
+    if (rowAt >= existingAt) latestByIdentity.set(key, row);
+  }
+  return [...passthrough, ...latestByIdentity.values()];
+}
+
+/**
  * Scoped (server) implementation — PLAT-3 W5. The single body both
  * runtimes share: the client entry above delegates with the singleton;
  * the nightly Worker cron calls it per stale user with the
@@ -263,9 +316,19 @@ export async function recomputeFromInteractionsScoped(
   const dim = 1536;
   let vector = bootstrapVector ? [...bootstrapVector] : new Array(dim).fill(0);
 
+  // A4 (roadmap 0.5): collapse repeated events to one per identity BEFORE
+  // replay so duplicate taps don't multiply a title's weight. Re-sort
+  // ascending by created_at so the confidence-floor boost still favours
+  // the genuinely-earliest interactions (dedup returns Map order).
+  const dedupedInteractions = dedupeInteractionsByIdentity(interactions).sort((a, b) => {
+    const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return at - bt;
+  });
+
   // Replay all interactions with decay
   let count = 0;
-  for (const interaction of interactions) {
+  for (const interaction of dedupedInteractions) {
     const key = `${interaction.media_type}-${interaction.content_id}`;
     const embedding = embeddingMap.get(key);
     if (!embedding) continue;
@@ -452,10 +515,15 @@ export async function recomputeInterestCentroidsScoped(
     return null;
   }
 
+  // A4 (roadmap 0.5): same per-identity dedup as the summary-vector
+  // recompute — a title contributes its mass once per event_type, not
+  // once per repeated tap.
+  const deduped = dedupeInteractionsByIdentity(interactions);
+
   // Decay-weighted mass per unique title ("share of recent positive
   // interactions" — recency is the decay, not a hard window)
   const massByKey = new Map<string, number>();
-  for (const i of interactions) {
+  for (const i of deduped) {
     if (!i.created_at || !i.content_id || !i.media_type) continue;
 
     let weight = INTERACTION_WEIGHTS[i.event_type];

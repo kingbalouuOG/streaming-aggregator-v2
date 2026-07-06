@@ -1,4 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
+import * as Linking from 'expo-linking';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import storage, { setAuthState } from '@/lib/storage';
@@ -18,8 +19,15 @@ import { clearQueryCache } from '@/queryPersist';
 // shared-lib modules (storage, supabase) are fine to import from there;
 // React-hook components are not.
 //
-// forgotPassword sends the reset email; the in-app deep-link reset screen
-// + account deletion remain deferred.
+// forgotPassword sends the reset email with a redirectTo deep link back
+// into the app (videx://reset-password); the /reset-password route
+// handles the recovery session and password update (A5 / roadmap 0.8).
+// Account deletion remains deferred.
+//
+// ⚠ Supabase dashboard requirement: `videx://reset-password` (or
+// `videx://*`) MUST be in Authentication → URL Configuration → Redirect
+// URLs, or Supabase ignores redirectTo and the link dead-ends at the Site
+// URL. See native/README + the wiki password-reset runbook.
 
 interface AuthState {
   session: Session | null;
@@ -103,9 +111,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await clearLocalUserState();
       },
       async forgotPassword(email) {
-        // Sends the reset email (Supabase Site URL handles the link). The
-        // in-app deep-link reset screen is still deferred.
-        const { error } = await supabase.auth.resetPasswordForEmail(email);
+        // Deep-link the reset link back into the app so the recovery
+        // session lands on /reset-password (handled there). createURL
+        // yields videx://reset-password in a standalone build.
+        const redirectTo = Linking.createURL('reset-password');
+        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
         return { error: error?.message ?? null };
       },
       async checkUsernameAvailable(username) {
