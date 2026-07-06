@@ -25,6 +25,8 @@ related:
 
 # Pre-launch blockers
 
+> **2026-07-06:** The approved [Product Strategy & Roadmap v1.0](../sources/strategy-roadmap-2026-07.md) H0 now owns launch sequencing — open items here map to H0 0.1 (item 29 solicitor review, the hard blocker), 0.11 (items 2/4/10/12/13/14 + security IN-PX-29/30) and 0.12 (release mechanics). **Items 15–18 (keystore/signing/version/tag) were closed by the NATIVE-4 cutover + tag-triggered CI release pipeline** — this register predates that and hasn't been row-updated. Item 19 (taste-summary review) and 20 (genre taxonomy) fold into the H0 beta feedback loop (0.7).
+
 Things that **must** be done before the v2 build can ship to real users (beyond the two prototype users). Categorised by stake. Refresh as phases close items. Last reviewed at Phase 5.5 close-out (2026-05-15) — items 5 / 6 / 26 closed; new item 29 (IN-XPS-014 solicitor review) filed as the consolidation of legacy items 7 + 8.
 
 ## Security and access control

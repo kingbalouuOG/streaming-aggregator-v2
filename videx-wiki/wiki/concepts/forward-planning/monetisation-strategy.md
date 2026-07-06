@@ -2,10 +2,10 @@
 title: Monetisation strategy exploration v0.1 (forward-planning)
 type: concept
 tags: [forward-planning, exploratory, monetisation, affiliate, data-licensing]
-status: exploratory
+status: superseded (absorbed into Product Strategy & Roadmap v1.0 §5, approved 2026-07-06)
 horizon: post-v2 (12-24 months)
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-07-06
 sources:
   - raw/forward-planning/Videx_Monetisation_Strategy_Exploration_v0_1.md
 related:
@@ -15,7 +15,7 @@ related:
 
 # Monetisation strategy exploration v0.1
 
-> **Status: exploratory.** Not locked. Forward-looking reference only. Captures early thinking on how Videx could eventually generate revenue when user base and data reach a scale where monetisation is viable (~12-24 months from v2 rollout).
+> **⚠ SUPERSEDED 2026-07-06** by the approved [Product Strategy & Roadmap v1.0](../../sources/strategy-roadmap-2026-07.md) §5, which absorbs and updates this exploration with July-2026 research: fair feature-backed **Premium (~£14.99/yr) gated at the ~5–8K-MAU break-even band** (this doc's blanket freemium rejection is retired — the approved model is its §3.6 "voluntary support" candidate upgraded with genuinely premium features; core never paywalled, arrival alerts free forever); affiliate as floor revenue (~£0.05–0.15/MAU/**yr**) via a server-side Worker `/out` redirector (settles this doc's ?tag=-preservation open question); any monetisation triggers the TMDb commercial licence (~$149/mo). The constraints below (esp. "revenue must not corrupt the engine" and "graceful zero") carry forward unchanged. Kept for historical reasoning.
 
 ## Constraints
 
