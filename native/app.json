@@ -39,8 +39,8 @@
       [
         "@sentry/react-native/expo",
         {
-          "url": "https://sentry.io/",
-          "organization": "videx",
+          "url": "https://de.sentry.io/",
+          "organization": "videx-0n",
           "project": "videx-native"
         }
       ],

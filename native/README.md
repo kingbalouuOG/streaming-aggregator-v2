@@ -130,11 +130,10 @@ Config:
   builds. With **no** DSN the SDK stays disabled, so local Metro dev is silent and
   never depends on a token.
 - **Source maps** (optional, "if cheap"): the `@sentry/react-native/expo` config
-  plugin in `app.json` uploads source maps during an EAS build when
-  `organization` + `project` there match your Sentry project **and** a
+  plugin in `app.json` uploads source maps during an EAS build when a
   **`SENTRY_AUTH_TOKEN`** secret is present in the build env. Without the token the
-  upload is skipped and the build still succeeds. The `organization`/`project`
-  values in `app.json` are placeholders — replace with the real Sentry slugs.
+  upload is skipped and the build still succeeds. Configured for org `videx-0n` /
+  project `videx-native` on the **EU** data region (`url: https://de.sentry.io/`).
 
 Runtime crash capture needs only the DSN; the auth token / slugs are just for
 readable stack traces.
