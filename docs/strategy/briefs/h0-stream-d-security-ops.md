@@ -27,3 +27,32 @@ Google Play requires personal developer accounts created after 13 Nov 2023 to ru
 ## Done means
 
 PR green · dashboard/console actions listed with what Joe must click himself (leaked-password toggle, GitLab mirror auth, Play Console check) · registers updated (pre-launch-blockers items 4/13/14 + parking-lot IN-PX-29/30/50, IN-XPS-003, IN-461 statuses) · wiki log entry · D1's answer communicated clearly since it schedules Stream E.
+
+---
+
+## Outcomes (executed 2026-07-06, PR `chore/h0-security-ops`)
+
+Joe-facing manual actions are collected in [`h0-stream-d-console-actions.md`](./h0-stream-d-console-actions.md).
+
+### D1 — Play production-access check → **DECISION NEEDED FROM JOE, schedules Stream E**
+The 12-testers/14-continuous-days closed-test gate is **real and current** (was 20 testers until Dec 2024, now **12**). It applies **only** to **personal** Play accounts created **on/after 13 Nov 2023**; **org accounts and older personal accounts are exempt**. Completion only lets you *apply* for production access, which is then **manually reviewed (~7 days typical)**. Internal-testing does **not** count — must be a **Closed** track; friends & family qualify as testers.
+- **I cannot see the Play Console**, so Joe must confirm two things (console-actions doc §0): account **type** (Settings → Account details) and **creation date** (registration email/receipt).
+- **Scheduling impact:** if the gate applies, the 0.6 shakeout must be run as the closed test → **~3–4 weeks lead time** (14-day window + production-access review + app review) enters the Stream E schedule. If the account is Organisation type, **no delay**.
+
+### D2 — Security
+- **IN-PX-29** ✅ migration `048_username_available_rate_limit.sql` — in-DB per-IP fixed-window limit (30/min) inside the RPC. Gateway/Worker throttle rejected: the client calls the RPC directly against PostgREST, never through the Worker, so only an in-function limit covers the real path. Fails open when no IP is attributable.
+- **IN-PX-30** ✅ `extractUserIdFromJwt` now throws if invoked from the reserved `_no_auth_/` namespace (unverified-signature context). Chose the runtime assertion over `jose`+JWKS because a JWKS-only verify would reject the project's current legacy-HS256 tokens (see IN-XPS-004) — that path opens up once the signing-key rotation lands.
+- **Leaked-password protection** — confirmed **disabled** via advisor; **Joe toggle** (console-actions §1).
+- **IN-XPS-004** — **UNBLOCKED.** Supabase shipped JWT Signing Keys (GA mid-2025, projects auto-migrated 1 Oct 2025); legacy keys deprecated end-2026. Rotation is now a **Joe-owned dashboard ceremony** (not done autonomously — live credential). Runbook rewritten for the new model; steps in console-actions §4.
+
+### D3 — Ops
+- **Off-site backup** ✅ workflow `db-backup.yml` (monthly encrypted `pg_dump` → artifact). **Awaiting Joe's 2 repo secrets** (console-actions §2) before it can run.
+- **GitLab mirror** — options documented (console-actions §3); **Joe to pick one**, then I wire the automated variant.
+- **pg_partman (IN-XPS-003)** ✅ **verified healthy, closed.** partman config correct (1-mon interval, premake 2, 3-mon retention dropping tables, auto-maintenance on); daily maintenance + rollup crons both `succeeded`. `card_impression_daily_totals` is empty **by design** — the rollup only aggregates rows `> 90 days` old and the earliest impression is 2026-06-15, so it correctly no-ops until ~mid-Sept 2026. Spot-check the totals table after the first data crosses 90 days.
+- **Pricing (IN-XPS-007)** ✅ `platformPricing.ts` refreshed against July-2026 UK prices — nearly every service moved (Netflix, Disney+, Apple TV, Paramount+ 3-tier, Prime standalone £7.99, NOW/Sky restructure incl. Sky Go now bundle-only).
+- **IN-PX-50** ✅ Edge Function `backfill-missing-titles` + migration `049` (anti-join RPC + weekly Sun 05:00 UTC cron, Vault-sourced bearer). TMDb key uses the existing `TMDB_API_KEY` secret (enrich-new-titles precedent), not Vault — documented deviation.
+- **IN-461** ✅ compound-noun carve-out added to `label.py` (`ALLOWED_COMPOUNDS = {"fairy tales"}`). Reviewed all 69 current labels: the only forbidden-word case is **"Bedtime Fairy Tales"** (contains "Tales"), preserved via Jaccard stability but rejected on regeneration — the carve-out fixes that without weakening the bare-"Tales" block.
+
+### Deploy steps (Joe / next deploy — not dashboard clicks)
+1. `supabase functions deploy backfill-missing-titles --project-ref fmusugdcnnwiuzkbjquo` **then** apply migrations `048` + `049` (049's cron calls the function — deploy order matters).
+2. Migrations `048`/`049` are **not** applied to prod by this PR (they change a live signup RPC + add a cron) — apply via the normal migration path after review.

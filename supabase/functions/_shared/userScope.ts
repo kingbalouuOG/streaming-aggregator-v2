@@ -41,10 +41,35 @@ export function createServiceRoleClient(): SupabaseClient {
  * round trip to Supabase auth. JWT signature verification is intentionally
  * skipped — Supabase's gateway has already verified the token before the
  * function executes (default `verify_jwt: true`). We only need to read the
- * claims. If verify_jwt is ever flipped off for this function, signature
- * verification must be added here.
+ * claims.
+ *
+ * IN-PX-30 defence-in-depth: that "gateway already verified it" contract
+ * only holds when the function runs WITH gateway JWT verification. The
+ * project reserves the `_no_auth_/` namespace for functions intentionally
+ * deployed with `verify_jwt = false` (edge-fn-jwt-guard.yml permits the
+ * flag only there). In such a context the `sub` claim is attacker-
+ * forgeable, so this helper refuses rather than hand back an unverified
+ * identity. If a `_no_auth_/` function genuinely needs the user id, verify
+ * the signature first (e.g. `jose.jwtVerify` against `SUPABASE_JWKS`) —
+ * deferred until the project rotates off the legacy HS256 secret, which a
+ * JWKS-only verify would otherwise reject (see IN-XPS-004).
  */
 export function extractUserIdFromJwt(req: Request): string | null {
+  // Fail closed if we're running without gateway JWT verification.
+  let pathname = '';
+  try {
+    pathname = new URL(req.url).pathname;
+  } catch {
+    pathname = req.url ?? '';
+  }
+  if (pathname.includes('_no_auth_')) {
+    throw new Error(
+      'extractUserIdFromJwt called from a _no_auth_/ function: the JWT ' +
+      'signature is unverified in this context, so `sub` is forgeable. ' +
+      'Verify the signature before trusting the user id (IN-PX-30).'
+    );
+  }
+
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) return null;
 

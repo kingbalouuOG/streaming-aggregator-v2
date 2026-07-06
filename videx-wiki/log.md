@@ -475,3 +475,13 @@ Joe approved the first product-level strategy + roadmap (built 5–6 Jul from pr
 - Annotated: wiki/registers/deferred-items.md (roadmap owns sequencing; stale "iOS launch" row closed) and wiki/registers/pre-launch-blockers.md (items 15–18 closed by NATIVE-4; IN-XPS-014 = H0 0.1).
 - Updated: index.md (Sources + Forward planning + Registers lines).
 - External: Notion "Videx Roadmap" (Feb 2026) marked superseded with pointer; new Notion summary page created under the Videx project.
+
+## [2026-07-06] ingest | H0 Stream D — security & ops batch (PR chore/h0-security-ops)
+Executed brief `docs/strategy/briefs/h0-stream-d-security-ops.md`. One PR of code + a Joe-facing console-actions doc; DB verified read-only via Supabase MCP (project fmusugdcnnwiuzkbjquo). No migrations applied to prod (files only — 048/049 change a live RPC + add a cron; Joe applies on next deploy).
+- Updated: `wiki/registers/pre-launch-blockers.md` — closed items 10 (pg_partman verified healthy), 12 (pricing), 24/25 (IN-PX-29/30); item 2 (IN-XPS-004) reclassified unblocked→Joe ceremony; item 13 partial (workflow shipped, awaiting 2 Joe secrets); item 14 options documented; item 4 confirmed still-disabled via advisor. Counts refreshed (open 14→11).
+- Updated: `wiki/registers/parking-lot.md` — IN-PX-29/30/50, IN-XPS-003, IN-XPS-007, IN-461 → ✅ Incorporated; IN-XPS-004 ⚠→unblocked. Counts ✅59→65, ⏳30→24.
+- Rewritten: `wiki/concepts/operations/service-role-jwt-rotation.md` — JWT Signing Keys shipped (GA mid-2025, auto-migrated 1 Oct 2025; legacy keys deprecated end-2026); new standby→rotate→revoke ceremony; IN-XPS-004 unblocked, left to Joe (live credential).
+- Updated: `wiki/concepts/operations/supabase-backup-restore.md` — documented the new automated `db-backup.yml` monthly encrypted off-site workflow + restore path.
+- Findings: (a) D1 Play gate is real & current (12 testers / 14 continuous days; personal accounts ≥13 Nov 2023; org exempt) — Joe must check account type/date; ~3–4 wk lead time if it applies, schedules Stream E. (b) pg_partman healthy; empty `card_impression_daily_totals` is by-design (rollup >90d, earliest impression 2026-06-15). (c) IN-461: only "Bedtime Fairy Tales" trips the flat forbidden check → `fairy tales` carve-out.
+- Code (not wiki): migrations 048 (username_available rate-limit) + 049 (backfill RPC+cron), Edge Function backfill-missing-titles, `_shared/userScope.ts` `_no_auth_/` guard, `platformPricing.ts` refresh, `scripts/mood_rooms/label.py` carve-out, `.github/workflows/db-backup.yml`.
+- No new wiki pages → index.md unchanged. CI green (tsc + 163 tests + lint warnings-only).

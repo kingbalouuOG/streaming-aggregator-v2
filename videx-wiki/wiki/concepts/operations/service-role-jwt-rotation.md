@@ -3,7 +3,7 @@ title: Service-role JWT rotation runbook
 type: concept
 tags: [runbook, security, jwt, supabase, vault]
 created: 2026-04-26
-updated: 2026-05-07
+updated: 2026-07-06
 sources:
   - raw/runbooks/service-role-jwt-rotation.md
   - docs/v2/phase-summaries/phase-5-summary.md
@@ -15,7 +15,9 @@ related:
 
 # Service-role JWT rotation runbook
 
-**Status (2026-05-07):** Phase 5 shipped a Vault storage migration (migration 039) — JWT moved out of source code into Supabase Vault. **Cryptographic rotation is deferred to Phase 6+** pending Supabase tooling. The same JWT value is now read from Vault rather than inlined in cron schedules; future rotation is a single `vault.update_secret()` call once Supabase ships JWT-format secret keys (current `sb_secret_…` opaque format fails `verify_jwt = true` on Edge Functions). Tracked as parking-lot IN-XPS-004.
+**Status (2026-07-06 — UNBLOCKED, H0 Stream D):** the Phase 5 blocker is gone. Supabase shipped **JWT Signing Keys** (asymmetric, rotatable — ES256/RS256; GA mid-2025, existing projects auto-migrated onto the signing-keys system on **1 Oct 2025**). Legacy shared-HS256 JWT API keys are on a **deprecation clock (end of 2026)**. Cryptographic rotation is now possible via the dashboard **standby → rotate → revoke** flow with no downtime and no forced sign-outs. This remains a **live-credential ceremony for Joe** (not automated in the H0 Stream D PR). See [Cryptographic rotation](#cryptographic-rotation--now-available-2026-07) below. Tracked as parking-lot IN-XPS-004.
+
+**Prior status (2026-05-07):** Phase 5 shipped a Vault storage migration (migration 039) — JWT moved out of source code into Supabase Vault; same value, no rotation, because the dashboard then had no path to issue a verifiable JWT (new `sb_secret_…` keys are opaque and fail `verify_jwt = true`).
 
 The Supabase service-role key bypasses RLS and grants admin-level DB access. Must be rotated periodically and immediately on any suspected exposure.
 
@@ -80,14 +82,22 @@ WHERE jobname IN ('daily-content-sync','embed-new-titles','enrich-new-titles','r
 ORDER BY end_time DESC LIMIT 10;  -- expect status = 'succeeded'
 ```
 
-## Cryptographic rotation — deferred to Phase 6+
+## Cryptographic rotation — now available (2026-07)
 
-The Supabase dashboard no longer exposes a path to issue a new long-lived JWT signed by the current ECC signing key. New API keys are opaque `sb_secret_…` tokens. Edge Functions configured `verify_jwt = true` reject opaque tokens. Two unblock paths, either gates the rotation:
+The May-2026 blocker (no path to issue a verifiable JWT) is resolved: Supabase **JWT Signing Keys** let you rotate the project's signing key from the dashboard, and a JWT signed by the *current* signing key passes `verify_jwt = true` (the platform verifies against the project JWKS, `SUPABASE_JWKS`). The opaque `sb_secret_…` keys still fail `verify_jwt = true` **by design** — they are not JWTs; they authenticate via the `apikey` header on functions deployed `verify_jwt = false`. So the lowest-friction rotation keeps the existing Bearer-JWT cron shape and just retires the legacy HS256 key.
 
-1. Supabase ships JWT-format secret keys via the new API key model.
-2. Edge Function auth refactored to validate `sb_secret_…` tokens via custom-header check (would also need `verify_jwt = false` on cron-callable functions, conflicting with Phase 5's `edge-fn-jwt-guard` CI workflow — IN-XPS-011).
+**Ceremony (Joe, dashboard — do NOT script; live credential):**
 
-Until then, the same legacy HS256 JWT remains in Vault. The original key is still in git history (`006_cron_schedule.sql:19`), so storage migration alone does not invalidate prior exposures.
+1. **Dashboard → Settings → JWT Keys.** Confirm current key = legacy HS256 and a **Standby** slot is available (generate one if absent; ES256 recommended).
+2. **Rotate.** Standby becomes *current* (signs new JWTs); the old key moves to *previously used* and still **verifies** already-issued tokens — nothing breaks. State changes are throttled ~5 min apart.
+3. **Wait** past access-token expiry + buffer (≈1h15m for a 1h expiry) so no live token was signed by the old key.
+4. **Revoke** the old (legacy HS256) key.
+5. **Re-mint the `service_role` JWT** from the new current signing key, then `SELECT vault.update_secret('service_role_key', '<new-jwt>');` — cron jobs pick it up at next firing (no cron re-schedule needed). Smoke-test one job (`enrich-new-titles` is soonest, 06:30 UTC).
+6. **Migrate CI/scripts** (`SUPABASE_SERVICE_ROLE_KEY`) to a named `sb_secret_…` key for independent revocability (separate credential from the cron path).
+
+**Why not fully automate:** rotating signing keys and re-minting a service-role credential is a live operation that can break cron or sign users out if botched; it needs dashboard access Claude does not have. H0 Stream D documented and unblocked it but left execution to Joe.
+
+**Legacy exposure note:** the original legacy JWT is still in git history (`006_cron_schedule.sql:19`). Only the **revoke** step (4) actually invalidates it — the Vault storage migration alone never did. Do the full rotation before end-2026 to stay ahead of the legacy-key deprecation.
 
 ## Pause / resume cron without rotating
 
