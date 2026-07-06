@@ -32,6 +32,10 @@ export interface DeepLinkContext {
   /** Whether the resolved URL is an exact deep link or a search-page
    *  fallback. Search fallbacks always emit confidence='low'. */
   linkType: 'exact' | 'search';
+  /** Rent/buy price shown at click time as rendered (e.g. "Rent from
+   *  £3.49"); null for flat-rate services with no price. Persisted as
+   *  price_shown on the deep_link_click event (A2 / roadmap 0.3). */
+  priceShown?: string | null;
 }
 
 export interface DeepLinkResult {

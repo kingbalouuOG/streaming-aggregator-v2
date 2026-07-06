@@ -6,6 +6,7 @@ import {
   DMSans_700Bold,
   useFonts,
 } from '@expo-google-fonts/dm-sans';
+import * as Sentry from '@sentry/react-native';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Stack } from 'expo-router';
@@ -18,6 +19,25 @@ import { QUERY_CACHE_BUSTER, queryPersister } from '@/queryPersist';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// A3 (roadmap 0.4): crash reporting. Init as early as possible — at module
+// load, before the first component renders — so a crash in initial render
+// is still captured. DSN comes from EXPO_PUBLIC_SENTRY_DSN (Expo inlines
+// EXPO_PUBLIC_* at bundle time; set as an EAS build secret, see README).
+// With no DSN (local Metro dev) the SDK stays disabled, so there's no
+// noise and no dependency on a token to run the app. enableAutoSessionTracking
+// powers release health — the "crash-free ≥99%" H0 exit gate reads from it.
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+
+Sentry.init({
+  dsn: SENTRY_DSN,
+  enabled: !!SENTRY_DSN,
+  enableAutoSessionTracking: true,
+  // Modest perf sampling; crash + session health are the H0 need, not
+  // full tracing volume.
+  tracesSampleRate: 0.2,
+  sendDefaultPii: false,
+});
+
 // Root layout: fonts + query provider + a single always-mounted Stack.
 // Auth/onboarding gating is done by REDIRECTS in the (tabs) guard
 // (NATIVE-3 W1) rather than conditionally swapping the navigator — so
@@ -29,7 +49,7 @@ const BG = '#0a0a0f';
 // a system-font flash is the native equivalent of the UX-1 white flash.
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-export default function RootLayout() {
+function RootLayout() {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -79,6 +99,7 @@ export default function RootLayout() {
           }}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="auth" options={{ animation: 'fade' }} />
+          <Stack.Screen name="reset-password" options={{ animation: 'fade' }} />
           <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
           <Stack.Screen name="detail/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="profile/[section]" options={{ animation: 'slide_from_right' }} />
@@ -87,3 +108,7 @@ export default function RootLayout() {
     </PersistQueryClientProvider>
   );
 }
+
+// Sentry.wrap enables error-boundary capture + touch/nav breadcrumbs from
+// the app root. No-op behaviourally when Sentry is disabled (no DSN).
+export default Sentry.wrap(RootLayout);

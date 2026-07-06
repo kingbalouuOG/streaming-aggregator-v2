@@ -12,6 +12,16 @@ compatibility_date = "2026-06-01"
 # touches process.env/Buffer-adjacent paths at runtime.
 compatibility_flags = ["nodejs_compat"]
 
+# Legal pages (launch-compliance §D): bundle the Markdown policy sources
+# in docs/legal/*.md as text so GET /privacy + /terms serve the single
+# source of truth, rendered to HTML at the edge. Only .md files that are
+# actually imported get bundled — this rule just tells esbuild how to
+# load them (the wrangler "bundles-from-anywhere" property).
+[[rules]]
+type = "Text"
+globs = ["**/*.md"]
+fallthrough = true
+
 [vars]
 # Public project URL (not a secret — it ships in the client bundle too).
 SUPABASE_URL = "https://fmusugdcnnwiuzkbjquo.supabase.co"

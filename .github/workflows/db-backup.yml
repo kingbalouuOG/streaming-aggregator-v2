@@ -1,0 +1,75 @@
+name: DB off-site backup
+
+# Monthly off-site pg_dump of the Supabase Postgres DB (pre-launch blocker
+# item 13 / risks-register R-015). Supabase Pro already keeps 7-day PITR +
+# daily auto-backups INSIDE Supabase; this stores an encrypted copy OUTSIDE
+# Supabase (GitHub Actions artifact) so a project-level loss is survivable.
+#
+# The dump is GPG-symmetric-encrypted before it ever leaves the runner, so
+# the artifact at rest is useless without BACKUP_GPG_PASSPHRASE.
+#
+# Required repo secrets (Joe — Settings → Secrets and variables → Actions):
+#   SUPABASE_DB_URL       Direct (port 5432) connection URI, NOT the pooler.
+#                         Dashboard → Database → Connection string → URI.
+#   BACKUP_GPG_PASSPHRASE Strong passphrase; store in a password manager.
+#                         Losing it makes every backup unrecoverable.
+#
+# Restore: download the artifact, decrypt, then follow supabase-backup-restore
+#   gpg --batch --yes --decrypt --passphrase "<pass>" -o restore.dump videx-*.dump.gpg
+#   pg_restore --dbname="<db-url>" --no-owner --no-privileges --clean --if-exists restore.dump
+
+on:
+  schedule:
+    - cron: '0 4 1 * *'   # 04:00 UTC, 1st of each month
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Install PostgreSQL 17 client (PGDG)
+        # pg_dump version must be >= server; PGDG pins a current client that
+        # works against Supabase's Postgres regardless of the runner default.
+        run: |
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+          echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Dump + encrypt
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_GPG_PASSPHRASE: ${{ secrets.BACKUP_GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_DB_URL:-}" ] || [ -z "${BACKUP_GPG_PASSPHRASE:-}" ]; then
+            echo "::error::SUPABASE_DB_URL and BACKUP_GPG_PASSPHRASE must both be set as repo secrets."
+            exit 1
+          fi
+          STAMP="$(date -u +%Y%m%d-%H%M)"
+          echo "STAMP=${STAMP}" >> "$GITHUB_ENV"
+          pg_dump "$SUPABASE_DB_URL" \
+            --schema=public \
+            --no-owner --no-privileges \
+            --format=custom \
+            --file="videx-${STAMP}.dump"
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+            --passphrase "$BACKUP_GPG_PASSPHRASE" \
+            --output "videx-${STAMP}.dump.gpg" \
+            "videx-${STAMP}.dump"
+          rm -f "videx-${STAMP}.dump"
+          ls -lh "videx-${STAMP}.dump.gpg"
+
+      - name: Upload encrypted backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: videx-db-backup-${{ env.STAMP }}
+          path: videx-*.dump.gpg
+          retention-days: 90
+          if-no-files-found: error
