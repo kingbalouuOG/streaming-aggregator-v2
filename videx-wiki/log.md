@@ -475,3 +475,12 @@ Joe approved the first product-level strategy + roadmap (built 5–6 Jul from pr
 - Annotated: wiki/registers/deferred-items.md (roadmap owns sequencing; stale "iOS launch" row closed) and wiki/registers/pre-launch-blockers.md (items 15–18 closed by NATIVE-4; IN-XPS-014 = H0 0.1).
 - Updated: index.md (Sources + Forward planning + Registers lines).
 - External: Notion "Videx Roadmap" (Feb 2026) marked superseded with pointer; new Notion summary page created under the Videx project.
+
+## [2026-07-06] ingest | H0 Stream C — DIY launch-compliance pack (Decision 6)
+Executed the re-scoped H0 item 0.1 (Decision 6, 6 Jul): the paid solicitor review is deferred to the H2 monetisation gate, so launch compliance is now DIY. Stream C output landed under `docs/legal/`; this is the doc trail (registers already handled in PR #50 — IN-XPS-014 not re-edited here).
+- Parked: `docs/legal/solicitor-briefing-pack.md` — banner-marked as the standing brief for the **H2** engagement (will also cover Premium consumer-contract terms / DMCCA + affiliate ASA/CMA disclosures); solicitor shortlist removed per Decision 6.
+- New: `docs/legal/launch-compliance-checklist.md` — the actionable roadmap-0.1 checklist: ICO registration (Tier 1 £52/yr, £47 by DD; public-register address caveat), policy accuracy pass, contact route (email-only), hosted policy URLs, store forms.
+- New: `docs/legal/store-privacy-disclosures.md` — copy-ready Google Play Data Safety + Apple App Privacy answers (no third-party sharing; no tracking; crash-reporting + push-token rows flagged as H0-conditional).
+- Policy edits: `privacy-policy.md` + `terms-of-service.md` — contact set to email-only `privacy@videx.app`, `[TBC]` placeholders + "not lawyer-vetted" caveat footers removed; §2 brought current (click-out `link_type`/`price_shown` disclosed; `user_interest_centroids`/`user_feature_flags`/`app_feedback` added; push notifications left as a clearly-marked, non-rendered pending slot for Stream B Phase 1).
+- Worker: `GET /privacy` + `/terms` on `workers/api` (Hono) render the same `docs/legal/*.md` (single source) to HTML via a small purpose-built renderer (`workers/api/src/policyPages.ts`, 10 unit tests) bundled as text (wrangler `[[rules]]` Text rule). Store-listing URLs; browser smoke-test is the Worker deploy step in the checklist.
+- Open dependencies flagged for Joe: register the `videx.app` domain + stand up the `privacy@` mailbox before publishing; deploy the Worker and record the `workers.dev` URL. No migrations added (048+ reserved by Streams B/D).

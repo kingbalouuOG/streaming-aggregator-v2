@@ -1,17 +1,20 @@
-# Videx — Solicitor Briefing Pack (IN-XPS-014)
+# Videx — Solicitor Briefing Pack (parked for the H2 monetisation gate)
 
-**Prepared:** 2026-07-06 · **For:** a UK tech / commercial solicitor, for a fixed-fee review of two documents.
-**Blocker reference:** IN-XPS-014 — the hard public-launch blocker. Videx cannot be published to the App Store or Google Play for a non-prototype user base until these documents are lawyer-vetted.
+> **⏸ PARKED — not for use yet. This pack is for the H2 monetisation-gate solicitor engagement (Decision 6, Joe, 6 July 2026).** The paid solicitor review is **deferred** from launch to the monetisation gate, where it will be bundled with the new scope that actually makes legal advice non-optional: **Premium consumer-contract terms (Digital Markets, Competition and Consumers Act — DMCCA — subscription / free-trial / cancellation rules)** and **affiliate-link disclosures (ASA / CMA)**. It is kept here, ready, so that engagement can start fast when H2 arrives. **Do not send this to a solicitor now.**
+>
+> Launch itself does **not** wait on this. Neither the app stores nor UK GDPR require lawyer-vetted policies — they require a public policy URL, accurate disclosures, working data-subject rights (all shipped), and the ICO fee. Those are handled by the **DIY launch-compliance checklist** at [launch-compliance-checklist.md](./launch-compliance-checklist.md) (roadmap item 0.1). This pack is the *future* engagement brief, not a launch blocker.
 
-**Documents under review (attached, in this folder):**
-- [Privacy Policy](./privacy-policy.md) — 11 sections, ~1,500 words
-- [Terms of Service](./terms-of-service.md) — 12 sections, ~1,100 words
+**For:** a UK tech / commercial solicitor, for a fixed-fee review — **at the H2 monetisation gate.**
+**Blocker reference:** IN-XPS-014 (re-scoped under Decision 6 — see the registers; do not re-edit).
 
-Both are **descriptive drafts** written by the developer against the real technical implementation. They carry a lawyer-vetting caveat footer and intentionally leave `[TBC]` placeholders (contact details, effective date). They have **not** been legally reviewed.
+**Documents that will be under review (in this folder):**
+- [Privacy Policy](./privacy-policy.md) — the live policy (placeholders resolved, caveat footer removed at launch)
+- [Terms of Service](./terms-of-service.md) — the live terms
+- **Plus, at H2:** the Premium subscription terms + affiliate-disclosure copy (drafted nearer the time)
 
-**How to use this pack:** §1 says what the product is; §2 is a one-page data-flow inventory (what's collected, where it lives, retention); §3 lists the user-rights mechanisms already built, so you can check the docs match reality; §4 is the specific questions we need answered; §5 lists gaps we've already spotted; §6 covers engagement logistics and turnaround.
+**How to use this pack (at H2):** §1 says what the product is; §2 is a one-page data-flow inventory (what's collected, where it lives, retention); §3 lists the user-rights mechanisms already built, so the solicitor can check the docs match reality; §4 is the questions; §5 lists gaps; §6 covers engagement logistics.
 
-**One review, one pass.** This pack deliberately describes the app **as it will be at public release**, not only as it is today. That includes two features landing during the current work cycle (H0): completed **click-out logging** (§2.4) and **push notifications + consent** (§2.5). Please review against the full picture so we pay for legal review **once**.
+**One review, one pass.** This pack describes the app **as it will be at the monetisation gate**, so the paid review happens **once** and covers everything legal at that point: the current app, the two H0 data additions (**click-out logging** §2.4 and **push notifications + consent** §2.5), Premium consumer-contract terms, and affiliate disclosures.
 
 ---
 
@@ -129,40 +132,25 @@ These are **not in scope for line-by-line review now**; we raise them so the cur
 
 ## 5. Gaps we've already flagged (please confirm / correct)
 
-- **`[TBC]` placeholders** throughout both docs: contact email, postal address, effective date. Joe fills these before publish once the contact-address option (§4 Q2) is chosen.
+- **Contact / placeholders — resolved at launch (DIY checklist), not by this engagement.** Contact route is **email-only** (Joe's choice); the `[TBC]` placeholders and the caveat footer were removed when the live policies were published. Re-confirm at H2 that email-only still satisfies Art. 13(1)(a) (Q2).
 - **No explicit Art. 6 lawful basis** stated (Q6).
-- **No ICO registration** referenced yet (Q3).
-- **Region claim unverified** — Privacy Policy §3 says eu-west-2 / London; to be confirmed before relied upon (§2).
-- **Privacy Policy §2 inventory is stale** — it predates `user_interest_centroids`, `user_feature_flags`, and `app_feedback`, and does not yet describe the §2.4 click-out fields or §2.5 push data. The §2 table above is the current source of truth; the policy text will be brought in line before publish.
+- **Region claim** — Privacy Policy §3 says eu-west-2 / London; verify the actual Supabase project region before relying on it (§2).
+- **§2 inventory brought current at launch** — the click-out fields (§2.4) and the `user_interest_centroids` / `user_feature_flags` / `app_feedback` tables were added to Privacy Policy §2 in the launch pass; push data (§2.5) remains a marked pending slot until Stream B Phase 1 ships.
 - **Retention is "indefinite until deletion"** for most tables (Privacy Policy §7). Please confirm that is acceptable for a free personalised app, or advise whether an inactivity prune is expected.
 - **Export omits `user_interest_centroids`** (§3, Q10).
 
 ---
 
-## 6. Engagement logistics
+## 6. Engagement logistics (for H2 — not now)
 
-**What we're asking for:** a **fixed-fee** review of the two attached documents — a redline / comments pass plus answers to the §4 questions. Joe applies the redlines himself (the docs render in-app from these markdown files, so edits flow straight through to the app). A **turnaround estimate and fixed quote up front** would be appreciated.
+**What to ask for at H2:** a **fixed-fee** review — a redline / comments pass on the live Privacy Policy + Terms plus the new Premium subscription terms and affiliate-disclosure copy, with answers to the §4 questions. Joe applies the redlines himself (the docs render in-app and on the hosted policy pages straight from these markdown files). Ask for a **turnaround estimate and fixed quote up front.**
 
-**Why the pack looks the way it does:** we have front-loaded the technical reality (§2–§3) precisely so the review can be **scoped and fixed-fee** rather than open-ended, and so it happens **once** — covering the current app **plus** click-out logging and push consent (§2.4–§2.5).
+**Why one pass:** the technical reality is front-loaded (§2–§3) so the review is scoped and fixed-fee rather than open-ended, and so the paid engagement happens **once** — covering the current app, the two H0 data flows (§2.4–§2.5), Premium consumer-contract terms, and affiliate disclosures together.
 
-**Joe's pre-send decision (owner: Joe, not the solicitor):** pick the **contact-address option** — email-only vs a registered-office / service address (~£30–50/yr) vs a PO box — and fill the `[TBC]` placeholders accordingly. Q2 asks the solicitor only to confirm the legal sufficiency of the chosen route.
+**Firm selection deferred.** Per Decision 6, no solicitor is shortlisted or engaged now. Draw up a shortlist and confirm current fixed fees at H2 (a two-document review of this kind is a **~£500–£1,500** market; the Premium/affiliate scope adds to that). Choosing the firm is Joe's, at engagement time.
 
-**Sequencing note:** §2.5 (push data-model note) is finalised as Stream B Phase 1 lands; the pack is sent to the solicitor once that banner is cleared. Everything else here is final.
-
-### Optional — fixed-fee UK solicitor shortlist (rough pricing)
-
-For comparison only; Joe books the engagement and should confirm current fees directly. UK fixed-fee providers that handle **app / SaaS privacy policy + T&Cs** review for small operators typically land in the **~£500–£1,500** range for a two-document review, depending on depth:
-
-| Provider | Fit | Rough fixed fee (verify) |
-|---|---|---|
-| **Sprintlaw UK** | Fixed-fee, startup/app-focused, packaged app T&Cs + privacy work | App T&Cs packages from **~£1,100**; bundles available |
-| **PAIL Solicitors** | Mobile-app T&Cs / privacy specialists | Fixed-fee on enquiry |
-| **JPP Law** | Fixed-fee startup legal packages | Package pricing on enquiry |
-| **Adlex Solicitors** | Website & app T&Cs / IP specialists | Fixed-fee on enquiry |
-| **A local commercial solicitor** | Often cheapest for a straight review of existing drafts | ~£500–£900 typical for a two-doc review |
-
-**Separate statutory cost (not legal fees):** the **ICO data-protection fee** is expected to be **Tier 1 — £52/yr** for a sole operator (£47 by direct debit). Confirm via the ICO self-assessment tool. This is a registration Joe does himself; it is not part of the solicitor engagement.
+**Already handled outside this engagement (see [launch-compliance-checklist.md](./launch-compliance-checklist.md)):** the contact route (**email-only**, Joe's choice), the ICO data-protection fee (**Tier 1, £52/yr** — a self-registration, not a legal fee), and the hosted `/privacy` + `/terms` URLs. None of these need a solicitor.
 
 ---
 
-*Assembled 2026-07-06 for IN-XPS-014. Companion to the earlier internal [solicitor-review-pack.md](./solicitor-review-pack.md) (2026-06-12), which this supersedes for the H0 release scope by adding the two H0 data flows (§2.4–§2.5) and the store-readiness / ICO / age-gating / forward-looking questions. Once the solicitor's feedback is applied to `privacy-policy.md` and `terms-of-service.md` (placeholders replaced with the chosen contact route), IN-XPS-014 closes in the pre-launch-blockers register and the parking lot, with a wiki log entry.*
+*Parked 2026-07-06 under Decision 6. Supersedes the earlier internal [solicitor-review-pack.md](./solicitor-review-pack.md) (2026-06-12). This is the standing brief for the **H2 monetisation-gate** engagement, not a launch artifact — launch compliance is the DIY checklist. When H2 arrives, refresh §4 against the then-current app, add the Premium + affiliate scope, shortlist firms, and engage. IN-XPS-014 is tracked (re-scoped) in the registers; do not re-edit it here.*

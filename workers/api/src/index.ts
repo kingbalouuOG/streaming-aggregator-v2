@@ -33,6 +33,11 @@ import {
   TITLE_TTL_SECONDS,
 } from './rules';
 import { verifySupabaseJwt } from './auth';
+import { markdownToHtml, renderPolicyPage } from './policyPages';
+// Bundled as text (wrangler [[rules]] Text rule) — the single source of
+// truth for the hosted /privacy + /terms pages is docs/legal/*.md.
+import privacyMd from '../../../docs/legal/privacy-policy.md';
+import termsMd from '../../../docs/legal/terms-of-service.md';
 // PLAT-3: the engine imports directly from src/lib — the
 // wrangler-bundles-from-anywhere property that dissolves ADR-011.
 import { renderForYou, type ForYouPayload } from '../../../src/lib/server/foryouRender';
@@ -80,6 +85,23 @@ app.use(
 app.get('/v1/health', (c) =>
   c.json({ ok: true, service: 'videx-api', ts: new Date().toISOString() }),
 );
+
+// ── Hosted legal pages (launch-compliance §D) ────────────────────────
+// Public, browser-navigable /privacy + /terms — the store-required
+// policy URLs. Rendered once at isolate startup from the bundled
+// Markdown; 1h CDN cache. Static content, so no per-user concerns.
+const PRIVACY_HTML = renderPolicyPage('Privacy Policy', markdownToHtml(privacyMd));
+const TERMS_HTML = renderPolicyPage('Terms of Service', markdownToHtml(termsMd));
+const POLICY_CACHE_CONTROL = 'public, max-age=3600';
+
+app.get('/privacy', (c) => {
+  c.header('Cache-Control', POLICY_CACHE_CONTROL);
+  return c.html(PRIVACY_HTML);
+});
+app.get('/terms', (c) => {
+  c.header('Cache-Control', POLICY_CACHE_CONTROL);
+  return c.html(TERMS_HTML);
+});
 
 /** Cache-or-fetch helper: failures pass through uncached. Callers pass
  *  a NORMALISED cache URL (sorted, credential-stripped params) so

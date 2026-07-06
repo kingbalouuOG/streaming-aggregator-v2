@@ -1,20 +1,19 @@
 # Privacy Policy
 
-**Last updated:** 2026-05-14
-**Effective from:** [date of first non-prototype release — TBC]
+**Last updated:** 6 July 2026
+**Effective from:** 6 July 2026
 
 ## 1. Who we are
 
 Videx is a personal viewing-recommendation app for UK streaming
-services. The app is currently a private prototype built by a single
-developer, Joe Green, as the data controller under UK GDPR.
+services. It is built and operated by a single developer, Joe Green,
+based in the United Kingdom, who is the data controller under UK GDPR.
 
-**Contact:** [your-contact-email-address — TBC]
-**Postal address:** [your-UK-postal-address — TBC]
+**Contact:** privacy@videx.app
 
 If you have any questions about how Videx handles your data, or you
-want to exercise any of the rights described in §6, write to the
-address or email above and Joe will respond within 30 days.
+want to exercise any of the rights described in §6, email the address
+above and Joe will respond within 30 days.
 
 ## 2. What data we collect
 
@@ -27,10 +26,14 @@ following data in the database tables listed:
   background / focused), your age range, and whether you finished the
   onboarding flow.
 - **Interaction history** (`user_interactions`): every thumbs up,
-  thumbs down, watched mark, watchlist add, dismiss, service tap,
-  detail-page view, and time-on-detail-page reading you do in the
-  app — each stamped with the content's TMDb id and the time you did
-  it.
+  thumbs down, watched mark, watchlist add, dismiss, detail-page view,
+  and time-on-detail-page reading you do in the app — each stamped
+  with the content's TMDb id and the time you did it. This also
+  includes your **click-outs**: when you tap through to a streaming
+  service to watch something, Videx records which service you tapped,
+  whether it sent you to an exact title link or to a search page, and
+  the rent or buy price (if any) that was shown on screen at the
+  moment you tapped.
 - **Impression log** (`card_impressions`): which titles surfaced in
   front of you, in which row, in what position, at what time, and
   with what context (mood-room anchor metadata, etc.). Rolled up to
@@ -46,10 +49,36 @@ following data in the database tables listed:
 - **Watchlist** (`watchlist`): titles you've saved to watch later.
 - **Onboarding analytics** (`onboarding_events`): which steps of the
   onboarding flow you reached, used internally to debug drop-off.
+- **Interest centroids** (`user_interest_centroids`): up to three
+  derived "sub-taste" vectors, computed from your interaction history
+  the same deterministic way as the main taste vector above.
+- **App feedback** (`app_feedback`): any feedback you choose to submit
+  through the in-app feedback form.
+- **Feature flags** (`user_feature_flags`): per-account flags that
+  turn experimental features on or off for you.
 
 We never collect any of: your location, anything happening in other
 apps on your device, what you actually watch on the streaming
 services themselves, your photos, contacts, or any biometric data.
+
+<!--
+PENDING SLOT — Push notifications (Stream B Phase 1, roadmap item 0.9).
+NOT YET LIVE. Do NOT publish this as active copy until the arrival /
+leaving-soon alerts feature actually ships. When it does, add a
+"Push notifications" subsection here describing:
+  • push token — an identifier issued by the device push service
+    (Google FCM / Apple APNs), stored in `user_push_tokens`, used only
+    to deliver the alerts you opted into; cleared on sign-out; dead
+    tokens pruned by the delivery pipeline.
+  • platform (Android / iOS) + minimal device metadata.
+  • per-type notification consent (arrivals, leaving-soon) — captured
+    AFTER your first value moment in the app, never at first launch;
+    withdrawable at any time in Profile → Settings; enforced
+    server-side (the alert cron filters on your consent, not just the
+    client).
+Paste Stream B Phase 1's data-model note here verbatim, then clear the
+"push notifications pending" line in docs/legal/launch-compliance-checklist.md.
+-->
 
 ## 3. Where your data is stored
 
@@ -175,21 +204,16 @@ notification.
 
 ## 11. Contact
 
-Questions, exercising rights, or complaints — write to:
+Questions, exercising rights, or complaints — email us:
 
-- Email: [your-contact-email-address — TBC]
-- Post:  [your-UK-postal-address — TBC]
+- Email: privacy@videx.app
 
 For a regulatory complaint, contact the UK Information
 Commissioner's Office: <https://ico.org.uk/make-a-complaint/>.
 
 ---
 
-*Draft v1, descriptive of current Videx behaviour as of 2026-05-14.
-Authored by Claude under Joe's review. **This document has not
-been reviewed by a qualified UK solicitor.** Solicitor review is
-required before App Store / Google Play submission and before any
-non-prototype user base accesses the product. Treat this draft as
-a working document that captures current technical reality, not
-as a legally-vetted disclosure. Tracked as IN-XPS-014 — UK
-solicitor review of Privacy Policy + Terms of Service.*
+*Videx is operated by Joe Green as an individual data controller based
+in the United Kingdom. This page describes how the app actually handles
+your data; if that changes, we update this page and (per §10) notify
+signed-in users. Last updated 6 July 2026.*
