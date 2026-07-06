@@ -61,6 +61,23 @@ FORBIDDEN_WORDS: frozenset[str] = frozenset({
 })
 
 
+# Compound-noun carve-outs (IN-461). A forbidden single token is permitted
+# when it appears as part of one of these established multi-word phrases,
+# which name a concrete, predictable category rather than the generic
+# evocative usage the forbidden list targets (e.g. "Fairy Tales" the genre
+# vs. bare "Tales" / "Tales of Destiny").
+#
+# Surfaced by the mood-room recluster review: the generated label "Bedtime
+# Fairy Tales" is carried across runs by Jaccard stability but a fresh
+# regeneration (cluster drift below the 0.8 threshold) would be wrongly
+# rejected by the flat token check and fall back to a "Cluster {uuid}"
+# placeholder. Phrases are matched case-insensitively against the whole
+# label. Keep this list tight — every entry is a deliberate exception.
+ALLOWED_COMPOUNDS: frozenset[str] = frozenset({
+    "fairy tales",
+})
+
+
 log = logging.getLogger(__name__)
 
 
@@ -266,8 +283,14 @@ def _validate_label(label: str, self_check: bool) -> None:
     """
     if not self_check:
         raise ValueError("LLM reported forbidden-word violation")
+    lowered = label.lower()
     tokens = {t.strip(".,!?;:()'\"").lower() for t in label.split()}
     hits = tokens & FORBIDDEN_WORDS
+    # Drop hits that are covered by an allowed compound noun (IN-461).
+    if hits:
+        for phrase in ALLOWED_COMPOUNDS:
+            if phrase in lowered:
+                hits -= set(phrase.split())
     if hits:
         raise ValueError(f"label contains forbidden word(s): {sorted(hits)}")
 
