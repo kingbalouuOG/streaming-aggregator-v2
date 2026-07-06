@@ -1,0 +1,5 @@
+# Per-function config for backfill-missing-titles (IN-PX-50).
+# Cron-invoked with service-role JWT — verify_jwt remains true.
+# Matches enrich-new-titles; keeps IN-XPS-011 verify_jwt guard green.
+
+verify_jwt = true
