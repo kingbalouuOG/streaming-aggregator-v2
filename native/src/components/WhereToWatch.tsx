@@ -43,7 +43,10 @@ export function WhereToWatch({ detail, userServices }: WhereToWatchProps) {
     );
   }
 
-  const open = async (service: ServiceId, saUrl: string | null) => {
+  // `priceShown` is the rent/buy price label exactly as rendered at click
+  // time (A2 / roadmap 0.3); null for flat-rate tier-1/tier-2 services,
+  // which show no price. Passed straight onto the deep_link_click event.
+  const open = async (service: ServiceId, saUrl: string | null, priceShown: string | null = null) => {
     const link = getDeepLink(service, saUrl, detail.title, detail.year);
     const { tmdbId } = parseContentItemId(detail.id);
     const dwellSecondsBeforeClick = getCurrentDwellSeconds();
@@ -54,6 +57,7 @@ export function WhereToWatch({ detail, userServices }: WhereToWatchProps) {
         serviceId: service,
         dwellSecondsBeforeClick,
         linkType: link.type,
+        priceShown,
       });
     } finally {
       exitDwell('deep_link_click');
@@ -120,10 +124,18 @@ function RentBuyList({
 }: {
   options: RentalOption[];
   detail: DetailData;
-  onOpen: (service: ServiceId, saUrl: string | null) => void;
+  onOpen: (service: ServiceId, saUrl: string | null, priceShown: string | null) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? options : options.slice(0, 3);
+
+  // The exact price label rendered for a rent/buy row — reused for both
+  // display and the deep_link_click `price_shown` field so they can never
+  // drift apart.
+  const priceLabel = (option: RentalOption): string =>
+    option.price.startsWith('£')
+      ? `${option.type === 'rent' ? 'Rent from' : 'Buy from'} ${option.price}`
+      : option.price;
 
   return (
     <View className="mt-3">
@@ -138,6 +150,7 @@ function RentBuyList({
               onOpen(
                 option.serviceKey,
                 option.deepLinkUrl ?? detail.serviceLinks[option.serviceKey]?.url ?? null,
+                priceLabel(option),
               )
             }
             className="flex-row items-center justify-between rounded-card bg-secondary px-3.5 py-3 active:opacity-80">
@@ -147,11 +160,7 @@ function RentBuyList({
                 {SERVICE_DISPLAY_NAMES[option.serviceKey] ?? option.service}
               </Text>
             </View>
-            <Text className="font-sans-medium text-meta text-primary">
-              {option.price.startsWith('£')
-                ? `${option.type === 'rent' ? 'Rent from' : 'Buy from'} ${option.price}`
-                : option.price}
-            </Text>
+            <Text className="font-sans-medium text-meta text-primary">{priceLabel(option)}</Text>
           </Pressable>
         ))}
       </View>

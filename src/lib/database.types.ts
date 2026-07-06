@@ -56,7 +56,7 @@ export type Database = {
           media_type: string
           notes: string | null
           report_type: string
-          service_id: string
+          service_id: string | null
           tmdb_id: number
           user_id: string
         }
@@ -66,7 +66,7 @@ export type Database = {
           media_type: string
           notes?: string | null
           report_type: string
-          service_id: string
+          service_id?: string | null
           tmdb_id: number
           user_id: string
         }
@@ -76,7 +76,7 @@ export type Database = {
           media_type?: string
           notes?: string | null
           report_type?: string
-          service_id?: string
+          service_id?: string | null
           tmdb_id?: number
           user_id?: string
         }
@@ -164,72 +164,6 @@ export type Database = {
         ]
       }
       card_impressions_default: {
-        Row: {
-          content_id: number
-          id: number
-          metadata: Json | null
-          position: number
-          session_id: string
-          shown_at: string
-          source_surface: string
-          user_id: string
-        }
-        Insert: {
-          content_id: number
-          id?: never
-          metadata?: Json | null
-          position: number
-          session_id: string
-          shown_at: string
-          source_surface: string
-          user_id: string
-        }
-        Update: {
-          content_id?: number
-          id?: never
-          metadata?: Json | null
-          position?: number
-          session_id?: string
-          shown_at?: string
-          source_surface?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      card_impressions_p20260201: {
-        Row: {
-          content_id: number
-          id: number
-          metadata: Json | null
-          position: number
-          session_id: string
-          shown_at: string
-          source_surface: string
-          user_id: string
-        }
-        Insert: {
-          content_id: number
-          id?: never
-          metadata?: Json | null
-          position: number
-          session_id: string
-          shown_at: string
-          source_surface: string
-          user_id: string
-        }
-        Update: {
-          content_id?: number
-          id?: never
-          metadata?: Json | null
-          position?: number
-          session_id?: string
-          shown_at?: string
-          source_surface?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      card_impressions_p20260301: {
         Row: {
           content_id: number
           id: number
@@ -394,6 +328,72 @@ export type Database = {
         }
         Relationships: []
       }
+      card_impressions_p20260801: {
+        Row: {
+          content_id: number
+          id: number
+          metadata: Json | null
+          position: number
+          session_id: string
+          shown_at: string
+          source_surface: string
+          user_id: string
+        }
+        Insert: {
+          content_id: number
+          id?: never
+          metadata?: Json | null
+          position: number
+          session_id: string
+          shown_at: string
+          source_surface: string
+          user_id: string
+        }
+        Update: {
+          content_id?: number
+          id?: never
+          metadata?: Json | null
+          position?: number
+          session_id?: string
+          shown_at?: string
+          source_surface?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      card_impressions_p20260901: {
+        Row: {
+          content_id: number
+          id: number
+          metadata: Json | null
+          position: number
+          session_id: string
+          shown_at: string
+          source_surface: string
+          user_id: string
+        }
+        Insert: {
+          content_id: number
+          id?: never
+          metadata?: Json | null
+          position: number
+          session_id: string
+          shown_at: string
+          source_surface: string
+          user_id: string
+        }
+        Update: {
+          content_id?: number
+          id?: never
+          metadata?: Json | null
+          position?: number
+          session_id?: string
+          shown_at?: string
+          source_surface?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       card_impressions_template: {
         Row: {
           content_id: number
@@ -460,6 +460,39 @@ export type Database = {
           started_at?: string
           status?: string
           version?: number
+        }
+        Relationships: []
+      }
+      editor_notes: {
+        Row: {
+          body: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          kicker: string
+          published_at: string
+          teaser: string | null
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          kicker: string
+          published_at?: string
+          teaser?: string | null
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          kicker?: string
+          published_at?: string
+          teaser?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1488,6 +1521,30 @@ export type Database = {
           table_schema: unknown
         }
         Relationships: []
+      }
+      v_training_examples: {
+        Row: {
+          content_id: number | null
+          exploration: boolean | null
+          label_positive: boolean | null
+          outcome_at: string | null
+          outcome_event: string | null
+          position: number | null
+          position_at_click: number | null
+          session_id: string | null
+          shown_at: string | null
+          source_surface: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_impressions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {

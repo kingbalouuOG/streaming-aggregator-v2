@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ import { ALL_SERVICE_IDS } from '@/constants/serviceCatalog';
 import type { ServiceId } from '@/lib/types/content';
 import { DEFAULT_SLIDERS, type SliderState } from '@/lib/taste-v2/types';
 import { useAuth } from '@/providers/auth';
+import { markJustOnboarded } from '@/onboardingSignal';
 import { StepAccount } from './StepAccount';
 import { StepClusters } from './StepClusters';
 import { StepServices } from './StepServices';
@@ -55,9 +56,24 @@ export function OnboardingFlow() {
   const { complete, submitting } = useCompleteOnboarding();
   const invalidateOnboarding = useInvalidateOnboardingStatus();
 
+  // A1 (roadmap 0.2): stamp the onboarding start time locally at mount so
+  // total duration is real, not the hardcoded 0 production has been
+  // logging. Step 0 is account creation, so at mount there is usually no
+  // session and logOnboardingEvent drops session-less events — firing
+  // `onboarding_started` here would be lost for every fresh signup (why
+  // prod only ever shows `onboarding_completed`).
+  const onboardingStartRef = useRef(Date.now());
+  const startedLoggedRef = useRef(false);
+
+  // Fire `onboarding_started` once a session exists: immediately for a
+  // resumed onboarding (session present at mount) or right after signUp
+  // for a fresh account (session flips non-null post-auth).
   useEffect(() => {
+    if (startedLoggedRef.current) return;
+    if (!session?.user?.id) return;
+    startedLoggedRef.current = true;
     void logOnboardingEvent(ONBOARDING_EVENTS.ONBOARDING_STARTED, {});
-  }, []);
+  }, [session]);
 
   const toggleCluster = (id: string) =>
     setSelectedClusters((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
@@ -69,7 +85,12 @@ export function OnboardingFlow() {
     });
     const ok = await complete({ services, clusters: selectedClusters, watchedTitles, sliders, ageRange, viewingContext });
     if (ok) {
-      void logOnboardingEvent(ONBOARDING_EVENTS.ONBOARDING_COMPLETED, { total_duration_seconds: 0 });
+      void logOnboardingEvent(ONBOARDING_EVENTS.ONBOARDING_COMPLETED, {
+        total_duration_seconds: Math.round((Date.now() - onboardingStartRef.current) / 1000),
+      });
+      // Hand the "just onboarded" bit to Home so it fires first_home_view
+      // once — the onboarding tree unmounts on the replace() below.
+      markJustOnboarded();
       await invalidateOnboarding();
       router.replace('/(tabs)');
     }
@@ -108,6 +129,24 @@ export function OnboardingFlow() {
     else router.replace('/auth');
   };
   const next = useCallback(() => setStep((s) => Math.min(s + 1, TOTAL - 1)), []);
+
+  // A1: mid-funnel step events, mirroring the web flow (src/components/
+  // OnboardingFlow.tsx goNext). Fired on the step's own "continue" so
+  // the funnel query can measure per-step drop-off, not just completion.
+  const onServicesContinue = () => {
+    void logOnboardingEvent(ONBOARDING_EVENTS.SERVICES_COMPLETED, {
+      service_count: services.length,
+      services,
+    });
+    next();
+  };
+  const onClustersContinue = () => {
+    void logOnboardingEvent(ONBOARDING_EVENTS.CLUSTERS_COMPLETED, {
+      cluster_count: selectedClusters.length,
+      clusters: selectedClusters,
+    });
+    next();
+  };
 
   const onAccountCreated = (ageRange: string | null, viewingContext: string | null) => {
     setAgeRange(ageRange);
@@ -162,7 +201,7 @@ export function OnboardingFlow() {
             selected={services}
             onToggle={toggleService}
             onSelectAll={selectAllServices}
-            onContinue={next}
+            onContinue={onServicesContinue}
           />
         ) : step === 2 ? (
           <StepWatchedGrid
@@ -177,7 +216,7 @@ export function OnboardingFlow() {
             loading={watchedGrid.isLoading}
           />
         ) : step === 3 ? (
-          <StepClusters selected={selectedClusters} onToggle={toggleCluster} onContinue={next} />
+          <StepClusters selected={selectedClusters} onToggle={toggleCluster} onContinue={onClustersContinue} />
         ) : (
           <StepTasteSummary
             selectedClusters={selectedClusters}

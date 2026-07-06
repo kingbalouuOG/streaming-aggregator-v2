@@ -21,7 +21,7 @@ import {
 } from '@/lib/taste-v2/interactionUpdate';
 import type { TasteProfileV2 } from '@/lib/taste-v2/types';
 import { invalidateRecommendationCache } from '@/lib/storage/recommendations';
-import { emitContentInteraction } from '@/lib/storage/interactions';
+import { emitContentInteraction, hasPriorInteraction } from '@/lib/storage/interactions';
 import { getCurrentSessionId } from '@/lib/instrumentation/sessionId';
 import storage from '@/lib/storage';
 
@@ -58,11 +58,26 @@ export function useTasteProfile() {
     action: 'thumbs_up' | 'thumbs_down' | 'watchlist_add' | 'watched' | 'removed',
   ) => {
     try {
+      // A4 (roadmap 0.5): only the FIRST occurrence of a (title, action)
+      // feeds the taste vector. Check BEFORE emitting so we detect a
+      // genuine prior event, not the tap we're about to log. Repeats stay
+      // in the immutable event log but must not double-count — same rule
+      // the recompute enforces via dedupeInteractionsByIdentity().
+      const alreadyCounted = await hasPriorInteraction(
+        contentMeta.contentId,
+        contentMeta.contentType,
+        action,
+      );
+
       // Emit to user_interactions event log (fire-and-forget, Phase 0 infrastructure)
       emitContentInteraction(action, contentMeta.contentId, contentMeta.contentType, {
         title: contentMeta.title,
         genre_ids: contentMeta.genreIds || [],
       });
+
+      // Duplicate signal — logged above, but the vector + centroids
+      // already reflect this (title, action); don't apply it again.
+      if (alreadyCounted) return;
 
       // Fetch the title embedding once and share it across both taste paths
       // (summary vector + nearest centroid) — one `titles` query, and at most
