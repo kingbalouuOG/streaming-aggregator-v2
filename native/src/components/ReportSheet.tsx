@@ -32,20 +32,34 @@ export function ReportSheet({ visible, onClose, tmdbId, mediaType, services, onR
   const [type, setType] = useState<ReportType>('not_available');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // A5 (roadmap 0.8): respect the submit result. This previously called
+  // onReported()/onClose() unconditionally, so a failed insert still
+  // showed "Report submitted — thanks!" — which is how availability_reports
+  // sat at 0 rows while the "All" default sent a NULL service_id into a
+  // NOT NULL column (fixed in migration 048). Now only success confirms;
+  // rate-limit and errors surface inline.
   const submit = async () => {
     if (busy) return;
     setBusy(true);
+    setError(null);
     try {
-      await submitReport({
+      const result = await submitReport({
         tmdb_id: tmdbId,
         media_type: mediaType,
         service_id: service,
         report_type: type,
         notes: notes.trim() || undefined,
       });
-      onReported();
-      onClose();
+      if (result.success) {
+        onReported();
+        onClose();
+      } else if (result.rateLimited) {
+        setError("You've already reported this title today — thanks!");
+      } else {
+        setError(result.error ?? 'Could not send your report. Please try again.');
+      }
     } finally {
       setBusy(false);
     }
@@ -137,6 +151,10 @@ export function ReportSheet({ visible, onClose, tmdbId, mediaType, services, onR
               multiline
               className="mt-4 min-h-[64px] rounded-card border border-border bg-background px-4 py-3 font-sans text-body text-foreground"
             />
+
+            {error ? (
+              <Text className="mt-3 font-sans text-meta text-danger">{error}</Text>
+            ) : null}
 
             <Pressable
               onPress={submit}
