@@ -12,7 +12,7 @@ Videx is technically ahead of every consumer competitor on the thing that matter
 
 The market is unusually validating: 66% of streamers say they want a single cross-service guide, time-to-decide keeps rising, subscription cycling is normalised, and the mobile "what should we watch tonight?" moment is owned by nobody. Meanwhile the category's free-forever players are dying (TV Time shuts down 15 July 2026) and incumbents are monetising clumsily (Trakt's up-to-300% price hike backlash). The lesson: charge early and fairly — but only once the maths works.
 
-**The roadmap in one line:** clear the legal blocker, fix measurement, **build the two missing loops** — free arrival alerts for retention, share links + title pages for growth — shake out with friends & family, and go **quietly live on both stores with those loops in v1** (H0, Jul–Sep) → recruit openly in UK communities against a real store listing, prove strangers activate, then spend the marketing moment in the pre-Christmas run-up (H1, Oct–Dec) → the "worth it this month" rotation coach in peak subscription-review season, a fair £15/yr Premium once MAU reaches the ~5–8K break-even band, and the learned re-ranker as its data gate clears (H2, Jan–Mar 2027) → then the vision bets: the agent-callable taste layer, subscription autopilot, group "Tonight" links, and owning the UK availability truth (H3).
+**The roadmap in one line:** clear launch compliance (the paid legal review is deferred to the monetisation gate — Decision 6), fix measurement, **build the two missing loops** — free arrival alerts for retention, share links + title pages for growth — shake out with friends & family, and go **quietly live on both stores with those loops in v1** (H0, Jul–Sep) → recruit openly in UK communities against a real store listing, prove strangers activate, then spend the marketing moment in the pre-Christmas run-up (H1, Oct–Dec) → the "worth it this month" rotation coach in peak subscription-review season, a fair £15/yr Premium once MAU reaches the ~5–8K break-even band, and the learned re-ranker as its data gate clears (H2, Jan–Mar 2027) → then the vision bets: the agent-callable taste layer, subscription autopilot, group "Tonight" links, and owning the UK availability truth (H3).
 
 *(Store availability ≠ launch moment. Joe's call, 6 Jul: TestFlight/closed-track invites are friction and look dodgy to strangers — communities should meet a real store listing. The press beat is spent later, when the retention and growth hooks are live.)*
 
@@ -31,7 +31,7 @@ Three things this plan refuses to do: paywall the retention loop, start ML work 
 | Content | 22,864 titles, ~75K availability rows, 69 mood rooms, 10 UK services with curated deep links, rent/buy pricing, daily incremental sync. `streaming_history` (52K rows) logs adds/removals, and `streaming_availability.expires_on` already carries **forward-looking leaving-soon dates for ~2,000 titles** — the raw material for alerts exists today. |
 | Surfaces | Home (editorial + calendar strip) · For You (personalised, sliders, mood rooms) · Browse (keyword + flag-gated semantic mood search) · Watchlist · Profile (spend dashboard, GDPR export/delete). |
 | Signals | `deep_link_click` already captured with service, URL, dwell, confidence, position and origin surface — the north-star metric is measurable **today** (two small gaps: persist link type; capture price shown). |
-| Compliance | GDPR Art. 17/20 done. Privacy Policy + ToS drafted, **not solicitor-reviewed** — the hard public-launch blocker (IN-XPS-014). |
+| Compliance | GDPR Art. 17/20 done. Privacy Policy + ToS drafted in-house and behaviour-accurate; **paid solicitor review deferred to the H2 monetisation gate (Decision 6)** — the launch gate is the DIY compliance checklist (0.1: ICO registration, contact details, hosted policy URLs, updated text, store forms). |
 
 ### 1.2 Usage reality (the honest bit)
 
@@ -157,7 +157,7 @@ Summer note: H0 baselines land in the July–August viewing trough — treat the
 
 **Revenue math (planning figures, not forecasts):** 5K MAU → Premium ~£1–1.7K/yr net + affiliate ~£250–750/yr — roughly break-even against the cost floor. 100K MAU → Premium ~£20–40K net (£50K+ only with top-quartile conversion) + affiliate £5–15K + sponsorship/newsletter £5–20K. Lifestyle income needs ~20–50K MAU; "graceful zero" holds throughout.
 
-**Compliance gates before switching anything on:** TMDb commercial licence + JustWatch attribution review; SA API paid tier; ASA/CMA affiliate disclosure copy; privacy policy covering click-out logging **and** push tokens/notification consent — fold both into the single solicitor pass (H0), so legal isn't paid twice.
+**Compliance gates before switching anything on:** TMDb commercial licence + JustWatch attribution review; SA API paid tier; ASA/CMA affiliate disclosure copy; and **the single paid solicitor pass — moved to H2 entry (Decision 6)** — covering privacy policy + Premium consumer-contract terms (incl. the DMCCA subscription regime) + affiliate disclosures in one engagement. Legal is paid once, exactly when it becomes non-optional. H0 keeps the policies accurate in-house: the click-out-logging and push-consent text updates ship with the features (0.1).
 
 ---
 
@@ -173,7 +173,7 @@ Fix what's unmeasurable, clear the legal blocker, **build notifications and shar
 
 | # | Item | Size | Notes |
 |---|---|---|---|
-| 0.1 | **Solicitor review of Privacy Policy + ToS** — one pass covering current app **+ click-out logging + push tokens/notification consent** (spec the notifications data model first via 0.9); decide contact address (registered-office service ~£30–50/yr) | M, calendar-bound — start this week | THE public-launch blocker (IN-XPS-014) |
+| 0.1 | **Launch compliance (DIY — Decision 6)**: ICO registration (the actual legal requirement — self-serve data-protection fee, ~£40–60/yr) · replace the `[TBC]` contact placeholders + remove the "not lawyer-vetted" caveat footers once Joe picks the contact route (registered-office service ~£30–50/yr recommended) · update policy text for the two H0 additions (click-out logging, push tokens/notification consent — accuracy is the legal test) · host `/privacy` + `/terms` on the Worker (stores require a public URL; the app only renders them in-app today) · fill Apple App Privacy labels + Play Data Safety forms consistently with the policy | S–M | Replaces the solicitor review (IN-XPS-014) as the launch gate. **Paid review deferred to the H2 monetisation gate**, bundled with Premium consumer-contract terms + affiliate disclosures — one engagement, exactly when it becomes non-optional |
 | 0.2 | **Fix onboarding funnel events on native** — queue `onboarding_started` post-auth, add step events, real durations | S | Activation is unmeasurable today |
 | 0.3 | **Complete click-out telemetry** — persist `link_type` (computed but dropped today), add `price_shown` | XS–S | deep_link_click already rich; this finishes the north-star metric |
 | 0.4 | **Crash reporting** (sentry-expo) + basic release health | S | "It froze" must be diagnosable; gate metric depends on it |
@@ -188,7 +188,7 @@ Fix what's unmeasurable, clear the legal blocker, **build notifications and shar
 
 **Growth workstream (starts now, runs forever — Decision 3: organic only, no paid spend until channels are measured):** wave 1 = personal network + friends-of-friends for the shakeout; wave 2 (H1, post-release) = public UK communities pointed at the real store listing — r/CordcuttersUK, r/BritishTV, MoneySavingExpert forum threads where self-promo rules allow — plus social-content experiments (short-form "what to watch tonight" content; Gen Z discovery already lives there); ongoing = Trakt-refugee threads. Per-channel yields are guesses until tried — that's what the weekly growth block measures.
 
-**Exit gate:** legal cleared · funnel + crash instrumentation live · **arrival + leaving-soon alerts firing on real data** · **share → title page → store round-trip works** · friends-&-family shakeout done with no open P0s · crash-free ≥99% · **quiet v1 live on both stores with the listing polished.** The activation read and engine pulse move to H1's community wave — strangers recruited against the store listing are the honest test.
+**Exit gate:** launch compliance done (ICO registered · contact details live · policies hosted + updated · store forms consistent) · funnel + crash instrumentation live · **arrival + leaving-soon alerts firing on real data** · **share → title page → store round-trip works** · friends-&-family shakeout done with no open P0s · crash-free ≥99% · **quiet v1 live on both stores with the listing polished.** The activation read and engine pulse move to H1's community wave — strangers recruited against the store listing are the honest test.
 
 ### H1 — "Grow & learn" (October–December 2026) · theme: community-led acquisition, then the marketing beat
 
@@ -266,7 +266,7 @@ v1 is already quietly live **with both loops on board** (H0). H1's order: **comm
 
 ## 7. The now-backlog (H0, in order)
 
-1. **Book the solicitor** (this week; calendar-bound; everything else parallel). Their brief lands once item 2's data-model spec exists, so the single pass covers click-out logging + notification consent. Decide contact-address option.
+1. **Launch-compliance checklist (0.1, Decision 6)**: Joe registers with the ICO and picks the contact route (registered-office service recommended); the policies then get real contact details, the caveat footers removed, click-out/push-consent text updates, and hosted `/privacy` + `/terms` URLs. The Stream C solicitor pack is parked, ready for the H2 engagement.
 2. **Notifications v1 spike** — data model (push tokens, consent) + one Edge trigger prototype reading `expires_on` (0.9). First fortnight: it feeds the solicitor brief.
 3. **Fix onboarding funnel events** on native (0.2).
 4. **Finish click-out telemetry** — persist link_type, add price_shown (0.3).
@@ -301,6 +301,7 @@ Items 2–6 are individually small — realistic as the first fortnight alongsid
 | **JustWatch clones any single feature** (they shipped a TV Time migration tool in days) | Medium | Compound moat (UK data quality × taste model × trust), never a single feature |
 | **Premium converts below benchmark** | Medium | Alerts-anchored paywall is the category's proven pattern; trial-first; costs stay side-project-sized either way; fake-door signals before build |
 | **Taste-data pollution** (dedup gap, importers) | Medium | 0.5 fixes the paths before importers or scale |
+| **Unvetted legal docs until H2** (Decision 6 residual) | Low | Drafts mirror actual behaviour (accuracy is the legal test); ICO registered; GDPR rights already functional; paid review mandatory at the monetisation gate; posture revisits on any complaint |
 
 **Decisions — RESOLVED by Joe, 6 July 2026** (the plan above reflects them):
 
@@ -309,6 +310,7 @@ Items 2–6 are individually small — realistic as the first fortnight alongsid
 3. **Capacity & growth budget — set.** Half a day to a day at weekends + up to ~2 hrs/day weekdays when work allows (variable ~6–16 hrs/week). **No monthly ad spend until organic channels show early traction** — growth is free channels first: social-media content experiments + UK community posts (Reddit etc.).
 4. **Rollout channels — public UK communities, against a live store listing.** Joe's call: TestFlight/closed-track invites are friction and can read as dodgy to strangers. So: quiet v1 store release first (H0 0.12), then community recruiting meets a real listing (H1 1.1). Friends & family only on internal tracks before that. **Extended 6 Jul: notifications v1 + share v1/title pages move INTO H0 so the v1 strangers meet already pings and shares** (H0 stretches to ~Jul–Sep accordingly; release valve in 0.12 protects the date).
 5. **Episode tracking — "smart mark-watched only", confirmed.** Full tracking adds complexity and dilutes the app's purpose; the anti-persona holds. The TV Time refugee window has passed regardless. Optional soft play: a community post inviting opinions on episode tracking — listening, not building.
+6. **Solicitor review — deferred to the H2 monetisation gate (6 Jul).** Neither the stores nor UK law require lawyer-vetted policies: stores require a policy URL + accurate disclosure forms; UK GDPR requires accuracy, working rights (shipped) and **ICO registration** (the one real legal must-do — self-serve, no lawyer). At current scale the residual risk of shipping the well-grounded in-house drafts is small and consciously accepted. H0 0.1 becomes the DIY launch-compliance checklist; the paid review lands at H2 entry bundled with consumer-contract terms and affiliate disclosures (one engagement instead of two). The Stream C briefing pack is parked ready for that engagement. *Not legal advice; posture revisits if complaints or scale change the picture.*
 
 ---
 
@@ -338,7 +340,7 @@ Items 2–6 are individually small — realistic as the first fortnight alongsid
 
 | Register item | Roadmap slot |
 |---|---|
-| IN-XPS-014 solicitor review | H0 0.1 |
+| IN-XPS-014 solicitor review | Re-scoped 6 Jul (Decision 6): H0 0.1 = DIY launch compliance; paid review = H2 monetisation gate |
 | IN-PX-29 / IN-PX-30 security · IN-XPS-004 (tracked-blocked on Supabase tooling) | H0 0.11 |
 | IN-XPS-003 partman · IN-PX-50 backfill · backups · pricing refresh · GitLab mirror | H0 0.11 |
 | Taste-summary quality review + genre taxonomy validation (blockers 19–20) | H0 beta feedback loop (0.7) |
