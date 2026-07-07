@@ -35,12 +35,13 @@ Confirmed **disabled** today (Supabase security advisor, 2026-07-06).
 
 ---
 
-## 2. Add the two backup secrets (blocker item 13 — unblocks the new backup workflow)
+## 2. Add ONE backup secret (blocker item 13 — unblocks the new backup workflow)
 
-The PR adds `.github/workflows/db-backup.yml` (monthly encrypted `pg_dump` → GitHub artifact). It stays red until these exist. Repo → **Settings → Secrets and variables → Actions → New repository secret**:
+The PR adds `.github/workflows/db-backup.yml` (monthly encrypted `pg_dump` → GitHub artifact). It reuses the **existing** `SUPABASE_CONNECTION_STRING` secret (the one mood-rooms-recluster already uses — the project's Direct 5432 URI, which already carries the DB password and already works from GitHub Actions), so **you only add one new secret**. Repo → **Settings → Secrets and variables → Actions → New repository secret**:
 
-- **`SUPABASE_DB_URL`** — the **direct** (port 5432) connection URI, *not* the pooler. Dashboard → **Database → Connection string → URI**.
 - **`BACKUP_GPG_PASSPHRASE`** — a strong passphrase, saved in your password manager. **If you lose it, every backup is unrecoverable.**
+
+> On "which password" for a Supabase URI: the `[YOUR-PASSWORD]` placeholder is always the **database password** (Dashboard → **Project Settings → Database**), not your account password or the service-role key. You don't need it here — the reused `SUPABASE_CONNECTION_STRING` already has it.
 
 Then run the workflow once manually (**Actions → DB off-site backup → Run workflow**) and confirm the encrypted artifact appears. Restore steps are in the workflow header + the backup-restore runbook.
 

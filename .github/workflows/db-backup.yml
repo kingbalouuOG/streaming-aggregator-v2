@@ -8,11 +8,16 @@ name: DB off-site backup
 # The dump is GPG-symmetric-encrypted before it ever leaves the runner, so
 # the artifact at rest is useless without BACKUP_GPG_PASSPHRASE.
 #
-# Required repo secrets (Joe — Settings → Secrets and variables → Actions):
-#   SUPABASE_DB_URL       Direct (port 5432) connection URI, NOT the pooler.
-#                         Dashboard → Database → Connection string → URI.
-#   BACKUP_GPG_PASSPHRASE Strong passphrase; store in a password manager.
-#                         Losing it makes every backup unrecoverable.
+# Secrets:
+#   SUPABASE_CONNECTION_STRING  Already set (mood-rooms-recluster uses it). The
+#                               project's Direct connection URI
+#                               (postgresql://postgres:<db-password>@db.<ref>.supabase.co:5432/postgres),
+#                               proven to work from GitHub Actions. pg_dump-compatible
+#                               (5432, not the transaction pooler on 6543). Reused so
+#                               the DB password lives in exactly one place.
+#   BACKUP_GPG_PASSPHRASE       NEW — Joe adds this (Settings → Secrets and variables →
+#                               Actions). Strong passphrase in a password manager;
+#                               losing it makes every backup unrecoverable.
 #
 # Restore: download the artifact, decrypt, then follow supabase-backup-restore
 #   gpg --batch --yes --decrypt --passphrase "<pass>" -o restore.dump videx-*.dump.gpg
@@ -44,17 +49,17 @@ jobs:
 
       - name: Dump + encrypt
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_CONNECTION_STRING: ${{ secrets.SUPABASE_CONNECTION_STRING }}
           BACKUP_GPG_PASSPHRASE: ${{ secrets.BACKUP_GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
-          if [ -z "${SUPABASE_DB_URL:-}" ] || [ -z "${BACKUP_GPG_PASSPHRASE:-}" ]; then
-            echo "::error::SUPABASE_DB_URL and BACKUP_GPG_PASSPHRASE must both be set as repo secrets."
+          if [ -z "${SUPABASE_CONNECTION_STRING:-}" ] || [ -z "${BACKUP_GPG_PASSPHRASE:-}" ]; then
+            echo "::error::SUPABASE_CONNECTION_STRING and BACKUP_GPG_PASSPHRASE must both be set as repo secrets."
             exit 1
           fi
           STAMP="$(date -u +%Y%m%d-%H%M)"
           echo "STAMP=${STAMP}" >> "$GITHUB_ENV"
-          pg_dump "$SUPABASE_DB_URL" \
+          pg_dump "$SUPABASE_CONNECTION_STRING" \
             --schema=public \
             --no-owner --no-privileges \
             --format=custom \

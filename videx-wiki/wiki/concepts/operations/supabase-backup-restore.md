@@ -82,10 +82,11 @@ pg_restore \
 (AES256), and uploads it as a 90-day GitHub Actions artifact — outside
 Supabase. `workflow_dispatch` allows manual runs.
 
-- **Requires two repo secrets** (Joe): `SUPABASE_DB_URL` (direct 5432 URI,
-  not the pooler) and `BACKUP_GPG_PASSPHRASE` (store in a password manager —
-  loss makes every backup unrecoverable). The job hard-fails if either is
-  missing.
+- **Secrets:** reuses the existing `SUPABASE_CONNECTION_STRING` (the Direct
+  5432 URI mood-rooms-recluster already uses — carries the DB password, proven
+  to work from GHA, pg_dump-compatible). Joe adds only `BACKUP_GPG_PASSPHRASE`
+  (store in a password manager — loss makes every backup unrecoverable). The
+  job hard-fails if either is missing.
 - **Restore:** download the artifact, then
   `gpg --batch --yes --decrypt --passphrase "<pass>" -o restore.dump videx-*.dump.gpg`
   and follow [From pg_dump file](#from-pg_dump-file) above.
