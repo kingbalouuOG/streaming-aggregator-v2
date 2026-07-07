@@ -5,6 +5,9 @@
 - [Privacy Policy](./privacy-policy.md) (195 lines / ~1,500 words, 11 sections)
 - [Terms of Service](./terms-of-service.md) (138 lines / ~1,100 words, 12 sections)
 
+**Supplementary data-model note (added 2026-07-06):**
+- [Push Notifications — Data-Model Note](./notifications-data-model.md) — Notifications v1 (H0 Stream B) adds push tokens, per-type opt-in prefs, and a delivery log, plus the Expo/APNs/FCM processor chain. Please fold this surface into the same pass; it lists four extra questions (push lawful basis, processor disclosure, Play Data Safety, delivery-log retention) as additions to §4 below.
+
 This pack gives you (1) what the app actually does with data, (2) the specific questions we need answered, and (3) the known gaps we've already spotted. The two documents are descriptive drafts written by the developer against the real technical implementation; they have **not** been legally reviewed. We want them launch-ready for a small UK user base (initially two testers, then a limited prototype), distributed as a direct Android APK now and likely Google Play later.
 
 ---

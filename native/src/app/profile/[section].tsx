@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ProfileAccount } from '@/components/profile/ProfileAccount';
 import { ProfileAppearance } from '@/components/profile/ProfileAppearance';
+import { ProfileNotifications } from '@/components/profile/ProfileNotifications';
 import { ProfilePrivacy } from '@/components/profile/ProfilePrivacy';
 import { ProfileServices } from '@/components/profile/ProfileServices';
 import { ProfileSpend } from '@/components/profile/ProfileSpend';
@@ -28,6 +29,8 @@ export default function ProfileSectionRoute() {
       return <ProfileTune />;
     case 'appearance':
       return <ProfileAppearance />;
+    case 'notifications':
+      return <ProfileNotifications />;
     case 'spend':
       return <ProfileSpend />;
     case 'privacy':

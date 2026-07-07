@@ -101,6 +101,12 @@ export default function ProfileScreen() {
 
         {/* Settings */}
         <SectionLabel>Settings</SectionLabel>
+        <ActionRow
+          glyph={PROFILE_GLYPHS.notifications}
+          title="Notifications"
+          subtitle="Arrival & leaving-soon alerts"
+          onPress={() => go('notifications')}
+        />
         <ActionRow glyph={PROFILE_GLYPHS.appearance} title="Appearance" subtitle="Dark" onPress={() => go('appearance')} />
         <ActionRow glyph={PROFILE_GLYPHS.privacy} title="Privacy & Data" subtitle="Manage your data" onPress={() => go('privacy')} />
 

@@ -19,6 +19,7 @@
     },
     "android": {
       "package": "app.videx.streaming",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 5,
       "allowBackup": false,
       "adaptiveIcon": {
@@ -36,6 +37,12 @@
     "plugins": [
       "expo-router",
       "./plugins/withReleaseSigning",
+      [
+        "expo-notifications",
+        {
+          "color": "#e85d25"
+        }
+      ],
       [
         "expo-splash-screen",
         {

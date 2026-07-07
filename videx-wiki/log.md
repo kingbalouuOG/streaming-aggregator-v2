@@ -475,3 +475,11 @@ Joe approved the first product-level strategy + roadmap (built 5–6 Jul from pr
 - Annotated: wiki/registers/deferred-items.md (roadmap owns sequencing; stale "iOS launch" row closed) and wiki/registers/pre-launch-blockers.md (items 15–18 closed by NATIVE-4; IN-XPS-014 = H0 0.1).
 - Updated: index.md (Sources + Forward planning + Registers lines).
 - External: Notion "Videx Roadmap" (Feb 2026) marked superseded with pointer; new Notion summary page created under the Videx project.
+
+## [2026-07-06] ingest | Notifications v1 + Share v1 (H0 Stream B)
+Reflecting the H0 Stream B build (brief `docs/strategy/briefs/h0-stream-b-notifications-share.md`). Retention loop (arrival + leaving-soon push) and growth loop (share → OG title page) shipping inside v1.
+- New page: `wiki/concepts/architecture/notifications-v1.md` — the two alert types, data model (migrations 048–051), first-value-moment consent, the 08:00 UTC `send-notifications` Edge Function (dedup/cap/bundling/receipt-pruning), native `expo-notifications` client, and the clean type-separation for the future Premium leaving-soon gate.
+- Updated: `wiki/entities/codebase/event-taxonomy.md` — added the `share` explicit event (growth signal, NOT ranking; migration 051) + a "Notification deliveries (separate table)" section for `notification_deliveries`. Bumped `updated` to 2026-07-06.
+- Updated: `index.md` — Notifications v1 under Architecture.
+- Cross-refs: notifications-v1 ↔ event-taxonomy, platform-architecture, rls-pattern, operations/sync-pipeline.
+- Legal: data-model note delivered to Stream C at `docs/legal/notifications-data-model.md` (referenced from the solicitor pack).

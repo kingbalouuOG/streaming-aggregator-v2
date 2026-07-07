@@ -14,6 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 
 import { AuthProvider } from '@/providers/auth';
+import { NotificationsProvider } from '@/providers/notifications';
 import { QUERY_CACHE_BUSTER, queryPersister } from '@/queryPersist';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -72,17 +73,19 @@ export default function RootLayout() {
       persistOptions={{ persister: queryPersister, maxAge: DAY_MS, buster: QUERY_CACHE_BUSTER }}>
       <StatusBar style="light" />
       <AuthProvider>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: BG },
-          }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="auth" options={{ animation: 'fade' }} />
-          <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
-          <Stack.Screen name="detail/[id]" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="profile/[section]" options={{ animation: 'slide_from_right' }} />
-        </Stack>
+        <NotificationsProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: BG },
+            }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="auth" options={{ animation: 'fade' }} />
+            <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
+            <Stack.Screen name="detail/[id]" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="profile/[section]" options={{ animation: 'slide_from_right' }} />
+          </Stack>
+        </NotificationsProvider>
       </AuthProvider>
     </PersistQueryClientProvider>
   );

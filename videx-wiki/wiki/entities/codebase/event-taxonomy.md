@@ -3,7 +3,7 @@ title: Event Taxonomy
 type: entity
 tags: [events, instrumentation, signals, analytics]
 created: 2026-04-26
-updated: 2026-05-07
+updated: 2026-07-06
 sources:
   - raw/codebase-snapshots/event-taxonomy.md
   - raw/v2-strategy/Videx_v2_Detail_Page_Signal_Capture_Spec_v0.3.2.md
@@ -52,6 +52,9 @@ Source: `lib/storage/interactions.ts`. Written to `user_interactions`. Always in
 | `watched` | Tap on "Mark as Watched". | `{}` |
 | `not_interested` | Detail page button (renamed from `dismiss` in Phase 0). | `{}` |
 | `report_availability` | "Report incorrect availability" submission. | `{ reported_service, reason }` |
+| `share` | Share action on the detail page (native RN `Share`). H0 Stream B. | `{ shared_url, to_surface }` |
+
+> ⚠ **`share` is a growth-analytics signal, NOT a ranking signal.** Added to the `user_interactions.event_type` CHECK in migration 058, and to `InteractionEventType` + `emitShare` in `lib/storage/interactions.ts`. It is deliberately absent from `INTERACTION_WEIGHTS` / `TASTE_RELEVANT_EVENTS` — a share moves no taste vector. `shared_url` is the Worker title-page smart link (`/t/:type/:tmdbId`); `to_surface` is the iOS share-target activity type when the OS reports it (null on Android).
 
 > ⚠ **Phase 5 (migration 037) dropped `marked_watched` from the `user_interactions.event_type` CHECK constraint.** It was carried alongside `watched` for forward-compat in migration 013 but never emitted at runtime — `emitContentInteraction` only takes `'watched'`. The `marked_watched` token survives as a canonical `exit_reason` payload value inside `dwell_event` metadata (Detail Page Signal Capture Spec v0.3.2 line 237) — that stays.
 >
@@ -82,6 +85,19 @@ Written to `card_impressions` (partitioned monthly by pg_partman), batched clien
 | `position` | Card index within row (0-based). |
 | `session_id` | Same UUID as `user_interactions.session_id`. |
 | `shown_at` | Timestamp. |
+
+## Notification deliveries (separate table)
+
+Sent pushes are logged to `notification_deliveries` (migration 057), NOT `user_interactions`. It is a dedup + cap ledger written only by the `send-notifications` Edge Function (service_role), read-own by the user. See [notifications-v1](../../concepts/architecture/notifications-v1.md).
+
+| Field | Description |
+|---|---|
+| `user_id`, `notification_type` | `arrival` \| `leaving_soon`. |
+| `tmdb_id`, `media_type` | The title alerted about. |
+| `sent_at` | Drives the ~1/day per-user cap. |
+| `expo_ticket_id`, `push_token_id`, `delivery_status` | Expo receipt polling → dead-token pruning. |
+
+`UNIQUE (user_id, notification_type, tmdb_id, media_type)` = the "never notify twice for the same arrival" guarantee.
 
 ## Source surfaces
 
