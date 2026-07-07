@@ -1,9 +1,12 @@
-# Push Notifications — Data-Model Note (for the solicitor pass)
+# Push Notifications — Data-Model Note
 
-**Prepared:** 2026-07-06 · **For:** the single UK solicitor review (see [solicitor-review-pack.md](./solicitor-review-pack.md)).
-**Status:** describes what H0 Stream B (Notifications v1) adds to the data inventory. Written against the real migrations (`supabase/migrations/055`–`059`). Add this surface to the solicitor's scope so the one paid pass covers push data.
+**Prepared:** 2026-07-06 · **For:** launch compliance now; the deferred H2 solicitor pass later.
+**Status:** describes what H0 Stream B (Notifications v1) adds to the data inventory. Written against the real migrations (`supabase/migrations/055`–`059`), deployed to prod.
 
-This is the half-page Stream B owes Stream C. It slots alongside §2 (data inventory) and §3 (user-rights mechanisms) of the review pack.
+Per **Decision 6** the paid solicitor review is deferred to the H2 monetisation gate, so this note now has two jobs:
+
+1. **Launch compliance (now).** It backs the push rows already stubbed in [store-privacy-disclosures.md](./store-privacy-disclosures.md) — Google Play "Device or other IDs" and Apple "Device ID", both marked **(H0)** — and the [launch-compliance checklist](./launch-compliance-checklist.md), and the push slot in Privacy Policy §2. When notifications go live at submission, un-stub those rows.
+2. **H2 solicitor pass (later).** It carries forward as the push surface for the deferred paid review (see [solicitor-review-pack.md](./solicitor-review-pack.md) and the parked [solicitor-briefing-pack.md](./solicitor-briefing-pack.md)).
 
 ---
 
@@ -54,11 +57,14 @@ Push delivery introduces one new sub-processor chain beyond those already listed
 
 No user PII beyond the push token and the alert text passes to these. This is the standard mobile-push processor chain.
 
-## Questions this raises for the solicitor (additions to review-pack §4)
+## Open questions
 
-1. **Lawful basis for push.** Arrival/leaving-soon alerts are opt-in and tied to the user's own watchlist. Is OS-permission-grant + in-app toggle sufficient consent under UK GDPR/PECR for these, or is anything more needed given PECR's treatment of electronic messaging?
-2. **Processor disclosure.** Do Expo / APNs / FCM need to be named in the Privacy Policy processor list (they are added to the inventory above)?
-3. **Play Data Safety.** Push tokens + the "titles you were alerted about" log — how should these be declared in Google Play's Data Safety form?
+**Resolve now (launch compliance):**
+1. **Play / Apple disclosure.** Push token = "Device or other IDs" (Play) / "Device ID" (Apple), purpose "delivering notifications the user opted into". The "titles you were alerted about" delivery log sits under existing App-activity/Product-interaction rows. Both already stubbed in [store-privacy-disclosures.md](./store-privacy-disclosures.md) — un-stub at submission.
+2. **Processor disclosure.** Add Expo / APNs / FCM to the Privacy Policy §2 processor list (currently a marked-pending push slot).
+
+**Deferred to the H2 solicitor pass:**
+3. **Lawful basis for push.** Arrival/leaving-soon alerts are opt-in and tied to the user's own watchlist. Is OS-permission-grant + in-app toggle sufficient consent under UK GDPR/PECR, or is anything more needed given PECR's treatment of electronic messaging? (Low residual risk for the prototype user base; confirm before scale.)
 4. **Retention.** Is "indefinite until deletion" acceptable for the delivery log, or is a fixed prune window advisable (feasible without breaking dedup)?
 
 ## Follow-ups (engineering, not legal)

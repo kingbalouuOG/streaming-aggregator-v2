@@ -6,7 +6,7 @@
 - [Terms of Service](./terms-of-service.md) (138 lines / ~1,100 words, 12 sections)
 
 **Supplementary data-model note (added 2026-07-06):**
-- [Push Notifications — Data-Model Note](./notifications-data-model.md) — Notifications v1 (H0 Stream B) adds push tokens, per-type opt-in prefs, and a delivery log, plus the Expo/APNs/FCM processor chain. Please fold this surface into the same pass; it lists four extra questions (push lawful basis, processor disclosure, Play Data Safety, delivery-log retention) as additions to §4 below.
+- [Push Notifications — Data-Model Note](./notifications-data-model.md) — Notifications v1 (H0 Stream B) adds push tokens, per-type opt-in prefs, and a delivery log, plus the Expo/APNs/FCM processor chain. Fold this surface in when this pack runs at the **H2 monetisation gate** (the paid review is deferred there per Decision 6). The launch-now store disclosures for push are already handled in [store-privacy-disclosures.md](./store-privacy-disclosures.md).
 
 This pack gives you (1) what the app actually does with data, (2) the specific questions we need answered, and (3) the known gaps we've already spotted. The two documents are descriptive drafts written by the developer against the real technical implementation; they have **not** been legally reviewed. We want them launch-ready for a small UK user base (initially two testers, then a limited prototype), distributed as a direct Android APK now and likely Google Play later.
 
