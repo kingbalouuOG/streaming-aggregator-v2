@@ -44,6 +44,14 @@
         }
       ],
       [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "organization": "videx",
+          "project": "videx-native"
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#0a0a0f",

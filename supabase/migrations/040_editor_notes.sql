@@ -30,11 +30,15 @@ CREATE TABLE IF NOT EXISTS public.editor_notes (
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
 
--- Index on the publish window so the read query (ORDER BY published_at
--- DESC LIMIT 1 with a now() filter) is index-only.
-CREATE INDEX IF NOT EXISTS editor_notes_publish_window_idx
-  ON public.editor_notes (published_at DESC)
-  WHERE expires_at IS NULL OR expires_at > now();
+-- Plain btree on the publish column serving the read query's
+-- ORDER BY published_at DESC LIMIT 1. NOTE: an earlier version of this
+-- migration used a partial predicate `WHERE expires_at IS NULL OR
+-- expires_at > now()`, but now() is not IMMUTABLE and cannot appear in an
+-- index predicate (Postgres 42P17) — that error is why 040 never applied
+-- to prod until H0 Stream A. Row count is tiny (< ~100 lifetime), so a
+-- plain index is more than enough.
+CREATE INDEX IF NOT EXISTS editor_notes_published_at_idx
+  ON public.editor_notes (published_at DESC);
 
 -- ── RLS ───────────────────────────────────────────────────────────
 -- Public-readable; only service_role writes (editorial team uses the

@@ -3,7 +3,7 @@ title: User taste vector v2
 type: concept
 tags: [taste-vector, embeddings, bootstrap, decay]
 created: 2026-04-26
-updated: 2026-06-10
+updated: 2026-07-06
 sources:
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
   - raw/v2-strategy/Videx_v2_Detail_Page_Signal_Capture_Spec_v0.3.2.md
@@ -62,6 +62,19 @@ Hybrid:
 - **Full recompute if stale > 24h**: replays from `user_interactions` event log.
 
 This gives instant feedback while remaining replayable from the source-of-truth log.
+
+### Event-identity dedup (H0 Stream A, 2026-07-06)
+
+The Combination rules above (§1 "dedup within 24h", §2 "replace, don't add") were **documented but never enforced in code** — a real integrity gap, not just a doc lag. Neither taste path deduped by event identity: the 24h recompute (`recomputeFromInteractionsScoped`) replayed *every* `user_interactions` row in a plain loop, and the incremental EMA (`applyInteractionIncremental` / `applyInteractionToCentroids`) applied each emit separately. A prototype tester's repeated mark-watched taps emitted 4× `watched` on one title and multiplied that title's weight 4× into his vector (the UI double-tap was fixed in PR #35; this closed the data layer). A future watch-history importer would have mass-replayed duplicates into the same hole.
+
+**Design decision (H0):** dedup per **(content_id, media_type, event_type)** identity — **apply once, keep latest**:
+
+- *Recompute (source of truth):* `dedupeInteractionsByIdentity()` (`interactionUpdate.ts`) collapses rows to one per identity, keeping the latest `created_at`, before both the summary-vector replay and the interest-centroid mass aggregation. Summary replay re-sorts the deduped set ascending so the confidence-floor boost still favours genuinely-early interactions. "Keep latest" means decay measures recency from the most recent signal (a rewatch refreshes the title).
+- *Incremental (best-effort):* `hasPriorInteraction()` (`storage/interactions.ts`) checks the log for a prior same-identity row **before** emitting; if one exists the vector + centroid updates are skipped (the event is still logged — the log stays immutable). Fails open (double-count beats dropping a real signal); the recompute is the backstop.
+- *Distinct event types on one title stay distinct* — `thumbs_up` + `watched` still sum to the combined 1.5 signal.
+- *Polluted prototype vectors self-heal* on the next nightly recompute (04:00 UTC Worker cron) — no migration, since the recompute is fully derived from the (now-deduped) event log. Duplicates confirmed in prod on 2026-07-06 (a user with 4× `deep_link_click` on one TV title).
+
+Unit-tested in `src/lib/taste-v2/__tests__/interactionDedup.test.ts` (the pure dedup function is the decision's testable core).
 
 ## Bootstrap (cold start)
 

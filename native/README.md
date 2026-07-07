@@ -116,6 +116,29 @@ APKs install directly on-device for testing — no separate signing setup requir
 
 Other scripts: `npm run lint` (`expo lint`), `npm run ios`, `npm run web`.
 
+## Crash reporting (Sentry)
+
+Crash + error reporting runs through **`@sentry/react-native`** (roadmap 0.4).
+`Sentry.init` is at the top of `src/app/_layout.tsx`; the root layout is wrapped
+with `Sentry.wrap`. Release health (crash-free sessions — the H0 "crash-free ≥99%"
+gate) is on via `enableAutoSessionTracking`.
+
+Config:
+
+- **`EXPO_PUBLIC_SENTRY_DSN`** (runtime) — the project DSN. Put it in `native/.env`
+  for local device builds and add it to **EAS build env / CI secrets** for release
+  builds. With **no** DSN the SDK stays disabled, so local Metro dev is silent and
+  never depends on a token.
+- **Source maps** (optional, "if cheap"): the `@sentry/react-native/expo` config
+  plugin in `app.json` uploads source maps during an EAS build when
+  `organization` + `project` there match your Sentry project **and** a
+  **`SENTRY_AUTH_TOKEN`** secret is present in the build env. Without the token the
+  upload is skipped and the build still succeeds. The `organization`/`project`
+  values in `app.json` are placeholders — replace with the real Sentry slugs.
+
+Runtime crash capture needs only the DSN; the auth token / slugs are just for
+readable stack traces.
+
 ## Package / bundle ids
 
 - **Android**: **`app.videx.streaming`** (`app.json` → `android.package`) — the production

@@ -276,6 +276,21 @@ export function emitDeepLinkClick(args: {
   deepLinkUrl: string;
   dwellSecondsBeforeClick: number;
   confidence: 'high' | 'low';
+  /**
+   * Whether the resolved URL was an exact deep link or a search-page
+   * fallback. Computed in the opener (openDeepLink.native.ts) and passed
+   * through — until A2 (roadmap 0.3) it was spread in but silently
+   * dropped here, so this now persists as `link_type`. Optional because
+   * legacy/web callers may not supply it; null when unknown.
+   */
+  linkType?: 'exact' | 'search';
+  /**
+   * The rent/buy price string shown at click time, exactly as rendered
+   * (e.g. "Rent from £3.49"), or null for flat-rate "on your stack"
+   * services that show no price. Completes the click-out record for
+   * Weekly Watch Decisions + affiliate/B2B seed data (A2 / roadmap 0.3).
+   */
+  priceShown?: string | null;
 }): void {
   emitInteraction({
     event_type: 'deep_link_click',
@@ -288,11 +303,58 @@ export function emitDeepLinkClick(args: {
       deep_link_url: args.deepLinkUrl,
       dwell_seconds_before_click: args.dwellSecondsBeforeClick,
       confidence: args.confidence,
+      link_type: args.linkType ?? null,
+      price_shown: args.priceShown ?? null,
     },
   }).catch(() => {});
 }
 
 // — Query helpers (for future replay/analytics) ————————————————————
+
+/**
+ * Whether the current user has already logged an interaction of this
+ * (content_id, media_type, event_type) identity.
+ *
+ * The incremental taste path (useTasteProfile.trackInteraction) uses this
+ * to apply a signal at most once — matching the recompute's
+ * dedupeInteractionsByIdentity() (A4 / roadmap 0.5) — so repeated taps
+ * (e.g. mark-watched ×4) don't multiply a title's weight.
+ *
+ * Call BEFORE emitting the new event, so the just-tapped row isn't what
+ * gets detected. Fails open (returns false) on error: a rare double-count
+ * is better than silently dropping a real signal, and the 24h recompute
+ * is the source of truth that heals either way.
+ */
+export async function hasPriorInteraction(
+  contentId: number,
+  mediaType: 'movie' | 'tv',
+  eventType: InteractionEventType,
+): Promise<boolean> {
+  if (!isSupabaseActive()) return false;
+
+  try {
+    const userId = getAuthUserId();
+    if (!userId) return false;
+
+    const { data, error } = await supabase
+      .from('user_interactions')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('content_id', contentId)
+      .eq('media_type', mediaType)
+      .eq('event_type', eventType)
+      .limit(1);
+
+    if (error) {
+      console.error('[Interactions] hasPriorInteraction check failed:', error.message);
+      return false;
+    }
+    return (data?.length ?? 0) > 0;
+  } catch (err) {
+    console.error('[Interactions] hasPriorInteraction unexpected error:', err);
+    return false;
+  }
+}
 
 /** Get all interactions for the current user, ordered by created_at */
 export async function getUserInteractions(

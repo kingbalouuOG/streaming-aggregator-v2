@@ -1,7 +1,7 @@
 # Terms of Service
 
-**Last updated:** 2026-05-14
-**Effective from:** [date of first non-prototype release — TBC]
+**Last updated:** 6 July 2026
+**Effective from:** 6 July 2026
 
 ## 1. Acceptance of these terms
 
@@ -123,16 +123,11 @@ notification.
 
 ## 12. Contact
 
-- Email: [your-contact-email-address — TBC]
-- Post:  [your-UK-postal-address — TBC]
+- Email: privacy@videx.app
 
 ---
 
-*Draft v1, descriptive of current Videx behaviour as of 2026-05-14.
-Authored by Claude under Joe's review. **This document has not
-been reviewed by a qualified UK solicitor.** Solicitor review is
-required before App Store / Google Play submission and before any
-non-prototype user base accesses the product. Treat this draft as
-a working document that captures current operating reality, not as
-a legally-vetted disclosure. Tracked as IN-XPS-014 — UK solicitor
-review of Privacy Policy + Terms of Service.*
+*Videx is operated by Joe Green as an individual based in the United
+Kingdom. These terms describe how the app actually works; if they
+change materially we update this page and (per §11) notify signed-in
+users. Last updated 6 July 2026.*

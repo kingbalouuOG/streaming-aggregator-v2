@@ -3,7 +3,7 @@ title: Supabase backup and restore runbook
 type: concept
 tags: [runbook, backup, restore, pitr, pg_dump]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-07-06
 sources:
   - raw/runbooks/supabase-backup-restore.md
 related:
@@ -75,7 +75,24 @@ pg_restore \
 5. Confirm pg_cron jobs: `SELECT * FROM cron.job;`.
 6. Manually trigger one Edge Function and one sync stage.
 
+## Automated off-site backup — ✅ shipped (H0 Stream D, 2026-07-06)
+
+`.github/workflows/db-backup.yml` runs a monthly (04:00 UTC, 1st) `pg_dump`
+(schema=public, custom format), **GPG-symmetric-encrypts it on the runner**
+(AES256), and uploads it as a 90-day GitHub Actions artifact — outside
+Supabase. `workflow_dispatch` allows manual runs.
+
+- **Requires two repo secrets** (Joe): `SUPABASE_DB_URL` (direct 5432 URI,
+  not the pooler) and `BACKUP_GPG_PASSPHRASE` (store in a password manager —
+  loss makes every backup unrecoverable). The job hard-fails if either is
+  missing.
+- **Restore:** download the artifact, then
+  `gpg --batch --yes --decrypt --passphrase "<pass>" -o restore.dump videx-*.dump.gpg`
+  and follow [From pg_dump file](#from-pg_dump-file) above.
+- Uses a PGDG-pinned `postgresql-client-17` so the client version is ≥ the
+  Supabase server regardless of the runner default.
+
 ## Frequency
 
 - Manual snapshot: before any destructive migration, before major Phase boundaries.
-- Off-site: monthly recommended. Download a `pg_dump` and store outside Supabase (encrypted personal cloud storage).
+- Off-site: **monthly, automated** via the workflow above (was: manual `pg_dump` to encrypted personal cloud storage).

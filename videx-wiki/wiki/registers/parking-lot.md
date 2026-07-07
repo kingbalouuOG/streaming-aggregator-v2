@@ -3,7 +3,7 @@ title: Parking lot — all IN-XXX entries
 type: register
 tags: [register, parking-lot, in-xxx, status]
 created: 2026-04-26
-updated: 2026-06-10
+updated: 2026-07-06
 sources:
   - raw/v2-strategy/Videx_v2_Implementation_Notes_Parking_Lot_v0.3.4.md
   - docs/v2/Videx_v2_Implementation_Notes_Parking_Lot_v0.7.md
@@ -117,7 +117,7 @@ Status legend: ✅ Incorporated · ⏳ Pending · ⚠ Partial · 🛑 Discharged
 | IN-458 | `getAvailableTmdbIds` does not distinguish by `media_type` | ⏳ Re-targeted to Phase 6 (additive new RPC `get_available_tmdb_id_pairs`, not in-place return-shape swap) |
 | IN-459 | Re-evaluate mood room coverage after 3 monthly runs | ⏳ Pending (post-launch action item) |
 | IN-460 | Upgrade `actions/setup-python` when v6 ships (Node.js 20 deprecation) | ⏳ Time-triggered |
-| IN-461 | Review `FORBIDDEN_WORDS` compound-noun carve-outs after May cron | ⏳ May 2026 review |
+| IN-461 | Review `FORBIDDEN_WORDS` compound-noun carve-outs after May cron | ✅ Incorporated (H0 Stream D, 2026-07-06) — reviewed all 69 current labels; only "Bedtime Fairy Tales" trips the flat `Tales` check (kept alive by Jaccard stability, would fail on regeneration). Added `ALLOWED_COMPOUNDS = {"fairy tales"}` carve-out to `scripts/mood_rooms/label.py` `_validate_label`; bare `Tales` still blocked. |
 | IN-462 | For You tab-switch preservation | ⏳ Re-targeted to Phase 6 (paired with IN-468 / IN-469 — designing the store shape pre-telemetry risks rework) |
 | IN-463 | LLM thematic labels for anchored rooms | ✅ Incorporated (Phase 4.5 fast-follow — `mood_rooms.anchor_label_text`, `label-anchor-room` Edge Function, migration 034) |
 | IN-465 | Backfill ~3,807 missing tmdb_ids | ✅ Incorporated (Phase 5.5, 2026-05-15) — `scripts/enrichment/backfill_missing_titles.ts` executed: 5,446 missing at run-time → 2,698 upserted / 2,748 TMDb-404 (deleted stubs stay missing forever) / 0 errored. `titles` grew 20,140 → 22,838. Investigation `docs/v2/investigations/in-465-catalogue-sync-gap.md` diagnosed Prime back-catalogue + TMDb `/discover` 500-page cap as root cause; pipeline-split finding (`daily-content-sync` cron never writes `titles`) means the backfill script's left-join query IS the recurring fix. Phase 6 IN-PX-50 wraps in scheduled Edge Function. |
@@ -143,11 +143,11 @@ Status legend: ✅ Incorporated · ⏳ Pending · ⚠ Partial · 🛑 Discharged
 |---|---|---|
 | IN-XPS-001 | Privacy disclosure copy must align with Detail Page Signal Spec | ✅ Incorporated (Phase 5.5) — IN-PX-34 resolved: `docs/legal/privacy-policy.md` §2 mirrors the in-app "What Videx learns" modal verbatim plus DB-level table-by-table detail. Signup-flow legal spans converted to functional buttons (`OnboardingFlow.tsx`). |
 | IN-XPS-002 | Profiles "Allow public username lookup" policy tightening | ✅ Incorporated (Phase 5 — migration 038 + `username_available` SECURITY DEFINER RPC; anon SELECT on profiles denied) |
-| IN-XPS-003 | Verify pg_partman automatic partition creation after first month | ⏳ Scheduled post-Phase-0 verification |
-| IN-XPS-004 | Service-role JWT in cron migration files → Supabase Vault | ⚠ Partial (Phase 5 — migration 039 moved JWT into Vault; **same JWT value**, cryptographic rotation deferred to Phase 6+ pending Supabase JWT-format secret keys) |
+| IN-XPS-003 | Verify pg_partman automatic partition creation after first month | ✅ Incorporated (H0 Stream D, 2026-07-06) — verified healthy: 1-mon interval, premake 2, 3-mon retention dropping tables, auto-maintenance on; maintenance + rollup crons `succeeded`. Empty `card_impression_daily_totals` is by-design (rollup >90d, earliest impression 2026-06-15). |
+| IN-XPS-004 | Service-role JWT in cron migration files → Supabase Vault | ⚠→**Unblocked (H0 Stream D, 2026-07-06).** Supabase shipped JWT Signing Keys (GA mid-2025; projects auto-migrated 1 Oct 2025); legacy keys deprecated end-2026. Rotation is now a Joe-owned dashboard ceremony (standby→rotate→revoke) — **not automated** (live credential). Runbook rewritten; steps in console-actions §4. |
 | IN-XPS-005 | Atomic tmp+rename is Windows-hostile for files under active observation | ✅ Incorporated (Phase 0.5 fix; lesson filed) |
 | IN-XPS-006 | Delete account wiring | ✅ Incorporated (Phase 5.5, migration 042 applied 2026-05-15) — defensive belt-and-braces explicit DELETEs across 8 user-scoped tables. C11 throwaway-account smoke test confirmed every cascade target empty post-delete (including 113 `card_impressions` from a partitioned table); `auth.users` row gone. UI gate flipped with type-username-to-confirm UX. Supabase auto-grant on `public.*` functions means body's NULL `auth.uid()` raise is the actual auth gate (documented). |
-| IN-XPS-007 | Service pricing config needs review cadence | ⏳ Flagged for pre-public-launch |
+| IN-XPS-007 | Service pricing config needs review cadence | ✅ Incorporated (H0 Stream D, 2026-07-06) — `platformPricing.ts` refreshed vs July-2026 UK prices (all 10 services re-verified). Next quarterly review ~Oct 2026. |
 | IN-XPS-008 | Consider pre-built onboarding watched-grid title pool | 🅿 Consider after user testing |
 | IN-XPS-009 | Retake Taste Profile limited to cluster selection only | 🅿 Deferred until Phase 4/5 touches files or feedback indicates problem |
 | IN-XPS-010 | Supabase Pro→Free downgrade risk inventory | ⏳ Documented; no action unless cost optimisation comes up again |
@@ -161,7 +161,7 @@ Quality / hardening items (IN-PX-21..33) and pre-launch legal blockers (IN-PX-34
 
 | ID | Subject | Status |
 |---|---|---|
-| IN-PX-21 | Regenerate `database.types.ts` and delete `as any` casts | ✅ Incorporated (Phase 5.5). 28 boundary casts removed across 11 files. `typegen-check.yml` CI gate prevents drift. One retained cast for `editor_notes` (migration 040 unapplied — table not in schema). |
+| IN-PX-21 | Regenerate `database.types.ts` and delete `as any` casts | ✅ Incorporated (Phase 5.5). 28 boundary casts removed across 11 files. `typegen-check.yml` CI gate prevents drift. ~~One retained cast for `editor_notes` (migration 040 unapplied — table not in schema).~~ **Migration 040 applied to prod in H0 Stream A (2026-07-06)** — it had a latent non-IMMUTABLE partial-index predicate (`now()`) that had silently blocked every apply; index fixed, table + seed note now live, `database.types.ts` regenerated with the `editor_notes` type. The defensive untyped cast in `fetchEditorNote` is now belt-and-braces, not a necessity. |
 | IN-PX-22 | Embedding fetch caching for MMR (24h TTL) | ✅ Incorporated (Phase 5.5). New `embeddingCache.ts` module: 24h localStorage on client + per-Edge-instance Map. Cache key simplified post-review to `userId + taste_profiles.updated_at`. `clearEmbeddingCache()` wired into every signOut path (including `onAuthStateChange` SIGNED_OUT post-fixup). |
 | IN-PX-23 | MMR partial-coverage fallback (>50% missing → genre-spread) | ✅ Incorporated (Phase 5.5). `applyMMR` returns `{ selected, bailedOut }`. Named constants `MMR_NULL_RATIO_BAIL = 0.5` + `MMR_MIN_SAMPLE = 4` at top of `diversity.ts`. |
 | IN-PX-24 | Float32Array + cosine-norm precompute in MMR | ✅ Incorporated (Phase 5.5). Map shape change to `Map<string, { vec: Float32Array; norm: number }>` at MMR consumers. `cosineSimilarity` rewritten — ~3× hot-loop speedup. |
@@ -169,8 +169,8 @@ Quality / hardening items (IN-PX-21..33) and pre-launch legal blockers (IN-PX-34
 | IN-PX-26 | `buildRowFromPool` options object refactor | ✅ Incorporated (Phase 5.5). Six call sites updated. |
 | IN-PX-27 | `ViewingContext` type to source of truth (`types.ts`) | ✅ Incorporated (Phase 5.5). Moved from `weights.ts`; runtime cast in `contextual.ts` dropped; defensive narrowing at both DB boundaries. |
 | IN-PX-28 | `edge-fn-jwt-guard` gap — central `supabase/config.toml` | ✅ Incorporated (Phase 5.5). Second grep pass added to workflow. |
-| IN-PX-29 | `username_available` rate-limit at gateway | ⏳ Filed (Phase 6 — pre-public-launch) |
-| IN-PX-30 | Defence-in-depth in `extractUserIdFromJwt` | ⏳ Filed (Phase 6 — pre-public-launch) |
+| IN-PX-29 | `username_available` rate-limit at gateway | ✅ Incorporated (H0 Stream D, 2026-07-06) — migration `053`. **In-DB** per-IP fixed-window limit (30/min) inside the RPC, not gateway: the client calls PostgREST directly (never the Worker). Fails open when no IP attributable. |
+| IN-PX-30 | Defence-in-depth in `extractUserIdFromJwt` | ✅ Incorporated (H0 Stream D, 2026-07-06) — `_shared/userScope.ts` throws under the `_no_auth_/` namespace. Runtime-assertion path chosen over `jose`+JWKS (JWKS-only verify would reject current legacy-HS256 tokens; revisit post IN-XPS-004 rotation). |
 | IN-PX-31 | Trim `supabase/cron/*.sql` source-of-truth confusion | ✅ Incorporated (Phase 5.5). Three SQL files deleted; migration 039 is sole source; `supabase/cron/README.md` documents the now-empty directory. |
 | IN-PX-32 | Mirror tree consolidation (`_shared/` as source-of-truth for leaf modules) | ⏳ Filed (Phase 6 — no drift incidents recorded; refactor warrants its own phase) |
 | IN-PX-33 | Property-level parity probe (golden output) | ✅ Incorporated (Phase 5.5). `--update-golden` flag on the parity probe (now `scripts/test/foryou-parity-probe.mjs` — renamed from `scripts/_inspect_foryou_parity.mjs` in REPO-1) + JWT refresh script + activation (5 secrets + golden seeded for test user). |
@@ -181,8 +181,8 @@ Quality / hardening items (IN-PX-21..33) and pre-launch legal blockers (IN-PX-34
 
 | ID | Subject | Status |
 |---|---|---|
-| IN-XPS-014 | UK solicitor review of Privacy Policy + Terms of Service | ⏳ Filed (Phase 6 — **hard pre-launch blocker** for App Store / Google Play submission). The Phase 5.5 drafts are descriptive of current Videx behaviour but not lawyer-vetted. Placeholders `[your-contact-email-address — TBC]` + `[your-UK-postal-address — TBC]` left visible to signal not-launch-ready. Joe's decision pre-launch: email-only (legally sufficient under UK GDPR) vs. email + registered office address service (~£30-50/yr) vs. email + PO Box. Personal home address advised against. |
-| IN-PX-50 | Scheduled catalogue-gap backfill as Edge Function | ⏳ Filed (Phase 6 — automation, not launch-gating). Wraps `scripts/enrichment/backfill_missing_titles.ts` logic in a new Edge Function `backfill-missing-titles` with pg_cron schedule (weekly or monthly). Closes the recurring half of IN-465 — until then Joe runs the script manually as monthly maintenance. Required: new Edge Function under `supabase/functions/backfill-missing-titles/`, new migration adding cron schedule, TMDb API key threaded via Vault (same pattern as migration 039). |
+| IN-XPS-014 | UK solicitor review of Privacy Policy + Terms of Service | 🅿 **Re-scoped 2026-07-06 (Roadmap v1.0 Decision 6): paid review DEFERRED to the H2 monetisation gate** (bundled with Premium consumer terms + affiliate disclosures); H0 0.1 is a DIY launch-compliance checklist (ICO fee, contact details, accuracy updates, hosted policy URLs, store forms). Originally filed (Phase 6 — hard pre-launch blocker for App Store / Google Play submission). The Phase 5.5 drafts are descriptive of current Videx behaviour but not lawyer-vetted. Placeholders `[your-contact-email-address — TBC]` + `[your-UK-postal-address — TBC]` left visible to signal not-launch-ready. Joe's decision pre-launch: email-only (legally sufficient under UK GDPR) vs. email + registered office address service (~£30-50/yr) vs. email + PO Box. Personal home address advised against. |
+| IN-PX-50 | Scheduled catalogue-gap backfill as Edge Function | ✅ Incorporated (H0 Stream D, 2026-07-06) — Edge Function `supabase/functions/backfill-missing-titles/` + migration `054` (anti-join RPC `list_missing_title_ids` + weekly Sun 05:00 UTC cron, Vault-sourced service-role bearer per 039). Per-invocation cap 300 (Edge wall-clock); weekly cadence drains any backlog. **Deviation:** TMDb key uses the existing `TMDB_API_KEY` Edge secret (enrich-new-titles precedent), not Vault — avoids a second secret store and keeps the two TMDb-fetching functions consistent. Deploy order: function first, then migration 054. |
 | IN-PX-51 | Hook `clearEmbeddingCache` into `onAuthStateChange` SIGNED_OUT | ✅ Incorporated (Phase 5.5 review-pass fixup, commit `e9c8560`). Surfaced by `kieran-typescript-reviewer` — original C5 implementation only fired on manual signOut callback, missing JWT expiry / multi-tab / server-side invalidation. UserId namespacing in the cache key prevented cross-user correctness contamination; this closes the docstring contract gap. |
 | IN-PX-52 | Regenerate Edge `_shared/database.types.ts` for typed RPC calls | ⏳ Filed (Phase 6 — non-launch-blocking). The Edge `_shared/` tree doesn't have generated types; `render-foryou-rows/index.ts` still uses `(client.from('titles') as any).select(...)` patterns. `<Database>` generic not applied to Edge `createClient`. Current casts are correctness-equivalent, just type-unsafe. |
 | IN-PX-53 | Compress embedding cache or cap to top-100 for Safari mobile | ⏳ Filed (Phase 6+ — only impacts Safari mobile prototype users; zero today). At 200 candidates × 1536 dims, localStorage write hits ~5MB which is Safari mobile's quota ceiling. Quota error is swallowed correctly (falls through to network fetch), but cache hit rate silently degrades. Options: cap top-100 / base64-encode ArrayBuffer / move to IndexedDB. |
@@ -235,9 +235,9 @@ Recorded in the docs parking lot v0.7 ENG-1 section; see `docs/v2/phase-summarie
 ## Counts
 
 - Total entries: **100** (Pre-PRE 1 + P0 13 + P0.5 7 + P0/0.5 cross 6 + P1 5 + P2 3 + P3 3 + P4 4 + P4.5 16 + OB 6 + XPS 14 + PX-21..35 15 + PX-36..38 3 + PX-39..45 7 + PX-50..54 5 + PX-55..57 3 + V3-001..003 3).
-- ✅ Incorporated: **59** (Phase 5.5 close 2026-05-15 added: IN-PX-21..28 except 29/30/32, IN-PX-31, IN-PX-33, IN-PX-34, IN-PX-35, IN-PX-51, IN-XPS-001, IN-XPS-006, IN-465; bumped IN-XPS-012 from partial → ✅ on parity activation).
-- ⏳ Pending / Not yet incorporated: **30** (Phase 5.5 added: IN-XPS-014, IN-PX-50, IN-PX-52, IN-PX-53, IN-PX-54; reclassified IN-458, IN-462 to Phase 6; ENG-1 close 2026-06-10 added IN-PX-55, IN-PX-56, IN-PX-57).
-- ⚠ Partial: **2** (IN-104, IN-XPS-004 — IN-XPS-001 closed Phase 5.5).
+- ✅ Incorporated: **65** (H0 Stream D 2026-07-06 added: IN-PX-29, IN-PX-30, IN-PX-50, IN-XPS-003, IN-XPS-007, IN-461. Phase 5.5 close 2026-05-15 added: IN-PX-21..28 except 29/30/32, IN-PX-31, IN-PX-33, IN-PX-34, IN-PX-35, IN-PX-51, IN-XPS-001, IN-XPS-006, IN-465; bumped IN-XPS-012 from partial → ✅ on parity activation).
+- ⏳ Pending / Not yet incorporated: **24** (H0 Stream D closed 6 of the prior 30; Phase 5.5 added: IN-XPS-014, IN-PX-52, IN-PX-53, IN-PX-54; reclassified IN-458, IN-462 to Phase 6; ENG-1 close 2026-06-10 added IN-PX-55, IN-PX-56, IN-PX-57).
+- ⚠ Partial: **2** (IN-104; IN-XPS-004 — now unblocked but rotation is a pending Joe-owned dashboard ceremony).
 - 🛑 Discharged: **1** (IN-260).
 - 🅿 Parked: **6** (IN-PX-06, IN-261, IN-XPS-008, IN-XPS-009, IN-OB-006, IN-PX-42).
 
