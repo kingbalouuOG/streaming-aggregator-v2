@@ -75,6 +75,12 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_VIDEX_UPLOAD_STORE_PASSWORD: ${{ secrets.VIDEX_UPLOAD_STORE_PASSWORD }}
           ORG_GRADLE_PROJECT_VIDEX_UPLOAD_KEY_PASSWORD: ${{ secrets.VIDEX_UPLOAD_KEY_PASSWORD }}
+          # Sentry release sourcemap upload: the expo plugin wires a
+          # SentryUpload gradle task into bundleRelease; without this token
+          # sentry-cli exits 1 and FAILS the whole build (seen on the first
+          # 2.1.0 smoke run). If the token is ever removed, set
+          # SENTRY_DISABLE_AUTO_UPLOAD=true here instead.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: ./gradlew bundleRelease --no-daemon --stacktrace
 
       - name: Verify signing fingerprint (expect SHA256 99:CE:FF:7E…)
