@@ -21,7 +21,7 @@ import { supabase } from '@/lib/supabase';
 
 export type NotificationType = 'arrival' | 'leaving_soon';
 
-// Default-on: matches the DB's "absent pref row = enabled" contract (migration 049).
+// Default-on: matches the DB's "absent pref row = enabled" contract (migration 056).
 export const DEFAULT_PREFERENCES: Record<NotificationType, boolean> = {
   arrival: true,
   leaving_soon: true,
@@ -80,21 +80,18 @@ export async function registerPushToken(userId: string): Promise<string | null> 
     );
     if (!token) return null;
 
-    const nowIso = new Date().toISOString();
-    const { error } = await supabase.from('user_push_tokens').upsert(
-      {
-        user_id: userId,
-        expo_push_token: token,
-        platform: Platform.OS === 'ios' ? 'ios' : 'android',
-        device_name: Device.deviceName ?? null,
-        app_version: Constants.expoConfig?.version ?? null,
-        last_seen_at: nowIso,
-        updated_at: nowIso,
-      },
-      { onConflict: 'expo_push_token' },
-    );
+    // SECURITY DEFINER RPC (migration 060): claims the token row for the
+    // signed-in user even when a stale row is still owned by a previous
+    // account (offline sign-out / reinstall) — the owner-only RLS on
+    // user_push_tokens blocks a direct client upsert from moving that row.
+    const { error } = await supabase.rpc('claim_push_token', {
+      p_expo_push_token: token,
+      p_platform: Platform.OS === 'ios' ? 'ios' : 'android',
+      p_device_name: Device.deviceName ?? undefined,
+      p_app_version: Constants.expoConfig?.version ?? undefined,
+    });
     if (error) {
-      console.warn('[push] token upsert failed:', error.message);
+      console.warn('[push] token claim failed:', error.message);
       return null;
     }
     // Persist locally so sign-out can delete exactly this token offline.

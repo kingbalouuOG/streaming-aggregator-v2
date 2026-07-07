@@ -1831,6 +1831,15 @@ export type Database = {
           tmdb_id: number
         }[]
       }
+      claim_push_token: {
+        Args: {
+          p_app_version?: string
+          p_device_name?: string
+          p_expo_push_token: string
+          p_platform: string
+        }
+        Returns: undefined
+      }
       create_parent: {
         Args: {
           p_automatic_maintenance?: string

@@ -22,11 +22,15 @@
 --   * client_key = md5(client_ip) — we never store the raw IP at rest
 --     (GDPR-minimising; the bucket only needs a stable opaque key), and
 --     rows are self-cleaned within ~1h.
---   * Client IP is read from PostgREST's `request.headers` GUC
---     (x-forwarded-for, then x-real-ip). If neither is present (e.g.
---     direct SQL / admin access), we FAIL OPEN — never block a caller we
---     can't attribute — so legitimate signup traffic can never be locked
---     out by a missing header.
+--   * Client IP is read from PostgREST's `request.headers` GUC —
+--     `cf-connecting-ip` first (set by the Cloudflare edge, not
+--     client-spoofable), then the LAST element of x-forwarded-for (the
+--     hop appended by the proxy in front of PostgREST; the FIRST element
+--     is caller-controlled and would let an attacker rotate buckets),
+--     then x-real-ip. If none is present (e.g. direct SQL / admin
+--     access), we FAIL OPEN — never block a caller we can't attribute —
+--     so legitimate signup traffic can never be locked out by a missing
+--     header.
 --   * Over-limit callers get a RAISE (SQLSTATE 54000). The client
 --     (AuthContext) already treats any RPC error as "unavailable", so a
 --     throttled attacker learns nothing; a real user won't hit 30/min.
@@ -76,6 +80,7 @@ AS $function$
 DECLARE
   v_headers  json;
   v_ip       text;
+  v_xff      text[];
   v_key      text;
   v_window   timestamptz := date_trunc('minute', now());
   v_count    integer;
@@ -84,12 +89,20 @@ DECLARE
   -- brake on enumeration. Tune here if CGNAT false-positives appear.
   v_limit    constant integer := 30;
 BEGIN
-  -- Best-effort client IP from PostgREST request headers. Any failure
+  -- Best-effort client IP from PostgREST request headers. Prefer
+  -- cf-connecting-ip (set by the Cloudflare edge — not client-spoofable);
+  -- fall back to the LAST element of x-forwarded-for (appended by the
+  -- trusted proxy hop; the FIRST element is caller-supplied and would let
+  -- an attacker rotate rate-limit buckets), then x-real-ip. Any failure
   -- (headers GUC unset, non-JSON, missing key) leaves v_ip NULL and we
   -- fall through without rate-limiting rather than blocking.
   BEGIN
     v_headers := current_setting('request.headers', true)::json;
-    v_ip := split_part(coalesce(v_headers ->> 'x-forwarded-for', ''), ',', 1);
+    v_ip := v_headers ->> 'cf-connecting-ip';
+    IF v_ip IS NULL OR length(btrim(v_ip)) = 0 THEN
+      v_xff := string_to_array(coalesce(v_headers ->> 'x-forwarded-for', ''), ',');
+      v_ip := btrim(v_xff[array_upper(v_xff, 1)]);
+    END IF;
     IF v_ip IS NULL OR length(btrim(v_ip)) = 0 THEN
       v_ip := v_headers ->> 'x-real-ip';
     END IF;

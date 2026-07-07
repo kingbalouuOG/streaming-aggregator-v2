@@ -172,6 +172,8 @@ async function getArrivalCandidates(
     .from('streaming_history')
     .select('tmdb_id, media_type, service_id, recorded_at')
     .eq('event_type', 'added')
+    // Watchable-included types only — rent/buy/addon catalogue churn must not fire "now streaming" alerts.
+    .in('stream_type', ['subscription', 'free'])
     .in('service_id', [...services])
     .gte('recorded_at', sinceIso)
     .order('recorded_at', { ascending: false });
@@ -208,6 +210,8 @@ async function getLeavingSoonCandidates(
   const { data, error } = await supabase
     .from('streaming_availability')
     .select('tmdb_id, media_type, service_id, expires_on')
+    // Watchable-included types only — an expiring rent/buy listing is not "leaving your subscription".
+    .in('stream_type', ['subscription', 'free'])
     .in('service_id', [...services])
     .not('expires_on', 'is', null)
     .gte('expires_on', nowIso)

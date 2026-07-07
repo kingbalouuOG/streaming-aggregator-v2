@@ -219,7 +219,7 @@ interface TitlePageData {
   rentBuy: string[]; // service labels for rent/buy
 }
 
-function renderTitlePage(type: string, id: number, d: TitlePageData): string {
+function renderTitlePage(type: string, id: number, d: TitlePageData, origin: string): string {
   const yearStr = d.year ? ` (${d.year})` : '';
   const pageTitle = `Where to watch ${d.title}${yearStr} in the UK | Videx`;
   const desc =
@@ -227,7 +227,9 @@ function renderTitlePage(type: string, id: number, d: TitlePageData): string {
       ? `Stream ${d.title} on ${d.subscription.join(', ')}. See where to watch in the UK on Videx.`
       : `See where to watch ${d.title} in the UK on Videx.`;
   const deepLink = `videx://detail/${type}-${id}`;
-  const canonical = `https://videx.app/t/${type}/${id}`;
+  // Derived from the serving host (workers.dev today) — swap to the real
+  // domain automatically once one fronts the Worker.
+  const canonical = `${origin}/t/${type}/${id}`;
 
   const watchBlock =
     d.subscription.length > 0 || d.rentBuy.length > 0
@@ -257,11 +259,11 @@ function renderTitlePage(type: string, id: number, d: TitlePageData): string {
 <meta property="og:title" content="${esc(`${d.title}${yearStr}`)}">
 <meta property="og:description" content="${esc(desc)}">
 <meta property="og:url" content="${canonical}">
-${d.posterUrl ? `<meta property="og:image" content="${d.posterUrl}">` : ''}
+${d.posterUrl ? `<meta property="og:image" content="${esc(d.posterUrl)}">` : ''}
 <meta name="twitter:card" content="${d.posterUrl ? 'summary_large_image' : 'summary'}">
 <meta name="twitter:title" content="${esc(`${d.title}${yearStr}`)}">
 <meta name="twitter:description" content="${esc(desc)}">
-${d.posterUrl ? `<meta name="twitter:image" content="${d.posterUrl}">` : ''}
+${d.posterUrl ? `<meta name="twitter:image" content="${esc(d.posterUrl)}">` : ''}
 <style>
 :root{color-scheme:dark}
 *{box-sizing:border-box}
@@ -287,7 +289,7 @@ footer a{color:rgba(245,241,232,.5)}
 <body>
 <div class="wrap">
   <div class="hero">
-    ${d.posterUrl ? `<img class="poster" src="${d.posterUrl}" alt="${esc(d.title)} poster" width="120" height="180">` : ''}
+    ${d.posterUrl ? `<img class="poster" src="${esc(d.posterUrl)}" alt="${esc(d.title)} poster" width="120" height="180">` : ''}
     <div>
       <h1>${esc(d.title)} <span class="year">${esc(yearStr.trim())}</span></h1>
       <p class="muted">Where to watch in the UK</p>
@@ -307,6 +309,34 @@ footer a{color:rgba(245,241,232,.5)}
     <p>Streaming availability from the Streaming Availability API (Movie of the Night).</p>
     <p>This product uses the TMDb API but is not endorsed or certified by <a href="https://www.themoviedb.org/">TMDb</a>.</p>
   </footer>
+</div>
+</body>
+</html>`;
+}
+
+/** Small branded 404 for /t/ requests whose title isn't in the cache. */
+function renderTitleNotFoundPage(): string {
+  return `<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Title not found | Videx</title>
+<meta name="robots" content="noindex">
+<style>
+:root{color-scheme:dark}
+body{margin:0;background:#0a0a0f;color:#f5f1e8;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+.wrap{max-width:640px;margin:0 auto;padding:48px 20px}
+h1{font-size:26px;margin:0 0 8px}
+.muted{color:rgba(245,241,232,.6)}
+.btn{display:inline-block;margin-top:24px;padding:12px 20px;border-radius:999px;font-weight:700;text-decoration:none;font-size:15px;background:#e85d25;color:#fff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Title not found</h1>
+  <p class="muted">We don't have this title in the Videx catalogue.</p>
+  <a class="btn" href="${PLAY_STORE_URL}">Get Videx on Android</a>
 </div>
 </body>
 </html>`;
@@ -340,6 +370,18 @@ app.get('/t/:type/:tmdbId', async (c) => {
           .eq('media_type', type),
       ]);
 
+      // Unknown title: a real 404 (never a junk "Title #N" 200 stuck in
+      // the 24h edge cache — withEdgeCache only stores ok responses).
+      if (!titleRow) {
+        return new Response(renderTitleNotFoundPage(), {
+          status: 404,
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'public, max-age=300',
+          },
+        });
+      }
+
       // Distinct service labels, split by whether you can stream vs rent/buy.
       const subSet = new Set<string>();
       const rentBuySet = new Set<string>();
@@ -350,17 +392,17 @@ app.get('/t/:type/:tmdbId', async (c) => {
       }
 
       const data: TitlePageData = {
-        title: titleRow?.title ?? `Title #${id}`,
-        year: titleRow?.release_year ?? null,
-        posterUrl: titleRow?.poster_path
+        title: titleRow.title,
+        year: titleRow.release_year ?? null,
+        posterUrl: titleRow.poster_path
           ? `https://image.tmdb.org/t/p/w500${titleRow.poster_path}`
           : null,
-        overview: titleRow?.overview ?? null,
+        overview: titleRow.overview ?? null,
         subscription: [...subSet].sort(),
         rentBuy: [...rentBuySet].filter((s) => !subSet.has(s)).sort(),
       };
 
-      return new Response(renderTitlePage(type, id, data), {
+      return new Response(renderTitlePage(type, id, data, new URL(c.req.url).origin), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     },

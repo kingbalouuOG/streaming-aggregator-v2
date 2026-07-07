@@ -16,6 +16,11 @@ on:
     paths:
       - 'workers/api/**'
       - '.github/workflows/deploy-worker.yml'
+      # The Worker bundles the legal pages at build time (index.ts imports
+      # these as text) — edits to them must trigger a redeploy or the
+      # served /privacy + /terms pages silently drift from the repo.
+      - 'docs/legal/privacy-policy.md'
+      - 'docs/legal/terms-of-service.md'
 
 jobs:
   deploy:

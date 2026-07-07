@@ -38,11 +38,11 @@ export const PLATFORM_PRICING: PlatformPricing[] = [
   {
     serviceId: "apple",
     // Apple TV (rebranded from Apple TV+ Nov 2025). Monthly £9.99 since
-    // Aug 2025; annual £89/yr ≈ £7.42/mo.
+    // Aug 2025; annual £89.99/yr ≈ £7.50/mo.
     tiers: [
       { name: "Standard", price: 9.99 },
-      { name: "Annual (equiv.)", price: 7.42 },
-      { name: "Apple One (Individual)", price: 14.95 },
+      { name: "Annual (equiv.)", price: 7.5 },
+      { name: "Apple One (Individual)", price: 18.95 },
     ],
   },
   {

@@ -1,5 +1,5 @@
 # Per-function config for send-notifications.
-# Cron-invoked with the Vault-backed service-role JWT (migration 052) —
+# Cron-invoked with the Vault-backed service-role JWT (migration 059) —
 # verify_jwt stays true; the handler additionally asserts role === 'service_role'.
 # H0 Stream B — Notifications v1.
 

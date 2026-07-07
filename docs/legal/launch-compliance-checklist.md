@@ -47,8 +47,8 @@ The policy must describe what the app **actually** does. Two H0 features change 
 
 - **Click-out logging (Stream A2) — added.** Privacy Policy §2 now discloses that a click-out records the service tapped, whether the link was an **exact** title link or a **search** fallback (`link_type`), and the **rent/buy price shown** at click time (`price_shown`). *(Note: at the time of writing, `emitDeepLinkClick` in `src/lib/storage/interactions.ts` still needs to persist `link_type` + `price_shown` — Stream A owns that code change. The policy describes the intended, disclosed behaviour; confirm the code matches before relying on the disclosure.)*
 - **Inventory corrected.** §2 now also lists `user_interest_centroids`, `user_feature_flags`, and `app_feedback`, which the original draft predated.
-- **Push notifications (Stream B Phase 1) — clearly-marked pending slot.** An editorial `<!-- PENDING SLOT -->` block sits at the end of Privacy Policy §2 with provisional copy (push token, platform, per-type consent). **It is NOT rendered publicly** and **NOT live** yet, because notifications haven't shipped. **When Stream B Phase 1 lands:** paste its data-model note into that slot as a real "Push notifications" subsection, then tick the box below.
-  - [ ] **Push-notifications policy copy finalised** (blocked on Stream B Phase 1; do before the notifications feature is switched on — roadmap 0.12 release valve allows notifications as a fast-follow, so the policy can go live without it and be updated when it ships).
+- **Push notifications (Stream B Phase 1) — published.** The former `<!-- PENDING SLOT -->` block at the end of Privacy Policy §2 is now a live "Push notifications" subsection (push token, platform, per-type consent, Expo/APNs/FCM processors), filled from [notifications-data-model.md](./notifications-data-model.md) after Stream B Phase 1 shipped.
+  - [x] **Push-notifications policy copy finalised** (Stream B Phase 1 shipped; slot filled 7 July 2026).
 
 ---
 
