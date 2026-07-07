@@ -28,7 +28,8 @@ export type InteractionEventType =
   | 'dwell_event'
   | 'deep_link_click'
   | 'not_interested'
-  | 'search';
+  | 'search'
+  | 'share';
 
 export type ExitReason =
   | 'deep_link_click'
@@ -119,6 +120,34 @@ export function emitContentInteraction(
     content_id: contentId,
     media_type: mediaType,
     metadata,
+  }).catch(() => {});
+}
+
+/**
+ * Emit a `share` event (H0 Stream B — Share v1, growth loop).
+ *
+ * Fired when the user shares a title from the detail page. This is a
+ * product/growth-analytics signal, NOT a ranking signal — it is
+ * deliberately absent from INTERACTION_WEIGHTS. `to_surface` records how
+ * the OS share sheet resolved (e.g. the target app) when the platform
+ * reports it; `shared_url` is the smart link (Worker title page) shared.
+ */
+export function emitShare(args: {
+  contentId: number;
+  mediaType: 'movie' | 'tv';
+  sharedUrl: string;
+  toSurface?: string | null;
+}): void {
+  emitInteraction({
+    event_type: 'share',
+    content_id: args.contentId,
+    media_type: args.mediaType,
+    source_surface: 'detail',
+    session_id: getCurrentSessionId(),
+    metadata: {
+      shared_url: args.sharedUrl,
+      to_surface: args.toSurface ?? null,
+    },
   }).catch(() => {});
 }
 

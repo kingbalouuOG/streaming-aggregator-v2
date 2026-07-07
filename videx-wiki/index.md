@@ -63,6 +63,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Onboarding flow](wiki/concepts/architecture/onboarding-flow.md) — 5 steps, ~90s target.
 - [Cold-start strategy](wiki/concepts/architecture/cold-start.md) — Service fingerprints + watched-grid + genre, dynamic 4-band weights.
 - [Signal architecture](wiki/concepts/architecture/signal-architecture.md) — Explicit and silent signals, interpretation matrix, impression batcher.
+- [Notifications v1](wiki/concepts/architecture/notifications-v1.md) — Arrival + leaving-soon push alerts (H0 Stream B): daily Edge Function cron, dedup/cap ledger, first-value-moment consent, Expo receipts + share/title-page growth loop.
 - [Lifecycle manager](wiki/concepts/architecture/lifecycle-manager.md) — Capacitor `appStateChange` centralisation, deep-link expected-background window.
 
 ### Techniques

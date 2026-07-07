@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "484023251769",
+    "project_id": "videx-3063b",
+    "storage_bucket": "videx-3063b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:484023251769:android:a557ecff1a2f6caaf46ee8",
+        "android_client_info": {
+          "package_name": "app.videx.streaming"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBs0mwnhxxlrcXdMEKpeSaEZaQimKPs658"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

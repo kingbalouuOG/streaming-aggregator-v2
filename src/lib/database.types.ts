@@ -1330,6 +1330,142 @@ export type Database = {
           },
         ]
       }
+      notification_deliveries: {
+        Row: {
+          delivery_status: string
+          error_detail: string | null
+          expo_ticket_id: string | null
+          id: string
+          media_type: string
+          notification_type: string
+          push_token_id: string | null
+          sent_at: string
+          service_id: string | null
+          title: string | null
+          tmdb_id: number
+          user_id: string
+        }
+        Insert: {
+          delivery_status?: string
+          error_detail?: string | null
+          expo_ticket_id?: string | null
+          id?: string
+          media_type: string
+          notification_type: string
+          push_token_id?: string | null
+          sent_at?: string
+          service_id?: string | null
+          title?: string | null
+          tmdb_id: number
+          user_id: string
+        }
+        Update: {
+          delivery_status?: string
+          error_detail?: string | null
+          expo_ticket_id?: string | null
+          id?: string
+          media_type?: string
+          notification_type?: string
+          push_token_id?: string | null
+          sent_at?: string
+          service_id?: string | null
+          title?: string | null
+          tmdb_id?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_deliveries_push_token_id_fkey"
+            columns: ["push_token_id"]
+            isOneToOne: false
+            referencedRelation: "user_push_tokens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_deliveries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_preferences: {
+        Row: {
+          enabled: boolean
+          notification_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          enabled?: boolean
+          notification_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          enabled?: boolean
+          notification_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_push_tokens: {
+        Row: {
+          app_version: string | null
+          created_at: string
+          device_id: string | null
+          device_name: string | null
+          expo_push_token: string
+          id: string
+          last_seen_at: string
+          platform: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          app_version?: string | null
+          created_at?: string
+          device_id?: string | null
+          device_name?: string | null
+          expo_push_token: string
+          id?: string
+          last_seen_at?: string
+          platform: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          app_version?: string | null
+          created_at?: string
+          device_id?: string | null
+          device_name?: string | null
+          expo_push_token?: string
+          id?: string
+          last_seen_at?: string
+          platform?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_push_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_interest_centroids: {
         Row: {
           centroid: string

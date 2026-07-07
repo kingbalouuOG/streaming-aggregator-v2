@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ContentRow } from '@/components/ContentRow';
 import { DetailEngagement } from '@/components/DetailEngagement';
 import { SectionHead } from '@/components/SectionHead';
+import { ShareButton } from '@/components/ShareButton';
 import { DetailSkeleton } from '@/components/Skeleton';
 import { WatchlistActions } from '@/components/WatchlistActions';
 import { WhereToWatch } from '@/components/WhereToWatch';
@@ -111,6 +112,12 @@ export default function DetailRoute() {
             style={{ position: 'absolute', inset: 0 }}
           />
           <BackButton onPress={back} top={insets.top + 12} />
+          <ShareButton
+            contentId={detail.id}
+            title={detail.title}
+            year={detail.year}
+            top={insets.top + 12}
+          />
           <Text
             className="absolute inset-x-5 bottom-5 font-display-black text-white"
             style={{ fontSize: 36, lineHeight: 38, letterSpacing: -0.7 }}>
