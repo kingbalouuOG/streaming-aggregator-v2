@@ -591,6 +591,95 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_deliveries: {
+        Row: {
+          delivery_status: string
+          error_detail: string | null
+          expo_ticket_id: string | null
+          id: string
+          media_type: string
+          notification_type: string
+          push_token_id: string | null
+          sent_at: string
+          service_id: string | null
+          title: string | null
+          tmdb_id: number
+          user_id: string
+        }
+        Insert: {
+          delivery_status?: string
+          error_detail?: string | null
+          expo_ticket_id?: string | null
+          id?: string
+          media_type: string
+          notification_type: string
+          push_token_id?: string | null
+          sent_at?: string
+          service_id?: string | null
+          title?: string | null
+          tmdb_id: number
+          user_id: string
+        }
+        Update: {
+          delivery_status?: string
+          error_detail?: string | null
+          expo_ticket_id?: string | null
+          id?: string
+          media_type?: string
+          notification_type?: string
+          push_token_id?: string | null
+          sent_at?: string
+          service_id?: string | null
+          title?: string | null
+          tmdb_id?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_deliveries_push_token_id_fkey"
+            columns: ["push_token_id"]
+            isOneToOne: false
+            referencedRelation: "user_push_tokens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_deliveries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_preferences: {
+        Row: {
+          enabled: boolean
+          notification_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          enabled?: boolean
+          notification_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          enabled?: boolean
+          notification_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       onboarding_events: {
         Row: {
           created_at: string | null
@@ -1330,94 +1419,29 @@ export type Database = {
           },
         ]
       }
-      notification_deliveries: {
+      user_interest_centroids: {
         Row: {
-          delivery_status: string
-          error_detail: string | null
-          expo_ticket_id: string | null
-          id: string
-          media_type: string
-          notification_type: string
-          push_token_id: string | null
-          sent_at: string
-          service_id: string | null
-          title: string | null
-          tmdb_id: number
-          user_id: string
-        }
-        Insert: {
-          delivery_status?: string
-          error_detail?: string | null
-          expo_ticket_id?: string | null
-          id?: string
-          media_type: string
-          notification_type: string
-          push_token_id?: string | null
-          sent_at?: string
-          service_id?: string | null
-          title?: string | null
-          tmdb_id: number
-          user_id: string
-        }
-        Update: {
-          delivery_status?: string
-          error_detail?: string | null
-          expo_ticket_id?: string | null
-          id?: string
-          media_type?: string
-          notification_type?: string
-          push_token_id?: string | null
-          sent_at?: string
-          service_id?: string | null
-          title?: string | null
-          tmdb_id?: number
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "notification_deliveries_push_token_id_fkey"
-            columns: ["push_token_id"]
-            isOneToOne: false
-            referencedRelation: "user_push_tokens"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "notification_deliveries_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      notification_preferences: {
-        Row: {
-          enabled: boolean
-          notification_type: string
+          centroid: string
+          slot: number
           updated_at: string
           user_id: string
+          weight: number
         }
         Insert: {
-          enabled?: boolean
-          notification_type: string
+          centroid: string
+          slot: number
           updated_at?: string
           user_id: string
+          weight?: number
         }
         Update: {
-          enabled?: boolean
-          notification_type?: string
+          centroid?: string
+          slot?: number
           updated_at?: string
           user_id?: string
+          weight?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "notification_preferences_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       user_push_tokens: {
         Row: {
@@ -1466,30 +1490,6 @@ export type Database = {
           },
         ]
       }
-      user_interest_centroids: {
-        Row: {
-          centroid: string
-          slot: number
-          updated_at: string
-          user_id: string
-          weight: number
-        }
-        Insert: {
-          centroid: string
-          slot: number
-          updated_at?: string
-          user_id: string
-          weight?: number
-        }
-        Update: {
-          centroid?: string
-          slot?: number
-          updated_at?: string
-          user_id?: string
-          weight?: number
-        }
-        Relationships: []
-      }
       user_services: {
         Row: {
           created_at: string | null
@@ -1518,6 +1518,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      username_check_rate_limit: {
+        Row: {
+          client_key: string
+          request_count: number
+          window_start: string
+        }
+        Insert: {
+          client_key: string
+          request_count?: number
+          window_start: string
+        }
+        Update: {
+          client_key?: string
+          request_count?: number
+          window_start?: string
+        }
+        Relationships: []
       }
       watchlist: {
         Row: {
@@ -2027,6 +2045,13 @@ export type Database = {
           p_parent_table: string
         }
         Returns: boolean
+      }
+      list_missing_title_ids: {
+        Args: { p_limit?: number }
+        Returns: {
+          media_type: string
+          tmdb_id: number
+        }[]
       }
       match_titles_by_vector: {
         Args: { match_limit?: number; query_vector: string }
