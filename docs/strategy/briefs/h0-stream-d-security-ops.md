@@ -34,10 +34,11 @@ PR green · dashboard/console actions listed with what Joe must click himself (l
 
 Joe-facing manual actions are collected in [`h0-stream-d-console-actions.md`](./h0-stream-d-console-actions.md).
 
-### D1 — Play production-access check → **DECISION NEEDED FROM JOE, schedules Stream E**
+### D1 — Play production-access check → **CONFIRMED: gate APPLIES (schedules Stream E)**
 The 12-testers/14-continuous-days closed-test gate is **real and current** (was 20 testers until Dec 2024, now **12**). It applies **only** to **personal** Play accounts created **on/after 13 Nov 2023**; **org accounts and older personal accounts are exempt**. Completion only lets you *apply* for production access, which is then **manually reviewed (~7 days typical)**. Internal-testing does **not** count — must be a **Closed** track; friends & family qualify as testers.
-- **I cannot see the Play Console**, so Joe must confirm two things (console-actions doc §0): account **type** (Settings → Account details) and **creation date** (registration email/receipt).
-- **Scheduling impact:** if the gate applies, the 0.6 shakeout must be run as the closed test → **~3–4 weeks lead time** (14-day window + production-access review + app review) enters the Stream E schedule. If the account is Organisation type, **no delay**.
+- **Confirmed by Joe 2026-07-07:** account is **personal**, created **after 13 Nov 2023**, app currently in **draft / internal testing** → **the gate applies.**
+- **Two paths (Joe's call):** (A) run the 0.6 shakeout **as** the Closed test — recruit ≥12 (aim 15–20) real testers, 14 continuous days, then apply for production (~7-day review). Reuses planned work; ~14 days largely overlap the shakeout. **Recommended.** (B) Convert to an **Organisation** account to remove the gate — needs a D-U-N-S number (free but days–2wks to obtain/verify), an org website, and Google org verification; often as slow as the test itself + a company footprint. Worth it only if incorporating anyway.
+- **Scheduling impact (Path A):** bake **~14 days closed test + ~7 days production review** into the Stream E schedule before public release.
 
 ### D2 — Security
 - **IN-PX-29** ✅ migration `053_username_available_rate_limit.sql` — in-DB per-IP fixed-window limit (30/min) inside the RPC. Gateway/Worker throttle rejected: the client calls the RPC directly against PostgREST, never through the Worker, so only an in-function limit covers the real path. Fails open when no IP is attributable.
