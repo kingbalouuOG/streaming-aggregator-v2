@@ -79,6 +79,7 @@ export default function ForYouScreen() {
     becauseYouWatched = [],
     fromYourWatchlist = [],
     outsideYourUsual = [],
+    paidTitles = [],
   } = data;
   const recommended = [...recommendedForYou];
   const hero = recommended.shift() ?? null;
@@ -135,6 +136,18 @@ export default function ForYouScreen() {
               kicker="Keep going"
               title="Continue exploring."
               items={hiddenGems}
+              onItemPress={openDetail}
+              surface="for_you"
+            />
+          </Reveal>
+        ) : null}
+
+        {paidTitles.length > 0 ? (
+          <Reveal index={idx++}>
+            <ContentRow
+              kicker="New releases"
+              title="New to rent or buy."
+              items={paidTitles}
               onItemPress={openDetail}
               surface="for_you"
             />

@@ -11,6 +11,7 @@ import { discoverMovies, discoverTV, getTrendingMovies, getTrendingTV } from '@/
 import { buildFilterSets, getAvailableTmdbIds } from '@/lib/recommendations-v2/hardFilters';
 import { dailyPick, dailyShuffleTopN } from '@/lib/utils/dailyShuffle';
 import { fetchGenreSpotlight } from '@/lib/recommendations-v2/rows/home/genreSpotlight';
+import { fetchPaidTitles } from '@/lib/recommendations-v2/rows/home/paidRow';
 import { fetchPerServiceCharts } from '@/lib/recommendations-v2/rows/home/perServiceChart';
 import type { PerServiceChartRow } from '@/lib/recommendations-v2/rows/home/perServiceChart';
 import { getV2TasteProfile } from '@/lib/taste-v2/tasteProfileV2';
@@ -42,6 +43,8 @@ export interface HomeFeed {
   recentlyAdded: ContentItem[];
   popular: ContentItem[];
   freeTonight: ContentItem[];
+  /** "New to rent or buy" — newest rent/buy titles on the user's services. */
+  paid: ContentItem[];
   upcoming: UpcomingItem[];
   rows: PerServiceChartRow[];
   spotlights: GenreSpotlight[];
@@ -246,13 +249,14 @@ async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
   // cache entry (no duplicate RPC), and it's skipped entirely on warm loads.
   const availableTmdbIds = await getAvailableTmdbIds(services);
 
-  const [charts, profile, filterSets, recentlyAdded, popularRaw, freeTonight, upcoming] = await Promise.all([
+  const [charts, profile, filterSets, recentlyAdded, popularRaw, freeTonight, paidRaw, upcoming] = await Promise.all([
     fetchPerServiceCharts(services),
     getV2TasteProfile(),
     buildFilterSets(services),
     fetchRecentlyAdded(services),
     fetchPopular(services, availableTmdbIds),
     fetchFreeTonight(),
+    fetchPaidTitles(services),
     fetchUpcoming(services),
   ]);
 
@@ -281,6 +285,18 @@ async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
     }
   }
 
+  // "New to rent or buy" — dedup against the recency/trending/free rows
+  // above it so a title new to a service doesn't show in both "Recently
+  // added" and here. (Per-service rows sit below and are subscription/
+  // free-only, so they can't collide with rent/buy content.)
+  const paidExclude = new Set<string>([
+    ...recentlyAdded.map((i) => i.id),
+    ...popular.map((i) => i.id),
+    ...freeTonight.map((i) => i.id),
+    ...(hero ? [hero.id] : []),
+  ]);
+  const paid = paidRaw.filter((i) => !paidExclude.has(i.id));
+
   // Personalised genre spotlights, ordered by the user's selected
   // clusters. Cross-row dedup vs per-service charts + prior spotlights
   // (the "same title in two adjacent rows" failure).
@@ -288,6 +304,7 @@ async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
   const exclude = new Set<string>();
   for (const c of rows) for (const i of c.items) exclude.add(i.id);
   if (hero) exclude.add(hero.id);
+  for (const i of paid) exclude.add(i.id);
 
   const spotlights: GenreSpotlight[] = [];
   for (let offset = 0; offset < SPOTLIGHT_COUNT; offset++) {
@@ -302,7 +319,7 @@ async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
     }
   }
 
-  return { hero, recentlyAdded, popular, freeTonight, upcoming, rows, spotlights };
+  return { hero, recentlyAdded, popular, freeTonight, paid, upcoming, rows, spotlights };
 }
 
 export function useHomeFeed() {

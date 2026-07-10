@@ -103,7 +103,7 @@ export default function HomeScreen() {
     );
   }
 
-  const { hero, rows, recentlyAdded, spotlights, popular = [], freeTonight = [], upcoming = [] } = feed.data;
+  const { hero, rows, recentlyAdded, spotlights, popular = [], freeTonight = [], paid = [], upcoming = [] } = feed.data;
   // Editorial spotlight: a popular title with a backdrop, distinct from the
   // hero and (where possible) the trending top-5.
   const spotlightPick =
@@ -169,12 +169,24 @@ export default function HomeScreen() {
           </Reveal>
         ) : null}
 
-        {rows.map((row) => (
-          <Reveal key={row.serviceId} index={(revealIdx += 1)}>
+        {paid.length > 0 ? (
+          <Reveal index={(revealIdx += 1)}>
             <ContentRow
-              kicker="Top on"
-              title={row.serviceName}
-              items={row.items}
+              kicker="New releases"
+              title="New to rent or buy."
+              items={paid}
+              onItemPress={openDetail}
+              surface="home"
+            />
+          </Reveal>
+        ) : null}
+
+        {spotlights.map((sp) => (
+          <Reveal key={sp.clusterName} index={(revealIdx += 1)}>
+            <ContentRow
+              kicker="Spotlight"
+              title={`${sp.clusterName}.`}
+              items={sp.items}
               onItemPress={openDetail}
               surface="home"
             />
@@ -187,12 +199,12 @@ export default function HomeScreen() {
           </Reveal>
         ) : null}
 
-        {spotlights.map((sp) => (
-          <Reveal key={sp.clusterName} index={(revealIdx += 1)}>
+        {rows.map((row) => (
+          <Reveal key={row.serviceId} index={(revealIdx += 1)}>
             <ContentRow
-              kicker="Spotlight"
-              title={`${sp.clusterName}.`}
-              items={sp.items}
+              kicker="Top on"
+              title={row.serviceName}
+              items={row.items}
               onItemPress={openDetail}
               surface="home"
             />
