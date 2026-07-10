@@ -122,6 +122,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Service-role JWT rotation runbook](wiki/concepts/operations/service-role-jwt-rotation.md)
 - [Supabase backup and restore runbook](wiki/concepts/operations/supabase-backup-restore.md)
 - [Supabase migration workflow runbook](wiki/concepts/operations/supabase-migration-workflow.md)
+- [Auth email SMTP + branding runbook](wiki/concepts/operations/auth-email-smtp.md) — custom sender (Resend), SPF/DKIM, token_hash template fix, reset-flow verification.
 - [Risks register](wiki/concepts/operations/risks-register.md)
 - [Evaluation harness reference](wiki/concepts/operations/eval-harness.md)
 - [Strategy version log](wiki/concepts/operations/strategy-version-log.md)

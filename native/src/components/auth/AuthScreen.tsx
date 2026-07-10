@@ -21,29 +21,22 @@ import { useAuth } from '@/providers/auth';
 
 export function AuthScreen() {
   const router = useRouter();
-  const { signIn, forgotPassword } = useAuth();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
-  const forgot = async () => {
-    setError(null);
-    setNotice(null);
-    if (!email.trim()) {
-      setError('Enter your email first, then tap Forgot password.');
-      return;
-    }
-    setBusy(true);
-    try {
-      const { error: e } = await forgotPassword(email.trim());
-      if (e) setError(e);
-      else setNotice(`Password reset link sent to ${email.trim()}.`);
-    } finally {
-      setBusy(false);
-    }
+  // Forgot-password now has its own route (email field, "check your
+  // email" confirmation, resend-with-cooldown) instead of firing inline
+  // here. Carry the typed email across so the user needn't retype it.
+  const forgot = () => {
+    router.push(
+      email.trim()
+        ? { pathname: '/forgot-password', params: { email: email.trim() } }
+        : '/forgot-password',
+    );
   };
 
   const submit = async () => {
@@ -128,13 +121,12 @@ export function AuthScreen() {
             </View>
           </View>
 
-          {/* Forgot password */}
-          <Pressable onPress={forgot} disabled={busy} className="mt-2 self-end" hitSlop={8}>
+          {/* Forgot password → dedicated route */}
+          <Pressable onPress={forgot} className="mt-2 self-end" hitSlop={8}>
             <Text className="font-sans-medium text-meta text-muted-foreground">Forgot password?</Text>
           </Pressable>
 
           {error ? <Text className="mt-3 font-sans text-meta text-danger">{error}</Text> : null}
-          {notice ? <Text className="mt-3 font-sans text-meta text-success">{notice}</Text> : null}
 
           {/* Submit */}
           <Pressable
