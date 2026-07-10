@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 import storage, { setAuthState } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
+import { clearPushToken } from '@/notifications/push';
 import { clearQueryCache } from '@/queryPersist';
 
 // Native auth provider (NATIVE-2 W6). Wraps the supabase-js auth surface
@@ -107,6 +108,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       },
       async signOut() {
+        // Delete this device's push-token row BEFORE ending the session:
+        // the DELETE is RLS-gated (owner-only), so once signOut() destroys
+        // the JWT the request silently matches nothing and the row orphans —
+        // the device keeps receiving the signed-out user's alerts. (Found in
+        // the 2026-07-10 device-test walk-through; the NotificationsProvider
+        // effect fires on session-null, which is inherently too late — it
+        // remains as local-state cleanup and no-ops the DB call.)
+        await clearPushToken();
         await supabase.auth.signOut();
         await clearLocalUserState();
       },
