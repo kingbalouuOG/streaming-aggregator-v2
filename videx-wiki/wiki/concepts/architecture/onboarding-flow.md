@@ -3,7 +3,7 @@ title: Onboarding flow (5 steps)
 type: concept
 tags: [onboarding, taste-vector, cold-start, steps]
 created: 2026-04-26
-updated: 2026-05-08
+updated: 2026-07-10
 sources:
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
   - raw/v2-strategy/Videx_v2_Design_Reference_v0.1.md
@@ -24,7 +24,7 @@ related:
 ## Step 1 — Create Account
 
 - Email, username, password (required).
-- Terms of Service + Privacy Policy acknowledgement (implicit on Continue tap).
+- Terms of Service + Privacy Policy acknowledgement (implicit on Continue tap). Native (2026-07-10): the ToS/Privacy links are now live — they open the same in-app `LegalSheet` used by Profile → Privacy & Data (previously dead styled text).
 - Age range dropdown labelled "(optional)".
 - "How do you usually watch?" dropdown labelled "(optional)" — Solo / With a partner / With family / Mix.
 - Copy: *"This helps us recommend the right content for how you watch. Entirely optional."*
@@ -71,6 +71,7 @@ Service-availability filter dropped: a title the user has seen elsewhere (cinema
 - 16 taste cluster chips (`TASTE_CLUSTERS`).
 - **Minimum 3 selections required, no upper cap** (cap removed during Phase 3 testing).
 - Phase 3 ships clusters, not raw genres (design showed cluster chips matching `TASTE_CLUSTERS`; brief said "genre preferences" but meant clusters).
+- **Native title rendered as two fixed lines** ("What do you love to" / "watch?") in `native/.../StepClusters.tsx`. Beta feedback 2026-07-09: the "N selected" chip stole horizontal room and wrapped the previously single-line title onto a second line the moment a genre was picked, jumping every card below it. Hard-splitting the title means the layout never reflows on first selection.
 
 ## Step 5 — Here's what we've learned (Sliders + Summary)
 
@@ -86,6 +87,18 @@ Service-availability filter dropped: a title the user has seen elsewhere (cinema
 - Progress indicator visible throughout ("Step 2 of 5").
 - No skip paths.
 - Back button on each step preserves state.
+
+## Resume persistence (native, 2026-07-10)
+
+Founder-hit resume loop: exiting the app at step 4 and returning dropped him to step 2 with services unselected and watch-history picks lost, taking 2-3 loops to finish. **Root cause:** `native/.../OnboardingFlow.tsx` held step index + every selection in `useState` (memory only), and the `(tabs)` guard remounts `OnboardingFlow` whenever onboarding isn't complete (e.g. after an auth session restore). Remount = memory wiped, step reset to `session ? 1 : 0` (= step 2 with a session).
+
+**Fix:** a draft is mirrored to MMKV (`native/src/onboardingDraft.ts`, store id `videx-onboarding-draft`) on every change — step, services, watched keys, clusters, sliders, age/viewing context — restored synchronously on mount (no flash) and cleared on completion. The draft also persists the **original start timestamp** so a resume doesn't reset the duration clock, and a `startedLogged` flag so `onboarding_started` fires exactly once across resumes (no funnel double-fire). Back-button floor uses a separate `floorStep` (`session ? 1 : 0`), independent of the restored current step.
+
+## Post-onboarding landing + Curating interstitial (native, 2026-07-10)
+
+Onboarding completion now routes to a **Curating interstitial** (`native/src/app/curating.tsx`) instead of straight to the tabs. It holds an on-brand editorial "Curating your Videx" moment (Fraunces display, a single slow kicker fade that respects reduce-motion, no bare spinner) until the first For You payload resolves, then `router.replace('/(tabs)/foryou')`. A 6s backstop prevents a hung Worker from stranding the user (For You's own skeleton/retry takes over). This aligns the implementation with the two-surface locked rule "land on For You after onboarding" (see [two-surface](two-surface-architecture.md)).
+
+The interstitial now **owns the `first_home_view` funnel event** (moved off the Home/"New" first-paint since landing is no longer Home). The event **name is unchanged** for funnel continuity even though the landing surface moved. `onboardingSignal.ts` still hands the one-shot "just onboarded" bit across the router boundary; curating consumes it and fires the event once the payload lands.
 
 ## Bootstrap weights (cluster-dominant, 2026-05-08)
 
@@ -112,3 +125,5 @@ If the user selects no clusters at Step 4, the genre weight is redistributed to 
 ## Onboarding events (analytics)
 
 `onboarding_started`, `services_completed`, `clusters_completed`, `quiz_started`/`quiz_completed`/`quiz_skipped` (legacy v1, no longer emitted), `onboarding_completed`, `first_home_view`. See [event taxonomy](../../entities/codebase/event-taxonomy.md).
+
+> Native (2026-07-10): `first_home_view` now fires from the post-onboarding Curating interstitial (`native/src/app/curating.tsx`), not the Home/"New" tab, because landing moved to For You. The event **name is retained** for funnel continuity. `onboarding_started` is guarded against double-firing on resume via the persisted `startedLogged` flag (see Resume persistence above).

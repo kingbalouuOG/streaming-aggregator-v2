@@ -3,7 +3,7 @@ title: Home surface
 type: concept
 tags: [home, surface, recency, hero-carousel]
 created: 2026-04-26
-updated: 2026-07-01
+updated: 2026-07-10
 sources:
   - raw/v2-strategy/Videx_v2_Home_and_ForYou_Composition_Hypothesis_v0.3.md
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
@@ -18,6 +18,8 @@ related:
 # Home surface
 
 Discovery mode. Recency-led, lightly personalised. Service-filtered. Maximum 7-9 rows. Shipped in Phase 4.
+
+> **Label note (native, 2026-07-10):** the concept name stays "Home", but the tab is now user-labelled **"New"** and sits second (after For You) in the bottom nav — beta feedback 2026-07-09. File/route name (`(tabs)/index.tsx`) unchanged. See [two-surface](two-surface-architecture.md#naming-home-concept-new-label-native-2026-07-10).
 
 ## Row composition (in order)
 

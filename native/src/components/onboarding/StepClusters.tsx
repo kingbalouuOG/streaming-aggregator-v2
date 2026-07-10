@@ -24,8 +24,16 @@ export function StepClusters({ selected, onToggle, onContinue }: StepClustersPro
       <ScrollView contentContainerClassName="px-5 pt-3 pb-4" showsVerticalScrollIndicator={false}>
         <View className="flex-row items-start justify-between">
           <View className="flex-1 pr-3">
+            {/* Title rendered as two fixed lines from the start (beta feedback
+                2026-07-09): the "N selected" chip used to steal horizontal
+                room and wrap the single-line title onto a second line the
+                moment a genre was picked, jumping every card below it. Two
+                hard lines mean the layout never reflows on first selection. */}
             <Text className="font-display-black text-headline text-foreground">
-              What do you love to watch?
+              What do you love to
+            </Text>
+            <Text className="font-display-black text-headline text-foreground">
+              watch?
             </Text>
             <Text className="mt-1 font-sans text-body text-muted-foreground">
               Pick at least {MIN_CLUSTERS} genres.
