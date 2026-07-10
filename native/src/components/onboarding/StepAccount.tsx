@@ -11,6 +11,8 @@ import {
   View,
 } from 'react-native';
 
+import { LegalSheet } from '@/components/LegalSheet';
+import { PRIVACY_POLICY_MD, TERMS_MD } from '@/legal/policyContent';
 import { useAuth } from '@/providers/auth';
 
 // Onboarding Step 1 — "Join VIDEX" (matches V2 Onboarding/Step 1.png).
@@ -46,6 +48,7 @@ export function StepAccount({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+  const [policy, setPolicy] = useState<'privacy' | 'terms' | null>(null);
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const usernameValid =
@@ -223,11 +226,16 @@ export function StepAccount({
           })}
         </View>
 
-        {/* ToS */}
+        {/* ToS — links open the same in-app legal sheets as Profile → Privacy. */}
         <Text className="mt-6 text-center font-sans text-meta text-muted-foreground">
           By creating an account, you agree to our{' '}
-          <Text className="text-primary">Terms of Service</Text> and{' '}
-          <Text className="text-primary">Privacy Policy</Text>
+          <Text className="text-primary" onPress={() => setPolicy('terms')}>
+            Terms of Service
+          </Text>{' '}
+          and{' '}
+          <Text className="text-primary" onPress={() => setPolicy('privacy')}>
+            Privacy Policy
+          </Text>
         </Text>
 
         {error ? <Text className="mt-3 text-center font-sans text-meta text-danger">{error}</Text> : null}
@@ -251,6 +259,19 @@ export function StepAccount({
           )}
         </Pressable>
       </ScrollView>
+
+      <LegalSheet
+        title="Privacy Policy"
+        markdown={PRIVACY_POLICY_MD}
+        visible={policy === 'privacy'}
+        onClose={() => setPolicy(null)}
+      />
+      <LegalSheet
+        title="Terms of Service"
+        markdown={TERMS_MD}
+        visible={policy === 'terms'}
+        onClose={() => setPolicy(null)}
+      />
     </KeyboardAvoidingView>
   );
 }

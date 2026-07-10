@@ -19,6 +19,8 @@ related:
 
 Discovery mode. Recency-led, lightly personalised. Service-filtered. Maximum 7-9 rows. Shipped in Phase 4.
 
+> **Label note (native, 2026-07-10):** the concept name stays "Home", but the tab is now user-labelled **"New"** and sits second (after For You) in the bottom nav — beta feedback 2026-07-09. File/route name (`(tabs)/index.tsx`) unchanged. See [two-surface](two-surface-architecture.md#naming-home-concept-new-label-native-2026-07-10).
+
 ## Row composition (in order)
 
 1. **Featured Hero Carousel** — 3-5 cards, CSS scroll-snap, 6s auto-rotation, pause-on-touch with 3s resume. Pool = titles released or added to services in last 14 days, available on at least one user service, with vote/popularity thresholds. Rank by `popularity × taste_fit`. Taste weight: 30-40%.

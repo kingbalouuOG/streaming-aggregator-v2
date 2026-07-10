@@ -1,12 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-import { ONBOARDING_EVENTS } from '@/lib/analytics/events';
-import { logOnboardingEvent } from '@/lib/analytics/logger';
-import { consumeJustOnboarded } from '@/onboardingSignal';
 
 // NATIVE-2 W3 — Home composition parity with the web app:
 // MagazineHero (Today's Pick) → editor's note → browse chips →
@@ -59,28 +55,11 @@ export default function HomeScreen() {
     }
   }, [feed.refetch]);
 
-  // A1 (roadmap 0.2): fire first_home_view once, when Home first paints
-  // real data after onboarding. Parity with web (src/App.tsx ~363).
-  // consumeJustOnboarded() is a one-shot, so a later manual return to
-  // Home won't re-fire; the ref guards a same-mount double-fire.
-  const firstHomeViewLoggedRef = useRef(false);
-  useEffect(() => {
-    if (firstHomeViewLoggedRef.current) return;
-    if (feed.isLoading || !feed.data) return;
-    if (!consumeJustOnboarded()) return;
-    firstHomeViewLoggedRef.current = true;
-    const d = feed.data;
-    const sectionCount = [
-      (d.recentlyAdded?.length ?? 0) > 0,
-      (d.popular?.length ?? 0) > 0,
-      (d.rows?.length ?? 0) > 0,
-      (d.spotlights?.length ?? 0) > 0,
-    ].filter(Boolean).length;
-    void logOnboardingEvent(ONBOARDING_EVENTS.FIRST_HOME_VIEW, {
-      has_taste_vector: true,
-      section_count: sectionCount,
-    });
-  }, [feed.isLoading, feed.data]);
+  // first_home_view now fires from the post-onboarding Curating interstitial
+  // (src/app/curating.tsx), not here: after the beta-feedback nav change the
+  // landing surface is For You, so the funnel's first-paint capture moved
+  // there. The event NAME is unchanged for funnel continuity. This screen
+  // (the "New" tab, formerly Home) no longer consumes the just-onboarded bit.
 
   if (feed.isLoading) {
     return (

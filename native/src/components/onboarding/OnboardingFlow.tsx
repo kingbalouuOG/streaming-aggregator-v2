@@ -15,6 +15,11 @@ import type { ServiceId } from '@/lib/types/content';
 import { DEFAULT_SLIDERS, type SliderState } from '@/lib/taste-v2/types';
 import { useAuth } from '@/providers/auth';
 import { markJustOnboarded } from '@/onboardingSignal';
+import {
+  clearOnboardingDraft,
+  readOnboardingDraft,
+  writeOnboardingDraft,
+} from '@/onboardingDraft';
 import { StepAccount } from './StepAccount';
 import { StepClusters } from './StepClusters';
 import { StepServices } from './StepServices';
@@ -40,38 +45,75 @@ export function OnboardingFlow() {
   const router = useRouter();
   const { session } = useAuth();
 
-  const startStep = session ? 1 : 0;
+  // Restore any in-progress draft synchronously on first render (beta
+  // feedback 2026-07-09). The (tabs) guard remounts this flow whenever
+  // onboarding isn't complete — e.g. after an auth session restore — and
+  // without a draft that remount wiped every selection and reset the step
+  // to `session ? 1 : 0`, which is exactly the founder's "back to step 2,
+  // services gone" loop. readOnboardingDraft() is sync (MMKV), so restore
+  // lands in the initial state with no flash.
+  const draftRef = useRef(readOnboardingDraft());
+  const draft = draftRef.current;
+
+  // The lowest reachable step: once a session exists, account creation
+  // (step 0) is behind us, so back stops at step 1. This is the back-button
+  // floor and is independent of the restored current step below.
+  const floorStep = session ? 1 : 0;
+  const startStep = draft?.step ?? floorStep;
   const [step, setStep] = useState(startStep);
 
-  // Collected data (consumed by completion).
-  const [ageRange, setAgeRange] = useState<string | null>(null);
-  const [viewingContext, setViewingContext] = useState<string | null>(null);
-  const [services, setServices] = useState<ServiceId[]>([]);
-  const [watchedKeys, setWatchedKeys] = useState<Set<string>>(new Set());
-  const [watchedRound, setWatchedRound] = useState(0);
-  const [watchedOffset, setWatchedOffset] = useState(0);
-  const [selectedClusters, setSelectedClusters] = useState<string[]>([]);
-  const [sliders, setSliders] = useState<SliderState>(DEFAULT_SLIDERS);
+  // Collected data (consumed by completion) — seeded from the draft if one
+  // exists so a resume keeps every prior selection.
+  const [ageRange, setAgeRange] = useState<string | null>(draft?.ageRange ?? null);
+  const [viewingContext, setViewingContext] = useState<string | null>(draft?.viewingContext ?? null);
+  const [services, setServices] = useState<ServiceId[]>(draft?.services ?? []);
+  const [watchedKeys, setWatchedKeys] = useState<Set<string>>(
+    () => new Set(draft?.watchedKeys ?? []),
+  );
+  const [watchedRound, setWatchedRound] = useState(draft?.watchedRound ?? 0);
+  const [watchedOffset, setWatchedOffset] = useState(draft?.watchedOffset ?? 0);
+  const [selectedClusters, setSelectedClusters] = useState<string[]>(draft?.selectedClusters ?? []);
+  const [sliders, setSliders] = useState<SliderState>(draft?.sliders ?? DEFAULT_SLIDERS);
 
   const { complete, submitting } = useCompleteOnboarding();
   const invalidateOnboarding = useInvalidateOnboardingStatus();
 
-  // A1 (roadmap 0.2): stamp the onboarding start time locally at mount so
-  // total duration is real, not the hardcoded 0 production has been
-  // logging. Step 0 is account creation, so at mount there is usually no
-  // session and logOnboardingEvent drops session-less events — firing
-  // `onboarding_started` here would be lost for every fresh signup (why
-  // prod only ever shows `onboarding_completed`).
-  const onboardingStartRef = useRef(Date.now());
-  const startedLoggedRef = useRef(false);
+  // A1 (roadmap 0.2): stamp the onboarding start time locally so total
+  // duration is real, not the hardcoded 0 production has been logging. The
+  // draft preserves the ORIGINAL start across resumes so a founder-style
+  // exit-and-return doesn't reset the clock and inflate the duration.
+  const onboardingStartRef = useRef(draft?.startedAt ?? Date.now());
+  const startedLoggedRef = useRef(draft?.startedLogged ?? false);
+
+  // Mirror collected state into the draft on every change so an exit at any
+  // point can be resumed. Kept as one effect over the whole snapshot — MMKV
+  // writes are cheap and synchronous.
+  useEffect(() => {
+    writeOnboardingDraft({
+      startedAt: onboardingStartRef.current,
+      startedLogged: startedLoggedRef.current,
+      step,
+      ageRange,
+      viewingContext,
+      services,
+      watchedKeys: [...watchedKeys],
+      watchedRound,
+      watchedOffset,
+      selectedClusters,
+      sliders,
+    });
+  }, [step, ageRange, viewingContext, services, watchedKeys, watchedRound, watchedOffset, selectedClusters, sliders]);
 
   // Fire `onboarding_started` once a session exists: immediately for a
   // resumed onboarding (session present at mount) or right after signUp
-  // for a fresh account (session flips non-null post-auth).
+  // for a fresh account (session flips non-null post-auth). The draft's
+  // `startedLogged` flag makes this survive remounts — without it, every
+  // resume would re-fire the event and corrupt the funnel's start count.
   useEffect(() => {
     if (startedLoggedRef.current) return;
     if (!session?.user?.id) return;
     startedLoggedRef.current = true;
+    writeOnboardingDraft({ startedLogged: true });
     void logOnboardingEvent(ONBOARDING_EVENTS.ONBOARDING_STARTED, {});
   }, [session]);
 
@@ -91,8 +133,13 @@ export function OnboardingFlow() {
       // Hand the "just onboarded" bit to Home so it fires first_home_view
       // once — the onboarding tree unmounts on the replace() below.
       markJustOnboarded();
+      // Draft is done — clear it so a fresh future onboarding starts clean.
+      clearOnboardingDraft();
       await invalidateOnboarding();
-      router.replace('/(tabs)');
+      // Route through the Curating interstitial, which holds until the first
+      // For You payload resolves and then lands the user on For You (beta
+      // feedback 2026-07-09). It also fires first_home_view now.
+      router.replace('/curating');
     }
   };
 
@@ -123,7 +170,7 @@ export function OnboardingFlow() {
     }
   };
 
-  const canGoBack = step > startStep;
+  const canGoBack = step > floorStep;
   const goBack = () => {
     if (canGoBack) setStep((s) => s - 1);
     else router.replace('/auth');
