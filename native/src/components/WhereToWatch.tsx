@@ -1,6 +1,6 @@
 import { ExternalLink } from 'lucide-react-native';
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import type { DetailData, RentalOption } from '@/lib/adapters/detailAdapter';
@@ -47,7 +47,15 @@ export function WhereToWatch({ detail, userServices }: WhereToWatchProps) {
   // time (A2 / roadmap 0.3); null for flat-rate tier-1/tier-2 services,
   // which show no price. Passed straight onto the deep_link_click event.
   const open = async (service: ServiceId, saUrl: string | null, priceShown: string | null = null) => {
-    const link = getDeepLink(service, saUrl, detail.title, detail.year);
+    // Platform gates the Prime force-fallback: iOS uses the exact SA
+    // Universal Link (reliable), Android keeps the search fallback.
+    const link = getDeepLink(
+      service,
+      saUrl,
+      detail.title,
+      detail.year,
+      Platform.OS === 'ios' ? 'ios' : 'android',
+    );
     const { tmdbId } = parseContentItemId(detail.id);
     const dwellSecondsBeforeClick = getCurrentDwellSeconds();
     try {
