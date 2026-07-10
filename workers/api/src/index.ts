@@ -34,6 +34,7 @@ import {
 } from './rules';
 import { verifySupabaseJwt } from './auth';
 import { markdownToHtml, renderPolicyPage } from './policyPages';
+import { renderResetBridgePage, TOKEN_HASH_RE } from './resetBridge';
 import {
   platformBucket,
   renderTitlePage,
@@ -113,6 +114,29 @@ app.get('/terms', (c) => {
   c.header('Cache-Control', POLICY_CACHE_CONTROL);
   return c.html(TERMS_HTML);
 });
+
+// ── Password-reset bridge ────────────────────────────────────────────
+// Gmail (and most email clients) refuse to activate custom-scheme links
+// (videx://…), so the reset email must link HTTPS. This page receives the
+// Supabase recovery token_hash as a query param (which, unlike URL
+// fragments, survives every hop) and forwards it into the app via the
+// custom scheme — auto-attempt on load plus a tap fallback, since some
+// browsers only allow scheme navigation from a user gesture.
+// Security: the token is single-use + short-lived and never logged here;
+// the page is no-store; token_hash is charset-validated before being
+// interpolated (defence against attribute/JS injection via the param).
+app.get('/reset', (c) => {
+  c.header('Cache-Control', 'private, no-store');
+  c.header('Referrer-Policy', 'no-referrer');
+  const tokenHash = c.req.query('token_hash') ?? '';
+  const type = c.req.query('type') === 'recovery' ? 'recovery' : '';
+  if (!TOKEN_HASH_RE.test(tokenHash) || !type) {
+    return c.html(renderResetBridgePage(null), 400);
+  }
+  const appUrl = `videx://reset-password?token_hash=${tokenHash}&type=${type}`;
+  return c.html(renderResetBridgePage(appUrl));
+});
+
 
 /** Cache-or-fetch helper: failures pass through uncached. Callers pass
  *  a NORMALISED cache URL (sorted, credential-stripped params) so
