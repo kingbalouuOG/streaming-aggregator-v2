@@ -21,8 +21,10 @@ export const queryPersister = createSyncStoragePersister({
  *  v2: Track-2 Home/For You payloads gained fields (popular, upcoming, the
  *  richer For You composition) — old persisted payloads lack them.
  *  v3: FB2 build — new query families (semantic flag/search, item-services,
- *  filter discover); start everyone clean on the feature-heavy build. */
-export const QUERY_CACHE_BUSTER = 'v3';
+ *  filter discover); start everyone clean on the feature-heavy build.
+ *  v4: feed composition — Home gained a `paid` row and For You gained
+ *  `paidTitles` in the Worker payload; old persisted feeds lack them. */
+export const QUERY_CACHE_BUSTER = 'v4';
 
 /** Wipe the persisted cache — called on sign-out so a different user on
  *  the same device never sees the previous user's cached feeds. */

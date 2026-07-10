@@ -35,6 +35,7 @@ import {
   buildRowFromPool,
 } from '../recommendations-v2/ranker';
 import { buildAnchoredRoomScoped } from '../recommendations-v2/anchoredRoom';
+import { fetchPaidTitlesScoped } from '../recommendations-v2/rows/home/paidRow';
 import {
   selectAnchors,
   type SelectedAnchor,
@@ -134,6 +135,8 @@ export interface ForYouPayload {
   becauseYouWatched: BecauseYouWatchedRow[];
   moreFromPerson: MoreFromPersonRow | null;
   fromYourWatchlist: ContentItem[];
+  /** "New to rent or buy" — newest rent/buy titles on the user's services. */
+  paidTitles: ContentItem[];
   anchorRooms: AnchorRoomPreview[];
   perAnchorLatencyMs: number[];
   sliders: SliderState;
@@ -252,10 +255,15 @@ export async function renderForYou(
   // Conditional rows + anchor rooms run in parallel — they share the
   // pool + filter sets but otherwise touch different RPC paths, so
   // network parallelism here is the main latency win vs the client.
-  const [becauseYouWatched, moreFromPerson, fromYourWatchlist, anchorRoomsResult] = await Promise.all([
+  // "New to rent or buy" — reads the public content-cache tables (not
+  // user-scoped), so it takes the raw client + the Videx service ids.
+  // Deduped against the taste-vector rows already built above so a paid
+  // new release doesn't also headline Recommended For You.
+  const [becauseYouWatched, moreFromPerson, fromYourWatchlist, paidTitles, anchorRoomsResult] = await Promise.all([
     fetchBecauseYouWatched(client, scope, filterSets, pool),
     fetchMoreFromPerson(client, scope, filterSets),
     fetchFromWatchlist(scope),
+    fetchPaidTitlesScoped(client, input.services, 18, usedIds),
     buildAnchorRooms(
       client, scope, profile.tasteVector, profile.sliders,
       profile.selectedClusters, profile.interactionCount, filterSets, pool,
@@ -269,6 +277,7 @@ export async function renderForYou(
     becauseYouWatched,
     moreFromPerson,
     fromYourWatchlist,
+    paidTitles,
     anchorRooms: anchorRoomsResult.rooms,
     perAnchorLatencyMs: anchorRoomsResult.latencyMs,
     sliders: profile.sliders,
@@ -838,6 +847,7 @@ function emptyPayload(sliders: SliderState | null, t_start: number): ForYouPaylo
     becauseYouWatched: [],
     moreFromPerson: null,
     fromYourWatchlist: [],
+    paidTitles: [],
     anchorRooms: [],
     perAnchorLatencyMs: [],
     sliders: sliders ?? { ...DEFAULT_SLIDERS },

@@ -268,6 +268,9 @@ function snapshotPayload(payload) {
     hiddenGems: rowSnapshot(payload.hiddenGems),
     outsideYourUsual: rowSnapshot(payload.outsideYourUsual),
     fromYourWatchlist: rowSnapshot(payload.fromYourWatchlist),
+    // "New to rent or buy" (2026-07-10). Regenerate the golden with
+    // --update-golden after adding this — old goldens lack the key.
+    paidTitles: rowSnapshot(payload.paidTitles),
     becauseYouWatched: (payload.becauseYouWatched ?? []).map((row) => ({
       anchorId: row.anchor?.id ?? null,
       items: rowSnapshot(row.items),

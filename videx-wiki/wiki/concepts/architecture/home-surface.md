@@ -1,7 +1,7 @@
 ---
 title: Home surface
 type: concept
-tags: [home, surface, recency, hero-carousel]
+tags: [home, surface, recency, hero-carousel, paid-titles]
 created: 2026-04-26
 updated: 2026-07-10
 sources:
@@ -63,3 +63,12 @@ Home felt static week-to-week: the native `Trending` ribbon had drifted to `disc
 - **#2 — daily UTC-seeded rotation.** `dailyShuffleTopN` reshuffles the top 20 of the trending pool each UTC day (moves ribbon + editorial spotlight); `dailyPick` rotates the hero ("Today's Pick") among the lead per-service row's top 5, leaving the ranked row intact. Seed `${salt}:${UTC-day}` — stable within a day (no re-render flicker), rotates at 00:00 UTC (aligns with the existing midnight-UTC cache invalidation).
 
 Web got the `#2` shuffle only (`src/hooks/useHomeContent.ts`); `#1` is a follow-up there since web's popular row uses the paginated `useSectionData` path. Report: `docs/v2/phase-summaries/content-freshness-2026-07-01.md`.
+
+## Paid-titles row + service-row paywall fix (native, 2026-07-10)
+
+Founder beta feedback (2026-07-09): a title showed in e.g. the "Popular on Apple TV+" per-service row when its only availability on that service was rent/buy, so the user tapped in and hit an unexpected paywall. Two coupled changes (`src/lib/recommendations-v2/rows/home/perServiceChart.ts`, new `.../rows/home/paidRow.ts`, `native/src/hooks/useHomeFeed.ts`, `native/src/app/(tabs)/index.tsx`):
+
+- **Per-service rows are now subscription/free only.** `fetchServiceRow` filters `stream_type IN ('subscription','free')` (was `('subscription','free','addon')`). `'addon'` is **excluded**: an add-on channel is a separate paid entitlement the user may not hold, same "surprise paywall" risk as rent/buy. Free-tier UK broadcasters surface via `'free'`, so they aren't re-suppressed. (Same rent/buy/addon exclusion the `send-notifications` alert queries already adopted — 2026-07-07 audit note 4.)
+- **New "New to rent or buy" row** (`paidRow.ts`, shared lib): newest rent/buy titles on ANY of the user's services, `release_date DESC` (rent/buy inventory skews to new releases; `available_since` is only sparsely populated). Deduped against the recency/trending/free rows above it. Relocates the rent/buy content honestly rather than hiding it — the label warns it costs money.
+
+**Native Home order is now exactly:** Recently added → Free tonight → Trending → Spotlight (editorial) → **New to rent or buy** → Genre spotlights → Calendar strip → Per-service rows. (The numbered brief list above is the Phase-4 web spec and predates the native render order; this note + `content-freshness` above are authoritative for native.) The hero, editor note and browse chips still lead. Row name chosen per [tone-and-voice](../product/tone-and-voice-guide.md): un-salesy, British English, tells the user the tap-in cost up front.

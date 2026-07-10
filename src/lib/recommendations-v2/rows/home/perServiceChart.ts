@@ -124,16 +124,24 @@ async function fetchServiceRow(serviceId: string): Promise<PerServiceChartRow> {
   const serviceName = SERVICE_DISPLAY_NAMES[serviceId] ?? serviceId;
 
   try {
-    // Get popular titles available on this specific service. We accept
-    // any monetisation type (subscription, free, addon) — the row label
-    // is "Popular on {service}" so the user just wants what's watchable
-    // on that service. Filtering to subscription-only suppressed BBC /
-    // Channel 4 / Sky Go (free-tier UK broadcasters) entirely.
+    // Only titles the user can watch WITHOUT paying per title on this
+    // service — stream_type 'subscription' or 'free'. Beta feedback
+    // (2026-07-09): a title whose only availability on e.g. Apple TV was
+    // rent/buy still appeared in the "Popular on Apple TV+" row, so the
+    // user tapped in expecting it to be included and hit a paywall.
+    //   - 'rent'/'buy' are excluded here and relocated to the dedicated
+    //     "New to rent or buy" row (paidRow.ts).
+    //   - 'addon' is ALSO excluded: an add-on channel (e.g. a premium
+    //     tier bolted onto a base service) is a separate paid entitlement
+    //     the user may not hold, so it carries the same "surprise
+    //     paywall" risk as rent/buy. Free-tier UK broadcasters (BBC /
+    //     Channel 4 / Sky Go) surface via 'free', not 'addon', so this
+    //     doesn't re-suppress them.
     const { data: saData } = await supabase
       .from('streaming_availability')
       .select('tmdb_id')
       .eq('service_id', serviceId)
-      .in('stream_type', ['subscription', 'free', 'addon'])
+      .in('stream_type', ['subscription', 'free'])
       .limit(200);
 
     if (!saData || saData.length === 0) {

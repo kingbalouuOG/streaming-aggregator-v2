@@ -74,6 +74,8 @@ export interface WorkerRenderPayload {
   becauseYouWatched: BecauseYouWatchedRow[];
   moreFromPerson: MoreFromPersonRow | null;
   fromYourWatchlist: ContentItem[];
+  /** "New to rent or buy" — newest rent/buy titles on the user's services. */
+  paidTitles: ContentItem[];
   anchorRooms: AnchorRoomPreview[];
   perAnchorLatencyMs: number[];
   sliders: SliderState;
