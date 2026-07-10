@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { Eye, EyeOff, Lock } from 'lucide-react-native';
@@ -90,9 +90,29 @@ type ErrorKind = 'expired' | 'timeout' | 'generic';
 // stop "verifying" and show an actionable error rather than spinning.
 const VERIFY_TIMEOUT_MS = 12_000;
 
+/** useLocalSearchParams values are string | string[]; recovery links only
+ *  ever carry one of each, so collapse arrays to their first entry. */
+const first = (v: string | string[] | undefined): string | undefined =>
+  Array.isArray(v) ? v[0] : v;
+
 export default function ResetPasswordRoute() {
   const router = useRouter();
   const incomingUrl = Linking.useURL();
+  // ── Warm-start fix (2026-07-10, found in the first real end-to-end
+  // email test) ─────────────────────────────────────────────────────
+  // Linking.useURL() misses the deep link when the app is WARM: the OS
+  // `url` event fires while expo-router is still navigating here, before
+  // this screen has subscribed — so the hook returns the original launch
+  // URL (no token), verifyOtp is never called, and the screen times out.
+  // Expo Router itself parsed the link to route here, so its search
+  // params carry the query on both warm and cold starts. They are the
+  // primary source; raw-URL parsing below stays only for legacy
+  // #fragment tokens, which never appear in route params.
+  const search = useLocalSearchParams<Record<string, string | string[]>>();
+  // Re-run the effect when a usable route param lands (or changes) —
+  // `search` itself is not referentially stable enough to be a dep.
+  const routeToken =
+    first(search.token_hash) ?? first(search.code) ?? first(search.error_code) ?? '';
 
   const [phase, setPhase] = useState<Phase>('verifying');
   const [errorKind, setErrorKind] = useState<ErrorKind>('generic');
@@ -104,6 +124,7 @@ export default function ResetPasswordRoute() {
   // Guard against double-establishment: once any path flips us to 'ready'
   // (or a terminal error), later async resolutions must not clobber it.
   const settledRef = useRef(false);
+  const attemptedTokenRef = useRef<string | null>(null);
   const settle = (fn: () => void) => {
     if (settledRef.current) return;
     settledRef.current = true;
@@ -140,8 +161,23 @@ export default function ResetPasswordRoute() {
 
     (async () => {
       const url = incomingUrl ?? (await Linking.getInitialURL());
-      if (!url) return; // wait for the URL (useURL updates when it arrives)
-      const p = parseAuthParams(url);
+      const p: AuthParams = url ? parseAuthParams(url) : {};
+      // Route params win over the raw URL: on warm starts the URL is
+      // stale (see note above) while the router params are from the
+      // link that actually navigated here.
+      for (const k of [
+        'token_hash',
+        'type',
+        'code',
+        'access_token',
+        'refresh_token',
+        'error',
+        'error_code',
+        'error_description',
+      ] as const) {
+        const v = first(search[k]);
+        if (v) p[k] = v;
+      }
 
       // An explicit Supabase error rides back as ?error=…&error_code=… —
       // treat access_denied / otp_expired as an expired/used link.
@@ -158,8 +194,12 @@ export default function ResetPasswordRoute() {
       }
 
       try {
-        if (p.token_hash) {
+        if (p.token_hash && attemptedTokenRef.current !== p.token_hash) {
           // Preferred path — query param survives the custom-scheme hop.
+          // Recovery tokens are single-use: never verify the same one
+          // twice even if the effect re-fires (a second attempt would
+          // read as "expired" and clobber a good session).
+          attemptedTokenRef.current = p.token_hash;
           const { error: e } = await supabase.auth.verifyOtp({
             type: (p.type as EmailOtpType) || 'recovery',
             token_hash: p.token_hash,
@@ -199,7 +239,7 @@ export default function ResetPasswordRoute() {
       sub.subscription.unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [incomingUrl]);
+  }, [incomingUrl, routeToken]);
 
   const pwValid =
     password.length >= 8 &&

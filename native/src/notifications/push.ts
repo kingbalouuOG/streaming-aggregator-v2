@@ -68,7 +68,10 @@ async function requestPermission(): Promise<boolean> {
  * Idempotent — safe to call on every app start / sign-in. Silent: never prompts.
  * No-op on simulators (no push tokens) or when permission isn't granted.
  */
-export async function registerPushToken(userId: string): Promise<string | null> {
+// _userId: unused since migration 060 — claim_push_token derives the owner
+// from auth.uid() server-side; kept in the signature so call sites still
+// document whose token is being claimed.
+export async function registerPushToken(_userId: string): Promise<string | null> {
   try {
     if (!Device.isDevice) return null;
     if (!(await isPermissionGranted())) return null;
