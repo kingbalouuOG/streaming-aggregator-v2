@@ -13,6 +13,35 @@
  * resolvers accept it) and fall back to the embedded https:// URL.
  * No current service link resolves to intent:// (deepLinks.ts emits
  * https + search fallbacks), so this path is belt-and-braces.
+ *
+ * ── App-vs-browser reality per service (beta feedback 2026-07-09) ────
+ * Founder reported links "sometimes still open in the browser" (Prime
+ * especially). This is the OS App-Links / Universal-Links resolver's
+ * call, NOT something openURL can force — RN Linking.openURL hands the
+ * https URL to the platform, which opens the owning app IFF it is
+ * installed and has verified that domain, else the browser. There is no
+ * "force app" API on either platform for an https link, so the reliable
+ * knob is which URL deepLinks.ts hands us (exact vs search).
+ *
+ *   Service      iOS (Universal Links)         Android (App Links)
+ *   Netflix      app if installed              app if installed
+ *   Disney+      app if installed              app if installed
+ *   Prime Video  app if installed (reliable)   NO — always browser/shop;
+ *                                              deepLinks.ts forces search
+ *                                              on Android for this reason
+ *   Channel 4    app if installed              app if installed
+ *   Apple TV+    app if installed              browser (no verified app)
+ *   ITVX/NOW/    app if installed, else web    varies; browser common
+ *   Paramount+
+ *   BBC iPlayer  search fallback (SA empty)    search fallback
+ *   Sky Go       Google search fallback        Google search fallback
+ *
+ * canOpenURL is NOT a useful gate here: for https it returns true even
+ * when only the browser can handle it, so it cannot distinguish "app
+ * will open" from "browser will open". We therefore do not branch on it
+ * and keep confidence tied to link_type (exact→high, search→low) — the
+ * Phase-0 telemetry contract. Changing that would corrupt the
+ * app-open-rate signal, so it stays put.
  */
 
 import { Linking } from 'react-native';

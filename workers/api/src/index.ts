@@ -34,6 +34,13 @@ import {
 } from './rules';
 import { verifySupabaseJwt } from './auth';
 import { markdownToHtml, renderPolicyPage } from './policyPages';
+import {
+  platformBucket,
+  renderTitlePage,
+  renderTitleNotFoundPage,
+  SHARE_SERVICE_LABELS,
+  type TitlePageData,
+} from './titlePage';
 // Bundled as text (wrangler [[rules]] Text rule) — the single source of
 // truth for the hosted /privacy + /terms pages is docs/legal/*.md.
 import privacyMd from '../../../docs/legal/privacy-policy.md';
@@ -191,156 +198,6 @@ app.get('/v1/title/:type/:id', async (c) => {
 // carrying store links + an "Open in Videx" deep link. 24h CDN cache.
 // This is the target of the native Share action AND the SEO seed.
 const TITLE_PAGE_TTL_SECONDS = 24 * 60 * 60;
-const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=app.videx.streaming';
-
-// service_id → display label (mirrors the native SERVICE_LABELS map).
-const SHARE_SERVICE_LABELS: Record<string, string> = {
-  netflix: 'Netflix', prime: 'Prime Video', disney: 'Disney+', apple: 'Apple TV+',
-  now: 'NOW', paramount: 'Paramount+', itvx: 'ITVX', channel4: 'Channel 4',
-  bbc: 'BBC iPlayer', skygo: 'Sky Go',
-};
-
-/** Minimal HTML escaper for interpolating cached title/overview text. */
-function esc(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-interface TitlePageData {
-  title: string;
-  year: number | null;
-  posterUrl: string | null;
-  overview: string | null;
-  subscription: string[]; // service labels you can stream on
-  rentBuy: string[]; // service labels for rent/buy
-}
-
-function renderTitlePage(type: string, id: number, d: TitlePageData, origin: string): string {
-  const yearStr = d.year ? ` (${d.year})` : '';
-  const pageTitle = `Where to watch ${d.title}${yearStr} in the UK | Videx`;
-  const desc =
-    d.subscription.length > 0
-      ? `Stream ${d.title} on ${d.subscription.join(', ')}. See where to watch in the UK on Videx.`
-      : `See where to watch ${d.title} in the UK on Videx.`;
-  const deepLink = `videx://detail/${type}-${id}`;
-  // Derived from the serving host (workers.dev today) — swap to the real
-  // domain automatically once one fronts the Worker.
-  const canonical = `${origin}/t/${type}/${id}`;
-
-  const watchBlock =
-    d.subscription.length > 0 || d.rentBuy.length > 0
-      ? `
-      ${d.subscription.length > 0
-        ? `<section><h2>Stream now</h2><ul class="svc">${d.subscription
-            .map((s) => `<li>${esc(s)}</li>`)
-            .join('')}</ul></section>`
-        : ''}
-      ${d.rentBuy.length > 0
-        ? `<section><h2>Rent or buy</h2><ul class="svc">${d.rentBuy
-            .map((s) => `<li>${esc(s)}</li>`)
-            .join('')}</ul></section>`
-        : ''}`
-      : `<section><p class="muted">We don't have current UK streaming info for this title yet.</p></section>`;
-
-  return `<!doctype html>
-<html lang="en-GB">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(pageTitle)}</title>
-<meta name="description" content="${esc(desc)}">
-<link rel="canonical" href="${canonical}">
-<meta property="og:type" content="video.other">
-<meta property="og:site_name" content="Videx">
-<meta property="og:title" content="${esc(`${d.title}${yearStr}`)}">
-<meta property="og:description" content="${esc(desc)}">
-<meta property="og:url" content="${canonical}">
-${d.posterUrl ? `<meta property="og:image" content="${esc(d.posterUrl)}">` : ''}
-<meta name="twitter:card" content="${d.posterUrl ? 'summary_large_image' : 'summary'}">
-<meta name="twitter:title" content="${esc(`${d.title}${yearStr}`)}">
-<meta name="twitter:description" content="${esc(desc)}">
-${d.posterUrl ? `<meta name="twitter:image" content="${esc(d.posterUrl)}">` : ''}
-<style>
-:root{color-scheme:dark}
-*{box-sizing:border-box}
-body{margin:0;background:#0a0a0f;color:#f5f1e8;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.5}
-.wrap{max-width:640px;margin:0 auto;padding:24px 20px 48px}
-.hero{display:flex;gap:16px;align-items:flex-start}
-.poster{width:120px;height:180px;border-radius:12px;object-fit:cover;background:#14141c;flex:none}
-h1{font-size:26px;line-height:1.15;margin:0 0 6px}
-.year{color:rgba(245,241,232,.6);font-weight:400}
-.muted{color:rgba(245,241,232,.6)}
-h2{font-size:13px;letter-spacing:1.4px;text-transform:uppercase;color:rgba(245,241,232,.6);margin:24px 0 8px}
-ul.svc{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}
-ul.svc li{background:#14141c;border:1px solid rgba(245,241,232,.12);border-radius:999px;padding:6px 14px;font-size:14px}
-.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
-.btn{display:inline-block;padding:12px 20px;border-radius:999px;font-weight:700;text-decoration:none;font-size:15px}
-.btn-primary{background:#e85d25;color:#fff}
-.btn-ghost{background:#14141c;color:#f5f1e8;border:1px solid rgba(245,241,232,.16)}
-.overview{margin-top:20px;color:rgba(245,241,232,.85)}
-footer{margin-top:40px;font-size:12px;color:rgba(245,241,232,.4)}
-footer a{color:rgba(245,241,232,.5)}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="hero">
-    ${d.posterUrl ? `<img class="poster" src="${esc(d.posterUrl)}" alt="${esc(d.title)} poster" width="120" height="180">` : ''}
-    <div>
-      <h1>${esc(d.title)} <span class="year">${esc(yearStr.trim())}</span></h1>
-      <p class="muted">Where to watch in the UK</p>
-    </div>
-  </div>
-
-  ${watchBlock}
-
-  ${d.overview ? `<p class="overview">${esc(d.overview)}</p>` : ''}
-
-  <div class="cta">
-    <a class="btn btn-primary" href="${deepLink}">Open in the Videx app</a>
-    <a class="btn btn-ghost" href="${PLAY_STORE_URL}">Get Videx on Android</a>
-  </div>
-
-  <footer>
-    <p>Streaming availability from the Streaming Availability API (Movie of the Night).</p>
-    <p>This product uses the TMDb API but is not endorsed or certified by <a href="https://www.themoviedb.org/">TMDb</a>.</p>
-  </footer>
-</div>
-</body>
-</html>`;
-}
-
-/** Small branded 404 for /t/ requests whose title isn't in the cache. */
-function renderTitleNotFoundPage(): string {
-  return `<!doctype html>
-<html lang="en-GB">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Title not found | Videx</title>
-<meta name="robots" content="noindex">
-<style>
-:root{color-scheme:dark}
-body{margin:0;background:#0a0a0f;color:#f5f1e8;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.5}
-.wrap{max-width:640px;margin:0 auto;padding:48px 20px}
-h1{font-size:26px;margin:0 0 8px}
-.muted{color:rgba(245,241,232,.6)}
-.btn{display:inline-block;margin-top:24px;padding:12px 20px;border-radius:999px;font-weight:700;text-decoration:none;font-size:15px;background:#e85d25;color:#fff}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <h1>Title not found</h1>
-  <p class="muted">We don't have this title in the Videx catalogue.</p>
-  <a class="btn" href="${PLAY_STORE_URL}">Get Videx on Android</a>
-</div>
-</body>
-</html>`;
-}
 
 app.get('/t/:type/:tmdbId', async (c) => {
   const { type, tmdbId } = c.req.param();
@@ -349,9 +206,16 @@ app.get('/t/:type/:tmdbId', async (c) => {
   }
   const id = Number(tmdbId);
 
+  // Beta feedback 2026-07-09: the store CTA said "Get Videx on Android"
+  // to iPhone visitors. Render is now UA-dependent, so the edge cache
+  // key MUST vary by a coarse platform bucket — otherwise the first
+  // visitor's platform sticks for all 24h. Three buckets → at most 3
+  // cached variants per title (android|ios|other).
+  const bucket = platformBucket(c.req.header('user-agent'));
+
   const resp = await withEdgeCache(
     c,
-    `https://cache.videx/t/${type}/${id}`,
+    `https://cache.videx/t/${type}/${id}?p=${bucket}`,
     TITLE_PAGE_TTL_SECONDS,
     async () => {
       const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -373,7 +237,7 @@ app.get('/t/:type/:tmdbId', async (c) => {
       // Unknown title: a real 404 (never a junk "Title #N" 200 stuck in
       // the 24h edge cache — withEdgeCache only stores ok responses).
       if (!titleRow) {
-        return new Response(renderTitleNotFoundPage(), {
+        return new Response(renderTitleNotFoundPage(bucket), {
           status: 404,
           headers: {
             'Content-Type': 'text/html; charset=utf-8',
@@ -402,7 +266,7 @@ app.get('/t/:type/:tmdbId', async (c) => {
         rentBuy: [...rentBuySet].filter((s) => !subSet.has(s)).sort(),
       };
 
-      return new Response(renderTitlePage(type, id, data, new URL(c.req.url).origin), {
+      return new Response(renderTitlePage(type, id, data, new URL(c.req.url).origin, bucket), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     },
