@@ -1,14 +1,18 @@
-import { Trash2 } from 'lucide-react-native';
+import { ChevronRight, FileText, ShieldCheck, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LegalSheet } from '@/components/LegalSheet';
+import { PRIVACY_POLICY_MD, TERMS_MD } from '@/legal/policyContent';
 import { useAuth } from '@/providers/auth';
 import { SubScreenHeader } from './SubScreenHeader';
 
 // Profile → Privacy & Data (web PrivacyDataPage). Intro + what-Videx-learns +
-// type-username-to-confirm account deletion. (Privacy/Terms links + data
-// export are deferred — export needs a native-share path, not web's <a>.)
+// Privacy Policy / Terms sheets + type-username-to-confirm account deletion.
+// The policy sheets (beta feedback 2026-07-09) reuse the same mirrored legal
+// copy as onboarding via LegalSheet. (Data export stays deferred — it needs a
+// native-share path, not web's <a>.)
 
 const TRACK = [
   'What you rate (thumbs up / down)',
@@ -38,6 +42,7 @@ export function ProfilePrivacy() {
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [policy, setPolicy] = useState<'privacy' | 'terms' | null>(null);
   const canDelete = username.length > 0 && confirm.trim().toLowerCase() === username.trim().toLowerCase();
 
   const doDelete = async () => {
@@ -77,6 +82,27 @@ export function ProfilePrivacy() {
           ))}
         </View>
 
+        <Text className="mb-2 mt-6 font-sans-bold text-kicker uppercase tracking-[1.6px] text-muted-foreground">
+          Policies
+        </Text>
+        <View className="overflow-hidden rounded-card border border-border bg-card">
+          <Pressable
+            onPress={() => setPolicy('privacy')}
+            className="flex-row items-center gap-3 p-4 active:bg-secondary">
+            <ShieldCheck size={18} color="rgba(245,241,232,0.7)" />
+            <Text className="flex-1 font-sans-medium text-body text-foreground">Privacy Policy</Text>
+            <ChevronRight size={18} color="rgba(245,241,232,0.4)" />
+          </Pressable>
+          <View className="h-px bg-border" />
+          <Pressable
+            onPress={() => setPolicy('terms')}
+            className="flex-row items-center gap-3 p-4 active:bg-secondary">
+            <FileText size={18} color="rgba(245,241,232,0.7)" />
+            <Text className="flex-1 font-sans-medium text-body text-foreground">Terms of Service</Text>
+            <ChevronRight size={18} color="rgba(245,241,232,0.4)" />
+          </Pressable>
+        </View>
+
         <Pressable
           onPress={() => {
             setOpen(true);
@@ -88,6 +114,19 @@ export function ProfilePrivacy() {
           <Text className="font-sans-bold text-body text-destructive">Delete my account</Text>
         </Pressable>
       </ScrollView>
+
+      <LegalSheet
+        title="Privacy Policy"
+        markdown={PRIVACY_POLICY_MD}
+        visible={policy === 'privacy'}
+        onClose={() => setPolicy(null)}
+      />
+      <LegalSheet
+        title="Terms of Service"
+        markdown={TERMS_MD}
+        visible={policy === 'terms'}
+        onClose={() => setPolicy(null)}
+      />
 
       <Modal visible={open} animationType="fade" transparent onRequestClose={() => setOpen(false)}>
         <View className="flex-1 items-center justify-center bg-black/70 px-8">

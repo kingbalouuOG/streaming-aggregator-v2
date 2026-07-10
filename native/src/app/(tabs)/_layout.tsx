@@ -50,18 +50,23 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: CREAM_SOFT,
         tabBarLabelStyle: { fontFamily: 'DMSans_500Medium', fontSize: 10, letterSpacing: 0.2 },
       }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color, size }: IconProps) => <House color={color} size={size ?? 24} strokeWidth={STROKE} />,
-        }}
-      />
+      {/* Order: For You · New · Browse · Watchlist · Profile. For You leads so
+          users land on the personalised surface reflecting what they just set up
+          in onboarding (beta feedback 2026-07-09; matches the two-surface
+          "land on For You after onboarding" locked rule). The `index` route keeps
+          its file/route name; only its user-facing label changed Home → New. */}
       <Tabs.Screen
         name="foryou"
         options={{
           title: 'For You',
           tabBarIcon: ({ color, size }: IconProps) => <Sparkle color={color} size={size ?? 24} strokeWidth={STROKE} />,
+        }}
+      />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'New',
+          tabBarIcon: ({ color, size }: IconProps) => <House color={color} size={size ?? 24} strokeWidth={STROKE} />,
         }}
       />
       <Tabs.Screen
