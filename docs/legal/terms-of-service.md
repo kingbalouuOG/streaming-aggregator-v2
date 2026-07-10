@@ -123,7 +123,7 @@ notification.
 
 ## 12. Contact
 
-- Email: privacy@videx.app
+- Email: privacy@videxstreaming.com
 
 ---
 

@@ -9,7 +9,7 @@ Videx is a personal viewing-recommendation app for UK streaming
 services. It is built and operated by a single developer, Joe Green,
 based in the United Kingdom, who is the data controller under UK GDPR.
 
-**Contact:** privacy@videx.app
+**Contact:** privacy@videxstreaming.com
 
 If you have any questions about how Videx handles your data, or you
 want to exercise any of the rights described in §6, email the address
@@ -219,7 +219,7 @@ notification.
 
 Questions, exercising rights, or complaints — email us:
 
-- Email: privacy@videx.app
+- Email: privacy@videxstreaming.com
 
 For a regulatory complaint, contact the UK Information
 Commissioner's Office: <https://ico.org.uk/make-a-complaint/>.
