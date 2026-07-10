@@ -1,8 +1,11 @@
 # Videx API proxy — PLAT-2 (E&P brief §6, locked D2/D6).
 # Secrets (set once via `wrangler secret put`): TMDB_API_KEY,
 # OMDB_API_KEY, SUPABASE_SERVICE_ROLE_KEY (PLAT-3).
-# Deployed to the workers.dev subdomain at prototype scale (plan Q2);
-# custom domain is a launch-prep item.
+# Custom domain: videxstreaming.com (zone on the same CF account) is
+# attached via the DASHBOARD (Workers & Pages -> videx-api -> Settings ->
+# Domains & Routes), NOT via routes here: the CI deploy token has Workers
+# scope only, and wrangler-managed custom domains would fail every deploy
+# on zone permissions. workers.dev stays live as a legacy alias.
 
 name = "videx-api"
 main = "src/index.ts"

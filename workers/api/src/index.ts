@@ -76,6 +76,10 @@ interface RateLimit {
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const OMDB_BASE = 'https://www.omdbapi.com';
 
+// Public web origin for canonical/og:url on shared pages. Pinned (not
+// request-derived) so workers.dev requests canonicalise to the real domain.
+const CANONICAL_ORIGIN = 'https://videxstreaming.com';
+
 const app = new Hono<{ Bindings: Env }>();
 
 // Capacitor WebView origins (Android https://localhost, iOS
@@ -266,7 +270,7 @@ app.get('/t/:type/:tmdbId', async (c) => {
         rentBuy: [...rentBuySet].filter((s) => !subSet.has(s)).sort(),
       };
 
-      return new Response(renderTitlePage(type, id, data, new URL(c.req.url).origin, bucket), {
+      return new Response(renderTitlePage(type, id, data, CANONICAL_ORIGIN, bucket), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     },
