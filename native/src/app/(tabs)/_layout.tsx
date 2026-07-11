@@ -59,14 +59,14 @@ export default function TabsLayout() {
         name="foryou"
         options={{
           title: 'For You',
-          tabBarIcon: ({ color, size }: IconProps) => <Sparkle color={color} size={size ?? 24} strokeWidth={STROKE} />,
+          tabBarIcon: ({ color, size }: IconProps) => <House color={color} size={size ?? 24} strokeWidth={STROKE} />,
         }}
       />
       <Tabs.Screen
         name="index"
         options={{
           title: 'New',
-          tabBarIcon: ({ color, size }: IconProps) => <House color={color} size={size ?? 24} strokeWidth={STROKE} />,
+          tabBarIcon: ({ color, size }: IconProps) => <Sparkle color={color} size={size ?? 24} strokeWidth={STROKE} />,
         }}
       />
       <Tabs.Screen
