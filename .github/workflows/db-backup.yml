@@ -60,7 +60,10 @@ jobs:
           fi
           STAMP="$(date -u +%Y%m%d-%H%M)"
           echo "STAMP=${STAMP}" >> "$GITHUB_ENV"
-          pg_dump "$SUPABASE_DB_URL" \
+          # Versioned path: the runner's preinstalled postgresql-client-16
+          # shadows the PGDG 17 client on PATH, and pg_dump 16 aborts
+          # against the Postgres 17 server ("server version mismatch").
+          /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" \
             --schema=public \
             --no-owner --no-privileges \
             --format=custom \
