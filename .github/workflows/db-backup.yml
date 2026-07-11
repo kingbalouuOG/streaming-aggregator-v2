@@ -9,8 +9,14 @@ name: DB off-site backup
 # the artifact at rest is useless without BACKUP_GPG_PASSPHRASE.
 #
 # Required repo secrets (Joe — Settings → Secrets and variables → Actions):
-#   SUPABASE_DB_URL       Direct (port 5432) connection URI, NOT the pooler.
-#                         Dashboard → Database → Connection string → URI.
+#   SUPABASE_DB_URL       SESSION POOLER connection URI (port 5432,
+#                         host aws-*.pooler.supabase.com, user postgres.<ref>).
+#                         Dashboard → Connect → Session pooler.
+#                         NOT the direct db.<ref>.supabase.co URI: that is
+#                         IPv6-only and GitHub-hosted runners have no IPv6,
+#                         so pg_dump fails with "network is unreachable".
+#                         NOT the transaction pooler (port 6543): pg_dump
+#                         needs session-level prepared statements.
 #   BACKUP_GPG_PASSPHRASE Strong passphrase; store in a password manager.
 #                         Losing it makes every backup unrecoverable.
 #
