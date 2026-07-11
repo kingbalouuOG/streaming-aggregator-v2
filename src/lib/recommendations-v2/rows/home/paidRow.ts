@@ -62,7 +62,35 @@ export async function fetchPaidTitlesScoped(
 
     if (!saData || saData.length === 0) return [];
 
-    const tmdbIds = [...new Set(saData.map((r) => r.tmdb_id))];
+    // Strictly pay-ONLY (beta feedback 2026-07-11): a title that is also
+    // watchable at no extra cost on the user's services — subscription or
+    // free — is not "pay to watch" for them; suggesting a rental they
+    // already have is worse than hiding it. `addon` deliberately does NOT
+    // count as included: a channel add-on is another paywall. Keyed on
+    // (media_type, tmdb_id) — tmdb ids collide across movies and TV.
+    const candidateIds = [...new Set(saData.map((r) => r.tmdb_id))];
+    const { data: includedData } = await client
+      .from('streaming_availability')
+      .select('tmdb_id, media_type')
+      .in('service_id', services)
+      .in('tmdb_id', candidateIds)
+      .in('stream_type', ['subscription', 'free']);
+
+    const includedKeys = new Set(
+      (includedData ?? []).map((r) => `${r.media_type}-${r.tmdb_id}`),
+    );
+    const paidOnlyKeys = new Set(
+      saData
+        .map((r) => `${r.media_type}-${r.tmdb_id}`)
+        .filter((key) => !includedKeys.has(key)),
+    );
+    if (paidOnlyKeys.size === 0) return [];
+
+    const tmdbIds = [
+      ...new Set(
+        saData.filter((r) => paidOnlyKeys.has(`${r.media_type}-${r.tmdb_id}`)).map((r) => r.tmdb_id),
+      ),
+    ];
 
     // Newest-first by release date — rent/buy inventory is dominated by
     // recent releases, and release_date is reliably populated (unlike
@@ -83,6 +111,9 @@ export async function fetchPaidTitlesScoped(
       const item = titleRowToContentItem(typed);
       if (!item.image) continue; // imageless cards look broken in a poster row
       if (excludeIds.has(item.id)) continue;
+      // The titles query matches on tmdb_id alone; re-check the composite
+      // key so the other media type sharing an id can't slip in.
+      if (!paidOnlyKeys.has(item.id)) continue;
       items.push(item);
       if (items.length >= limit) break;
     }
