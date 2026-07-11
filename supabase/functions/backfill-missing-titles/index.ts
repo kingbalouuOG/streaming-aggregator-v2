@@ -179,17 +179,33 @@ async function runBackfillBatch(): Promise<RunStats> {
     }
   }
 
+  // 404s must be RECORDED, not just skipped: list_missing_title_ids is
+  // ordered by tmdb_id, so an unrecorded dead ID re-fills the cap every
+  // run and the backlog never drains (migration 063 root-cause note).
+  const skips: MissingRow[] = [];
+
   for (const row of missing) {
     await sleep(TMDB_DELAY);
     const tmdb = await tmdbFetch(row.tmdb_id, row.media_type);
     if (tmdb === null) {
       stats.skipped404++;
+      skips.push(row);
       continue;
     }
     buffer.push(buildTitleRow(tmdb, row.media_type));
     if (buffer.length >= CHUNK) await flush();
   }
   await flush();
+
+  if (skips.length > 0) {
+    const { error: skipErr } = await supabase
+      .from('backfill_skips')
+      .upsert(skips, { onConflict: 'tmdb_id,media_type', ignoreDuplicates: true });
+    if (skipErr) {
+      // Non-fatal: the run's inserts stand; these IDs just resurface next run.
+      console.error(`  backfill_skips upsert error (${skips.length} rows): ${skipErr.message}`);
+    }
+  }
 
   // How many are still missing after this run — makes the cron logs show
   // whether a weekly cadence is keeping up or a backlog is building.
