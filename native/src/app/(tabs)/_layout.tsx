@@ -26,7 +26,10 @@ export default function TabsLayout() {
   const { data: watchlist } = useWatchlist();
   const wantCount = (watchlist ?? []).filter((i) => i.status === 'want_to_watch').length;
 
-  if (initializing || (session && onboarding.isLoading)) {
+  // Hold on the spinner while a refetch is in flight and the cached answer
+  // is falsy — a stale persisted `false` must not trigger the onboarding
+  // redirect while the server is about to say `true`.
+  if (initializing || (session && (onboarding.isLoading || (onboarding.isFetching && !onboarding.data)))) {
     return (
       <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={PRIMARY} />

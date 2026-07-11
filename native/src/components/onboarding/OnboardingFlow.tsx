@@ -6,7 +6,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useCompleteOnboarding } from '@/hooks/useCompleteOnboarding';
-import { useInvalidateOnboardingStatus } from '@/hooks/useOnboardingStatus';
+import { useMarkOnboardingComplete } from '@/hooks/useOnboardingStatus';
 import { useWatchedGrid, TITLES_PER_ROUND, type WatchedGridTitle } from '@/hooks/useWatchedGrid';
 import { ONBOARDING_EVENTS } from '@/lib/analytics/events';
 import { logOnboardingEvent } from '@/lib/analytics/logger';
@@ -76,7 +76,7 @@ export function OnboardingFlow() {
   const [sliders, setSliders] = useState<SliderState>(draft?.sliders ?? DEFAULT_SLIDERS);
 
   const { complete, submitting } = useCompleteOnboarding();
-  const invalidateOnboarding = useInvalidateOnboardingStatus();
+  const markOnboardingComplete = useMarkOnboardingComplete();
 
   // A1 (roadmap 0.2): stamp the onboarding start time locally so total
   // duration is real, not the hardcoded 0 production has been logging. The
@@ -135,7 +135,11 @@ export function OnboardingFlow() {
       markJustOnboarded();
       // Draft is done — clear it so a fresh future onboarding starts clean.
       clearOnboardingDraft();
-      await invalidateOnboarding();
+      // Write completion INTO the guard's cache — complete() has already
+      // awaited the server write, so this is truth. Invalidating instead
+      // loses the race: the guard remounts on the cached/persisted `false`
+      // and bounces the user back into onboarding (v2.1.2 device test).
+      if (session?.user?.id) markOnboardingComplete(session.user.id);
       // Route through the Curating interstitial, which holds until the first
       // For You payload resolves and then lands the user on For You (beta
       // feedback 2026-07-09). It also fires first_home_view now.

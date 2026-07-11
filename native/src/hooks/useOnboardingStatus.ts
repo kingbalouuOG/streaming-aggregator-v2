@@ -26,3 +26,17 @@ export function useInvalidateOnboardingStatus() {
     [qc],
   );
 }
+
+/** Write completion straight into the cache. Invalidation alone LOSES THE
+ *  RACE at the end of onboarding: the guard remounts with the cached (and
+ *  disk-persisted) `false` and redirects back to /onboarding before the
+ *  refetch resolves — found in the 2026-07-11 v2.1.2 device test. The
+ *  server write has already been awaited by the time this is called, so
+ *  the cache write is truth, not optimism. */
+export function useMarkOnboardingComplete() {
+  const qc = useQueryClient();
+  return useCallback(
+    (userId: string) => qc.setQueryData(KEY(userId), true),
+    [qc],
+  );
+}

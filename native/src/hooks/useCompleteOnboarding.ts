@@ -115,7 +115,12 @@ export function useCompleteOnboarding() {
       };
       if (data.ageRange) updates.age_range = data.ageRange;
       if (data.viewingContext) updates.viewing_context = data.viewingContext;
-      await supabase.from('profiles').update(updates).eq('id', user.id);
+      // MUST fail loudly: callers write completion into the guard's query
+      // cache on success, and an unnoticed failure here would leave the
+      // cache saying "complete" while the server says otherwise — the user
+      // would bounce back into onboarding on their next cold start.
+      const { error: flagError } = await supabase.from('profiles').update(updates).eq('id', user.id);
+      if (flagError) throw flagError;
 
       return true;
     } catch (e) {
