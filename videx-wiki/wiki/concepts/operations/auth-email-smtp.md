@@ -3,7 +3,7 @@ title: Auth email — custom SMTP sender + branding runbook
 type: concept
 tags: [runbook, supabase, auth, email, smtp, dns, password-reset]
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-11
 sources:
   - https://supabase.com/docs/guides/auth/auth-smtp
   - https://supabase.com/docs/guides/auth/auth-email-templates
@@ -14,9 +14,17 @@ related:
 
 # Auth email — custom SMTP sender + branding runbook
 
-Reset-password and other auth emails currently ship from Supabase's built-in
-sender (`noreply@mail.app.supabase.io`). That is fine for internal testing but
-has two problems for launch:
+> ✅ **Status (2026-07-11): DONE and verified end-to-end.** Auth email sends
+> from `Videx Streaming <noreply@videxstreaming.com>` via Resend (eu-west-1);
+> DKIM/SPF/DMARC pass; the reset flow was proven on-device (email → HTTPS
+> bridge → app → new password → reused link shows the expired state). The
+> steps below are kept as the record / rebuild guide. The domain is
+> **videxstreaming.com** (the `videx.streaming` placeholder this doc was
+> drafted with was never registered — `.streaming` is not a real TLD).
+
+Reset-password and other auth emails originally shipped from Supabase's
+built-in sender (`noreply@mail.app.supabase.io`). That was fine for internal
+testing but had two problems for launch:
 
 1. **Deliverability + trust** — a shared Supabase-owned domain lands in spam
    more often and shows an unbranded sender. Beta feedback (2026-07-09) flagged
@@ -28,11 +36,9 @@ This runbook makes auth email send from a Videx-owned address via a custom SMTP
 provider, with SPF/DKIM set up and the templates branded. Written to be
 followed blind.
 
-> ⚠ **Hard dependency: the product domain.** Every DNS step below needs a
-> domain we control. The intended domain is being registered now (likely
-> `videx.streaming`). Until the domain resolves and its DNS is delegated to a
-> nameserver we can edit, **stop after Step 1** — the rest cannot be completed.
-> Substitute the real domain for `videx.streaming` throughout once confirmed.
+> The product domain is **videxstreaming.com** (Cloudflare-managed DNS;
+> registered 2026-07-10). Substitute it wherever an older note says
+> `videx.streaming` or `videx.app`.
 
 ---
 
@@ -41,8 +47,8 @@ followed blind.
 | Field | Value |
 |-------|-------|
 | From name | `Videx` |
-| From address | `noreply@videx.streaming` (or `hello@` if we want replies) |
-| Reply-to | optional; `support@videx.streaming` if a mailbox exists |
+| From address | `noreply@videxstreaming.com` (or `hello@` if we want replies) |
+| Reply-to | optional; `support@videxstreaming.com` if a mailbox exists |
 
 Keep the local-part stable — changing it later resets deliverability reputation.
 
@@ -73,7 +79,7 @@ port, username, password/API-key, plus SPF/DKIM DNS).
 
 1. Sign up at resend.com with the Videx testing account
    (`joegreenwas@gmail.com` — see the testing-account note).
-2. Dashboard → **Domains** → **Add Domain** → enter `videx.streaming`.
+2. Dashboard → **Domains** → **Add Domain** → enter `videxstreaming.com`.
 3. Resend shows a set of DNS records to add (see Step 2). Leave this tab open.
 4. Dashboard → **API Keys** → create a key named `supabase-smtp` with
    **Sending access**. Copy it — this is the SMTP password. It is shown once.
@@ -82,15 +88,15 @@ port, username, password/API-key, plus SPF/DKIM DNS).
 
 ## Step 2 — DNS records (SPF + DKIM + optional DMARC)
 
-Add these at the registrar / DNS host for `videx.streaming`. Resend's domain
+Add these at the registrar / DNS host for `videxstreaming.com`. Resend's domain
 page lists the exact values; the shapes are:
 
 | Type | Host / Name | Value | Purpose |
 |------|-------------|-------|---------|
-| `TXT` | `send.videx.streaming` (or `@`) | `v=spf1 include:amazonses.com ~all` (Resend uses SES under the hood; paste the value Resend shows) | **SPF** — authorises the provider to send as your domain. |
-| `TXT`/`CNAME` | `resend._domainkey.videx.streaming` | the long DKIM key Resend generates | **DKIM** — cryptographically signs mail; the single biggest deliverability lever. |
-| `MX` | `send.videx.streaming` | `feedback-smtp.<region>.amazonses.com` (as shown) | bounce/complaint handling. |
-| `TXT` | `_dmarc.videx.streaming` | `v=DMARC1; p=none; rua=mailto:dmarc@videx.streaming` | **DMARC** (optional but recommended) — start at `p=none` to monitor, tighten to `quarantine` later. |
+| `TXT` | `send.videxstreaming.com` (or `@`) | `v=spf1 include:amazonses.com ~all` (Resend uses SES under the hood; paste the value Resend shows) | **SPF** — authorises the provider to send as your domain. |
+| `TXT`/`CNAME` | `resend._domainkey.videxstreaming.com` | the long DKIM key Resend generates | **DKIM** — cryptographically signs mail; the single biggest deliverability lever. |
+| `MX` | `send.videxstreaming.com` | `feedback-smtp.<region>.amazonses.com` (as shown) | bounce/complaint handling. |
+| `TXT` | `_dmarc.videxstreaming.com` | `v=DMARC1; p=none; rua=mailto:dmarc@videxstreaming.com` | **DMARC** (optional but recommended) — start at `p=none` to monitor, tighten to `quarantine` later. |
 
 Notes:
 
@@ -113,7 +119,7 @@ Settings** (older UI: **Project Settings → Auth → SMTP**).
 
    | Field | Value |
    |-------|-------|
-   | Sender email | `noreply@videx.streaming` |
+   | Sender email | `noreply@videxstreaming.com` |
    | Sender name | `Videx` |
    | Host | `smtp.resend.com` |
    | Port | `465` (SSL) — or `587` (STARTTLS) if `465` is blocked |
@@ -137,40 +143,59 @@ Settings** (older UI: **Project Settings → Auth → SMTP**).
 Dashboard → **Authentication → Email Templates**. Edit at least the **Reset
 Password** template (and Confirm-signup / Magic-link for consistency).
 
-### 4a. Recommended: switch the reset link to the token_hash path
+### 4a. The reset link: token_hash + HTTPS bridge (both are load-bearing)
 
-This is not cosmetic — it fixes the native reset-hang class of bug. See the
-root-cause note in `native/src/app/reset-password.tsx`: the default
-`{{ .ConfirmationURL }}` returns tokens in the URL **fragment**, which the
-custom-scheme redirect (`videx://reset-password`) frequently **drops**, leaving
-the app with no params and (before the fix) an infinite spinner. A
-`token_hash` query parameter survives that hop.
+Two independent failure classes were hit here (2026-07-09/10); the live
+template dodges both. **Do not regress either.**
 
-Change the reset-password template's link from the default
-`{{ .ConfirmationURL }}` to:
+**Failure 1 — fragment tokens.** The default `{{ .ConfirmationURL }}` returns
+tokens in the URL **fragment**, which the HTTP→custom-scheme redirect hop
+frequently **drops**, leaving the app with no params (the old infinite
+spinner). Fix: link with `token_hash` as a **query** parameter and let the app
+call `verifyOtp` (root-cause note in `native/src/app/reset-password.tsx`).
+
+**Failure 2 — custom-scheme hrefs in email.** Gmail (and most clients)
+**refuse to activate `videx://` anchors** — the button renders as flat,
+non-tappable styled text with no long-press URL. An earlier draft of this
+runbook recommended hard-coding the scheme in the template; that advice was
+wrong. Email links must be `https://` on a domain we control.
+
+The live shape is therefore an **HTTPS bridge** on the videx-api Worker
+(PR #62, `workers/api/src/resetBridge.ts` + the `/reset` route in `index.ts`):
 
 ```html
-<a href="{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&type=recovery">
-  Reset your password
+<a href="https://videxstreaming.com/reset?token_hash={{ .TokenHash }}&type=recovery">
+  <span style="color:#0a0a0f;">Reset your password</span>
 </a>
 ```
 
-…where `{{ .SiteURL }}` for native resolves through the redirect allowlist to
-`videx://reset-password`. If templating `{{ .SiteURL }}` doesn't yield the
-custom scheme in your setup, hard-code the scheme:
+- `GET /reset` validates `token_hash` (charset/length regex, 400 otherwise),
+  sets `no-store`/`no-referrer`/`noindex`, and serves a branded page that
+  forwards to `videx://reset-password?token_hash=…&type=recovery` (auto after
+  ~400 ms, plus an explicit **Open Videx** button for clients that block
+  scriptless redirects). The token is never logged and never touches Supabase
+  from the bridge — only the app consumes it.
+- The inner `<span style="color:…">` is deliberate: Gmail dark mode repaints
+  anchor text white unless the colour is set on a child element.
+- Include a **plain-text copy of the same URL** in the body (Gmail
+  auto-linkifies bare https URLs even when it distrusts anchors) — the live
+  template has a "Button not working?" row.
 
-```html
-<a href="videx://reset-password?token_hash={{ .TokenHash }}&type=recovery">
-  Reset your password
-</a>
-```
+**App-side pairing (PR #63):** the reset screen reads `token_hash` from
+expo-router `useLocalSearchParams`, NOT `Linking.useURL()` — the latter misses
+the deep link on **warm starts** (the url event fires before the screen
+subscribes), which produced "couldn't verify" errors on the first real
+end-to-end test. Raw-URL parsing remains only as the legacy-fragment fallback.
 
-The native screen already handles **all** of `token_hash`, implicit fragment
-tokens, and PKCE `?code`, so this change is safe and backward-compatible — it
-just makes the reliable path the default. Available template variables
-(`{{ .TokenHash }}`, `{{ .ConfirmationURL }}`, `{{ .Token }}`, `{{ .SiteURL }}`,
-`{{ .RedirectTo }}`, `{{ .Email }}`) are documented in Supabase's Email
-Templates guide.
+Available template variables (`{{ .TokenHash }}`, `{{ .ConfirmationURL }}`,
+`{{ .Token }}`, `{{ .SiteURL }}`, `{{ .RedirectTo }}`, `{{ .Email }}`) are
+documented in Supabase's Email Templates guide.
+
+> ⚠ **Template saves can silently not take.** The 2026-07-10 session saved
+> the new template, yet Supabase kept sending the old one. After saving:
+> hard-refresh the dashboard page and confirm the editor still shows the new
+> HTML, then verify a real delivery via Gmail **⋮ → Show original** and
+> Ctrl-F for `videxstreaming.com/reset`.
 
 ### 4b. Videx branding
 
@@ -208,11 +233,13 @@ after any URL-config edits. The native provider sets `redirectTo` via
 
 1. In the app: sign-in screen → **Forgot password?** → enter the testing email
    → **Send reset link** → confirmation state appears.
-2. Inbox: the email is from `Videx <noreply@videx.streaming>`, not the Supabase
+2. Inbox: the email is from `Videx <noreply@videxstreaming.com>`, not the Supabase
    default. Headers show `dkim=pass` and `spf=pass` (Gmail: "Show original").
-3. Tap the link **on the device running the app**. It opens
-   `/reset-password`, verifies within a second (no infinite spinner), and shows
-   the new-password form.
+3. Tap the link **on the device running the app**. The branded bridge page
+   flashes up, forwards into the app's `/reset-password` screen, which
+   verifies within a second (no infinite spinner) and shows the new-password
+   form. Test **both** warm (app backgrounded) and cold (app killed) starts —
+   the warm path is the one PR #63 fixed.
 4. Set a new password → lands back in the app signed in.
 5. Tap the **same** link again → the app now shows the explicit "expired or
    already used — request a new one" state (not a spinner).
