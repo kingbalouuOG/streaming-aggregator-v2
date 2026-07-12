@@ -35,6 +35,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { extractUserIdFromJwt } from '../_shared/userScope.ts';
 
 // ── Config ───────────────────────────────────────────────
 
@@ -208,6 +209,19 @@ Deno.serve(async (req) => {
   }
   if (req.method !== 'POST') {
     return jsonResponse(405, { error: 'method not allowed' });
+  }
+
+  // Require a real signed-in user, not just the bundled anon key: this
+  // function feeds client-supplied text into an LLM and writes the result
+  // into a cache EVERY user reads (mood_room_anchor_labels), and each
+  // uncached call costs an OpenAI request. Anonymous callers could poison
+  // shared labels and run up the bill untraceably (pre-launch security
+  // review 2026-07-12). Same pattern as embed-query. Follow-up hardening
+  // tracked: derive neighbour titles server-side from the anchor instead
+  // of trusting the client's topTitles.
+  const userId = extractUserIdFromJwt(req);
+  if (!userId) {
+    return jsonResponse(401, { error: 'unauthorized' });
   }
 
   let body: unknown;

@@ -1,7 +1,7 @@
 import { Redirect } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 import { Bookmark, House, Search, Sparkle, User } from 'lucide-react-native';
-import { ActivityIndicator, View, type ColorValue } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View, type ColorValue } from 'react-native';
 
 import { FeedbackHost } from '@/components/FeedbackHost';
 import { useOnboardingStatus } from '@/hooks/useOnboardingStatus';
@@ -37,6 +37,23 @@ export default function TabsLayout() {
     );
   }
   if (!session) return <Redirect href="/auth" />;
+  // A FAILED status check is not "not onboarded" — redirecting there on
+  // error would walk an offline (already-onboarded) user back through
+  // onboarding and overwrite their taste profile. Offer a retry instead.
+  if (onboarding.isError) {
+    return (
+      <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
+        <Text style={{ color: 'rgba(245,241,232,0.72)', fontSize: 15, textAlign: 'center' }}>
+          We couldn't reach Videx. Check your connection and try again.
+        </Text>
+        <Pressable
+          onPress={() => onboarding.refetch()}
+          style={{ marginTop: 20, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 14, backgroundColor: PRIMARY }}>
+          <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 15 }}>Try again</Text>
+        </Pressable>
+      </View>
+    );
+  }
   if (!onboarding.data) return <Redirect href="/onboarding" />;
 
   return (

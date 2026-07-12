@@ -106,12 +106,24 @@ const PRIVACY_HTML = renderPolicyPage('Privacy Policy', markdownToHtml(privacyMd
 const TERMS_HTML = renderPolicyPage('Terms of Service', markdownToHtml(termsMd));
 const POLICY_CACHE_CONTROL = 'public, max-age=3600';
 
+// Defence-in-depth on every browser-navigable HTML response: all
+// interpolation is escaped at render time, but these stop MIME sniffing
+// and framing (clickjacking) outright. Applied to /privacy, /terms, /t/
+// and /reset via their handlers.
+export function htmlSecurityHeaders(c: { header: (k: string, v: string) => void }): void {
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'DENY');
+  c.header('Content-Security-Policy', "frame-ancestors 'none'");
+}
+
 app.get('/privacy', (c) => {
   c.header('Cache-Control', POLICY_CACHE_CONTROL);
+  htmlSecurityHeaders(c);
   return c.html(PRIVACY_HTML);
 });
 app.get('/terms', (c) => {
   c.header('Cache-Control', POLICY_CACHE_CONTROL);
+  htmlSecurityHeaders(c);
   return c.html(TERMS_HTML);
 });
 
@@ -128,6 +140,7 @@ app.get('/terms', (c) => {
 app.get('/reset', (c) => {
   c.header('Cache-Control', 'private, no-store');
   c.header('Referrer-Policy', 'no-referrer');
+  htmlSecurityHeaders(c);
   const tokenHash = c.req.query('token_hash') ?? '';
   const type = c.req.query('type') === 'recovery' ? 'recovery' : '';
   if (!TOKEN_HASH_RE.test(tokenHash) || !type) {
@@ -270,6 +283,9 @@ app.get('/t/:type/:tmdbId', async (c) => {
           headers: {
             'Content-Type': 'text/html; charset=utf-8',
             'Cache-Control': 'public, max-age=300',
+            'X-Content-Type-Options': 'nosniff',
+            'X-Frame-Options': 'DENY',
+            'Content-Security-Policy': "frame-ancestors 'none'",
           },
         });
       }
@@ -295,7 +311,12 @@ app.get('/t/:type/:tmdbId', async (c) => {
       };
 
       return new Response(renderTitlePage(type, id, data, CANONICAL_ORIGIN, bucket), {
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'X-Content-Type-Options': 'nosniff',
+          'X-Frame-Options': 'DENY',
+          'Content-Security-Policy': "frame-ancestors 'none'",
+        },
       });
     },
   );
@@ -324,13 +345,18 @@ const FORYOU_CACHE_TTL_SECONDS = 20 * 60;
 
 app.get('/v1/foryou', async (c) => {
   const servicesRaw = c.req.query('services') ?? '';
+  // Normalise case ONCE and use the normalised ids everywhere below:
+  // validation was case-insensitive but the KV cache key and the DB
+  // service_id filters received raw case — `Netflix` minted a separate
+  // per-user cache entry and silently matched nothing in the DB
+  // (pre-launch review 2026-07-12). Dedup for the same reason.
   const services = servicesRaw
-    ? servicesRaw.split(',').map((s) => s.trim()).filter(Boolean)
+    ? [...new Set(servicesRaw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean))]
     : [];
   if (services.length > MAX_SERVICES) {
     return c.json({ error: `services exceeds ${MAX_SERVICES}` }, 400);
   }
-  if (services.some((s) => !VALID_SERVICE_IDS.has(s.toLowerCase()))) {
+  if (services.some((s) => !VALID_SERVICE_IDS.has(s))) {
     return c.json({ error: 'unknown service id' }, 400);
   }
 

@@ -77,10 +77,15 @@ interface TmdbTitle {
   episode_run_time?: number[];
 }
 
+// Discriminated result: 'notfound' is a CONFIRMED TMDb 404 (permanently
+// skippable); null is any other failure (broken key, retry exhaustion,
+// TMDb incident) and must NOT enter the skip-list — recording those as
+// 404s during one bad Sunday run would permanently blacklist up to 300
+// legitimate titles (pre-launch review 2026-07-12).
 async function tmdbFetch(
   tmdbId: number,
   mediaType: 'movie' | 'tv'
-): Promise<TmdbTitle | null> {
+): Promise<TmdbTitle | 'notfound' | null> {
   const url = new URL(`${TMDB_BASE}/${mediaType}/${tmdbId}`);
   url.searchParams.set('api_key', TMDB_API_KEY);
 
@@ -88,7 +93,7 @@ async function tmdbFetch(
   // no such title (deleted stub) — leave it missing and move on.
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch(url.toString());
-    if (res.status === 404) return null;
+    if (res.status === 404) return 'notfound';
     if (res.ok) return (await res.json()) as TmdbTitle;
     if (res.status === 429 || res.status >= 500) {
       const backoff = Math.pow(2, attempt + 2) * 1000;
@@ -96,7 +101,8 @@ async function tmdbFetch(
       await sleep(backoff);
       continue;
     }
-    // 4xx other than 404/429: unexpected, skip this row rather than abort.
+    // 4xx other than 404/429: unexpected, skip this row this run, but
+    // don't blacklist it.
     console.error(`  TMDb ${res.status} for ${mediaType}/${tmdbId}`);
     return null;
   }
@@ -187,9 +193,15 @@ async function runBackfillBatch(): Promise<RunStats> {
   for (const row of missing) {
     await sleep(TMDB_DELAY);
     const tmdb = await tmdbFetch(row.tmdb_id, row.media_type);
-    if (tmdb === null) {
+    if (tmdb === 'notfound') {
       stats.skipped404++;
       skips.push(row);
+      continue;
+    }
+    if (tmdb === null) {
+      // Transient/unknown failure: count it, DON'T blacklist it — the
+      // row stays in list_missing_title_ids for the next run.
+      stats.failed++;
       continue;
     }
     buffer.push(buildTitleRow(tmdb, row.media_type));

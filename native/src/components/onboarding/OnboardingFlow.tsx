@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Alert, Pressable, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -125,8 +125,8 @@ export function OnboardingFlow() {
       const [mt, id] = key.split('-');
       return { tmdbId: parseInt(id, 10), mediaType: mt as 'movie' | 'tv' };
     });
-    const ok = await complete({ services, clusters: selectedClusters, watchedTitles, sliders, ageRange, viewingContext });
-    if (ok) {
+    const completedUserId = await complete({ services, clusters: selectedClusters, watchedTitles, sliders, ageRange, viewingContext });
+    if (completedUserId) {
       void logOnboardingEvent(ONBOARDING_EVENTS.ONBOARDING_COMPLETED, {
         total_duration_seconds: Math.round((Date.now() - onboardingStartRef.current) / 1000),
       });
@@ -139,11 +139,20 @@ export function OnboardingFlow() {
       // awaited the server write, so this is truth. Invalidating instead
       // loses the race: the guard remounts on the cached/persisted `false`
       // and bounces the user back into onboarding (v2.1.2 device test).
-      if (session?.user?.id) markOnboardingComplete(session.user.id);
+      // Keyed on the id complete() authenticated with, NOT the context
+      // session (which can momentarily be null while getUser() succeeds).
+      markOnboardingComplete(completedUserId);
       // Route through the Curating interstitial, which holds until the first
       // For You payload resolves and then lands the user on For You (beta
       // feedback 2026-07-09). It also fires first_home_view now.
       router.replace('/curating');
+    } else {
+      // complete() already logged the cause; without this the button just
+      // silently does nothing on a dead connection (review 2026-07-12).
+      Alert.alert(
+        "Couldn't finish setup",
+        'Check your connection and tap the button again — your answers are saved on this device.',
+      );
     }
   };
 

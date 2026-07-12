@@ -1,10 +1,12 @@
 import type { Session } from '@supabase/supabase-js';
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import * as Linking from 'expo-linking';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import storage, { setAuthState } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import { clearPushToken } from '@/notifications/push';
+import { clearOnboardingDraft } from '@/onboardingDraft';
 import { clearQueryCache } from '@/queryPersist';
 
 // Native auth provider (NATIVE-2 W6). Wraps the supabase-js auth surface
@@ -52,19 +54,37 @@ function syncStorageAuth(session: Session | null) {
 }
 
 // Wipe per-user local state when a session ends (sign-out or account
-// deletion) so the next user on this device starts clean: the persisted
-// query cache (cached feeds) AND the one-time feedback-prompt bookkeeping
-// (device-global MMKV keys mirrored from useFeedbackPrompt.ts — kept in
-// sync there). Without the latter, user B inherits A's "already shown"
-// flag or banked foreground time.
-async function clearLocalUserState(): Promise<void> {
+// deletion) so the next user on this device starts clean:
+//  - the LIVE QueryClient — most query keys are not user-scoped
+//    (['native','watchlist'], feeds, services), so without this user B
+//    sees user A's data from memory; worse, the persister re-dehydrates
+//    the live cache moments after the disk wipe, undoing it (pre-launch
+//    review 2026-07-12).
+//  - the persisted query cache on disk (cached feeds).
+//  - the onboarding draft — device-global MMKV with no user identity;
+//    left behind, user B resumes user A's half-finished onboarding and
+//    can seed their taste profile from A's picks (same review).
+//  - the one-time feedback-prompt bookkeeping (device-global MMKV keys
+//    mirrored from useFeedbackPrompt.ts — kept in sync there).
+async function clearLocalUserState(queryClient: QueryClient): Promise<void> {
+  queryClient.clear();
   clearQueryCache();
+  clearOnboardingDraft();
   await storage.multiRemove(['fb_prompt_shown', 'fb_fg_ms']);
+}
+
+/** clearPushToken performs a network DELETE with no timeout of its own;
+ *  never let a hung connection block sign-out (errors are already
+ *  swallowed inside, so racing it is safe — worst case the row is
+ *  reclaimed by the 060 RPC on next sign-in). */
+function clearPushTokenBounded(ms = 3000): Promise<unknown> {
+  return Promise.race([clearPushToken(), new Promise((r) => setTimeout(r, ms))]);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [initializing, setInitializing] = useState(true);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     let mounted = true;
@@ -115,9 +135,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // the 2026-07-10 device-test walk-through; the NotificationsProvider
         // effect fires on session-null, which is inherently too late — it
         // remains as local-state cleanup and no-ops the DB call.)
-        await clearPushToken();
+        await clearPushTokenBounded();
         await supabase.auth.signOut();
-        await clearLocalUserState();
+        await clearLocalUserState(queryClient);
       },
       async forgotPassword(email) {
         // Deep-link the reset link back into the app so the recovery
@@ -142,11 +162,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) return { error: error.message };
         // Deletion also ends the session; mirror signOut's local wipe.
         await supabase.auth.signOut();
-        await clearLocalUserState();
+        await clearLocalUserState(queryClient);
         return { error: null };
       },
     }),
-    [session, initializing],
+    [session, initializing, queryClient],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

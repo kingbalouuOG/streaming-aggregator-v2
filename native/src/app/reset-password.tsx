@@ -125,6 +125,7 @@ export default function ResetPasswordRoute() {
   // (or a terminal error), later async resolutions must not clobber it.
   const settledRef = useRef(false);
   const attemptedTokenRef = useRef<string | null>(null);
+  const verifyingRef = useRef<string | null>(null);
   const settle = (fn: () => void) => {
     if (settledRef.current) return;
     settledRef.current = true;
@@ -143,6 +144,18 @@ export default function ResetPasswordRoute() {
   // ever processes the URL itself).
   useEffect(() => {
     let active = true;
+
+    // A FRESH token arriving on an already-settled screen (user hit the
+    // error state, requested a new email, tapped it while this screen was
+    // still mounted — expo-router updates params in place, no remount)
+    // must re-arm the flow, or verifyOtp would consume the new token while
+    // the settled error screen swallows the success (review 2026-07-12).
+    const freshToken = first(search.token_hash);
+    if (freshToken && freshToken !== attemptedTokenRef.current && settledRef.current) {
+      settledRef.current = false;
+      setError(null);
+      setPhase('verifying');
+    }
 
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY' && active) settle(() => setPhase('ready'));
@@ -179,34 +192,35 @@ export default function ResetPasswordRoute() {
         if (v) p[k] = v;
       }
 
-      // An explicit Supabase error rides back as ?error=…&error_code=… —
-      // treat access_denied / otp_expired as an expired/used link.
-      if (p.error || p.error_code) {
-        const expired =
-          /expired|invalid|access_denied/i.test(`${p.error_code} ${p.error} ${p.error_description}`);
-        fail(
-          expired ? 'expired' : 'generic',
-          expired
-            ? 'This reset link has expired or already been used. Request a new one below.'
-            : p.error_description || 'This reset link could not be used. Request a new one below.',
-        );
-        return;
-      }
-
       try {
-        if (p.token_hash && attemptedTokenRef.current !== p.token_hash) {
+        // Credentials FIRST, error params LAST: on a warm start the raw
+        // URL is the app's original launch URL, which can carry a stale
+        // #error=otp_expired from an old link — it must never shadow a
+        // fresh token that arrived via route params (review 2026-07-12).
+        if (
+          p.token_hash &&
+          attemptedTokenRef.current !== p.token_hash &&
+          verifyingRef.current !== p.token_hash
+        ) {
           // Preferred path — query param survives the custom-scheme hop.
-          // Recovery tokens are single-use: never verify the same one
-          // twice even if the effect re-fires (a second attempt would
-          // read as "expired" and clobber a good session).
-          attemptedTokenRef.current = p.token_hash;
-          const { error: e } = await supabase.auth.verifyOtp({
-            type: (p.type as EmailOtpType) || 'recovery',
-            token_hash: p.token_hash,
-          });
-          if (!active) return;
-          if (e) throw e;
-          settle(() => setPhase('ready'));
+          // Recovery tokens are single-use: verifyingRef stops concurrent
+          // duplicate calls; attemptedTokenRef stops re-verifying after a
+          // DEFINITIVE server answer. A transport failure stamps neither,
+          // so the same still-valid link stays retryable.
+          const tokenHash = p.token_hash;
+          verifyingRef.current = tokenHash;
+          try {
+            const { error: e } = await supabase.auth.verifyOtp({
+              type: (p.type as EmailOtpType) || 'recovery',
+              token_hash: tokenHash,
+            });
+            if (!active) return;
+            attemptedTokenRef.current = tokenHash; // definitive server answer
+            if (e) throw e;
+            settle(() => setPhase('ready'));
+          } finally {
+            verifyingRef.current = null;
+          }
         } else if (p.access_token && p.refresh_token) {
           const { error: e } = await supabase.auth.setSession({
             access_token: p.access_token,
@@ -220,15 +234,35 @@ export default function ResetPasswordRoute() {
           if (!active) return;
           if (e) throw e;
           settle(() => setPhase('ready'));
+        } else if (p.error || p.error_code) {
+          // An explicit Supabase error rides back as ?error=…&error_code=…
+          // — treat access_denied / otp_expired as an expired/used link.
+          const expired =
+            /expired|invalid|access_denied/i.test(`${p.error_code} ${p.error} ${p.error_description}`);
+          fail(
+            expired ? 'expired' : 'generic',
+            expired
+              ? 'This reset link has expired or already been used. Request a new one below.'
+              : p.error_description || 'This reset link could not be used. Request a new one below.',
+          );
         }
         // No recognised params yet: do nothing and let the timeout OR a
         // late PASSWORD_RECOVERY event settle us. (A bare
         // videx://reset-password with a dropped fragment lands here.)
-      } catch {
+      } catch (err) {
         if (!active) return;
+        // A network failure is NOT a dead link — say so, and leave the
+        // token unstamped above so tapping the same link again retries.
+        const status = (err as { status?: number }).status;
+        const transport =
+          !status && /network|fetch|connection|timed?[ -]?out|abort/i.test(
+            err instanceof Error ? err.message : '',
+          );
         fail(
-          'expired',
-          'This reset link has expired or already been used. Request a new one below.',
+          transport ? 'timeout' : 'expired',
+          transport
+            ? "We couldn't reach the server. Check your connection, then tap the link in the email again."
+            : 'This reset link has expired or already been used. Request a new one below.',
         );
       }
     })();
