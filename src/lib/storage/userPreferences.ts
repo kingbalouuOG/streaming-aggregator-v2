@@ -27,14 +27,28 @@ export interface UserPreferences {
   selectedClusters?: string[];
 }
 
-export const saveUserProfile = async (profile: Partial<UserProfile> & { userId: string; name: string; email: string }) => {
+/**
+ * `strict` (signed-in only): rethrow a failed Supabase write instead of
+ * silently falling back to local storage. Without it, an all-or-nothing
+ * caller (native onboarding) could "complete" with the profile only ever
+ * written to the device — the Worker would then score against nothing and
+ * the local copy would never sync (pre-launch review 2026-07-12). Default
+ * (non-strict) preserves the legacy local-fallback for callers that aren't
+ * prepared to handle a throw (web onboarding + profile edits).
+ */
+export const saveUserProfile = async (
+  profile: Partial<UserProfile> & { userId: string; name: string; email: string },
+  opts?: { strict?: boolean },
+) => {
   if (isSupabaseActive()) {
     try {
       await supa.supaSaveUserProfile(profile);
       if (DEBUG) console.log('[Storage] User profile saved to Supabase:', profile.userId);
       return;
     } catch (error) {
-      console.error('[Storage] Supabase saveUserProfile failed, falling back:', error);
+      console.error('[Storage] Supabase saveUserProfile failed:', error);
+      if (opts?.strict) throw error;
+      console.error('[Storage] falling back to local storage');
     }
   }
   const profileData = { ...profile, createdAt: profile.createdAt || Date.now() };
@@ -60,14 +74,20 @@ export const getUserProfile = async (): Promise<UserProfile | null> => {
   }
 };
 
-export const saveUserPreferences = async (preferences: UserPreferences) => {
+/** See saveUserProfile for the `strict` contract. */
+export const saveUserPreferences = async (
+  preferences: UserPreferences,
+  opts?: { strict?: boolean },
+) => {
   if (isSupabaseActive()) {
     try {
       await supa.supaSaveUserPreferences(preferences);
       if (DEBUG) console.log('[Storage] User preferences saved to Supabase:', preferences.region, `${preferences.platforms.length} platforms`);
       return;
     } catch (error) {
-      console.error('[Storage] Supabase saveUserPreferences failed, falling back:', error);
+      console.error('[Storage] Supabase saveUserPreferences failed:', error);
+      if (opts?.strict) throw error;
+      console.error('[Storage] falling back to local storage');
     }
   }
   await storage.setItem(STORAGE_KEYS.USER_PREFERENCES, JSON.stringify(preferences));

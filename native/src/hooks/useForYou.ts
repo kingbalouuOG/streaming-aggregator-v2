@@ -10,10 +10,17 @@ import type { ServiceId } from '@/lib/types/content';
 // pipeline is deliberately NOT ported - on native a Worker miss shows a
 // retry state rather than running an unsupported fallback.
 //
-// Returns null when: no proxy configured, no access token (signed out),
-// the user has no taste profile yet, or the Worker errors. The screen
-// treats null as "not ready". NATIVE-3 W7: scored against the user's
-// onboarding-saved services (useUserServices).
+// tryRenderForYouWorker resolves to null ONLY when the Worker path
+// doesn't apply (no proxy configured, no access token / signed out); the
+// screen treats null as "not ready". A transport/server failure THROWS
+// (WorkerRenderError), which we let propagate so this query retries
+// (retry:2) and then flips to isError — the screen shows its retry state.
+// Crucially the throw keeps a transient Worker blip OUT of the query
+// cache/disk persister, so a cold start can't restore a bogus empty feed
+// (pre-launch review 2026-07-12). A user with no taste profile yet gets a
+// 200 empty payload, not null, so onboarding-in-progress renders the
+// empty state, not the error state. NATIVE-3 W7: scored against the
+// user's onboarding-saved services (useUserServices).
 
 async function fetchForYou(services: ServiceId[]): Promise<WorkerRenderPayload | null> {
   const providerIds = serviceIdsToProviderIds(services);
