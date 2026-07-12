@@ -30,7 +30,11 @@ export interface CompleteOnboardingData {
 export function useCompleteOnboarding() {
   const [submitting, setSubmitting] = useState(false);
 
-  const complete = async (data: CompleteOnboardingData): Promise<boolean> => {
+  /** Returns the authenticated user id on success (callers write the
+   *  completion flag into the guard's query cache and must use THIS id —
+   *  the context session can lag getUser(), and keying the cache write on
+   *  it left a null-session hole), or null on failure. */
+  const complete = async (data: CompleteOnboardingData): Promise<string | null> => {
     setSubmitting(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -122,10 +126,10 @@ export function useCompleteOnboarding() {
       const { error: flagError } = await supabase.from('profiles').update(updates).eq('id', user.id);
       if (flagError) throw flagError;
 
-      return true;
+      return user.id;
     } catch (e) {
       console.error('[Onboarding] completion failed:', e);
-      return false;
+      return null;
     } finally {
       setSubmitting(false);
     }

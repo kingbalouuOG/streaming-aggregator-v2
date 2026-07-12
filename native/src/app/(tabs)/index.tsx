@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // NATIVE-2 W3 — Home composition parity with the web app:
@@ -70,14 +70,28 @@ export default function HomeScreen() {
   }
 
   if (feed.isError || !feed.data) {
+    // Must offer a real retry: retries are exhausted by the time this
+    // renders, refetchOnWindowFocus is off, and no reconnect refetch fires
+    // on RN — without the button this screen was a dead end until app
+    // restart (pre-launch review 2026-07-12).
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-background px-8">
         <Text className="text-center font-standfirst text-section text-foreground">
           Couldn&apos;t load tonight&apos;s shelf
         </Text>
         <Text className="mt-2 text-center font-sans text-body text-muted-foreground">
-          {feed.error instanceof Error ? feed.error.message : 'Pull down to try again.'}
+          Check your connection and try again.
         </Text>
+        <Pressable
+          onPress={onRefresh}
+          disabled={refreshing}
+          className="mt-6 h-12 flex-row items-center justify-center rounded-card bg-primary px-8 active:opacity-90">
+          {refreshing ? (
+            <ActivityIndicator color="#ffffff" />
+          ) : (
+            <Text className="font-sans-bold text-body text-white">Try again</Text>
+          )}
+        </Pressable>
       </SafeAreaView>
     );
   }

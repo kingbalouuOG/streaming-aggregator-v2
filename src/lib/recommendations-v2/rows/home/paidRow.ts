@@ -29,9 +29,6 @@ import { EXTENDED_TITLE_SELECT } from '../../types';
 import type { ExtendedTitleRow } from '../../types';
 import type { ContentItem } from '@/lib/types/content';
 
-/** Stream types that mean "you pay per title" — the row's whole remit. */
-const PAID_STREAM_TYPES = ['rent', 'buy'] as const;
-
 /** Default number of titles in the row. */
 const DEFAULT_LIMIT = 18;
 
@@ -50,58 +47,33 @@ export async function fetchPaidTitlesScoped(
   if (services.length === 0) return [];
 
   try {
-    // Rent/buy availability on any of the user's services. Over-fetch
-    // ids (many titles carry several rent/buy rows — per quality tier,
-    // per service) then dedup to distinct titles.
-    const { data: saData } = await client
-      .from('streaming_availability')
-      .select('tmdb_id, media_type')
-      .in('service_id', services)
-      .in('stream_type', PAID_STREAM_TYPES)
-      .limit(600);
+    // Strictly pay-ONLY, resolved by ONE SQL anti-join (migration 064,
+    // pre-launch review 2026-07-12). The previous two-query TS shape had
+    // two defects: the exclusion query silently truncated at PostgREST's
+    // 1000-row cap (re-admitting subscription-included titles), and the
+    // candidate query took an UNORDERED limit over ~40K rent/buy rows,
+    // so "newest" sorted an arbitrary sample. The RPC returns titles with
+    // a rent/buy row and NO subscription/free row on the user's services,
+    // release_date DESC ('addon' counts as paid — it's another paywall).
+    const { data: paidData } = await client.rpc('paid_only_titles', {
+      p_services: services,
+      // Headroom: imageless titles and cross-row dedup drops below.
+      p_limit: limit * 3,
+    });
 
-    if (!saData || saData.length === 0) return [];
+    const paidRows = (paidData ?? []) as { tmdb_id: number; media_type: string }[];
+    if (paidRows.length === 0) return [];
 
-    // Strictly pay-ONLY (beta feedback 2026-07-11): a title that is also
-    // watchable at no extra cost on the user's services — subscription or
-    // free — is not "pay to watch" for them; suggesting a rental they
-    // already have is worse than hiding it. `addon` deliberately does NOT
-    // count as included: a channel add-on is another paywall. Keyed on
-    // (media_type, tmdb_id) — tmdb ids collide across movies and TV.
-    const candidateIds = [...new Set(saData.map((r) => r.tmdb_id))];
-    const { data: includedData } = await client
-      .from('streaming_availability')
-      .select('tmdb_id, media_type')
-      .in('service_id', services)
-      .in('tmdb_id', candidateIds)
-      .in('stream_type', ['subscription', 'free']);
+    // RPC order is the row order; keep it through the unordered metadata
+    // fetch. Keyed on (media_type, tmdb_id) — tmdb ids collide across
+    // movies and TV.
+    const rank = new Map(paidRows.map((r, i) => [`${r.media_type}-${r.tmdb_id}`, i]));
+    const tmdbIds = [...new Set(paidRows.map((r) => r.tmdb_id))];
 
-    const includedKeys = new Set(
-      (includedData ?? []).map((r) => `${r.media_type}-${r.tmdb_id}`),
-    );
-    const paidOnlyKeys = new Set(
-      saData
-        .map((r) => `${r.media_type}-${r.tmdb_id}`)
-        .filter((key) => !includedKeys.has(key)),
-    );
-    if (paidOnlyKeys.size === 0) return [];
-
-    const tmdbIds = [
-      ...new Set(
-        saData.filter((r) => paidOnlyKeys.has(`${r.media_type}-${r.tmdb_id}`)).map((r) => r.tmdb_id),
-      ),
-    ];
-
-    // Newest-first by release date — rent/buy inventory is dominated by
-    // recent releases, and release_date is reliably populated (unlike
-    // available_since). NULLS LAST keeps undated back-catalogue titles
-    // from crowding the head of the row.
     const { data: titleData } = await client
       .from('titles')
       .select(EXTENDED_TITLE_SELECT)
-      .in('tmdb_id', tmdbIds)
-      .order('release_date', { ascending: false, nullsFirst: false })
-      .limit(limit * 4);
+      .in('tmdb_id', tmdbIds);
 
     if (!titleData) return [];
 
@@ -111,14 +83,15 @@ export async function fetchPaidTitlesScoped(
       const item = titleRowToContentItem(typed);
       if (!item.image) continue; // imageless cards look broken in a poster row
       if (excludeIds.has(item.id)) continue;
-      // The titles query matches on tmdb_id alone; re-check the composite
-      // key so the other media type sharing an id can't slip in.
-      if (!paidOnlyKeys.has(item.id)) continue;
+      // The titles query matches on tmdb_id alone; the rank map re-checks
+      // the composite key so the other media type sharing an id can't
+      // slip in.
+      if (!rank.has(item.id)) continue;
       items.push(item);
-      if (items.length >= limit) break;
     }
 
-    return items;
+    items.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+    return items.slice(0, limit);
   } catch {
     return [];
   }

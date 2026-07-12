@@ -63,8 +63,12 @@ jobs:
           # Versioned path: the runner's preinstalled postgresql-client-16
           # shadows the PGDG 17 client on PATH, and pg_dump 16 aborts
           # against the Postgres 17 server ("server version mismatch").
+          # auth schema INCLUDED: without auth.users the restored public
+          # rows dangle against nonexistent user ids and nobody can sign
+          # in — the "project-level loss" this backup exists for wouldn't
+          # actually be survivable (pre-launch review 2026-07-12).
           /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" \
-            --schema=public \
+            --schema=public --schema=auth \
             --no-owner --no-privileges \
             --format=custom \
             --file="videx-${STAMP}.dump"
