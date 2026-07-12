@@ -35,7 +35,7 @@ function greetingLabel(): string {
 export default function ForYouScreen() {
   const router = useRouter();
   const { session } = useAuth();
-  const { data, isLoading, refetch } = useForYou();
+  const { data, isLoading, isError, refetch } = useForYou();
   const [refreshing, setRefreshing] = useState(false);
 
   const name =
@@ -66,7 +66,11 @@ export default function ForYouScreen() {
   }
 
   if (!data) {
-    return <NotReady onRetry={onRefresh} />;
+    // Distinct states now that Worker failures THROW (PR #75): a query
+    // error is a connection problem, not a young taste profile — saying
+    // "warming up" for a network failure sends users waiting on the
+    // wrong thing.
+    return <NotReady onRetry={onRefresh} failed={isError} />;
   }
 
   // Defensive defaults — a fresh Worker payload carries all of these; guard
@@ -207,17 +211,19 @@ export default function ForYouScreen() {
   );
 }
 
-function NotReady({ onRetry }: { onRetry: () => void }) {
+function NotReady({ onRetry, failed = false }: { onRetry: () => void; failed?: boolean }) {
   return (
     <SafeAreaView className="flex-1 items-center justify-center bg-background px-10">
       <View className="h-16 w-16 items-center justify-center rounded-2xl bg-card">
         <Sparkles size={28} color="rgba(245,241,232,0.4)" />
       </View>
       <Text className="mt-4 text-center font-display text-section text-foreground">
-        Your For You feed is warming up
+        {failed ? "Couldn't load your feed" : 'Your For You feed is warming up'}
       </Text>
       <Text className="mt-2 text-center font-sans text-body text-muted-foreground">
-        Once your taste profile is set up, personalised picks land here.
+        {failed
+          ? 'Check your connection and try again.'
+          : 'Once your taste profile is set up, personalised picks land here.'}
       </Text>
       <Pressable onPress={onRetry} className="mt-5 rounded-card bg-primary px-5 py-3 active:opacity-90">
         <Text className="font-sans-bold text-body text-white">Try again</Text>
