@@ -374,6 +374,48 @@ export async function getV2TasteProfileScoped(scope: UserScope): Promise<TastePr
   };
 }
 
+/**
+ * Light key-fields read (pre-launch perf batch, finding 5). The Worker
+ * builds its per-user KV feed-cache key from updated_at + the four
+ * sliders ONLY — but it was fetching the full profile (incl. the 1536-dim
+ * taste vector) on every request just to construct that key, even on
+ * cache HITS where the vector is never used. This reads only the columns
+ * the key needs; the full profile (with vector) is fetched lazily, on a
+ * cache miss, when the render actually needs it. Returns updated_at =
+ * null + default sliders when no profile row exists.
+ */
+export interface TasteProfileKeyFields {
+  updatedAt: string | null;
+  sliders: SliderState;
+}
+
+export async function getTasteProfileKeyFieldsScoped(
+  scope: UserScope,
+): Promise<TasteProfileKeyFields> {
+  const { data, error } = await scope
+    .select(
+      'taste_profiles',
+      'taste_vector_updated_at, '
+      + 'slider_catalogue_age, slider_comfort_zone, slider_content_mix, slider_variety',
+    )
+    .maybeSingle();
+
+  if (error || !data) {
+    return { updatedAt: null, sliders: { ...DEFAULT_SLIDERS } };
+  }
+
+  const row = data as unknown as TasteProfileRow;
+  return {
+    updatedAt: row.taste_vector_updated_at || null,
+    sliders: {
+      catalogueAge: row.slider_catalogue_age ?? DEFAULT_SLIDERS.catalogueAge,
+      comfortZone: row.slider_comfort_zone ?? DEFAULT_SLIDERS.comfortZone,
+      contentMix: row.slider_content_mix ?? DEFAULT_SLIDERS.contentMix,
+      variety: row.slider_variety ?? DEFAULT_SLIDERS.variety,
+    },
+  };
+}
+
 interface CentroidRow {
   slot: number;
   centroid: string | number[];
@@ -454,6 +496,27 @@ export async function updateV2TasteVectorScoped(
 
   if (error) {
     console.error('[TasteV2] updateV2TasteVectorScoped failed:', error.message);
+    throw new Error(error.message);
+  }
+}
+
+/**
+ * Stamp taste_vector_recomputed_at (migration 065). The nightly cron
+ * calls this on EVERY profile it examines — whether it ran a full
+ * recompute or skipped one for lack of new signal — so the row leaves
+ * the recompute scan window for ~24h. Distinct from
+ * taste_vector_updated_at, which also bumps on client EMA writes; see
+ * src/lib/server/staleRecompute.ts.
+ */
+export async function markTasteVectorRecomputedScoped(
+  scope: UserScope,
+  recomputedAtIso: string,
+): Promise<void> {
+  const { error } = await scope.update('taste_profiles', {
+    taste_vector_recomputed_at: recomputedAtIso,
+  });
+  if (error) {
+    console.error('[TasteV2] markTasteVectorRecomputedScoped failed:', error.message);
     throw new Error(error.message);
   }
 }
