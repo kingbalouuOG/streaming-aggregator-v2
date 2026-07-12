@@ -116,7 +116,6 @@ export interface AnchorRoomPreview {
   thumbnails: ContentItem[];
   titleCount: number;
   llmLabel: { label: string; description: string | null } | null;
-  topTitlesForLabel: { title: string; year: number | null }[];
 }
 
 export interface ForYouPayload {
@@ -704,11 +703,6 @@ async function buildAnchorRooms(
           return { preview: null as AnchorRoomPreview | null, latency: elapsed };
         }
 
-        const topTitlesForLabel = result.items.slice(0, 8).map((item) => ({
-          title: item.title,
-          year: item.year ?? null,
-        }));
-
         const preview: AnchorRoomPreview = {
           id: `anchor:${anchor.mediaType}-${anchor.tmdbId}`,
           anchor,
@@ -718,7 +712,6 @@ async function buildAnchorRooms(
           thumbnails: result.items.slice(0, 4),
           titleCount: result.items.length,
           llmLabel: dbCachedLabels.get(anchorKey) ?? null,
-          topTitlesForLabel,
         };
         return { preview, latency: elapsed };
       }),

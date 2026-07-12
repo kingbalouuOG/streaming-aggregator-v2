@@ -319,13 +319,6 @@ export function useAnchorMoodRooms(
             return { preview: null, latency: elapsed };
           }
 
-          // Pull top titles for the LLM prompt — pass titles + years
-          // only, the Edge Function doesn't need ContentItem shape.
-          const topTitlesForLabel = result.items.slice(0, 8).map((item) => ({
-            title: item.title,
-            year: item.year ?? null,
-          }));
-
           const preview: AnchorRoomPreview = {
             id: `anchor:${anchor.mediaType}-${anchor.tmdbId}`,
             anchor,
@@ -339,7 +332,6 @@ export function useAnchorMoodRooms(
             // literal "If you love {anchor}" fallback until the
             // Edge Function resolves them in step 4.
             llmLabel: knownLabels[anchorKey(anchor)] ?? null,
-            topTitlesForLabel,
           };
           return { preview, latency: elapsed };
         }),
@@ -431,14 +423,10 @@ async function resolveMissingLabels(
   let working = initial;
   await Promise.all(
     misses.map(async (preview) => {
-      const result = await requestAnchorLabel(
-        {
-          ...preview.anchor,
-          title: preview.anchorTitle,
-          year: preview.anchorYear,
-        },
-        preview.topTitlesForLabel,
-      );
+      const result = await requestAnchorLabel({
+        tmdbId: preview.anchor.tmdbId,
+        mediaType: preview.anchor.mediaType,
+      });
       if (isStale() || !result) return;
       working = working.map((p) =>
         p.id === preview.id ? { ...p, llmLabel: result } : p,

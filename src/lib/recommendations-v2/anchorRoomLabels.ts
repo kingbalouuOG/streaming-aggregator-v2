@@ -7,10 +7,10 @@
  *      cache table in a single batch. Cache hits return instantly.
  *
  *   2. For any anchor missing a cached label, the hook calls
- *      `requestAnchorLabel(anchor, topTitles)` which invokes the
- *      `label-anchor-room` Edge Function. The function checks the cache
- *      again (race-resilient), generates via gpt-4o-mini if missing,
- *      writes the cache, returns the result.
+ *      `requestAnchorLabel(anchor)` which invokes the `label-anchor-room`
+ *      Edge Function. The function checks the cache again (race-resilient),
+ *      derives the prompt inputs server-side, generates via gpt-4o-mini if
+ *      missing, writes the cache, returns the result.
  *
  * Same-anchor labels are shared across users — once The Hangover has a
  * label, every user with The Hangover as a Tier 2 anchor reads from
@@ -18,7 +18,6 @@
  */
 
 import { supabase } from '../supabase';
-import type { SelectedAnchor } from './anchorSelection';
 
 export interface AnchorRoomLabel {
   label: string;
@@ -62,10 +61,15 @@ export async function getCachedAnchorLabels(
  * Edge Function. The function side handles cache lookup + LLM call +
  * cache write. Returns null on hard failure (caller falls back to the
  * literal "If you love {anchor}" label).
+ *
+ * We send ONLY the anchor identity (tmdbId + mediaType). The Edge
+ * Function derives the anchor title and neighbour titles server-side —
+ * the client is not trusted to supply prompt text, since the result is
+ * cached into a table every user reads (prompt-injection hardening,
+ * pre-launch review 2026-07-12).
  */
 export async function requestAnchorLabel(
-  anchor: SelectedAnchor & { title: string; year: number | null },
-  topTitles: { title: string; year: number | null }[],
+  anchor: { tmdbId: number; mediaType: 'movie' | 'tv' },
 ): Promise<AnchorRoomLabel | null> {
   try {
     const { data, error } = await supabase.functions.invoke('label-anchor-room', {
@@ -73,10 +77,7 @@ export async function requestAnchorLabel(
         anchor: {
           tmdbId: anchor.tmdbId,
           mediaType: anchor.mediaType,
-          title: anchor.title,
-          year: anchor.year,
         },
-        topTitles: topTitles.slice(0, 8),
       },
     });
     if (error) {
