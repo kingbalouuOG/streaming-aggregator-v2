@@ -266,6 +266,4 @@ export interface AnchorRoomPreview {
    * Function call resolves. Null while loading or on failure.
    */
   llmLabel: AnchorRoomLabel | null;
-  /** Top room titles passed to the Edge Function for label generation. */
-  topTitlesForLabel: { title: string; year: number | null }[];
 }

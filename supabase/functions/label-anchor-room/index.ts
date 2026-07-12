@@ -9,17 +9,29 @@
  * anchor_media_type). Shared across users — once generated for The
  * Hangover, every user with The Hangover as an anchor reads the cache.
  *
+ * Security (pre-launch review 2026-07-12): the function is signed-in-only
+ * (PR #73) AND derives every LLM input SERVER-SIDE. The caller supplies
+ * only the anchor's (tmdbId, mediaType); the anchor title + neighbour
+ * titles are looked up from `titles` + the same vector neighbourhood the
+ * client renders (match_titles_by_vector). No client-supplied text ever
+ * reaches the OpenAI prompt, so an authenticated user cannot prompt-inject
+ * a poisoned label into the shared cache every user reads. A per-user
+ * in-memory rate limit bounds the OpenAI bill on the cold-generation path.
+ *
  * Request shape:
  *   POST /functions/v1/label-anchor-room
- *   Authorization: Bearer <user JWT> (anon clients use the public anon key)
- *   {
- *     anchor: { tmdbId: number, mediaType: 'movie'|'tv', title: string, year: number|null },
- *     topTitles: [{ title: string, year: number|null }, ...]   // up to 8
- *   }
+ *   Authorization: Bearer <user JWT>
+ *   { anchor: { tmdbId: number, mediaType: 'movie'|'tv' } }
+ *
+ * (Legacy clients also send anchor.title/year + topTitles[]; those fields
+ *  are IGNORED — the server no longer trusts them.)
  *
  * Response shape:
  *   200 { label: string, description: string|null, cached: boolean }
  *   400 { error: string }   // bad input
+ *   401 { error: string }   // no / invalid user JWT
+ *   404 { error: string }   // anchor tmdbId/mediaType not in `titles`
+ *   429 { error: string }   // per-user generation rate limit
  *   500 { error: string }   // OpenAI failure / DB failure
  *
  * Deploy: npx supabase functions deploy label-anchor-room --project-ref fmusugdcnnwiuzkbjquo
@@ -46,6 +58,16 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')!;
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_MODEL = 'gpt-4o-mini';
 
+/** Neighbours passed to the prompt (mirrors the client's top-8 slice). */
+const NEIGHBOUR_COUNT = 8;
+/**
+ * NN over-fetch from match_titles_by_vector. We only need NEIGHBOUR_COUNT
+ * after dropping the anchor itself, but over-fetch a little for headroom
+ * against nulls. The RPC floors hnsw.ef_search at 100 (migration 025), so
+ * a small match_limit still returns quality neighbours.
+ */
+const NEIGHBOUR_MATCH_LIMIT = 25;
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // Mirrors the global mood-rooms cron's banned vocabulary (label.py).
@@ -56,45 +78,152 @@ const FORBIDDEN_WORDS = new Set([
   'unleashed', 'unveiled',
 ]);
 
+// ── Per-user rate limit ──────────────────────────────────
+//
+// Only the cold path (cache miss → OpenAI call) is limited, so ordinary
+// cache-hit reads are never throttled. Bounds the OpenAI bill against an
+// authenticated user enumerating valid tmdbIds to force generations.
+// In-memory + per-isolate (same best-effort caveat as embed-query's LRU);
+// Supabase may run several isolates, so this caps per-isolate throughput,
+// not a global hard ceiling. Good enough to defang cheap enumeration.
+
+const RATE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+const RATE_MAX_GENERATIONS = 20; // cold generations per user per window
+
+const generationLog = new Map<string, number[]>();
+
+/** Returns true if the user is under the limit (and records the hit). */
+function allowGeneration(userId: string): boolean {
+  const now = Date.now();
+  const cutoff = now - RATE_WINDOW_MS;
+  const hits = (generationLog.get(userId) ?? []).filter((t) => t > cutoff);
+  if (hits.length >= RATE_MAX_GENERATIONS) {
+    generationLog.set(userId, hits);
+    return false;
+  }
+  hits.push(now);
+  generationLog.set(userId, hits);
+  return true;
+}
+
 // ── Types ────────────────────────────────────────────────
 
-interface RequestBody {
-  anchor: {
-    tmdbId: number;
-    mediaType: 'movie' | 'tv';
-    title: string;
-    year: number | null;
-  };
-  topTitles: Array<{ title: string; year: number | null }>;
+interface AnchorRef {
+  tmdbId: number;
+  mediaType: 'movie' | 'tv';
+}
+
+interface DerivedInputs {
+  anchor: { title: string; year: number | null };
+  neighbours: Array<{ title: string; year: number | null }>;
 }
 
 // ── Helpers ──────────────────────────────────────────────
 
-function validateBody(body: unknown): RequestBody | null {
+/**
+ * Validate the request. We require ONLY the anchor identity; any
+ * client-supplied title/topTitles are ignored (server derives them).
+ */
+function parseAnchorRef(body: unknown): AnchorRef | null {
   if (!body || typeof body !== 'object') return null;
   const b = body as Record<string, unknown>;
   const a = b.anchor as Record<string, unknown> | undefined;
   if (
     !a
     || typeof a.tmdbId !== 'number'
+    || !Number.isInteger(a.tmdbId)
     || (a.mediaType !== 'movie' && a.mediaType !== 'tv')
-    || typeof a.title !== 'string'
-    || (a.year != null && typeof a.year !== 'number')
   ) return null;
-  if (!Array.isArray(b.topTitles)) return null;
-  for (const t of b.topTitles) {
-    if (!t || typeof t !== 'object') return null;
-    const tr = t as Record<string, unknown>;
-    if (typeof tr.title !== 'string') return null;
-    if (tr.year != null && typeof tr.year !== 'number') return null;
-  }
-  return body as RequestBody;
+  return { tmdbId: a.tmdbId, mediaType: a.mediaType };
 }
 
-function buildPrompt(req: RequestBody): { system: string; user: string } {
-  const yearStr = req.anchor.year ? ` (${req.anchor.year})` : '';
-  const neighbours = req.topTitles
-    .slice(0, 8)
+/**
+ * Derive the anchor title + representative neighbour titles from the
+ * database — the SAME data the client renders (anchoredRoom.ts): the
+ * anchor's embedding neighbourhood via match_titles_by_vector.
+ *
+ * Returns null if the anchor doesn't exist or has no usable embedding
+ * (caller maps this to a 404).
+ */
+async function deriveAnchorInputs(anchor: AnchorRef): Promise<DerivedInputs | null> {
+  // 1. Verify the anchor exists + pull its title/year/embedding.
+  const { data: anchorRows, error: anchorErr } = await supabase
+    .from('titles')
+    .select('title, release_year, embedding')
+    .eq('tmdb_id', anchor.tmdbId)
+    .eq('media_type', anchor.mediaType)
+    .limit(1);
+
+  if (anchorErr) {
+    console.error('label-anchor-room: anchor lookup failed:', anchorErr.message);
+    return null;
+  }
+  const anchorRow = anchorRows?.[0] as
+    | { title: string | null; release_year: number | null; embedding: string | null }
+    | undefined;
+  if (!anchorRow || !anchorRow.title) return null;
+
+  const anchorInfo = { title: anchorRow.title, year: anchorRow.release_year ?? null };
+
+  // 2. Neighbours via the anchor's embedding. If the anchor has no
+  //    embedding we can still label from the title alone.
+  let neighbours: Array<{ title: string; year: number | null }> = [];
+  if (anchorRow.embedding) {
+    let embedding: number[] | null = null;
+    try {
+      embedding = JSON.parse(anchorRow.embedding);
+    } catch {
+      console.error('label-anchor-room: failed to parse anchor embedding');
+    }
+
+    if (Array.isArray(embedding)) {
+      const vectorStr = `[${embedding.join(',')}]`;
+      const { data: matched, error: rpcErr } = await supabase.rpc('match_titles_by_vector', {
+        query_vector: vectorStr,
+        match_limit: NEIGHBOUR_MATCH_LIMIT,
+      });
+
+      if (rpcErr) {
+        console.error('label-anchor-room: match_titles_by_vector failed:', rpcErr.message);
+      } else if (Array.isArray(matched)) {
+        const rows = matched as Array<{ tmdb_id: number; title: string; media_type: string }>;
+        const topNeighbours = rows
+          .filter((r) => !(r.tmdb_id === anchor.tmdbId && r.media_type === anchor.mediaType))
+          .filter((r) => typeof r.title === 'string' && r.title.length > 0)
+          .slice(0, NEIGHBOUR_COUNT);
+
+        // Enrich with release years in one lookup (RPC omits year).
+        const yearById = await fetchNeighbourYears(topNeighbours.map((r) => r.tmdb_id));
+        neighbours = topNeighbours.map((r) => ({
+          title: r.title,
+          year: yearById.get(`${r.media_type}-${r.tmdb_id}`) ?? null,
+        }));
+      }
+    }
+  }
+
+  return { anchor: anchorInfo, neighbours };
+}
+
+/** Batch-fetch release_year for neighbour tmdbIds. Keyed `${media}-${id}`. */
+async function fetchNeighbourYears(tmdbIds: number[]): Promise<Map<string, number | null>> {
+  const map = new Map<string, number | null>();
+  if (tmdbIds.length === 0) return map;
+  const ids = [...new Set(tmdbIds)];
+  const { data, error } = await supabase
+    .from('titles')
+    .select('tmdb_id, media_type, release_year')
+    .in('tmdb_id', ids);
+  if (error || !data) return map;
+  for (const row of data as Array<{ tmdb_id: number; media_type: string; release_year: number | null }>) {
+    map.set(`${row.media_type}-${row.tmdb_id}`, row.release_year ?? null);
+  }
+  return map;
+}
+
+function buildPrompt(inputs: DerivedInputs): { system: string; user: string } {
+  const yearStr = inputs.anchor.year ? ` (${inputs.anchor.year})` : '';
+  const neighbours = inputs.neighbours
     .map((t) => `- ${t.title}${t.year ? ` (${t.year})` : ''}`)
     .join('\n');
 
@@ -108,10 +237,10 @@ The room is anchored on a single title. The neighbours share its feeling.
 
 Respond ONLY as JSON: {"label": "...", "description": "..."}`;
 
-  const user = `Anchor: ${req.anchor.title}${yearStr}
+  const user = `Anchor: ${inputs.anchor.title}${yearStr}
 
 Nearest neighbours by embedding similarity:
-${neighbours}
+${neighbours || '- (none available)'}
 
 Generate the room label and description.`;
 
@@ -123,8 +252,8 @@ interface OpenAIChatResponse {
   usage?: { total_tokens: number };
 }
 
-async function callOpenAI(req: RequestBody): Promise<{ label: string; description: string | null } | null> {
-  const { system, user } = buildPrompt(req);
+async function callOpenAI(inputs: DerivedInputs): Promise<{ label: string; description: string | null } | null> {
+  const { system, user } = buildPrompt(inputs);
 
   const body = {
     model: OPENAI_MODEL,
@@ -212,13 +341,10 @@ Deno.serve(async (req) => {
   }
 
   // Require a real signed-in user, not just the bundled anon key: this
-  // function feeds client-supplied text into an LLM and writes the result
-  // into a cache EVERY user reads (mood_room_anchor_labels), and each
-  // uncached call costs an OpenAI request. Anonymous callers could poison
-  // shared labels and run up the bill untraceably (pre-launch security
-  // review 2026-07-12). Same pattern as embed-query. Follow-up hardening
-  // tracked: derive neighbour titles server-side from the anchor instead
-  // of trusting the client's topTitles.
+  // function writes into a cache EVERY user reads
+  // (mood_room_anchor_labels) and each uncached call costs an OpenAI
+  // request. Anonymous callers could run up the bill untraceably
+  // (pre-launch security review 2026-07-12). Same pattern as embed-query.
   const userId = extractUserIdFromJwt(req);
   if (!userId) {
     return jsonResponse(401, { error: 'unauthorized' });
@@ -231,17 +357,17 @@ Deno.serve(async (req) => {
     return jsonResponse(400, { error: 'invalid json' });
   }
 
-  const validated = validateBody(body);
-  if (!validated) {
+  const anchor = parseAnchorRef(body);
+  if (!anchor) {
     return jsonResponse(400, { error: 'invalid request body' });
   }
 
-  // Cache hit?
+  // Cache hit? (unlimited — no OpenAI cost)
   const { data: cached } = await supabase
     .from('mood_room_anchor_labels')
     .select('label, description')
-    .eq('anchor_tmdb_id', validated.anchor.tmdbId)
-    .eq('anchor_media_type', validated.anchor.mediaType)
+    .eq('anchor_tmdb_id', anchor.tmdbId)
+    .eq('anchor_media_type', anchor.mediaType)
     .maybeSingle();
 
   if (cached) {
@@ -252,8 +378,20 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Cold path — an OpenAI call is about to happen. Rate-limit per user.
+  if (!allowGeneration(userId)) {
+    return jsonResponse(429, { error: 'too many label generations, try again shortly' });
+  }
+
+  // Derive every prompt input server-side. The client's title/topTitles
+  // (if any) are never read — this is the prompt-injection fix.
+  const inputs = await deriveAnchorInputs(anchor);
+  if (!inputs) {
+    return jsonResponse(404, { error: 'anchor not found' });
+  }
+
   // Generate via OpenAI.
-  const generated = await callOpenAI(validated);
+  const generated = await callOpenAI(inputs);
   if (!generated) {
     return jsonResponse(500, { error: 'label generation failed' });
   }
@@ -263,8 +401,8 @@ Deno.serve(async (req) => {
   const { error: upsertErr } = await supabase
     .from('mood_room_anchor_labels')
     .upsert({
-      anchor_tmdb_id: validated.anchor.tmdbId,
-      anchor_media_type: validated.anchor.mediaType,
+      anchor_tmdb_id: anchor.tmdbId,
+      anchor_media_type: anchor.mediaType,
       label: generated.label,
       description: generated.description,
       openai_model: OPENAI_MODEL,
