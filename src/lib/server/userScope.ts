@@ -54,6 +54,7 @@ export interface ScopedQuery extends PromiseLike<ScopedResult> {
   eq(column: string, value: unknown): ScopedQuery;
   neq(column: string, value: unknown): ScopedQuery;
   in(column: string, values: readonly unknown[]): ScopedQuery;
+  gt(column: string, value: unknown): ScopedQuery;
   gte(column: string, value: unknown): ScopedQuery;
   lte(column: string, value: unknown): ScopedQuery;
   not(column: string, operator: string, value: unknown): ScopedQuery;

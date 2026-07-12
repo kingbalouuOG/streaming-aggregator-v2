@@ -28,6 +28,7 @@ import type { UserScope } from './userScope';
 import {
   buildFilterSetsScoped,
   type FilterSets,
+  type TmdbIdsCache,
 } from '../recommendations-v2/hardFilters';
 import {
   fetchCandidatePoolScoped,
@@ -71,18 +72,8 @@ import {
   getInterestCentroidsScoped,
 } from '../taste-v2/tasteProfileV2';
 import { DEFAULT_SLIDERS, type SliderState, type TasteProfileV2 } from '../taste-v2/types';
-import {
-  buildEmbeddingCacheKey,
-  computeNorm,
-  type EmbeddingMap,
-} from '../recommendations-v2/embeddingCache';
-
-// Per-isolate embedding cache (IN-PX-22 server half). Key = same shape
-// as the client (userId + taste_profiles.updated_at). Module-scoped so
-// requests served by the same warm Worker isolate reuse the load; an
-// isolate recycle zeroes it. No TTL — the key's updated_at component is
-// the invalidation.
-const EMBEDDING_CACHE = new Map<string, EmbeddingMap>();
+import { type EmbeddingMap } from '../recommendations-v2/embeddingCache';
+import { fetchEmbeddingsForCandidates } from './titleEmbeddingCache';
 
 // ── Wire contract (byte-compatible with the Edge function) ───────────
 
@@ -153,10 +144,20 @@ export interface ForYouPayload {
 
 // ── Entry point ──────────────────────────────────────────────────────
 
+/** Server-injected dependencies — supplied by the Worker transport, kept
+ *  out of RenderForYouInput (the wire contract). Optional so tests and
+ *  any non-Worker caller can omit them. */
+export interface RenderForYouDeps {
+  /** Cross-user KV cache for the user-independent available-ids RPC
+   *  (pre-launch perf batch, finding 4). */
+  availableIdsCache?: TmdbIdsCache;
+}
+
 export async function renderForYou(
   client: SupabaseClient,
   scope: UserScope,
   input: RenderForYouInput,
+  deps: RenderForYouDeps = {},
 ): Promise<ForYouPayload> {
   const t_start = Date.now();
   const userId = scope.userId;
@@ -173,7 +174,7 @@ export async function renderForYou(
   // ENG-1: interest centroids fetched in parallel with filter sets —
   // 3-row PK scan, no latency cost on the critical path.
   const [filterSets, interestCentroids] = await Promise.all([
-    buildFilterSetsScoped(client, scope, input.services),
+    buildFilterSetsScoped(client, scope, input.services, deps.availableIdsCache),
     getInterestCentroidsScoped(scope),
   ]);
 
@@ -194,10 +195,7 @@ export async function renderForYou(
   // Top-200 embeddings for MMR + the avoid set + the exploration seen
   // set, all in one parallel network window (ENG-1 contract).
   const [embeddingMap, avoidSet, seenIds] = await Promise.all([
-    fetchEmbeddingsForCandidates(client, scored.slice(0, 200), {
-      userId,
-      tasteProfilesUpdatedAt: profile.updatedAt,
-    }),
+    fetchEmbeddingsForCandidates(client, scored.slice(0, 200)),
     fetchAvoidSetScoped(scope, client),
     fetchSeenContentIdsScoped(scope),
   ]);
@@ -332,55 +330,6 @@ function nthSmallest(arr: number[], n: number): number {
   const idx = Math.max(0, Math.min(n, arr.length - 1));
   const sorted = [...arr].sort((a, b) => a - b);
   return sorted[idx];
-}
-
-// ── MMR support: embedding fetch with per-isolate cache ──────────────
-
-async function fetchEmbeddingsForCandidates(
-  client: SupabaseClient,
-  candidates: ScoredCandidate[],
-  cacheContext: { userId: string; tasteProfilesUpdatedAt: string | null },
-): Promise<EmbeddingMap> {
-  if (candidates.length === 0) return new Map();
-
-  const cacheKey = buildEmbeddingCacheKey(
-    cacheContext.userId,
-    cacheContext.tasteProfilesUpdatedAt,
-  );
-  const map: EmbeddingMap = EMBEDDING_CACHE.get(cacheKey) ?? new Map();
-
-  const needed: number[] = [];
-  for (const c of candidates) {
-    if (!map.has(c.contentKey)) needed.push(c.tmdbId);
-  }
-  if (needed.length === 0) {
-    EMBEDDING_CACHE.set(cacheKey, map);
-    return map;
-  }
-  const tmdbIds = [...new Set(needed)];
-
-  try {
-    const { data, error } = await client
-      .from('titles')
-      .select('tmdb_id, media_type, embedding')
-      .in('tmdb_id', tmdbIds);
-    if (error || !data) {
-      EMBEDDING_CACHE.set(cacheKey, map);
-      return map;
-    }
-    for (const row of data as Array<{ tmdb_id: number; media_type: string; embedding: string | number[] | null }>) {
-      if (row.embedding == null) continue;
-      const emb = typeof row.embedding === 'string' ? JSON.parse(row.embedding) : row.embedding;
-      if (Array.isArray(emb) && emb.length > 0) {
-        const vec = new Float32Array(emb);
-        map.set(`${row.media_type}-${row.tmdb_id}`, { vec, norm: computeNorm(vec) });
-      }
-    }
-  } catch {
-    // Network or parse error → return whatever we have.
-  }
-  EMBEDDING_CACHE.set(cacheKey, map);
-  return map;
 }
 
 // ── PipelineContext builder ──────────────────────────────────────────

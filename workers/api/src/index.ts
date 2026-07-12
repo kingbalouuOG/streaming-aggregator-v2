@@ -53,8 +53,13 @@ import {
   createServiceRoleClient,
   withUserScope,
 } from '../../../src/lib/server/userScope';
-import { getV2TasteProfileScoped } from '../../../src/lib/taste-v2/tasteProfileV2';
+import {
+  getV2TasteProfileScoped,
+  getTasteProfileKeyFieldsScoped,
+} from '../../../src/lib/taste-v2/tasteProfileV2';
+import type { TmdbIdsCache } from '../../../src/lib/recommendations-v2/hardFilters';
 import { recomputeStaleProfiles } from '../../../src/lib/server/staleRecompute';
+import { buildFeedCacheKey, coalesce } from './foryouCache';
 
 type Env = {
   TMDB_API_KEY: string;
@@ -342,6 +347,18 @@ const VALID_SERVICE_IDS = new Set([
 // 20 min — mid-range of the brief's 15–30. Stale-feed worst case is one
 // TTL; vector-moving interactions bust earlier via the key timestamp.
 const FORYOU_CACHE_TTL_SECONDS = 20 * 60;
+// Available-ids KV cache (finding 4): the user-independent
+// get_available_tmdb_ids RPC (~130KB full-table DISTINCT) keyed on the
+// sorted service combo, shared across all users. 10 min — service
+// catalogues shift slowly; a stale entry only over-/under-includes a
+// title for one TTL, and the render's other filters still apply.
+const AVAILABLE_IDS_CACHE_TTL_SECONDS = 10 * 60;
+
+// Module-scoped single-flight map for /v1/foryou renders (finding 3).
+// Lives for the isolate's lifetime; keyed on the same string as the KV
+// feed cache. Coalesces concurrent misses for one user+taste+services so
+// a stampede runs one pgvector render, not N.
+const foryouInflight = new Map<string, Promise<string>>();
 
 app.get('/v1/foryou', async (c) => {
   const servicesRaw = c.req.query('services') ?? '';
@@ -390,18 +407,14 @@ app.get('/v1/foryou', async (c) => {
   const scope = withUserScope(client, userId);
 
   try {
-    // Feed cache (brief §7.2-3). The profile read happens BEFORE the
-    // cache lookup because the key embeds taste_vector_updated_at —
-    // an interaction that moves the vector busts the entry naturally
-    // (the embedding-cache invalidation trick, reused). Sliders are
-    // hashed separately: slider saves don't bump the vector timestamp.
-    const profile = await getV2TasteProfileScoped(scope);
-    const s = profile?.sliders;
-    const sliderHash = s
-      ? `${s.catalogueAge}.${s.comfortZone}.${s.contentMix}.${s.variety}`
-      : 'none';
-    const cacheKey =
-      `foryou:v1:${userId}:${profile?.updatedAt ?? 0}:${sliderHash}:${[...services].sort().join(',')}`;
+    // Feed cache (brief §7.2-3). The cache KEY needs only
+    // taste_vector_updated_at + the sliders, so read just those (finding
+    // 5) — the full profile, incl. the 1536-dim vector, is fetched lazily
+    // on a miss where the render actually needs it. On a hit (the common
+    // case) we never pull the vector over the wire. An interaction that
+    // moves the vector bumps updated_at and busts the entry naturally.
+    const keyFields = await getTasteProfileKeyFieldsScoped(scope);
+    const cacheKey = buildFeedCacheKey(userId, keyFields.updatedAt, keyFields.sliders, services);
 
     const cached = await c.env.FORYOU_CACHE.get(cacheKey, 'text');
     if (cached) {
@@ -410,24 +423,58 @@ app.get('/v1/foryou', async (c) => {
       });
     }
 
-    const payload: ForYouPayload = await renderForYou(client, scope, {
-      services,
-      hourOfDay,
-      dayOfWeek,
-      userAgent: c.req.header('user-agent'),
-      profile,
+    // Cross-user KV cache for the available-ids RPC (finding 4). Reads
+    // synchronously (blocks the filter build); writes fire-and-forget via
+    // waitUntil so populating never blocks the render.
+    const availableIdsCache: TmdbIdsCache = {
+      async get(key) {
+        const raw = await c.env.FORYOU_CACHE.get(key, 'json');
+        return Array.isArray(raw) ? (raw as number[]) : null;
+      },
+      put(key, ids) {
+        c.executionCtx.waitUntil(
+          c.env.FORYOU_CACHE.put(key, JSON.stringify(ids), {
+            expirationTtl: AVAILABLE_IDS_CACHE_TTL_SECONDS,
+          }),
+        );
+        return Promise.resolve();
+      },
+    };
+
+    // Single-flight the render (finding 3): concurrent misses for the
+    // same key share one pgvector pass instead of stampeding.
+    const { promise, leader } = coalesce(foryouInflight, cacheKey, async () => {
+      // Lazy full profile read — only on a genuine miss.
+      const profile = await getV2TasteProfileScoped(scope);
+      const payload: ForYouPayload = await renderForYou(
+        client,
+        scope,
+        {
+          services,
+          hourOfDay,
+          dayOfWeek,
+          userAgent: c.req.header('user-agent'),
+          profile,
+        },
+        { availableIdsCache },
+      );
+      const body = JSON.stringify(payload);
+      // Don't cache the no-taste-vector empty payload — the user is mid
+      // onboarding and a 20-minute-stale empty feed is the worst outcome.
+      if (profile?.tasteVector) {
+        c.executionCtx.waitUntil(
+          c.env.FORYOU_CACHE.put(cacheKey, body, { expirationTtl: FORYOU_CACHE_TTL_SECONDS }),
+        );
+      }
+      return body;
     });
 
-    // Don't cache the no-taste-vector empty payload — the user is mid
-    // onboarding and a 20-minute-stale empty feed is the worst outcome.
-    const body = JSON.stringify(payload);
-    if (profile?.tasteVector) {
-      c.executionCtx.waitUntil(
-        c.env.FORYOU_CACHE.put(cacheKey, body, { expirationTtl: FORYOU_CACHE_TTL_SECONDS }),
-      );
-    }
+    const body = await promise;
     return new Response(body, {
-      headers: { 'Content-Type': 'application/json', 'x-videx-cache': 'miss' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-videx-cache': leader ? 'miss' : 'coalesced',
+      },
     });
   } catch (err) {
     // Log the real error; return a generic body - postgrest messages
@@ -473,7 +520,7 @@ async function scheduled(
   const report = await recomputeStaleProfiles(client);
   console.log(
     `[stale-recompute] scanned=${report.scanned} vectors=${report.vectorsRecomputed} `
-    + `centroids=${report.centroidsRefreshed} errors=${report.errors.length}`,
+    + `centroids=${report.centroidsRefreshed} skipped=${report.skipped} errors=${report.errors.length}`,
   );
   for (const e of report.errors) {
     console.error(`[stale-recompute] ${e.userId}: ${e.message}`);

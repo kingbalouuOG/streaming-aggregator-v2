@@ -244,19 +244,61 @@ export async function getWatchlistIdsScoped(scope: UserScope): Promise<Set<strin
   }
 }
 
+/**
+ * Cross-request cache port for the available-ids RPC (pre-launch perf
+ * batch, finding 4). `get_available_tmdb_ids` is a full-table DISTINCT
+ * that returns ~130KB and — unlike every other filter-set input — is
+ * user-INDEPENDENT: it depends only on the service combo. The server
+ * variant had no cache (the client twin uses localStorage), so every
+ * For You miss re-ran it. This minimal port lets the Worker back it with
+ * KV keyed on the sorted service combo, shared across all users, without
+ * the engine tree importing Workers types (it must stay importable
+ * outside Vite). `null` from get() = miss → run the RPC and populate.
+ */
+export interface TmdbIdsCache {
+  get(key: string): Promise<number[] | null>;
+  put(key: string, ids: number[]): Promise<void>;
+}
+
+/** Cache key for a service combo — order-independent (sorted), so the
+ *  same set of services shares one entry regardless of request order. */
+export function buildAvailableIdsCacheKeyScoped(serviceIds: string[]): string {
+  return `availids:v1:${[...serviceIds].sort().join(',')}`;
+}
+
 export async function getAvailableTmdbIdsScoped(
   client: SupabaseClient,
   serviceIds: string[],
+  cache?: TmdbIdsCache,
 ): Promise<Set<number>> {
   if (serviceIds.length === 0) return new Set();
+
+  const cacheKey = cache ? buildAvailableIdsCacheKeyScoped(serviceIds) : null;
+  if (cache && cacheKey) {
+    try {
+      const cached = await cache.get(cacheKey);
+      if (cached) return new Set<number>(cached);
+    } catch {
+      // Cache read failure → fall through to the RPC.
+    }
+  }
 
   try {
     const { data, error } = await client.rpc('get_available_tmdb_ids', {
       service_ids: serviceIds,
     });
     if (error || !data) return new Set();
-    const ids = Array.isArray(data) ? data : [];
-    return new Set<number>(ids as unknown as number[]);
+    const ids = Array.isArray(data) ? (data as unknown as number[]) : [];
+    if (cache && cacheKey && ids.length > 0) {
+      // Best-effort populate; the Worker adapter fires this via
+      // waitUntil so it never blocks the render.
+      try {
+        await cache.put(cacheKey, ids);
+      } catch {
+        // Cache write failure is non-fatal.
+      }
+    }
+    return new Set<number>(ids);
   } catch {
     return new Set();
   }
@@ -266,12 +308,13 @@ export async function buildFilterSetsScoped(
   client: SupabaseClient,
   scope: UserScope,
   serviceIds: string[],
+  availableIdsCache?: TmdbIdsCache,
 ): Promise<FilterSets> {
   const [dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds] = await Promise.all([
     getDismissedIdsScoped(scope),
     getThumbsDownIdsScoped(scope),
     getWatchlistIdsScoped(scope),
-    getAvailableTmdbIdsScoped(client, serviceIds),
+    getAvailableTmdbIdsScoped(client, serviceIds, availableIdsCache),
   ]);
   return { dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds };
 }
