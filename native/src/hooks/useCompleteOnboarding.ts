@@ -43,7 +43,12 @@ export function useCompleteOnboarding() {
       const email = user.email ?? '';
       const name = ((user.user_metadata?.username as string | undefined) ?? '') || email.split('@')[0] || 'User';
 
-      await saveUserProfile({ userId: user.id, name, email });
+      // strict: this hook is all-or-nothing — a silent local-only write
+      // would let onboarding "complete" without the profile/services
+      // reaching the server (Worker then scores against nothing, local
+      // copy never syncs). Rethrow lands in the outer catch → returns null
+      // → OnboardingFlow shows its "Couldn't finish setup" retry Alert.
+      await saveUserProfile({ userId: user.id, name, email }, { strict: true });
 
       // Services → TMDb provider IDs for storage.
       const platforms = data.services.map((sid) => ({
@@ -70,7 +75,7 @@ export function useCompleteOnboarding() {
         platforms,
         homeGenres,
         selectedClusters: data.clusters,
-      });
+      }, { strict: true });
 
       // Bootstrap the v2 taste vector + interest centroids from the signals.
       try {

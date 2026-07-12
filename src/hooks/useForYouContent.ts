@@ -172,7 +172,17 @@ export async function fetchForYouRender(
   // local hourOfDay (decision 9); ctx is returned for the rerank path.
   const ctx = await buildPipelineContext();
 
-  const edge = await tryRenderForYouWorker(providerIds, ctx);
+  // tryRenderForYouWorker now THROWS on a transport/server failure
+  // (WorkerRenderError) rather than returning null, so native can retry
+  // instead of caching a bogus empty. On web we own the D4 fallback:
+  // swallow the failure here and fall through to the client-side pipeline
+  // below — a null return still means "Worker path doesn't apply".
+  let edge: Awaited<ReturnType<typeof tryRenderForYouWorker>> = null;
+  try {
+    edge = await tryRenderForYouWorker(providerIds, ctx);
+  } catch (err) {
+    console.warn('[useForYouContent] worker render failed; client pipeline fallback:', err);
+  }
   if (edge) {
     const anchorMax = edge.perAnchorLatencyMs.length > 0 ? Math.max(...edge.perAnchorLatencyMs) : 0;
     console.log(

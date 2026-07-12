@@ -2,10 +2,22 @@
  * Client wrapper around the videx-api Worker's GET /v1/foryou (PLAT-3).
  *
  * Primary path for For You first paint. Returns a fully-built payload
- * that useForYouContent populates state from in one go. On any failure
- * (network error, 5xx, malformed JSON, safety timeout), returns null so
- * the hook falls through to the client-side pipeline — the D4
- * one-release fallback.
+ * that useForYouContent populates state from in one go.
+ *
+ * Failure contract (two distinct outcomes — do not conflate them):
+ *   • Returns `null` when the Worker path DOESN'T APPLY — no proxy
+ *     configured, no services selected, or signed out. Nothing to retry;
+ *     the caller shows its "not ready" state.
+ *   • THROWS a `WorkerRenderError` on a transport/server FAILURE —
+ *     network error, non-2xx response, safety timeout, or wire-format
+ *     drift. Callers that own a fallback (web: the client-side pipeline,
+ *     the D4 one-release fallback) catch it and fall through; callers
+ *     that don't (native For You) let it surface so TanStack Query
+ *     retries and enters its error state. Previously these returned
+ *     `null` too, which resolved the query as a "successful" empty —
+ *     retries never fired and the null was cached (10-min staleTime) AND
+ *     persisted to disk, so a transient blip could strand native cold
+ *     starts in the empty "warming up" state (pre-launch review 2026-07-12).
  *
  * History: this called the render-foryou-rows Supabase Edge Function
  * (IN-466) with a 1.5s bail-fast timeout because cold Deno instances
@@ -85,6 +97,21 @@ export interface WorkerRenderPayload {
   wallclockMs: number;
 }
 
+/**
+ * Thrown on a Worker transport/server failure (network error, non-2xx
+ * response, safety timeout, or wire-format drift). Distinct from a `null`
+ * return, which means the Worker path doesn't apply. See the module
+ * doc-comment for the full contract.
+ */
+export class WorkerRenderError extends Error {
+  readonly status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'WorkerRenderError';
+    this.status = status;
+  }
+}
+
 export async function tryRenderForYouWorker(
   providerIds: number[],
   ctx?: PipelineContext,
@@ -117,15 +144,14 @@ export async function tryRenderForYouWorker(
     });
 
     if (!res.ok) {
-      console.warn(`[workerRender] HTTP ${res.status}; falling back to client pipeline`);
-      return null;
+      throw new WorkerRenderError(`worker responded HTTP ${res.status}`, res.status);
     }
 
     const data = await res.json();
     const wallclockMs = Date.now() - t0;
 
     const pool = reconstructPool(data.pool as WorkerPoolWire);
-    if (!pool) return null;
+    if (!pool) throw new WorkerRenderError('worker pool wire-format drift');
 
     return {
       ...data,
@@ -133,12 +159,13 @@ export async function tryRenderForYouWorker(
       wallclockMs,
     };
   } catch (err) {
+    // Already classified — re-throw untouched so the status survives.
+    if (err instanceof WorkerRenderError) throw err;
     if ((err as Error)?.name === 'AbortError') {
-      console.warn(`[workerRender] safety timeout after ${SAFETY_TIMEOUT_MS}ms; falling back to client pipeline`);
-    } else {
-      console.warn('[workerRender] failed; falling back to client pipeline:', err);
+      throw new WorkerRenderError(`worker safety timeout after ${SAFETY_TIMEOUT_MS}ms`);
     }
-    return null;
+    // Network error, JSON parse failure, etc.
+    throw new WorkerRenderError(`worker request failed: ${(err as Error)?.message ?? String(err)}`);
   } finally {
     clearTimeout(timeoutId);
   }
