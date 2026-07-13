@@ -29,3 +29,25 @@ entry. Deploys via .github/workflows/deploy-worker.yml on merge.
 Local dev: `npm run dev` (use `.dev.vars` for secrets — gitignored);
 bundle check: `npm run check`; cron test:
 `npx wrangler dev --test-scheduled` + curl `/__scheduled?cron=0+4+*+*+*`.
+
+## Domain routing (post-cutover 2026-07-13 — READ BEFORE ADDING PUBLIC ROUTES)
+
+`videxstreaming.com` is NOT a Worker custom domain any more. The apex
+serves the marketing site (separate repo, Next.js + Payload on Vercel,
+proxied through Cloudflare). This Worker receives ONLY the paths listed
+as dashboard-managed **zone routes** (Workers & Pages → videx-api →
+Settings → Domains & Routes):
+
+    videxstreaming.com/v1/*
+    videxstreaming.com/t/*
+    videxstreaming.com/reset*
+    videxstreaming.com/privacy*
+    videxstreaming.com/terms*
+
+**Standing rule: any NEW public path added to this Worker (e.g. the H1
+`/out` affiliate redirector) needs a matching route added in the
+Cloudflare dashboard, or requests fall through to the marketing site.**
+Routes are dashboard-managed on purpose — do NOT add `routes` to
+wrangler.toml: the CI deploy token is Workers-scoped (no zone
+permissions) and the deploy would fail. The `*.workers.dev` URL remains
+live as a fallback origin.
