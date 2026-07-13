@@ -22,6 +22,7 @@ on:
       # served /privacy + /terms pages silently drift from the repo.
       - 'docs/legal/privacy-policy.md'
       - 'docs/legal/terms-of-service.md'
+      - 'docs/legal/delete-account.md'
       # ADR-014 single engine: the Worker imports src/lib directly
       # (recommendations-v2, taste-v2, server/*), so engine changes alter
       # the Worker build without touching workers/api — PR #55's paidTitles
