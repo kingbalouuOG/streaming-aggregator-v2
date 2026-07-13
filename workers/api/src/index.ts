@@ -46,6 +46,7 @@ import {
 // truth for the hosted /privacy + /terms pages is docs/legal/*.md.
 import privacyMd from '../../../docs/legal/privacy-policy.md';
 import termsMd from '../../../docs/legal/terms-of-service.md';
+import deleteAccountMd from '../../../docs/legal/delete-account.md';
 // PLAT-3: the engine imports directly from src/lib — the
 // wrangler-bundles-from-anywhere property that dissolves ADR-011.
 import { renderForYou, type ForYouPayload } from '../../../src/lib/server/foryouRender';
@@ -130,6 +131,17 @@ app.get('/terms', (c) => {
   c.header('Cache-Control', POLICY_CACHE_CONTROL);
   htmlSecurityHeaders(c);
   return c.html(TERMS_HTML);
+});
+// Play data-safety requires a PUBLIC web page for account-deletion
+// requests (shown on the store listing) even though deletion is
+// available in-app — a web path must exist for people without the app.
+// ⚠ Needs its own dashboard zone route (videxstreaming.com/delete-account*)
+// per the README's standing rule, or it falls through to the marketing site.
+const DELETE_ACCOUNT_HTML = renderPolicyPage('Delete your account', markdownToHtml(deleteAccountMd));
+app.get('/delete-account', (c) => {
+  c.header('Cache-Control', POLICY_CACHE_CONTROL);
+  htmlSecurityHeaders(c);
+  return c.html(DELETE_ACCOUNT_HTML);
 });
 
 // ── Password-reset bridge ────────────────────────────────────────────
