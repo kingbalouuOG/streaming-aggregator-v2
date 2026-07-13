@@ -3,7 +3,7 @@ title: Next steps — Roadmap v1.0 H0 "Prove it & equip it"
 type: register
 tags: [register, next-steps, roadmap, h0, launch, notifications, share, beta, quiet-release]
 created: 2026-04-26
-updated: 2026-07-06
+updated: 2026-07-13
 sources:
   - raw/forward-planning/Videx_Product_Strategy_and_Roadmap_v1.0_2026-07.md
   - docs/strategy/Videx_Product_Strategy_and_Roadmap_v1.0.md
@@ -21,19 +21,21 @@ related:
 
 ## Now — H0 "Prove it & equip it" (Jul–Sep 2026)
 
-Fix what's unmeasurable, clear legal, build the two loops into v1, shake out with friends & family, then **quiet public release on both stores** (staged rollout, no press). Full item detail in the roadmap §6/§7; headline order:
+Fix what's unmeasurable, clear legal, build the two loops into v1, shake out with friends & family, then **quiet public release on both stores** (staged rollout, no press). Full item detail in the roadmap §6/§7 — **§6 status block + §7 per-item markers are the live tracker (status pass 2026-07-13)**. Headline state:
 
-| # | Item |
-|---|---|
-| 0.1 | **Launch compliance (DIY — Decision 6, 2026-07-06)**: ICO registration · contact details + caveat-footer removal · policy text updates (click-out + push consent) · hosted `/privacy` + `/terms` · store disclosure forms. **Paid solicitor review deferred to the H2 monetisation gate** (bundled with Premium consumer terms + affiliate disclosures); IN-XPS-014 re-scoped accordingly |
-| 0.2–0.5 | Measurement + integrity fixes: native onboarding funnel events (broken — only `onboarding_completed`, duration 0), click-out telemetry completion (persist `link_type`, add `price_shown`), sentry-expo crash reporting, **taste-vector dedup fix** (both paths) |
-| 0.6–0.8 | Friends-&-family shakeout (~10–15, internal tracks only) · weekly ritual (triage + dashboard + 2h growth block) · beta-blocking fixes (password-reset E2E, `editor_notes` 040 apply-or-remove — table confirmed missing in prod, availability-report loop E2E — 0 rows ever) |
-| 0.9 | **Notifications v1 — full build** (moved from H1): arrival alerts (`streaming_history` 'added' × watchlist × services) + leaving-soon (read `streaming_availability.expires_on`, ~2K titles carry dates). Arrival alerts free forever. |
-| 0.10 | **Share v1 + minimal title pages** (moved from H1): share sheet → Worker-served per-title landing (OG tags, store links) — also the SEO seed |
-| 0.11 | Security + ops batch: leaked-password toggle, IN-PX-29, IN-PX-30, off-site backup, GitLab mirror, pg_partman check (overdue), pricing refresh (overdue), IN-PX-50 backfill fn; IN-XPS-004 stays tooling-blocked |
-| 0.12 | **Quiet v1 public release**: Play production-access prerequisites check (14-day/12-tester closed test if personal account post-Nov-2023), listing polish/ASO, first App Store review (+1 rejection-cycle buffer), staged rollout, **no announcements**. Release valve: ship without notifications if credentialing drags >~2 weeks, fast-follow. |
+| # | Item | Status (2026-07-13) |
+|---|---|---|
+| 0.1 | **Launch compliance (DIY — Decision 6)**: ICO · contact details + caveat-footer removal · policy text updates · hosted `/privacy` + `/terms` · store disclosure forms. Solicitor review stays deferred to H2. | 🔶 Policies hosted + current on videxstreaming.com; contact route live (`privacy@`). **ICO = Joe's remaining action**; footers/placeholders drop on the number. Store-forms answer pack prepared (submission-pack artifact). |
+| 0.2–0.5 | Measurement + integrity fixes (funnel events, click-out telemetry, crash reporting, taste dedup) | ✅ Stream A + device-verified; two completion races found in testing and fixed (PRs #57, #69) |
+| 0.6–0.8 | Shakeout · weekly ritual · beta-blocking fixes | 0.8 ✅ (password-reset E2E proven on device via the `/reset` HTTPS bridge; editor_notes applied; report loop unblocked) · 0.6 ⬜ **CRITICAL PATH — doubles as Play's mandatory 12-tester/14-day closed test (gate confirmed on the account 2026-07-11); v2.1.4 = the closed-test build** · 0.7 🔶 starts with the cohort |
+| 0.9 | **Notifications v1 — full build** | ✅ Built + credentialed + device-verified end-to-end (arrival, bundling, dedup, caps, tap routing warm+cold). Release valve never needed. |
+| 0.10 | **Share v1 + minimal title pages** | ✅ Live (`/t/` Worker pages, OG tags, UA-aware CTA, canonical domain) |
+| 0.11 | Security + ops batch | ✅ Core done (rate limit, JWT hardening, leaked-password toggle, off-site encrypted backup public+auth — restore-viable, verified; backfill fn + 404 skip-list). Stragglers ⬜ (non-gating): GitLab mirror, pg_partman check, pricing refresh. IN-XPS-004 still tooling-blocked. |
+| 0.12 | **Quiet v1 public release** | 🔶 Play gate verified (closed test required); listing/data-safety/rating answers prepared; remaining: assets, demo account, Support URL (marketing site in build), then 14-day clock → production application (~7d review) + App Store review |
 
 **H0 exit gate:** launch compliance done (ICO registered · contact details live · policies hosted + current) · instrumentation live · alerts firing on real data · share round-trip works · shakeout clean · crash-free ≥99% · quiet v1 live on both stores.
+
+> **Week-1 delta (2026-07-07 → 07-13):** v2.1.0 → v2.1.4 shipped to both tracks; videxstreaming.com live (Worker custom domain, branded Resend auth email, privacy@ routing); a 4-reviewer pre-launch audit ran with every finding fixed or accepted-and-registered (PRs #73–#78, migrations 062–065, risk R-016); marketing site brief authored (separate repo, Payload + Next.js — in build). Engineering side of H0 is effectively complete; the clock-bound items (closed test, ICO, store reviews) own the timeline now.
 
 > **Stream A delivered** (PR `fix/h0-measurement-integrity`, 2026-07-06): items **0.2** (native funnel events — `onboarding_started`/`services_completed`/`clusters_completed`/`first_home_view` + real duration), **0.3** (click-out `link_type` + `price_shown`), **0.4** (`@sentry/react-native` crash reporting + release health), **0.5** (taste-vector event-identity dedup, both paths — see [taste-vector](../concepts/architecture/taste-vector.md#event-identity-dedup-h0-stream-a-2026-07-06)), the **0.7** dashboard SQL (`supabase/queries/metrics-dashboard.sql`), and **0.8** beta-blocking fixes: `editor_notes` migration 040 **applied** to prod (had a latent non-IMMUTABLE index predicate — why it never applied; seed note live) · `availability_reports` loop **unblocked** (root cause: `service_id` was NOT NULL but the "All" default sends NULL, and the sheet showed success regardless — migration 048 drops NOT NULL + `ReportSheet` now respects the result) · in-app **password-reset** deep-link screen (`/reset-password`; needs `videx://reset-password` in the Supabase Redirect URLs allowlist). Device-level verification of the native items (onboarding funnel rows, crash capture, reset round-trip) still pending a dev build.
 

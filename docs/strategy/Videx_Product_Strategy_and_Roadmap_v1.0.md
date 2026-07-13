@@ -1,6 +1,7 @@
 # Videx — Product Strategy & Roadmap
 
 **v1.0 — APPROVED by Joe, 6 July 2026.** This is the working product strategy and roadmap. It supersedes: the February 2026 Notion roadmap, the Monetisation Strategy Exploration v0.1 (absorbed into §5), and the v3 Conversational Discovery Strategy v0.1 (absorbed into H3 Bet 1).
+**Execution status pass — 2026-07-13:** H0 progress markers added in §6 (status block) and §7 (per-item ✅/🔶/⬜). Strategy content unchanged from the approved v1.0. At a glance: H0 engineering is done through v2.1.4; the critical path is now shakeout recruiting (= Play's mandatory 14-day closed test) and ICO registration.
 **Rendered copy:** https://claude.ai/code/artifact/1ec8d533-7d33-45b8-9f11-ae2e128f0fc4 · **Wiki snapshot:** `videx-wiki/raw/forward-planning/Videx_Product_Strategy_and_Roadmap_v1.0_2026-07.md`
 **Provenance:** built 5–6 July 2026 from the codebase (v2.0.2), videx-wiki registers, Notion project, Supabase production data, and fully-cited July-2026 market research. Three independent critique passes (strategy · feasibility-vs-codebase · external fact-check) + a consistency pass; Joe's five decisions (6 Jul), the loops-into-H0 resequence, and the independent H3 vision review (ideation + 2026 frontier research) are incorporated.
 
@@ -167,6 +168,29 @@ Four horizons at side-project pace — now calibrated to Joe's stated capacity (
 
 ### H0 — "Prove it & equip it" (July–September 2026) · theme: measurement, legality, the two loops, quiet v1 release
 
+> **H0 STATUS (updated 2026-07-13, week 1 of ~10–12):** dramatically ahead of
+> the plan's sizing — the engineering is essentially DONE; what remains is
+> admin + people. ✅ 0.2–0.5 (measurement/integrity) · ✅ 0.8 (beta blockers,
+> incl. the full password-reset chain: HTTPS bridge on videxstreaming.com →
+> app) · ✅ 0.9 notifications v1 (built AND device-verified: arrival, bundling,
+> dedup, rate-limit, warm/cold tap routing; FCM+APNs credentialed — the
+> release valve was never needed) · ✅ 0.10 share v1 + /t/ title pages (live
+> on the custom domain) · ✅ 0.11 security/ops core (rate limit, JWT
+> hardening, off-site encrypted backup incl. auth schema — verified restores
+> possible; leaked-password toggle; backfill fn + skip-list) · ✅ a 4-reviewer
+> pre-launch code audit + full fix cycle (PRs #73–#78, not in the original
+> plan) · ✅ v2.1.4 shipped to both store tracks = the closed-test build.
+> 🔶 0.1 compliance: policies hosted + current, custom-domain email live;
+> **ICO registration is Joe's next action**, then placeholders/footers drop.
+> 🔶 0.12 release: Play's 12-tester/14-day closed-test gate CONFIRMED on the
+> account — the shakeout IS the closed test and **recruiting ~15 testers is
+> now the critical path**; store-listing content pack ready to paste.
+> ⬜ 0.6 shakeout (recruit + 14-day clock) · ⬜ 0.7 weekly ritual (starts with
+> the shakeout). Beyond plan: videxstreaming.com (domain, Worker routes,
+> branded auth email via Resend), marketing site brief (Payload+Next.js,
+> in build). **Critical path to the exit gate: testers opted in → 14 days →
+> ICO → production applications.**
+
 Fix what's unmeasurable, clear the legal blocker, **build notifications and share into v1** (Joe's call, 6 Jul: the loops are too important to launch without), shake the app out with people who'll forgive rough edges — then put v1 quietly on both stores so community recruiting in H1 meets a real listing carrying real hooks. Honest sizing: the loop builds roughly double H0's load, hence ~10–12 weeks at stated capacity. The quiet release has no external deadline, so the trade is sound — but nothing else creeps into H0.
 
 **Committed:**
@@ -264,25 +288,25 @@ v1 is already quietly live **with both loops on board** (H0). H1's order: **comm
 
 ---
 
-## 7. The now-backlog (H0, in order)
+## 7. The now-backlog (H0, in order) — status pass 2026-07-13
 
-1. **Launch-compliance checklist (0.1, Decision 6)**: Joe registers with the ICO and picks the contact route (registered-office service recommended); the policies then get real contact details, the caveat footers removed, click-out/push-consent text updates, and hosted `/privacy` + `/terms` URLs. The Stream C solicitor pack is parked, ready for the H2 engagement.
-2. **Notifications v1 spike** — data model (push tokens, consent) + one Edge trigger prototype reading `expires_on` (0.9). First fortnight: it feeds the solicitor brief.
-3. **Fix onboarding funnel events** on native (0.2).
-4. **Finish click-out telemetry** — persist link_type, add price_shown (0.3).
-5. **Add sentry-expo** crash reporting (0.4).
-6. **Taste-vector dedup fix** (0.5).
-7. **Beta-blocking fixes**: password-reset E2E, editor_notes 040 apply-or-remove, availability-report E2E (0.8).
-8. **Security/ops batch** (0.11): leaked-password toggle, IN-PX-29, IN-PX-30, backups, GitLab mirror, partman check, pricing refresh, IN-PX-50.
-9. **Notifications v1 — delivery build** (0.9): EAS FCM/APNs credentials, Expo Notifications, Edge cron, arrival + leaving-soon alerts on real data.
-10. **Share v1 + minimal title pages** (0.10): share sheet → Worker-served title landing with OG tags + store links.
-11. **Friends-&-family shakeout** (~10–15 on existing internal tracks, testing alerts + share too; "active tester" definition applied) — no stranger recruiting yet (0.6).
-12. **Store-release prerequisites**: verify Play production-access rules for the account (14-day/12-tester closed test if it's a personal account created after Nov 2023 — 0.6 doubles as it if needed); store-listing assets + copy + ASO keywords; pre-submission App Store guideline check (0.12).
-13. **Quiet v1 release** on both stores once legal + shakeout clear — staged Play rollout, no announcements; release valve applies if notifications drag (0.12).
-14. **Start the weekly ritual** (runs from week 1 alongside everything): triage + dashboard + 2h growth block (0.7).
-15. Reserve remaining capacity for shakeout fixes.
+1. 🔶 **Launch-compliance checklist (0.1, Decision 6)**: hosted `/privacy` + `/terms` ✅ (Worker, custom domain) · policy text updates (click-out, push consent) ✅ · contact route ✅ (`privacy@videxstreaming.com` via Cloudflare Email Routing) · **ICO registration ⬜ (Joe — the last blocker here)** · placeholder/caveat-footer removal ⬜ (unblocks on ICO number) · store disclosure forms 🔶 (full answer pack prepared; Joe filling in). Stream C solicitor pack parked for H2 as planned.
+2. ✅ **Notifications v1 spike** — data model, consent UX, push tokens (migrations 048–052).
+3. ✅ **Onboarding funnel events** on native (Stream A; resume + completion races found in device tests and fixed — PRs #57, #69).
+4. ✅ **Click-out telemetry** — link_type + price_shown (Stream A).
+5. ✅ **Crash reporting** — @sentry/react-native + release health; sessions confirmed flowing from real builds.
+6. ✅ **Taste-vector dedup fix** — both paths (PR #51); plus (beyond plan) the nightly recompute gained an activity gate + the render path a per-title embedding cache (PR #76).
+7. ✅ **Beta-blocking fixes**: password-reset E2E ✅ (three real bugs found and fixed on-device: fragment-drop → token_hash, Gmail custom-scheme refusal → HTTPS `/reset` bridge, warm-start param loss → router params) · editor_notes 040 applied ✅ · availability-report loop unblocked ✅.
+8. ✅ **Security/ops batch** (0.11): leaked-password toggle ✅ · IN-PX-29 rate limit ✅ · IN-PX-30 JWT hardening ✅ · off-site encrypted monthly backup ✅ (public + auth schemas, run verified) · IN-PX-50 backfill fn ✅ (+ 404 skip-list — the backlog now actually drains) · GitLab mirror ⬜ · pg_partman check ⬜ · pricing refresh ⬜ (three stragglers, none launch-gating).
+9. ✅ **Notifications v1 — delivery build**: FCM V1 + APNs credentialed, send-notifications cron live, **device-verified end-to-end** (arrival, bundling, notify-once dedup, 20h cap, stream-type filter, warm+cold tap routing).
+10. ✅ **Share v1 + title pages**: share sheet → `/t/` Worker pages with OG tags, UA-aware store CTA, canonical domain.
+11. ⬜ **Friends-&-family shakeout** (~15) — **now doubles as Play's REQUIRED closed test (12+ testers, 14 continuous days — confirmed on the account 2026-07-11). This is the critical path.** v2.1.4 (versionCode 10) is the build to promote to the closed track.
+12. 🔶 **Store-release prerequisites**: Play production-access rules verified ✅ (closed-test gate applies) · listing content + data-safety/rating answer pack prepared ✅ (submission-pack artifact) · assets (screenshots, feature graphic) ⬜ · demo account ⬜ · Support URL ⬜ (marketing site in build; Worker fallback available).
+13. ⬜ **Quiet v1 release** — blocked on: 14-day closed test complete → production-access application (~7-day review) + ICO + App Store review.
+14. 🔶 **Weekly ritual** — dashboard SQL exists; ritual proper starts with the shakeout cohort.
+15. Shakeout-fix capacity: partially consumed ahead of schedule by the beta-feedback batch (v2.1.1) and the pre-launch review cycle (PRs #73–#78) — which is the point.
 
-Items 2–6 are individually small — realistic as the first fortnight alongside solicitor calendar time; the notifications delivery build (9) and share/title pages (10) are the meat of weeks 3–8.
+**Beyond-plan work landed in week 1:** videxstreaming.com (registration, Worker custom-domain → the API/legal/share/reset surface), branded auth email (Resend SMTP, DKIM/SPF/DMARC green), the reset-bridge, a 4-reviewer pre-launch audit with all findings fixed or formally accepted (risk register R-016), and the marketing-site brief (separate repo, Payload CMS + Next.js — in build).
 
 ---
 
