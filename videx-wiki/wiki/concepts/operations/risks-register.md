@@ -3,7 +3,7 @@ title: Risks register
 type: concept
 tags: [risks, mitigations, ops]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-07-13
 sources:
   - raw/reference/risks-register.md
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
@@ -33,7 +33,8 @@ Living list of known risks and mitigations. Severity is engineering judgement; r
 | R-012 | Capacitor 8 plugin incompatibility on Android update | Low | Pin Capacitor + plugin versions. Test on latest Android release before Play Store update. | Eng |
 | R-013 | Onboarding drop-off reduces taste vector quality | Medium | Funnel queries flag step-by-step drop-off. Iterate copy and progress UI. | Product |
 | R-014 | OMDB free-tier quota exhausted | Low | Cache aggressively. Sync skips already-rated titles. Upgrade if needed. | Eng |
-| R-015 | Backup retention insufficient for incident recovery | Medium | Manual snapshot before destructive migrations. Off-site monthly `pg_dump` recommended pre-launch. | Eng |
+| R-015 | Backup retention insufficient for incident recovery | Medium | ✅ Mitigated 2026-07-11: monthly off-site encrypted `pg_dump` (public + auth schemas) via `db-backup.yml`, 90-day artifact retention. Manual snapshot before destructive migrations still applies. | Eng |
+| R-016 | `claim_push_token` (migration 060) lets any authenticated user claim any push-token string — a leaked token's alert channel can be redirected/silenced | Low | ACCEPTED by design (pre-launch review 2026-07-12): token possession is treated as device-control proof; restricting claims to unowned/own rows would break the shared-device reclaim flow 060 exists for. Exposure requires a leaked Expo token AND a signed-in attacker. Revisit if tokens ever appear in logs/support tooling. | Eng |
 
 ## Strategy-doc risks (resolved or tracked)
 
