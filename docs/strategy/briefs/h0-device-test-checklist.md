@@ -1,6 +1,17 @@
 # H0 device-test checklist (v2.1.0 builds)
 
-Compiled from the four-stream audit (2026-07-07). Run Android first; repeat on iOS when APNs/TestFlight is ready.
+> **STATUS — CLOSED 2026-07-13.** All "before building" blockers cleared and
+> the test script executed across the v2.1.0–v2.1.3 walk-throughs (server-side
+> seeds run by CC, device actions by Joe). Everything passed, several with
+> real bugs found and fixed along the way: reset E2E (three bugs → token_hash
+> flow, `/reset` HTTPS bridge, warm-start router params — PRs #56/#62/#63),
+> onboarding resume + completion (PRs #57/#69), sign-out token cleanup
+> (PR #58), notifications (arrival/bundle/dedup/rate-limit/tap-routing all
+> PASS on device), mark-watched dedup PASS, Sentry sessions confirmed.
+> Superseded for future testing by the closed-test cycle on **v2.1.4**
+> (versionCode 10) — the remaining unchecked box from this list is the
+> Sentry *crash* event (sessions verified; a deliberate crash test is
+> optional). Kept for the record.
 
 ## Before building (blockers for a meaningful test)
 
