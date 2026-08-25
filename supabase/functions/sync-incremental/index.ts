@@ -122,6 +122,21 @@ class ErrorCollector {
     return this.totalCount;
   }
 
+  // A chained run spans several invocations, so the collector has to
+  // survive as JSON in sync_log.chain_state and come back on the far side.
+  toBuckets(): ErrorBucket[] {
+    return [...this.buckets.values()];
+  }
+
+  static fromBuckets(buckets: ErrorBucket[] | undefined | null): ErrorCollector {
+    const collector = new ErrorCollector();
+    for (const bucket of buckets ?? []) {
+      collector.buckets.set(`${bucket.scope} :: ${bucket.message}`, { ...bucket });
+      collector.totalCount += bucket.count;
+    }
+    return collector;
+  }
+
   // Returns null when clean, so `error_details` stays NULL on healthy runs
   // and a non-NULL value always means something actually went wrong.
   toJson(): Record<string, unknown> | null {
@@ -204,6 +219,30 @@ async function saApiFetch(path: string): Promise<any> {
 // missed daily run without balloning pagination on the SA API side.
 const MAX_SINCE_LOOKBACK_SECONDS = 36 * 3600;
 
+// ── Slice budget (A2) ────────────────────────────────────
+// A slice stops after 18s and hands off, so no single invocation is ever
+// long enough to be killed. A full window took ~128s on recent runs, so
+// roughly 8 slices; the cap allows ~9 minutes of work before giving up.
+const SLICE_BUDGET_MS = 18_000;
+const MAX_CHAIN_DEPTH = 30;
+
+// A chain that has not heartbeated in this long is presumed dead.
+const CHAIN_STALE_MS = 120_000;
+
+// Where a slice stopped, and what the chain has accumulated so far.
+// Persisted to sync_log.chain_state between invocations.
+interface SyncChainState {
+  since: number;
+  ti: number;             // index into CHANGE_TYPES
+  si: number;             // index into SA_SERVICES_GB
+  cursor: string | null;  // SA API pagination cursor at (ti, si)
+  depth: number;
+  slices: number;
+  stats: SyncStats;
+  errorBuckets: ErrorBucket[];
+  stopped_because: string | null;
+}
+
 async function getLastSyncTimestamp(): Promise<number> {
   const { data } = await supabase
     .from('sync_log')
@@ -262,7 +301,6 @@ interface SyncStats {
   availabilityAdded: number;
   availabilityUpdated: number;
   availabilityRemoved: number;
-  timedOut: boolean;
 }
 
 function emptyStats(): SyncStats {
@@ -271,38 +309,72 @@ function emptyStats(): SyncStats {
     availabilityAdded: 0,
     availabilityUpdated: 0,
     availabilityRemoved: 0,
-    timedOut: false,
   };
 }
 
+// Runs ONE slice: from the position saved in `state` until either the work
+// is exhausted or SLICE_BUDGET_MS elapses. Returns true when the whole
+// window has been consumed, false when it stopped early — in which case
+// `state` holds the exact point to resume from.
+//
+// What this replaces: the old loop had a MAX_RUNTIME_MS check that logged
+// "Will resume on next invocation" and returned. There was no next
+// invocation, and no position was saved. The handler then marked the run
+// 'completed', which let getLastSyncTimestamp() advance the window past
+// pages that were never fetched. Silent, permanent data loss on every run
+// long enough to trip it.
+//
 // `stats` is owned by the caller and mutated in place, so a fatal error
 // partway through still leaves the partial counts readable in the catch
 // block rather than dying with the stack frame.
-async function runIncrementalSync(
-  sinceOverride: number | undefined,
+async function runSyncSlice(
+  state: SyncChainState,
   syncId: string | undefined,
   errors: ErrorCollector,
   stats: SyncStats
-): Promise<SyncStats> {
-  const since = sinceOverride || await getLastSyncTimestamp();
+): Promise<boolean> {
+  const since = state.since;
   const historyEvents: HistoryEvent[] = [];
   const startTime = Date.now();
+  const overBudget = () => Date.now() - startTime > SLICE_BUDGET_MS;
 
-  console.log(`Incremental sync since ${new Date(since * 1000).toISOString()}`);
+  // Captured before the loops mutate them, so the resume test below stays
+  // anchored to where THIS slice started.
+  const resumeTi = state.ti;
+  const resumeSi = state.si;
+  const resumeCursor = state.cursor;
 
-  for (const changeType of CHANGE_TYPES) {
-    for (const service of SA_SERVICES_GB) {
-      // Check wall-clock time to avoid Edge Function timeout
-      if (Date.now() - startTime > MAX_RUNTIME_MS) {
-        console.log('Approaching timeout, stopping early. Will resume on next invocation.');
-        stats.timedOut = true;
-        return stats;
-      }
+  console.log(
+    `slice ${state.depth}: since ${new Date(since * 1000).toISOString()}, ` +
+    `resuming at [${resumeTi}/${resumeSi}]${resumeCursor ? ` cursor=${resumeCursor}` : ''}`
+  );
 
-      let cursor: string | undefined;
+  for (let ti = resumeTi; ti < CHANGE_TYPES.length; ti++) {
+    const changeType = CHANGE_TYPES[ti];
+    // Only the change-type we resumed into starts partway down the service
+    // list; every later one starts from the beginning.
+    for (let si = ti === resumeTi ? resumeSi : 0; si < SA_SERVICES_GB.length; si++) {
+      const service = SA_SERVICES_GB[si];
+
+      // The cursor belongs to exactly one (changeType, service) pair.
+      let cursor: string | undefined =
+        ti === resumeTi && si === resumeSi ? (resumeCursor ?? undefined) : undefined;
       let hasMore = true;
 
       while (hasMore) {
+        if (overBudget()) {
+          // Save the exact resume point and flush before handing off, so a
+          // slice that stops early loses nothing.
+          state.ti = ti;
+          state.si = si;
+          state.cursor = cursor ?? null;
+          await insertHistoryBatch(historyEvents);
+          console.log(
+            `slice budget reached at [${ti}/${si}] (${changeType}/${service}) — handing off`
+          );
+          return false;
+        }
+
         try {
           let path = `/changes?country=gb&change_type=${changeType}&catalogs=${service}&item_type=show&from=${since}`;
           if (cursor) path += `&cursor=${cursor}`;
@@ -471,9 +543,11 @@ async function runIncrementalSync(
   }
 
   await insertHistoryBatch(historyEvents);
-  console.log(`History: ${historyEvents.length} events logged`);
+  console.log(`History: ${historyEvents.length} events logged this slice`);
 
-  return stats;
+  // Walked every change type and every service — the window is consumed.
+  state.cursor = null;
+  return true;
 }
 
 // One shape for both the success and failure paths, so a run that dies
@@ -499,99 +573,262 @@ function syncLogUpdate(
   };
 }
 
-// ── Edge Function handler ────────────────────────────────
+/// ── Edge Function handler ────────────────────────────────
+//
+// One invocation = one slice. The daily cron (migration 062) starts slice
+// 0; each slice enqueues its successor through `enqueue_function_call`
+// (migration 067), which queues the request inside Postgres so the handoff
+// survives this isolate exiting.
+//
+// Why the window must never be marked 'completed' early:
+// getLastSyncTimestamp() advances from the last COMPLETED run, so calling
+// a partial window complete silently skips every page it never fetched.
+// A chain that runs out of depth, or dies, is therefore marked FAILED —
+// which correctly makes the next run re-cover the same window.
 
-const MAX_RUNTIME_MS = 120_000; // 2 min — leave 30s buffer before Edge Function timeout
+interface ChainBody {
+  depth?: number;
+  runId?: string;
+  since?: number;
+}
+
+function emptySyncChainState(since: number): SyncChainState {
+  return {
+    since,
+    ti: 0,
+    si: 0,
+    cursor: null,
+    depth: 0,
+    slices: 0,
+    stats: emptyStats(),
+    errorBuckets: [],
+    stopped_because: null,
+  };
+}
+
+function unauthorized() {
+  return new Response(JSON.stringify({ status: 'error', message: 'Unauthorized' }), {
+    status: 401,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
 
 Deno.serve(async (req) => {
   // Verify caller has service_role — check the JWT role claim rather than doing
   // a raw string comparison against the env var (which varies by invocation method).
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return new Response(JSON.stringify({ status: 'error', message: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  if (!authHeader?.startsWith('Bearer ')) return unauthorized();
   try {
     const payload = JSON.parse(atob(authHeader.split(' ')[1].split('.')[1]));
     if (payload.role !== 'service_role') throw new Error('not service_role');
   } catch {
-    return new Response(JSON.stringify({ status: 'error', message: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return unauthorized();
   }
 
-  // Declared outside try so the outer catch can mark the row as failed
-  // instead of leaving it stuck in 'running' forever.
-  let syncId: string | undefined;
-  const errors = new ErrorCollector();
-  const stats = emptyStats();
-
+  // Chain position. The cron posts '{}', so an absent depth means slice 0.
+  let depth = 0;
+  let runId: string | undefined;
+  let sinceOverride: number | undefined;
   try {
-    // Close out any run killed mid-flight before starting a new one, so
-    // 'running' means running (migration 066).
+    const body = (await req.json()) as ChainBody;
+    if (typeof body?.depth === 'number') depth = body.depth;
+    if (typeof body?.runId === 'string') runId = body.runId;
+    if (typeof body?.since === 'number') sinceOverride = body.since;
+  } catch {
+    // No body, or not JSON — treat as a fresh chain.
+  }
+  // ?since= on the URL still works for manual re-runs, and wins over the body.
+  const sinceParam = new URL(req.url).searchParams.get('since');
+  if (sinceParam) sinceOverride = parseInt(sinceParam, 10);
+
+  // ── Chain start ──────────────────────────────────────────────────
+  if (depth === 0) {
     const { data: reaped, error: reapError } = await supabase.rpc('reap_stale_sync_runs');
     if (reapError) console.error('reap_stale_sync_runs failed:', reapError.message);
     else if (reaped) console.log(`Reaped ${reaped} stale sync_log row(s)`);
 
-    // Parse optional since parameter
-    const url = new URL(req.url);
-    const sinceParam = url.searchParams.get('since');
-    const since = sinceParam ? parseInt(sinceParam, 10) : undefined;
+    // Never run two chains at once — they would both page the same SA
+    // windows and double the API spend we are trying to reduce.
+    const { data: active } = await supabase
+      .from('sync_log')
+      .select('id')
+      .eq('sync_type', 'incremental')
+      .eq('status', 'running')
+      .gte('heartbeat_at', new Date(Date.now() - CHAIN_STALE_MS).toISOString())
+      .limit(1);
+    if (active && active.length > 0) {
+      console.log(`sync chain already running (sync_log ${active[0].id}) — skipping`);
+      return json({ status: 'skipped', reason: 'chain already running' });
+    }
 
-    // Create sync log entry
-    const { data: syncLog } = await supabase
+    const since = sinceOverride || (await getLastSyncTimestamp());
+    const { data: syncLog, error: logError } = await supabase
       .from('sync_log')
       .insert({
         sync_type: 'incremental',
         source: 'sa_api',
         status: 'running',
         heartbeat_at: new Date().toISOString(),
+        chain_state: emptySyncChainState(since),
       })
       .select('id')
       .single();
-
-    syncId = syncLog?.id;
-
-    // Run the sync
-    await runIncrementalSync(since, syncId, errors, stats);
-
-    // Update sync log
-    if (syncId) {
-      await supabase
-        .from('sync_log')
-        .update(syncLogUpdate('completed', stats, errors))
-        .eq('id', syncId);
+    if (logError || !syncLog) {
+      const message = logError?.message ?? 'sync_log insert returned no row';
+      console.error('sync_log insert failed:', message);
+      return json({ status: 'error', message }, 500);
     }
+    runId = syncLog.id;
+    console.log(`sync chain ${runId} starting from ${new Date(since * 1000).toISOString()}`);
+  }
+
+  if (!runId) {
+    return json({ status: 'error', message: 'chained slice called without runId' }, 400);
+  }
+
+  // ── Load chain state ─────────────────────────────────────────────
+  const { data: current, error: readError } = await supabase
+    .from('sync_log')
+    .select('chain_state, status')
+    .eq('id', runId)
+    .single();
+  if (readError || !current) {
+    const message = readError?.message ?? `sync_log ${runId} not found`;
+    console.error('chain state read failed:', message);
+    return json({ status: 'error', message }, 500);
+  }
+  if (current.status !== 'running') {
+    // Reaped or closed while this slice was in flight — don't resurrect it.
+    console.warn(`chain ${runId} is ${current.status} — not continuing`);
+    return json({ status: 'stopped', reason: `run is ${current.status}` });
+  }
+  if (!current.chain_state) {
+    const message = `sync_log ${runId} has no chain_state — cannot resume`;
+    console.error(message);
+    await supabase
+      .from('sync_log')
+      .update({
+        status: 'failed',
+        completed_at: new Date().toISOString(),
+        errors: 1,
+        error_details: { total: 1, fatal: message, errors: [] },
+      })
+      .eq('id', runId);
+    return json({ status: 'error', message }, 500);
+  }
+
+  const state = current.chain_state as SyncChainState;
+  state.depth = depth;
+  state.slices += 1;
+
+  // Totals and error buckets carry across the chain, so each slice adds to
+  // what its predecessors already recorded rather than starting clean.
+  const stats: SyncStats = { ...emptyStats(), ...state.stats };
+  const errors = ErrorCollector.fromBuckets(state.errorBuckets);
+
+  // ── Run one slice ────────────────────────────────────────────────
+  let windowConsumed = false;
+  let fatal: string | null = null;
+  try {
+    windowConsumed = await runSyncSlice(state, runId, errors, stats);
+  } catch (err) {
+    fatal = err instanceof Error ? err.message : String(err);
+    errors.record('fatal', err);
+    console.error('Sync slice failed:', fatal);
+  }
+
+  state.stats = stats;
+  state.errorBuckets = errors.toBuckets();
+
+  // ── Decide whether the chain continues ───────────────────────────
+  let stop: string | null = null;
+  if (fatal) stop = `fatal: ${fatal}`;
+  else if (windowConsumed) stop = 'window consumed';
+  else if (depth + 1 >= MAX_CHAIN_DEPTH) {
+    stop = `chain depth cap (${MAX_CHAIN_DEPTH}) reached before the window was consumed`;
+  }
+
+  if (stop) {
+    state.stopped_because = stop;
+    // ONLY a fully consumed window may be marked 'completed'. Anything else
+    // must stay 'failed' so getLastSyncTimestamp() does not advance past
+    // pages this chain never fetched.
+    const status = windowConsumed && !fatal ? 'completed' : 'failed';
+    await supabase
+      .from('sync_log')
+      .update({ ...syncLogUpdate(status, stats, errors), chain_state: state })
+      .eq('id', runId);
 
     console.log(
-      `Sync complete: processed=${stats.processed} ` +
-      `availability_added=${stats.availabilityAdded} ` +
+      `sync chain ${runId} ${status} after ${state.slices} slice(s): ` +
+      `processed=${stats.processed} availability_added=${stats.availabilityAdded} ` +
       `availability_updated=${stats.availabilityUpdated} ` +
-      `availability_removed=${stats.availabilityRemoved} ` +
-      `errors=${errors.total} timedOut=${stats.timedOut}`
+      `availability_removed=${stats.availabilityRemoved} errors=${errors.total} — ${stop}`
     );
-
-    return new Response(JSON.stringify({ status: 'ok', ...stats, errors: errors.total }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (err: any) {
-    console.error('Sync failed:', err.message);
-    // Count the fatal error itself, then persist everything collected
-    // before it — a run that dies at page 40 still knows what pages 1-39
-    // hit. Previously all of that was discarded in favour of `errors: 1`.
-    errors.record('fatal', err);
-    if (syncId) {
-      await supabase
-        .from('sync_log')
-        .update(syncLogUpdate('failed', stats, errors))
-        .eq('id', syncId);
-    }
-    return new Response(JSON.stringify({ status: 'error', message: err.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return json(
+      {
+        status: status === 'completed' ? 'ok' : 'error',
+        runId,
+        slices: state.slices,
+        ...stats,
+        errors: errors.total,
+        stopped: stop,
+      },
+      status === 'completed' ? 200 : 500
+    );
   }
+
+  // ── Persist progress, then hand off ──────────────────────────────
+  // Written BEFORE the handoff so the resume point is durable even if the
+  // enqueue fails.
+  await supabase
+    .from('sync_log')
+    .update({
+      heartbeat_at: new Date().toISOString(),
+      titles_processed: stats.processed,
+      titles_added: 0,
+      availability_added: stats.availabilityAdded,
+      availability_updated: stats.availabilityUpdated,
+      availability_removed: stats.availabilityRemoved,
+      errors: errors.total,
+      error_details: errors.toJson(),
+      chain_state: state,
+    })
+    .eq('id', runId);
+
+  const { error: chainError } = await supabase.rpc('enqueue_function_call', {
+    p_function: 'sync-incremental',
+    p_body: { depth: depth + 1, runId },
+  });
+  if (chainError) {
+    console.error(`chain handoff failed at depth ${depth}:`, chainError.message);
+    errors.record('chain', `enqueue_function_call failed: ${chainError.message}`);
+    state.stopped_because = `chain handoff failed: ${chainError.message}`;
+    await supabase
+      .from('sync_log')
+      .update({ ...syncLogUpdate('failed', stats, errors), chain_state: state })
+      .eq('id', runId);
+    return json({ status: 'error', message: chainError.message }, 500);
+  }
+
+  console.log(
+    `slice ${depth} done at [${state.ti}/${state.si}] ` +
+    `(processed=${stats.processed} errors=${errors.total}) — queued depth ${depth + 1}`
+  );
+  return json({
+    status: 'ok',
+    runId,
+    depth,
+    chained: depth + 1,
+    resumeAt: { ti: state.ti, si: state.si, cursor: state.cursor },
+    ...stats,
+    errors: errors.total,
+  });
 });
