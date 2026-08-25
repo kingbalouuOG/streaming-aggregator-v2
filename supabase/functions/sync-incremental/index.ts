@@ -72,6 +72,88 @@ const CHANGE_TYPES = ['new', 'updated', 'removed', 'expiring'] as const;
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// ── Observability (A1) ───────────────────────────────────
+//
+// `sync_log.error_details` was NULL on every run ever recorded, including
+// 2026-08-12..15 which each logged errors=17 with nothing to show for it.
+// The cause turned out to be TMDb 401s — the same message 17 times over.
+//
+// So: aggregate by (scope, message) rather than appending. 600 identical
+// failures collapse to one row with count=600, which both fits in a JSONB
+// column and reads better than a truncated list of duplicates.
+const MAX_DISTINCT_ERRORS = 25;
+
+interface ErrorBucket {
+  scope: string;
+  message: string;
+  count: number;
+  first_seen: string;
+  sample: string | null;
+}
+
+class ErrorCollector {
+  private readonly buckets = new Map<string, ErrorBucket>();
+  private totalCount = 0;
+  private droppedDistinct = 0;
+
+  record(scope: string, err: unknown, sample?: string): void {
+    this.totalCount++;
+    const message = err instanceof Error ? err.message : String(err);
+    const key = `${scope} :: ${message}`;
+    const existing = this.buckets.get(key);
+    if (existing) {
+      existing.count++;
+      return;
+    }
+    if (this.buckets.size >= MAX_DISTINCT_ERRORS) {
+      this.droppedDistinct++;
+      return;
+    }
+    this.buckets.set(key, {
+      scope,
+      message,
+      count: 1,
+      first_seen: new Date().toISOString(),
+      sample: sample ?? null,
+    });
+  }
+
+  get total(): number {
+    return this.totalCount;
+  }
+
+  // Returns null when clean, so `error_details` stays NULL on healthy runs
+  // and a non-NULL value always means something actually went wrong.
+  toJson(): Record<string, unknown> | null {
+    if (this.totalCount === 0) return null;
+    const errors = [...this.buckets.values()].sort((a, b) => b.count - a.count);
+    return {
+      total: this.totalCount,
+      distinct: this.buckets.size,
+      dropped_distinct: this.droppedDistinct,
+      errors,
+    };
+  }
+}
+
+// Heartbeat: proves the run is still alive so reap_stale_sync_runs()
+// (migration 066) can tell a working job from one that was killed. Killed
+// runs used to sit at status='running' forever — 4 of the last 14.
+const HEARTBEAT_INTERVAL_MS = 15_000;
+let lastHeartbeat = 0;
+
+async function heartbeat(syncId: string | undefined, force = false): Promise<void> {
+  if (!syncId) return;
+  const now = Date.now();
+  if (!force && now - lastHeartbeat < HEARTBEAT_INTERVAL_MS) return;
+  lastHeartbeat = now;
+  const { error } = await supabase
+    .from('sync_log')
+    .update({ heartbeat_at: new Date().toISOString() })
+    .eq('id', syncId);
+  if (error) console.error('heartbeat failed:', error.message);
+}
+
 async function fetchWithRetry(
   url: string,
   options: RequestInit,
@@ -170,16 +252,39 @@ async function insertHistoryBatch(events: HistoryEvent[]): Promise<void> {
   }
 }
 
-async function runIncrementalSync(sinceOverride?: number, syncId?: string): Promise<{
+// Every count here is a STREAMING OPTION, never a title. This function has
+// no `.from('titles')` write of any kind — it cannot add a title. The old
+// field names (`added`/`updated`/`removed`) were written straight into
+// sync_log.titles_* and are the reason the log claimed 925 titles added on
+// a day the catalogue did not move at all.
+interface SyncStats {
   processed: number;
-  added: number;
-  updated: number;
-  removed: number;
-  errors: number;
+  availabilityAdded: number;
+  availabilityUpdated: number;
+  availabilityRemoved: number;
   timedOut: boolean;
-}> {
+}
+
+function emptyStats(): SyncStats {
+  return {
+    processed: 0,
+    availabilityAdded: 0,
+    availabilityUpdated: 0,
+    availabilityRemoved: 0,
+    timedOut: false,
+  };
+}
+
+// `stats` is owned by the caller and mutated in place, so a fatal error
+// partway through still leaves the partial counts readable in the catch
+// block rather than dying with the stack frame.
+async function runIncrementalSync(
+  sinceOverride: number | undefined,
+  syncId: string | undefined,
+  errors: ErrorCollector,
+  stats: SyncStats
+): Promise<SyncStats> {
   const since = sinceOverride || await getLastSyncTimestamp();
-  const stats = { processed: 0, added: 0, updated: 0, removed: 0, errors: 0, timedOut: false };
   const historyEvents: HistoryEvent[] = [];
   const startTime = Date.now();
 
@@ -218,12 +323,12 @@ async function runIncrementalSync(sinceOverride?: number, syncId?: string): Prom
               } else if (change.show?.tmdbId) {
                 ({ tmdbId, mediaType } = extractTmdbId(change.show.tmdbId));
               } else {
-                stats.errors++;
+                errors.record('change.shape', 'missing showId/showType', Object.keys(change).join(','));
                 console.error(`Skipping change: missing showId/showType. Keys: ${Object.keys(change).join(', ')}`);
                 continue;
               }
               if (!tmdbId || isNaN(tmdbId)) {
-                stats.errors++;
+                errors.record('change.shape', 'invalid tmdbId', String(change.showId));
                 console.error(`Skipping change: invalid tmdbId "${change.showId}"`);
                 continue;
               }
@@ -260,7 +365,7 @@ async function runIncrementalSync(sinceOverride?: number, syncId?: string): Prom
                   .eq('media_type', mediaType)
                   .eq('service_id', serviceId)
                   .eq('stream_type', streamType);
-                stats.removed++;
+                stats.availabilityRemoved++;
               } else {
                 // new / updated / expiring: upsert this individual streaming option.
                 // For 'updated': read existing row before delete for price comparison.
@@ -329,14 +434,18 @@ async function runIncrementalSync(sinceOverride?: number, syncId?: string): Prom
                   sync_run_id: syncId || null,
                 });
 
-                if (changeType === 'new') stats.added++;
-                else stats.updated++;
+                if (changeType === 'new') stats.availabilityAdded++;
+                else stats.availabilityUpdated++;
 
                 // Phase 1: embeddings handled by embed-new-titles cron (06:45 UTC)
               }
               stats.processed++;
             } catch (err: any) {
-              stats.errors++;
+              errors.record(
+                `change.${changeType}`,
+                err,
+                `${change.showType ?? '?'}/${change.showId ?? change.show?.tmdbId ?? '?'}`
+              );
               console.error(`Error processing ${changeType} for ${change.showId ?? change.show?.tmdbId}:`, err.message);
             }
           }
@@ -349,11 +458,12 @@ async function runIncrementalSync(sinceOverride?: number, syncId?: string): Prom
 
           hasMore = result.hasMore || false;
           cursor = result.nextCursor;
+          await heartbeat(syncId);
           // Pace requests below RapidAPI's per-second cap on the BASIC tier.
           await delay(1100);
         } catch (err: any) {
           console.error(`Error fetching ${changeType} changes for ${service}:`, err.message);
-          stats.errors++;
+          errors.record(`fetch.${changeType}`, err, service);
           hasMore = false;
         }
       }
@@ -364,6 +474,29 @@ async function runIncrementalSync(sinceOverride?: number, syncId?: string): Prom
   console.log(`History: ${historyEvents.length} events logged`);
 
   return stats;
+}
+
+// One shape for both the success and failure paths, so a run that dies
+// halfway still records what it managed to do and why it stopped. The old
+// catch block wrote `errors: 1` and nothing else.
+function syncLogUpdate(
+  status: 'completed' | 'failed',
+  stats: SyncStats,
+  errors: ErrorCollector
+) {
+  return {
+    status,
+    completed_at: new Date().toISOString(),
+    heartbeat_at: new Date().toISOString(),
+    titles_processed: stats.processed,
+    // This function never writes `titles`. Saying 0 is the whole point of A1.
+    titles_added: 0,
+    availability_added: stats.availabilityAdded,
+    availability_updated: stats.availabilityUpdated,
+    availability_removed: stats.availabilityRemoved,
+    errors: errors.total,
+    error_details: errors.toJson(),
+  };
 }
 
 // ── Edge Function handler ────────────────────────────────
@@ -393,8 +526,16 @@ Deno.serve(async (req) => {
   // Declared outside try so the outer catch can mark the row as failed
   // instead of leaving it stuck in 'running' forever.
   let syncId: string | undefined;
+  const errors = new ErrorCollector();
+  const stats = emptyStats();
 
   try {
+    // Close out any run killed mid-flight before starting a new one, so
+    // 'running' means running (migration 066).
+    const { data: reaped, error: reapError } = await supabase.rpc('reap_stale_sync_runs');
+    if (reapError) console.error('reap_stale_sync_runs failed:', reapError.message);
+    else if (reaped) console.log(`Reaped ${reaped} stale sync_log row(s)`);
+
     // Parse optional since parameter
     const url = new URL(req.url);
     const sinceParam = url.searchParams.get('since');
@@ -403,46 +544,49 @@ Deno.serve(async (req) => {
     // Create sync log entry
     const { data: syncLog } = await supabase
       .from('sync_log')
-      .insert({ sync_type: 'incremental', source: 'sa_api', status: 'running' })
+      .insert({
+        sync_type: 'incremental',
+        source: 'sa_api',
+        status: 'running',
+        heartbeat_at: new Date().toISOString(),
+      })
       .select('id')
       .single();
 
     syncId = syncLog?.id;
 
     // Run the sync
-    const stats = await runIncrementalSync(since, syncId);
+    await runIncrementalSync(since, syncId, errors, stats);
 
     // Update sync log
     if (syncId) {
       await supabase
         .from('sync_log')
-        .update({
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-          titles_processed: stats.processed,
-          titles_added: stats.added,
-          titles_updated: stats.updated,
-          titles_removed: stats.removed,
-          errors: stats.errors,
-        })
+        .update(syncLogUpdate('completed', stats, errors))
         .eq('id', syncId);
     }
 
-    console.log(`Sync complete: processed=${stats.processed} added=${stats.added} updated=${stats.updated} removed=${stats.removed} errors=${stats.errors}`);
+    console.log(
+      `Sync complete: processed=${stats.processed} ` +
+      `availability_added=${stats.availabilityAdded} ` +
+      `availability_updated=${stats.availabilityUpdated} ` +
+      `availability_removed=${stats.availabilityRemoved} ` +
+      `errors=${errors.total} timedOut=${stats.timedOut}`
+    );
 
-    return new Response(JSON.stringify({ status: 'ok', ...stats }), {
+    return new Response(JSON.stringify({ status: 'ok', ...stats, errors: errors.total }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err: any) {
     console.error('Sync failed:', err.message);
+    // Count the fatal error itself, then persist everything collected
+    // before it — a run that dies at page 40 still knows what pages 1-39
+    // hit. Previously all of that was discarded in favour of `errors: 1`.
+    errors.record('fatal', err);
     if (syncId) {
       await supabase
         .from('sync_log')
-        .update({
-          status: 'failed',
-          completed_at: new Date().toISOString(),
-          errors: 1,
-        })
+        .update(syncLogUpdate('failed', stats, errors))
         .eq('id', syncId);
     }
     return new Response(JSON.stringify({ status: 'error', message: err.message }), {

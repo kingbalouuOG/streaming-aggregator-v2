@@ -77,11 +77,26 @@ interface TmdbTitle {
   episode_run_time?: number[];
 }
 
+// Thrown to abort the whole run the instant TMDb rejects our credential.
+// See CredentialError's use site for why this is fatal rather than counted.
+class CredentialError extends Error {
+  constructor(status: number, ref: string) {
+    super(
+      `TMDb rejected the credential (HTTP ${status}) on ${ref}. ` +
+      `TMDB_API_KEY is missing, revoked, or is a v4 read token being sent ` +
+      `as a v3 api_key parameter. Aborting the run — every remaining fetch ` +
+      `would fail identically.`
+    );
+    this.name = 'CredentialError';
+  }
+}
+
 // Discriminated result: 'notfound' is a CONFIRMED TMDb 404 (permanently
-// skippable); null is any other failure (broken key, retry exhaustion,
-// TMDb incident) and must NOT enter the skip-list — recording those as
-// 404s during one bad Sunday run would permanently blacklist up to 300
-// legitimate titles (pre-launch review 2026-07-12).
+// skippable); null is any other failure (retry exhaustion, TMDb incident)
+// and must NOT enter the skip-list — recording those as 404s during one bad
+// Sunday run would permanently blacklist up to 300 legitimate titles
+// (pre-launch review 2026-07-12). A 401/403 throws instead of returning
+// null: it is not a per-row failure, it is the whole run being dead.
 async function tmdbFetch(
   tmdbId: number,
   mediaType: 'movie' | 'tv'
@@ -95,6 +110,13 @@ async function tmdbFetch(
     const res = await fetch(url.toString());
     if (res.status === 404) return 'notfound';
     if (res.ok) return (await res.json()) as TmdbTitle;
+    // Fail fast on a bad credential. Every weekly run from 2026-06-07 to
+    // 2026-08-23 spent ~105 s walking 300 IDs at 260 ms apiece, took a 401
+    // on every single one, recorded `failed=300` in a log nobody reads, and
+    // returned HTTP 200. Seventy-nine days of green ticks over a dead key.
+    if (res.status === 401 || res.status === 403) {
+      throw new CredentialError(res.status, `${mediaType}/${tmdbId}`);
+    }
     if (res.status === 429 || res.status >= 500) {
       const backoff = Math.pow(2, attempt + 2) * 1000;
       console.warn(`  retry ${attempt + 1}/3 after ${backoff}ms (HTTP ${res.status}) for ${mediaType}/${tmdbId}`);
@@ -154,10 +176,35 @@ interface RunStats {
   skipped404: number;
   failed: number;
   remaining: number;
+  // Aggregated by message so 300 identical failures collapse to one entry
+  // with count=300 rather than 300 rows of the same string.
+  failures: Record<string, number>;
+}
+
+function noteFailure(stats: RunStats, message: string): void {
+  stats.failures[message] = (stats.failures[message] ?? 0) + 1;
+}
+
+// null on a clean run, so a non-NULL sync_log.error_details always means
+// something actually went wrong.
+function errorDetails(stats: RunStats, fatal?: string): Record<string, unknown> | null {
+  const entries = Object.entries(stats.failures);
+  if (entries.length === 0 && !fatal) return null;
+  return {
+    total: stats.failed,
+    fatal: fatal ?? null,
+    skipped_404: stats.skipped404,
+    errors: entries
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 25)
+      .map(([message, count]) => ({ message, count })),
+  };
 }
 
 async function runBackfillBatch(): Promise<RunStats> {
-  const stats: RunStats = { missing: 0, upserted: 0, skipped404: 0, failed: 0, remaining: 0 };
+  const stats: RunStats = {
+    missing: 0, upserted: 0, skipped404: 0, failed: 0, remaining: 0, failures: {},
+  };
 
   const { data, error } = await supabase.rpc('list_missing_title_ids', {
     p_limit: BATCH_LIMIT,
@@ -179,6 +226,8 @@ async function runBackfillBatch(): Promise<RunStats> {
       .upsert(rows, { onConflict: 'tmdb_id,media_type' });
     if (upErr) {
       stats.failed += rows.length;
+      stats.failures[`titles upsert: ${upErr.message}`] =
+        (stats.failures[`titles upsert: ${upErr.message}`] ?? 0) + rows.length;
       console.error(`  upsert error (${rows.length} rows): ${upErr.message}`);
     } else {
       stats.upserted += rows.length;
@@ -202,6 +251,9 @@ async function runBackfillBatch(): Promise<RunStats> {
       // Transient/unknown failure: count it, DON'T blacklist it — the
       // row stays in list_missing_title_ids for the next run.
       stats.failed++;
+      // Deliberately id-free so the counter aggregates. The individual IDs
+      // are already in the function logs via tmdbFetch's console.error.
+      noteFailure(stats, 'TMDb fetch failed (non-404, retries exhausted)');
       continue;
     }
     buffer.push(buildTitleRow(tmdb, row.media_type));
@@ -254,18 +306,66 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Close out any run that was killed mid-flight, so 'running' means
+  // running rather than "died at some point in the last two months".
+  const { error: reapError } = await supabase.rpc('reap_stale_sync_runs');
+  if (reapError) console.error('reap_stale_sync_runs failed:', reapError.message);
+
+  // A1: this is the ONLY scheduled job that inserts rows into `titles`, so
+  // it is the only honest source of sync_log.titles_added. Until now it
+  // wrote no sync_log row at all, which is why a 79-day catalogue freeze
+  // left no trace anywhere except Edge Function logs.
+  const { data: syncLog, error: logError } = await supabase
+    .from('sync_log')
+    .insert({
+      sync_type: 'backfill',
+      source: 'tmdb',
+      status: 'running',
+      heartbeat_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+  if (logError) console.error('sync_log insert failed:', logError.message);
+  const syncId: string | undefined = syncLog?.id;
+
   try {
     const stats = await runBackfillBatch();
     console.log(
       `backfill-missing-titles done: missing=${stats.missing} upserted=${stats.upserted} ` +
       `skipped404=${stats.skipped404} failed=${stats.failed} remaining=${stats.remaining}`
     );
+    if (syncId) {
+      await supabase
+        .from('sync_log')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          heartbeat_at: new Date().toISOString(),
+          titles_processed: stats.missing,
+          titles_added: stats.upserted,
+          errors: stats.failed,
+          error_details: errorDetails(stats),
+        })
+        .eq('id', syncId);
+    }
     return new Response(JSON.stringify({ status: 'ok', ...stats }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('backfill-missing-titles failed:', message);
+    if (syncId) {
+      await supabase
+        .from('sync_log')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          heartbeat_at: new Date().toISOString(),
+          errors: 1,
+          error_details: { total: 1, fatal: message, errors: [] },
+        })
+        .eq('id', syncId);
+    }
     return new Response(JSON.stringify({ status: 'error', message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
