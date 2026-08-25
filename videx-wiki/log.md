@@ -551,3 +551,24 @@ Branch `feat/paid-titles-row-composition`. Founder beta feedback (2026-07-09): p
 - Updated: wiki/concepts/operations/risks-register.md — R-015 marked mitigated (off-site encrypted monthly pg_dump, public+auth schemas, verified); R-016 added (claim_push_token possession-as-proof model, ACCEPTED by design per the 2026-07-12 review).
 - Updated: wiki/concepts/operations/auth-email-smtp.md (2026-07-11 — recorded here for the log): domain corrected to videxstreaming.com; Step 4a rewritten around the /reset HTTPS bridge (Gmail never activates custom-scheme hrefs); template silent-save verification steps.
 - Source-of-truth changes this rides with: docs/strategy/Videx_Product_Strategy_and_Roadmap_v1.0.md gained a §6 H0 status block + §7 per-item markers (strategy content unchanged); docs/strategy/briefs/h0-device-test-checklist.md CLOSED with outcomes.
+
+## [2026-08-25] ingest | Catalogue pipeline repair (A1 + A2)
+Branch `fix/catalogue-pipeline-a1-a2`, from `docs/plans/2026-08-25-001-fix-catalogue-speed-freshness-plan.md` (workstreams A1 and A2 only; B and C untouched).
+
+**Root cause found during implementation, not in the plan: TMDb returns 401 to every Edge Function call.** `backfill-missing-titles` (2026-08-23) logged `TMDb 401` 300 times and finished `failed=300, upserted=0`; `enrich-new-titles` (2026-08-25) the same, 100/100. `TMDB_API_KEY` is invalid/revoked. **No amount of A1/A2 work writes a title until Joe rotates it** — the catalogue stays frozen at 22,864 rows, newest `2026-06-07`.
+
+Two plan claims corrected against live evidence:
+- pg_net's 30s sever does **not** kill the function (the 08-23 backfill ran 105s and returned 200 past it). What it kills is the *outcome* — nothing downstream learns the result. The real casualty is the Edge Function wall-clock limit: 62 of 145 incremental runs since 2026-03-31 (**42.8%**) are stuck at `status='running'`. That is the plan's "~40% of runs hang and re-fetch", now exact — `getLastSyncTimestamp()` reads only completed runs.
+- `titles_added=925` on 2026-08-18 confirmed phantom: zero titles created that day.
+
+A1 — migration 066 (`sync_log`): adds `availability_added`/`_updated`/`_removed` (additive, **not** a rename — `sync_history`, `supabase/queries/dashboard.sql` and `scripts/sync-content.ts` are untouched), repurposes `titles_added` to mean real title rows, relabels 65 historic rows (19,811 phantom "titles added" moved across), adds `heartbeat_at` + `reap_stale_sync_runs()` (62 rows on first call), widens the `sync_type` CHECK to allow `'backfill'`, and rebuilds `sync_history`. Both functions aggregate failures by `(scope, message)` into `error_details` and persist them on the failure path. `backfill-missing-titles` writes its own `sync_log` row — the first honest `titles_added` — and aborts on a TMDb 401/403 rather than burning 300 rate-limited calls.
+
+A2 — migration 067: `enqueue_function_call(text, jsonb)` (allow-listed, fire-and-forget via pg_net so the handoff survives isolate teardown), `sync_log.chain_state`, `count_missing_title_ids()` (~2.3s — chain start/end only). `backfill-missing-titles` → 50 rows / 18s per slice, flushing titles **and** skips every 10 rows (was 100 / end-of-run). `sync-incremental` → resumable `(changeType, service, cursor)` position in `chain_state`; a chain that dies or exhausts depth is marked `failed` on purpose so the window is re-covered.
+
+Caught while dry-running 066: the `sync_history` rebuild had to become DROP + CREATE (replace cannot reorder view columns) and re-declare `security_invoker = on`, which migration 026 set and a plain recreate would silently have dropped.
+
+- Updated: `wiki/concepts/operations/sync-pipeline.md` (self-chaining section, "reading sync health" — `cron.job_run_details` is not evidence a job ran, TMDb-401 failure row, catalogue-growth health checks), `wiki/concepts/operations/risks-register.md` (R-010 Medium→High and marked materialised; R-017 credential expiry, R-018 killed long jobs ✅, R-019 backlog drain rate).
+- Verify: root `tsc --noEmit` clean, native `tsc --noEmit` clean, `vitest run` 229/229. `supabase/functions/**` is eslint-ignored and outside the root tsconfig, so the two functions were checked with a standalone `tsc --noEmit --noResolve` pass instead (no local Deno).
+- **Migrations 066 + 067 are NOT applied.** Both must be applied before the functions are redeployed — the new code writes `chain_state`, `availability_*` and `sync_type='backfill'`, and calls `reap_stale_sync_runs` / `enqueue_function_call`.
+- Out of scope and still open: A3 (queue is `tmdb_id ASC`), A4 (22,260-row bulk clear — needs Joe's go-ahead), A5 (daily cadence). SA quota question stays deferred until A1/A2 land and usage is re-measured.
+

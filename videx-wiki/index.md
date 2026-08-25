@@ -114,7 +114,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Phase NATIVE-3 — Onboarding + real service prefs](wiki/concepts/operations/phase-native-3.md) — RN migration phase 3: 5-step onboarding (account→services→watched→clusters→sliders), taste bootstrap, retires DEV_SERVICES.
 - [Phase NATIVE-3.5 — Home composition completion](wiki/concepts/operations/phase-native-3-5.md) — RN migration phase 3.5: ports the web Home's genre-spotlight + Recently-Added rows onto native Home.
 - [Phase NATIVE-4 + POLISH — Profile/settings, signal capture, cutover](wiki/concepts/operations/phase-native-4-and-polish.md) — RN migration finale: Profile/Sign-Out, engagement signal capture, MMKV query persistence, migration 047, and the app.videx.streaming v2.0.0 cutover to main.
-- [Sync pipeline runbook](wiki/concepts/operations/sync-pipeline.md)
+- [Sync pipeline runbook](wiki/concepts/operations/sync-pipeline.md) — bulk + incremental sync, self-chaining slices, and how to read sync health (`cron.job_run_details` is not evidence a job ran).
 - [Embedding backfill runbook](wiki/concepts/operations/embedding-backfill.md)
 - [Edge Function deployment runbook](wiki/concepts/operations/edge-function-deployment.md)
 - [Monthly mood room recluster runbook](wiki/concepts/operations/monthly-mood-room-recluster.md)
