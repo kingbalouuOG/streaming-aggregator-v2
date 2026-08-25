@@ -63,23 +63,31 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const TMDB_DELAY = 260; // ms — matches sync-content.ts + the backfill script
 
-// ── Slice budget (A2) ────────────────────────────────────
-// 50 rows x 260ms = ~13s of pacing plus fetch latency, targeting ~15-18s
-// per invocation. SLICE_BUDGET_MS is the real guarantee: the row count is
-// only a hint, since TMDb latency is not ours to control.
-const SLICE_LIMIT = 50;
-const SLICE_BUDGET_MS = 18_000;
+// ── Slice budget ─────────────────────────────────────────
+// RESIZED 2026-08-25 after the first live chain died at slice 12 with an
+// Edge Runtime 502. Workers linger minutes past the end of their request,
+// so twelve 18s invocations inside 3.5 minutes exhausted the concurrent
+// worker allowance. INVOCATION COUNT is the scarce resource here, not
+// duration — single invocations of 105s and 128s complete fine.
+//
+// So: bigger and fewer, the opposite of the original sizing. 250 rows x
+// 260ms = ~65s of pacing, budgeted at 75s — comfortably inside the range
+// we have direct evidence works, and well under the ~150s zone where runs
+// were being killed. 12 slices covers 3,000 titles per chain using a
+// quarter of the invocations the old sizing needed for 2,000.
+const SLICE_LIMIT = 250;
+const SLICE_BUDGET_MS = 75_000;
 
-// Flush every 10 rows (~3s of work). Previously titles flushed at 100 and
-// skips only at the very end of a 300-row run, so anything that cut the
-// run short discarded everything it had fetched.
+// Pause before handing off, giving the outgoing worker a moment to wind
+// down before its successor is started. Cheap insurance against the 502.
+const HANDOFF_DELAY_MS = 3_000;
+
 const FLUSH_EVERY = 10;
 
-// Hard ceiling on chain length: 40 x 50 = 2,000 titles per chain. Deep
-// enough to be useful against the 22,260-row backlog, shallow enough that
-// a misbehaving chain cannot run away. Clearing the backlog outright is A4
-// and needs its own go-ahead.
-const MAX_CHAIN_DEPTH = 40;
+// Hard ceiling on chain length: 12 x 250 = 3,000 titles per chain.
+// Clearing the 22,260-row backlog outright is A4 and needs its own
+// go-ahead.
+const MAX_CHAIN_DEPTH = 12;
 
 // A chain that has not heartbeated in this long is presumed dead, so a new
 // one may start. Comfortably longer than one slice.
@@ -221,6 +229,10 @@ function noteFailure(stats: RunStats, message: string): void {
 // One invocation = one slice. Sized to finish in well under 20s so it can
 // never be the thing that hits a wall-clock limit, and bounded by elapsed
 // time as well as row count — a slow TMDb makes the count budget a lie.
+// Set for the duration of a slice so flushBoth() can heartbeat. Module
+// scope rather than a parameter to keep the flush helpers closure-simple.
+let heartbeatRunId: string | undefined;
+
 async function runBackfillSlice(): Promise<RunStats> {
   const stats: RunStats = {
     missing: 0, upserted: 0, skipped404: 0, failed: 0, remaining: 0, failures: {},
@@ -279,6 +291,15 @@ async function runBackfillSlice(): Promise<RunStats> {
   async function flushBoth() {
     await flushTitles();
     await flushSkips();
+    // Heartbeat on every flush (~3s apart). resume_stalled_chains() treats
+    // a 3-minute-old heartbeat as dead, so a slice that is working must
+    // say so far more often than that or the watchdog starts a duplicate.
+    if (heartbeatRunId) {
+      await supabase
+        .from('sync_log')
+        .update({ heartbeat_at: new Date().toISOString() })
+        .eq('id', heartbeatRunId);
+    }
   }
 
   // try/finally, not a trailing flush: tmdbFetch throws CredentialError on
@@ -347,6 +368,11 @@ interface ChainState {
   failures: Record<string, number>;
   skipped_404: number;
   stopped_because: string | null;
+  // Set after each handoff so resume_stalled_chains() (migration 068) can
+  // report WHY a chain stalled, not merely that it did.
+  last_request_id: number | null;
+  resumes?: number;
+  last_delivery_status?: string;
 }
 
 function emptyChainState(gapAtStart: number | null): ChainState {
@@ -358,6 +384,7 @@ function emptyChainState(gapAtStart: number | null): ChainState {
     failures: {},
     skipped_404: 0,
     stopped_because: null,
+    last_request_id: null,
   };
 }
 
@@ -404,6 +431,20 @@ Deno.serve(async (req) => {
 
   if (depth >= MAX_CHAIN_DEPTH) {
     console.warn(`refusing slice at depth ${depth} (cap ${MAX_CHAIN_DEPTH})`);
+    // Close the run out rather than just returning. A slice that returns
+    // without touching sync_log leaves the row at 'running', so
+    // resume_stalled_chains() (migration 068) would keep resuming a chain
+    // that is already finished until it exhausted its retry budget.
+    if (runId) {
+      await supabase
+        .from('sync_log')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          heartbeat_at: new Date().toISOString(),
+        })
+        .eq('id', runId);
+    }
     return new Response(
       JSON.stringify({ status: 'stopped', reason: 'max chain depth', depth }),
       { headers: { 'Content-Type': 'application/json' } }
@@ -498,6 +539,7 @@ Deno.serve(async (req) => {
   // ── Run one slice ────────────────────────────────────────────────
   let stats: RunStats | null = null;
   let fatal: string | null = null;
+  heartbeatRunId = runId;
   try {
     stats = await runBackfillSlice();
   } catch (err) {
@@ -606,7 +648,8 @@ Deno.serve(async (req) => {
     })
     .eq('id', runId);
 
-  const { error: chainError } = await supabase.rpc('enqueue_function_call', {
+  await sleep(HANDOFF_DELAY_MS);
+  const { data: requestId, error: chainError } = await supabase.rpc('enqueue_function_call', {
     p_function: 'backfill-missing-titles',
     p_body: { depth: depth + 1, runId },
   });
@@ -635,6 +678,14 @@ Deno.serve(async (req) => {
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
+
+  // Second write, deliberately after the enqueue: the watchdog
+  // (resume_stalled_chains, migration 068) uses this id to look the
+  // delivery up in net._http_response and report WHY a chain stalled. If
+  // we die between the two writes the watchdog still resumes the chain —
+  // it just records the delivery status as unknown.
+  state.last_request_id = typeof requestId === 'number' ? requestId : null;
+  await supabase.from('sync_log').update({ chain_state: state }).eq('id', runId);
 
   console.log(
     `slice ${depth} done (added=${stats?.upserted ?? 0} skipped404=${stats?.skipped404 ?? 0} ` +

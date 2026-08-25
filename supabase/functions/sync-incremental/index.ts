@@ -223,8 +223,19 @@ const MAX_SINCE_LOOKBACK_SECONDS = 36 * 3600;
 // A slice stops after 18s and hands off, so no single invocation is ever
 // long enough to be killed. A full window took ~128s on recent runs, so
 // roughly 8 slices; the cap allows ~9 minutes of work before giving up.
-const SLICE_BUDGET_MS = 18_000;
-const MAX_CHAIN_DEPTH = 30;
+// RESIZED 2026-08-25: the backfill chain died at slice 12 with an Edge
+// Runtime 502 because workers linger minutes past their request and twelve
+// 18s invocations exhausted the worker allowance. Invocation count is the
+// scarce resource, not duration — so slices get bigger and fewer. 75s is
+// well inside what we have evidence completes (105s, 128s) and well under
+// the ~150s zone where runs were being killed. A full ~128s window is now
+// 2 slices instead of 8.
+const SLICE_BUDGET_MS = 75_000;
+const MAX_CHAIN_DEPTH = 10;
+
+// Pause before handing off, giving the outgoing worker a moment to wind
+// down before its successor starts.
+const HANDOFF_DELAY_MS = 3_000;
 
 // A chain that has not heartbeated in this long is presumed dead.
 const CHAIN_STALE_MS = 120_000;
@@ -241,6 +252,11 @@ interface SyncChainState {
   stats: SyncStats;
   errorBuckets: ErrorBucket[];
   stopped_because: string | null;
+  // Set after each handoff so resume_stalled_chains() (migration 068) can
+  // report WHY a chain stalled, not merely that it did.
+  last_request_id: number | null;
+  resumes?: number;
+  last_delivery_status?: string;
 }
 
 async function getLastSyncTimestamp(): Promise<number> {
@@ -614,6 +630,7 @@ function emptySyncChainState(since: number): SyncChainState {
     stats: emptyStats(),
     errorBuckets: [],
     stopped_because: null,
+    last_request_id: null,
   };
 }
 
@@ -814,7 +831,8 @@ Deno.serve(async (req) => {
     })
     .eq('id', runId);
 
-  const { error: chainError } = await supabase.rpc('enqueue_function_call', {
+  await delay(HANDOFF_DELAY_MS);
+  const { data: requestId, error: chainError } = await supabase.rpc('enqueue_function_call', {
     p_function: 'sync-incremental',
     p_body: { depth: depth + 1, runId },
   });
@@ -828,6 +846,14 @@ Deno.serve(async (req) => {
       .eq('id', runId);
     return json({ status: 'error', message: chainError.message }, 500);
   }
+
+  // Second write, deliberately after the enqueue: the watchdog
+  // (resume_stalled_chains, migration 068) uses this id to look the
+  // delivery up in net._http_response and report WHY a chain stalled. If
+  // we die between the two writes the watchdog still resumes the chain —
+  // it just records the delivery status as unknown.
+  state.last_request_id = typeof requestId === 'number' ? requestId : null;
+  await supabase.from('sync_log').update({ chain_state: state }).eq('id', runId);
 
   console.log(
     `slice ${depth} done at [${state.ti}/${state.si}] ` +
