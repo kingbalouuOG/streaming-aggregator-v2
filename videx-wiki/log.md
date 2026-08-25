@@ -572,3 +572,25 @@ Caught while dry-running 066: the `sync_history` rebuild had to become DROP + CR
 - **Migrations 066 + 067 are NOT applied.** Both must be applied before the functions are redeployed — the new code writes `chain_state`, `availability_*` and `sync_type='backfill'`, and calls `reap_stale_sync_runs` / `enqueue_function_call`.
 - Out of scope and still open: A3 (queue is `tmdb_id ASC`), A4 (22,260-row bulk clear — needs Joe's go-ahead), A5 (daily cadence). SA quota question stays deferred until A1/A2 land and usage is re-measured.
 
+## [2026-08-25] ingest | Chain delivery watchdog + downstream slicing
+Branch `fix/chain-delivery-and-downstream-slicing`. Follow-up to the A1/A2 PR (#84), driven by the first live run rather than by plan work.
+
+**The catalogue is unfrozen.** `TMDB_API_KEY` was rotated and the first chain added **379 titles with 0 errors** — `titles` 22,864 to 23,243, newest `created_at` moving from 2026-06-07 to the same afternoon. 216 of 595 queue-head rows were genuine dead TMDb stubs (36%), which independently supports A3's case for reordering off `tmdb_id ASC`. The 62 stuck `sync_log` rows were reaped automatically on the first invocation.
+
+**Then the chain died at slice 12 with an Edge Runtime 502**, exposing two defects in the A2 design:
+
+1. *Slice sizing was backwards.* Workers linger minutes past the end of their request (shutdown events trailed to 16:05:37, three minutes after the last slice), so twelve 18s invocations inside 3.5 minutes exhausted the concurrent-worker allowance. **Invocation count is the scarce resource, not duration** — single invocations of 105s and 128s complete fine. Slices resized 50 rows/18s to 250 rows/75s, depth 40 to 12: same coverage for a quarter of the invocations, plus a 3s pre-handoff pause.
+2. *The handoff was not watched.* `enqueue_function_call` returning successfully only means pg_net **queued** the request — structurally the same blind spot as `cron.job_run_details` = 'succeeded', one layer down. Migration 068 adds `resume_stalled_chains()` on a 5-minute pg_cron (pure SQL, so it cannot itself be severed), restarting chains from their saved depth, recording delivery status via a new `chain_state.last_request_id`, and giving up after 5 attempts. Resuming bumps the heartbeat so the 10-minute reaper cannot close a row out from under a nursed chain. Duplicate slices are possible and safe — all slice writes are idempotent.
+
+**Downstream was the bottleneck the repair exposed.** 379 titles landed against 100/day of enrich and embed capacity. This is not lag: `embed-new-titles` skips `keywords IS NULL`, and `match_titles_by_vector` cannot retrieve a NULL embedding, so an unenriched title **cannot appear in For You at all**.
+- `embed-new-titles`: switched from `embedSingle` per row to `embedBatch` — the shared client always supported it — so 100 titles go per OpenAI request instead of 1. Also sliced (500/slice, 6,000/chain).
+- `enrich-new-titles`: sliced (250/slice, 3,000/chain), TMDb 401/403 fail-fast, own `sync_log` row.
+- Both now log to `sync_log` (`sync_type` 'enrich'/'embed', added to the CHECK in 068) with aggregated `error_details`.
+
+Also: a slice refusing at `MAX_CHAIN_DEPTH` now closes its `sync_log` row rather than returning bare, which would have left the watchdog resuming a finished chain until its retry budget ran out.
+
+- Updated: `wiki/concepts/operations/sync-pipeline.md` (slice-sizing rule and its evidence, handoff watchdog, the idempotency requirement for any new sliced job, downstream-is-invisible-catalogue section, two new failure rows, embedding-coverage health checks, manual chain triggers), `wiki/concepts/operations/risks-register.md` (R-018 amended; R-020 silent handoff loss, R-021 titles that cannot be recommended).
+- Verify: root `tsc --noEmit` clean, native `tsc --noEmit` clean, `vitest run` 229/229, all four Edge Functions clean under a standalone `tsc --noResolve` pass. Pre-existing type errors in `refresh-service-fingerprints` left alone (untouched by this branch).
+- Migrations 066 + 067 are APPLIED. **068 is not** — apply before redeploying the four functions.
+- Still open: A5 (daily cadence) becomes safe once the chain is proven at the new sizing; A3 supported by the 36% dead-stub rate at the queue head; A4 probably unnecessary.
+
