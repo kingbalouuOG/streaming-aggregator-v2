@@ -338,6 +338,15 @@ async function runSyncSlice(
   const startTime = Date.now();
   const overBudget = () => Date.now() - startTime > SLICE_BUDGET_MS;
 
+  // Clears after writing, so calling it twice cannot double-insert. Every
+  // exit path from this function goes through it (including the `finally`
+  // below), which is what makes "flush early" actually hold.
+  const flushHistory = async () => {
+    if (historyEvents.length === 0) return;
+    await insertHistoryBatch(historyEvents);
+    historyEvents.length = 0;
+  };
+
   // Captured before the loops mutate them, so the resume test below stays
   // anchored to where THIS slice started.
   const resumeTi = state.ti;
@@ -349,6 +358,7 @@ async function runSyncSlice(
     `resuming at [${resumeTi}/${resumeSi}]${resumeCursor ? ` cursor=${resumeCursor}` : ''}`
   );
 
+  try {
   for (let ti = resumeTi; ti < CHANGE_TYPES.length; ti++) {
     const changeType = CHANGE_TYPES[ti];
     // Only the change-type we resumed into starts partway down the service
@@ -368,7 +378,7 @@ async function runSyncSlice(
           state.ti = ti;
           state.si = si;
           state.cursor = cursor ?? null;
-          await insertHistoryBatch(historyEvents);
+          await flushHistory();
           console.log(
             `slice budget reached at [${ti}/${si}] (${changeType}/${service}) — handing off`
           );
@@ -522,11 +532,9 @@ async function runSyncSlice(
             }
           }
 
-          // Flush history after each page to stay well within the 2-min timeout.
-          if (historyEvents.length >= 200) {
-            await insertHistoryBatch(historyEvents);
-            historyEvents.length = 0;
-          }
+          // Flush history after each page rather than holding it for the
+          // whole slice.
+          if (historyEvents.length >= 200) await flushHistory();
 
           hasMore = result.hasMore || false;
           cursor = result.nextCursor;
@@ -542,8 +550,11 @@ async function runSyncSlice(
     }
   }
 
-  await insertHistoryBatch(historyEvents);
-  console.log(`History: ${historyEvents.length} events logged this slice`);
+  } finally {
+    // Also covers the throw path: a slice that dies mid-window still
+    // persists the history events it had already built.
+    await flushHistory();
+  }
 
   // Walked every change type and every service — the window is consumed.
   state.cursor = null;

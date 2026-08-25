@@ -281,35 +281,42 @@ async function runBackfillSlice(): Promise<RunStats> {
     await flushSkips();
   }
 
-  for (const row of missing) {
-    // Elapsed-time guard. Checked before the sleep so a slice that is
-    // already over budget stops immediately rather than paying another
-    // 260ms first. Unfinished rows stay in list_missing_title_ids and the
-    // next slice picks them up — nothing is lost by stopping early.
-    if (Date.now() - startedAt > SLICE_BUDGET_MS) {
-      console.log(`  slice budget reached after ${stats.upserted + stats.skipped404 + stats.failed} rows`);
-      break;
-    }
+  // try/finally, not a trailing flush: tmdbFetch throws CredentialError on
+  // a 401/403, and without the finally that throw would escape past the
+  // flush and discard everything the slice had already fetched. Flushing
+  // early is worth nothing if the error path skips the last one.
+  try {
+    for (const row of missing) {
+      // Elapsed-time guard. Checked before the sleep so a slice that is
+      // already over budget stops immediately rather than paying another
+      // 260ms first. Unfinished rows stay in list_missing_title_ids and the
+      // next slice picks them up — nothing is lost by stopping early.
+      if (Date.now() - startedAt > SLICE_BUDGET_MS) {
+        console.log(`  slice budget reached after ${stats.upserted + stats.skipped404 + stats.failed} rows`);
+        break;
+      }
 
-    await sleep(TMDB_DELAY);
-    const tmdb = await tmdbFetch(row.tmdb_id, row.media_type);
-    if (tmdb === 'notfound') {
-      stats.skipped404++;
-      skips.push(row);
-    } else if (tmdb === null) {
-      // Transient/unknown failure: count it, DON'T blacklist it — the
-      // row stays in list_missing_title_ids for the next slice.
-      stats.failed++;
-      // Deliberately id-free so the counter aggregates. The individual IDs
-      // are already in the function logs via tmdbFetch's console.error.
-      noteFailure(stats, 'TMDb fetch failed (non-404, retries exhausted)');
-    } else {
-      buffer.push(buildTitleRow(tmdb, row.media_type));
-    }
+      await sleep(TMDB_DELAY);
+      const tmdb = await tmdbFetch(row.tmdb_id, row.media_type);
+      if (tmdb === 'notfound') {
+        stats.skipped404++;
+        skips.push(row);
+      } else if (tmdb === null) {
+        // Transient/unknown failure: count it, DON'T blacklist it — the
+        // row stays in list_missing_title_ids for the next slice.
+        stats.failed++;
+        // Deliberately id-free so the counter aggregates. The individual IDs
+        // are already in the function logs via tmdbFetch's console.error.
+        noteFailure(stats, 'TMDb fetch failed (non-404, retries exhausted)');
+      } else {
+        buffer.push(buildTitleRow(tmdb, row.media_type));
+      }
 
-    if (buffer.length + skips.length >= FLUSH_EVERY) await flushBoth();
+      if (buffer.length + skips.length >= FLUSH_EVERY) await flushBoth();
+    }
+  } finally {
+    await flushBoth();
   }
-  await flushBoth();
 
   return stats;
 }
