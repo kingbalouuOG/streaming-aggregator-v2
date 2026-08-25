@@ -18,11 +18,14 @@
 --     (TMDb returning 401 to every call) was only ever visible in Edge
 --     Function logs, which nothing monitors.
 --
---  3. Killed runs are invisible. 4 of the last 14 sync-incremental runs sit
---     at `status='running'` with `completed_at` NULL forever (2026-08-16,
---     -17, -19, -25) — the Edge Function hit its wall-clock limit
---     mid-pagination and never came back to close its own row. Nothing
---     distinguishes "running right now" from "died 9 days ago".
+--  3. Killed runs are invisible. 62 of the 145 sync-incremental runs since
+--     2026-03-31 — 42.8% — sit at `status='running'` with `completed_at`
+--     NULL forever. The Edge Function hit its wall-clock limit
+--     mid-pagination and never came back to close its own row, and nothing
+--     distinguishes "running right now" from "died five months ago".
+--     That 42.8% is also the plan's "~40% of runs hang and re-fetch the
+--     same pages": `getLastSyncTimestamp()` reads only completed runs, so
+--     each of those 62 made the next run re-cover the same SA API window.
 --
 -- Fixes, in order:
 --   A. Add `availability_*` columns that honestly name what the SA sync
@@ -106,8 +109,9 @@ WHERE source = 'sa_api'
 -- a job that is genuinely still working.
 --
 -- Rows predating this migration have heartbeat_at IS NULL, so they are
--- judged on started_at instead — that is what closes out the four stuck
--- rows from 2026-08-16/17/19/25.
+-- judged on started_at instead. Measured 2026-08-25: the first call will
+-- close out 62 rows spanning 2026-03-31 to 2026-08-25. Every subsequent
+-- call should reap 0 or 1.
 CREATE OR REPLACE FUNCTION public.reap_stale_sync_runs(
   p_stale_after interval DEFAULT interval '10 minutes'
 )
@@ -157,7 +161,23 @@ ALTER TABLE public.sync_log ADD CONSTRAINT sync_log_sync_type_check
 -- ── D. Surface all of it in the monitoring view ────────────────────
 -- Supersedes migration 003's sync_history. `stalled_for` is the tell: a
 -- non-null value on a 'running' row means nobody has heartbeated since.
-CREATE OR REPLACE VIEW public.sync_history AS
+--
+-- DROP then CREATE, not CREATE OR REPLACE: replace can only append columns
+-- to the end of a view. This one drops titles_updated/titles_removed and
+-- inserts the availability_* columns mid-list, so replace fails outright
+-- with "cannot change name of view column".
+--
+-- Verified 2026-08-25: nothing else in the database depends on this view
+-- (no pg_depend rewrite entries), so the drop is safe.
+--
+-- security_invoker is re-declared explicitly. The live view carries
+-- `security_invoker=on` from migration 026 (which fixed a security-linter
+-- finding); a plain DROP + CREATE would silently drop back to definer
+-- rights and reintroduce it.
+DROP VIEW IF EXISTS public.sync_history;
+
+CREATE VIEW public.sync_history
+WITH (security_invoker = on) AS
 SELECT
   sync_type,
   source,
@@ -188,7 +208,7 @@ LIMIT 20;
 --   FROM public.sync_log
 --   WHERE sync_type = 'incremental' ORDER BY started_at DESC LIMIT 5;
 --
---   -- 2. Reaper closes the four stuck rows (expect 4 on first run, 0 after).
+--   -- 2. Reaper closes the stuck rows (expect 62 on the first call, then 0).
 --   SELECT public.reap_stale_sync_runs();
 --   SELECT count(*) FROM public.sync_log
 --   WHERE status = 'running' AND completed_at IS NULL;   -- expect 0
