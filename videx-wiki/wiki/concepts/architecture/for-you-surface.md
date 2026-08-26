@@ -3,7 +3,7 @@ title: For You surface
 type: concept
 tags: [for-you, surface, personalised, sliders, mood-rooms, anchored-rooms, edge-function, paid-titles]
 created: 2026-04-26
-updated: 2026-07-10
+updated: 2026-08-26
 sources:
   - raw/v2-strategy/Videx_v2_Home_and_ForYou_Composition_Hypothesis_v0.4.md
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.7.md
@@ -44,6 +44,63 @@ Personalised mode. Heavy ranking, sliders, mood rooms. Service-filtered. Maximum
 ## Phase 4 implementation note
 
 Brief lists 5 Stage 2 weights summing to 1.0. Phase 4 ships 3 scoring components (62.5/25/12.5: taste/recency/contextual placeholder) + 2 post-processing stages (genre-spread, service de-clustering). MMR deferred to Phase 5 (would require ~3MB transfer + ~23M float ops per page load). Pluggable for Phase 5 swap. Strategy §5.2 carries the implementation note.
+
+## Engagement fatigue (C1)
+
+For You is deterministic — same taste vector, same pool, same scores, same
+MMR, same order — so repetition scales with return visits. Measured
+2026-08-26:
+
+| For You sessions | Distinct titles | Views/title |
+|---|---|---|
+| 1 | 18 | 1.00 |
+| 2 | 20 | 2.10 |
+| 6 | 40 | 2.93 |
+| **9** | **29** | **4.45** |
+
+Nine sessions, 129 impressions, **29 distinct titles** from a catalogue of
+24,496.
+
+`applyFatiguePenalty` (`recommendations-v2/fatigue.ts`) demotes titles the
+user has been shown and ignored, mirroring `applyAvoidPenalty` — subtract
+from `finalScore`, re-sort — so rows, MMR and exploration all see the
+adjusted order without knowing fatigue exists.
+
+| Stage | Trigger | Penalty |
+|---|---|---|
+| **Park** | 1–3 views, no engagement | 0.04/view (max 0.12) |
+| **Bury** | **4+** views, no engagement | 0.50 |
+
+Both decay linearly to zero over **21 days**, which is what makes parking
+temporary rather than a permanent blacklist. Engagement — `detail_view`,
+`dwell_event`, `watched`, `deep_link_click`, `watchlist_add`, `thumbs_up`,
+`share` — exempts a title entirely: repetition only matters for things
+being ignored.
+
+> **C1 required C2 first.** Demoting from a pure top-K pool surfaces
+> nothing new — it shuffles the same K and shrinks what is usable. C2's
+> deeper retrieval (500→800, 200→400 per centroid) is what demotions fall
+> behind.
+
+### Two things to know before tuning this
+
+**Validation is thin and it shipped on reasoning.** The plan specifies
+validating via exploration CTR rather than offline eval, but with ~10
+users and 42 For You impressions a fortnight there is no CTR signal and
+no A/B to run. The check is re-measuring views-per-title for multi-session
+users. If the thresholds are wrong, the data will be slow to say so —
+which is why 4 was chosen over a more aggressive 2 or 3.
+
+**`card_impressions` has no `media_type`.** Fatigue is keyed on
+`content_id` alone, so a film and a series sharing a TMDb id would
+collide. The consequence is one wrongly-demoted title; the existing
+`fetchSeenContentIdsScoped` carries the same limitation.
+
+**Deferred:** the plan argues a `deep_link_click` without follow-through
+should demote *placement* while leaving *taste* alone — the user went and
+did not come back. There are 10 such rows in the entire database, so
+there is nothing to tune against; it counts as ordinary engagement.
+
 
 ## Exploration slot (ENG-1 Workstream C)
 

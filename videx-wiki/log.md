@@ -768,3 +768,29 @@ Method note worth keeping: `SELECT set_config('hnsw.ef_search','3000',true)` ret
 - Verify: root + native `tsc --noEmit` clean, `vitest run` 229/229, eslint clean.
 - **076 not applied.** No redeploys — C2 is shared-lib constants consumed by the Worker.
 
+## [2026-08-26] ingest | C1 — two-stage engagement fatigue
+Branch `feat/c1-engagement-fatigue`. No migration; **Worker redeploy required** (`foryouRender` is Worker-side).
+
+New `recommendations-v2/fatigue.ts` demotes titles the user has been shown and ignored, mirroring `applyAvoidPenalty` exactly — subtract from `finalScore`, re-sort — so rows, MMR and exploration all see the adjusted order without knowing fatigue exists.
+
+| Stage | Trigger | Penalty |
+|---|---|---|
+| Park | 1-3 views, no engagement | 0.04/view (max 0.12) |
+| Bury | **4+** views, no engagement | 0.50 |
+
+Both decay linearly to zero over 21 days — that decay is what makes parking temporary rather than a permanent blacklist. Engagement (`detail_view`, `dwell_event`, `watched`, `deep_link_click`, `watchlist_add`, `thumbs_up`, `share`) exempts a title entirely: repetition only matters for things being ignored.
+
+Threshold 4 chosen as the gentler option. The heaviest real user averages 4.45 views/title, so 4 catches the actual problem while leaving normal repeat exposure alone — and with no CTR signal available, an over-eager bury would degrade relevance in a way we could not measure for weeks.
+
+**Depended on C2.** Demoting from a pure top-K pool surfaces nothing new; it shuffles the same K and shrinks what is usable. C2's deeper retrieval is what these demotions fall behind. Landing them separately made C1 a small, reversible step.
+
+13 unit tests cover the curve: park/bury step, no escalation past the threshold, linear decay to zero, engagement exemption, non-mutation, and a reproduction of the real 4.45-views case. `vitest run` 242/242 overall.
+
+**Recorded honestly: C1 ships on reasoning, not evidence.** The plan specifies validating via exploration CTR rather than offline eval, but ~10 users and 42 For You impressions a fortnight gives no CTR signal and no A/B. The check is re-measuring views-per-title for multi-session users in a few weeks.
+
+Two caveats written onto the surface page: `card_impressions` has no `media_type`, so fatigue keys on `content_id` alone and a film/series TMDb-id collision would demote one wrong title (same limitation as the existing `fetchSeenContentIdsScoped`); and the plan's clicked-but-not-converted nuance is deferred because 10 `deep_link_click` rows is nothing to tune against.
+
+- Updated: `wiki/concepts/architecture/for-you-surface.md` (Engagement fatigue section, placed with the exploration slot as the other scoring concern).
+- Verify: root + native `tsc --noEmit` clean, `vitest run` 242/242, eslint clean.
+- Remaining in C: **C3** (per-session ordering variation) — still needs the cache-key decision, since the feed is KV-cached 20 min and a per-session seed would either bust it every open or be ignored.
+
