@@ -65,16 +65,34 @@ The warmer records to `cache_warm_status` and the daily health check
 asserts on it, because a warmer that quietly stops **fails nothing** — it
 just returns cold-open latency to 4s and waits for a user to complain.
 
-Diagnostic:
+### Diagnostic — use the warmer's own duration
 
 ```sql
-EXPLAIN (ANALYZE, BUFFERS)
-SELECT * FROM match_titles_by_vector(
-  (SELECT embedding FROM titles WHERE embedding IS NOT NULL LIMIT 1), 200);
+SELECT ran_at, now() - ran_at AS age, duration_ms, ok FROM cache_warm_status;
 ```
 
-`read=0` means warm. **Any non-zero `read=` means pages were evicted and
-the warmer is not keeping up.**
+Warm is **~90ms** (measured 87ms). Hundreds of ms, or seconds, means the
+index went cold *between* runs and the 5-minute interval is too long for
+this instance.
+
+This is the right signal because the warmer runs the same query a user's
+cold open would, every 5 minutes, and writes down how long it took.
+
+> ⚠ **Do not use `EXPLAIN (ANALYZE, BUFFERS)` and read `read=0` as proof
+> of warmth.** This page said to, and it misled a real verification.
+> `match_titles_by_vector` is plpgsql, so the outer EXPLAIN shows a
+> Function Scan node whose buffer counts **do not include** the index
+> pages touched inside the function. A genuinely cold call was observed
+> reporting `hit=4054 read=0` while taking **2,136 ms**. Buffer counts at
+> a function-scan boundary tell you nothing about what the function did.
+
+To time it by hand, call it twice: the first call after an idle spell pays
+the cold cost, the second is the warm number. Measured 2026-08-26 after
+~10 minutes idle: **1,471 ms then 7 ms**.
+
+Eviction is fast — under ten minutes on this instance — which is why the
+interval is 5 minutes and why `duration_ms` is worth watching rather than
+assuming.
 
 ## B4 — the serial stretches in Home
 
