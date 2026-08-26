@@ -9,8 +9,8 @@
  *   - keywords IS NOT NULL ensures only enriched rows are embedded
  *   - TMDb-404 rows with NULL keywords are excluded
  *
- * BATCHED + SLICED + SELF-CHAINING (2026-08-25). Two changes, in order of
- * how much they matter:
+ * BATCHED + SLICED + SELF-CHAINING (2026-08-25/26). Three changes, in
+ * order of how much they matter:
  *
  *  1. BATCHING. This function used to call `embedSingle` per row — one
  *     HTTP request to OpenAI per title, 100 requests per invocation. The
@@ -20,7 +20,13 @@
  *     OpenAI's embeddings endpoint is built for this; we were paying
  *     per-request latency ~100x over for no reason.
  *
- *  2. SLICING. One invocation processes one slice and chains the next via
+ *  2. BULK WRITES (migration 069). Embeddings are written a chunk at a
+ *     time through `bulk_set_title_embeddings` rather than one UPDATE per
+ *     row. Measured 2026-08-26: the per-row round trips cost ~400ms each
+ *     and capped a 75s slice at ~200 rows, which was too close to the
+ *     ~1,900 rows/day that daily backfill (A5) produces.
+ *
+ *  3. SLICING. One invocation processes one slice and chains the next via
  *     `enqueue_function_call` (migrations 067/068), so the queue depth is
  *     no longer capped by what fits in a single invocation.
  *
@@ -61,9 +67,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 // costs 100 rows of retry, not 500.
 const EMBED_CHUNK = 100;
 
-// With batching, the per-row cost is dominated by the single-row DB
-// UPDATE, not OpenAI. 500 rows is ~5 OpenAI requests plus 500 updates,
-// which fits the budget with room to spare.
+// 500 rows is ~5 OpenAI requests plus ~5 bulk writes. Before migration
+// 069 this was ~5 requests plus 500 individual UPDATE round trips, and
+// live runs only reached ~200 rows inside the 75s budget — the DB round
+// trips, not OpenAI, were the constraint. With bulk writes the full 500
+// fits comfortably.
 const SLICE_LIMIT = 500;
 const SLICE_BUDGET_MS = 75_000;
 const MAX_CHAIN_DEPTH = 12; // 12 x 500 = 6,000 rows per chain
@@ -157,6 +165,12 @@ async function runEmbeddingSlice(stats: SliceStats, runId: string): Promise<void
 
     stats.total_tokens += batch.total_tokens;
 
+    // Collect the chunk, then write it in ONE statement via
+    // bulk_set_title_embeddings (migration 069). This used to be an UPDATE
+    // per row: measured 2026-08-26 at ~400ms each, which made the DB round
+    // trips — not OpenAI — the binding constraint on this whole job.
+    const ids: number[] = [];
+    const vectors: string[] = [];
     for (let j = 0; j < chunk.length; j++) {
       const row = chunk[j];
       const result = batch.results[j];
@@ -166,17 +180,34 @@ async function runEmbeddingSlice(stats: SliceStats, runId: string): Promise<void
         console.error(`  fail  ${row.media_type}/${row.tmdb_id}: no embedding in batch response`);
         continue;
       }
-      const { error: updateError } = await supabase
-        .from('titles')
-        .update({ embedding: `[${result.embedding.join(',')}]` })
-        .eq('id', row.id);
+      ids.push(row.id);
+      vectors.push(`[${result.embedding.join(',')}]`);
+    }
+
+    if (ids.length > 0) {
+      const { data: updated, error: updateError } = await supabase.rpc(
+        'bulk_set_title_embeddings',
+        { p_ids: ids, p_embeddings: vectors }
+      );
       if (updateError) {
-        stats.failed++;
-        noteFailure(stats, `Supabase update failed: ${updateError.message}`);
-        console.error(`  fail  ${row.media_type}/${row.tmdb_id}: ${updateError.message}`);
-        continue;
+        // The whole chunk failed to write. The rows keep embedding IS NULL,
+        // so the next slice picks them up — nothing is lost.
+        stats.failed += ids.length;
+        noteFailure(stats, `bulk_set_title_embeddings failed: ${updateError.message}`, ids.length);
+        console.error(`  chunk of ${ids.length} failed to write: ${updateError.message}`);
+      } else {
+        const written = typeof updated === 'number' ? updated : ids.length;
+        stats.processed += written;
+        if (written < ids.length) {
+          // Fewer rows matched than we sent — an id disappeared between the
+          // SELECT and the write. Rare, but count it rather than silently
+          // reporting more progress than was made.
+          const missing = ids.length - written;
+          stats.failed += missing;
+          noteFailure(stats, 'row no longer existed when the embedding was written', missing);
+          console.warn(`  ${missing} row(s) vanished before their embedding could be written`);
+        }
       }
-      stats.processed++;
     }
 
     // Heartbeat once per chunk so resume_stalled_chains() (migration 068)

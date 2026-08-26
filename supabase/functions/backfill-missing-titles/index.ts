@@ -18,7 +18,8 @@
  * SELF-CHAINING (A2, 2026-08-25). One invocation processes ONE slice —
  * SLICE_LIMIT rows or SLICE_BUDGET_MS, whichever comes first — persists its
  * progress, then enqueues the next slice through `enqueue_function_call`
- * (migration 067) and returns. The weekly cron only ever starts slice 0.
+ * (migration 067) and returns. The daily 05:00 cron (migration 069 —
+ * weekly until then) only ever starts slice 0.
  *
  * Why: pg_net severs every cron→function call at 30s, so nothing
  * downstream ever learned whether a run worked. Measured on the 2026-08-23
@@ -84,9 +85,12 @@ const HANDOFF_DELAY_MS = 3_000;
 
 const FLUSH_EVERY = 10;
 
-// Hard ceiling on chain length: 12 x 250 = 3,000 titles per chain.
-// Clearing the 22,260-row backlog outright is A4 and needs its own
-// go-ahead.
+// Hard ceiling on chain length: 12 x 250 = 3,000 rows per chain. Against
+// ~1,000 rows/day of inflow from the daily SA sync, daily cadence (A5,
+// migration 069) nets ~2,000/day of drain and clears the ~22.7k backlog in
+// roughly eleven days — which is what makes A4's one-off bulk burst
+// unnecessary. Raise this if count_missing_title_ids() ever climbs on a
+// daily cadence, since that means inflow has outgrown the chain.
 const MAX_CHAIN_DEPTH = 12;
 
 // A chain that has not heartbeated in this long is presumed dead, so a new
