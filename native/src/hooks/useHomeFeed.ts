@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useIsRestoring, useQuery } from '@tanstack/react-query';
 
 import { useUserServices } from '@/hooks/useUserServices';
 import {
@@ -368,12 +368,41 @@ async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
   return { hero, recentlyAdded, popular, freeTonight, paid, upcoming, rows, spotlights };
 }
 
+/**
+ * B6 — stale-while-revalidate.
+ *
+ * The persisted MMKV cache has always held the last payload; the app just
+ * never preferred it on launch. Two things stopped it painting:
+ *
+ *  1. While PersistQueryClientProvider restores, queries are PAUSED —
+ *     `isFetching` is false, so `isLoading` is false, and `data` is still
+ *     undefined. The screen's `if (!data)` branch therefore ran, showing
+ *     the failure state for a moment on every cold start. The same held
+ *     before `useUserServices` resolved, since `enabled` was false.
+ *     "Nothing yet" was being rendered as "something broke".
+ *
+ *  2. The query key embeds the service list, so the moment services
+ *     resolve the key CHANGES — and the new key has no in-memory data,
+ *     dropping the screen back to empty even when the old key was showing
+ *     content.
+ *
+ * `isBootstrapping` distinguishes "no data yet" from "this failed", and
+ * keepPreviousData carries the previous key's payload across the switch.
+ * Revalidation is unchanged — a stale entry still refetches in the
+ * background, it just does so behind visible content.
+ */
 export function useHomeFeed() {
   const { data: services } = useUserServices();
-  return useQuery({
+  const isRestoring = useIsRestoring();
+
+  const query = useQuery({
     queryKey: ['native', 'home', 'feed', services?.join(',') ?? ''],
     queryFn: () => fetchHomeFeed(services ?? []),
     enabled: !!services,
+    // 30 min was already right for SWR — left alone deliberately.
     staleTime: 30 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
+
+  return { ...query, isBootstrapping: isRestoring || !services };
 }

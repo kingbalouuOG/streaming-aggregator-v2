@@ -61,7 +61,12 @@ export default function HomeScreen() {
   // there. The event NAME is unchanged for funnel continuity. This screen
   // (the "New" tab, formerly Home) no longer consumes the just-onboarded bit.
 
-  if (feed.isLoading) {
+  // B6: order matters. While the MMKV cache is restoring (or services have
+  // not resolved) the query is paused — not loading, not errored, just
+  // empty — so without this branch the "couldn't load" screen below
+  // rendered for a frame on every cold start, before the cached feed had
+  // a chance to paint.
+  if ((feed.isBootstrapping && !feed.data) || feed.isLoading) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-background">
         <ActivityIndicator color="#e85d25" />
