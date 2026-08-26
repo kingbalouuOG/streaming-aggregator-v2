@@ -55,8 +55,69 @@ Both long-running Edge Functions process **one slice per invocation** and hand o
 
 | Job | Slice size | Budget | Chain cap | Resume state |
 |---|---|---|---|---|
-| `sync-incremental` | until budget | 18s | 30 slices | `chain_state` = `{since, ti, si, cursor}` |
-| `backfill-missing-titles` | 50 rows | 18s | 40 slices (2,000 titles) | none — `list_missing_title_ids` is self-advancing |
+| `sync-incremental` | until budget | 75s | 10 slices | `chain_state` = `{since, ti, si, cursor}` |
+| `backfill-missing-titles` | 250 rows | 75s | 12 (3,000 titles) | none — `list_missing_title_ids` self-advances |
+| `enrich-new-titles` | 250 rows | 75s | 12 (3,000 rows) | none — `WHERE keywords IS NULL` self-advances |
+| `embed-new-titles` | 500 rows | 75s | 12 (6,000 rows) | none — `WHERE embedding IS NULL` self-advances |
+
+### Sizing: invocation count is the scarce resource, not duration
+
+Slices were first sized at 50 rows / 18s. The first live chain died at slice 12:
+
+```
+16:02:36  slice 11 done — queued depth 12
+16:02:36  POST | 502 | .../backfill-missing-titles
+```
+
+Edge Runtime workers linger minutes past the end of their request — that
+chain's shutdown events trail on until 16:05:37, three minutes after the
+last slice ran. Twelve invocations inside 3.5 minutes exhausted the
+concurrent-worker allowance.
+
+**Slices should therefore be big and few, not small and many.** Single
+invocations of 105s and 128s are known to complete; forty 18s ones are
+not. Resized the same day to 250 rows / 75s, plus a 3s pause before each
+handoff. Keep new slices in the 60-90s band: below that the invocation
+count climbs, above ~150s is where runs were being killed outright.
+
+### Handoffs need a watchdog
+
+`enqueue_function_call` returning successfully means pg_net **queued** the
+request. It says nothing about delivery — the 502 above killed the chain
+silently, which is structurally the same bug as `cron.job_run_details` =
+`'succeeded'`, one layer down.
+
+`resume_stalled_chains()` (migration 068, pg_cron every 5 min, pure SQL so
+it cannot itself be severed) restarts any chain whose heartbeat is over 3
+minutes old, from its saved depth. It records the delivery status looked
+up from `net._http_response` via `chain_state.last_request_id`, and gives
+up after 5 attempts with the reason in `error_details`. Resuming bumps
+`heartbeat_at`, so the 10-minute reaper cannot close a row out from under
+a chain the watchdog is nursing.
+
+Duplicate slices are possible if the watchdog resumes a chain that was in
+fact still alive. This is safe by construction — every slice's writes are
+idempotent (`titles` upsert on `(tmdb_id, media_type)`, enrich/embed are
+single-row updates keyed by id) — so the cost is wasted work, never
+corruption. **Any new sliced job must preserve that property.**
+
+### The downstream jobs are the constraint
+
+Repairing the backfill made `enrich-new-titles` and `embed-new-titles` the
+bottleneck: the 2026-08-25 chain added 379 titles against a downstream
+capacity of 100/day each.
+
+This is not just lag. `embed-new-titles` only processes rows where
+`keywords IS NOT NULL`, so an unenriched title is never embedded — and a
+title with no embedding is not retrievable by `match_titles_by_vector`,
+so it **cannot appear in For You at all**. An under-fed enrich queue is
+invisible catalogue, and `count(*) FROM titles` will not show it.
+
+> `embed-new-titles` used to call `embedSingle` per row — one OpenAI
+> request per title. The shared client in `_shared/openaiEmbeddings.ts`
+> has always exposed `embedBatch`, which accepts an array and returns one
+> embedding per input in positional order. It now sends 100 titles per
+> request. If you add another embedding path, batch it.
 
 Why sliced rather than one long run:
 
@@ -108,6 +169,8 @@ Since migration 066, `sync_log` columns mean what they say:
 | `titles` stops growing; `list_missing_title_ids` climbs | **TMDb 401** — `TMDB_API_KEY` secret invalid/revoked. Froze the catalogue from 2026-06-07 to at least 2026-08-25. | Rotate the Functions secret. Since A2 the backfill aborts the whole chain on the first 401/403 and records it in `sync_log.error_details` rather than walking 300 IDs against a dead key. |
 | `sync_log` row stuck at `running` | Function killed mid-run | `SELECT reap_stale_sync_runs();` — also called at the head of every run. |
 | Cron "succeeded" but nothing changed | pg_net queued the request; the function failed | Read `sync_log`, then Edge Function logs. Not `cron.job_run_details`. |
+| Chain stops mid-run; `slices` stops climbing | Handoff not delivered — HTTP 502 from the Edge Runtime under rapid invocation | The watchdog resumes it within 5 min. If `chain_state.resumes` keeps climbing, slices are too small: raise `SLICE_LIMIT`, lower `MAX_CHAIN_DEPTH`. |
+| Titles exist but never appear in For You | No embedding — the enrich/embed queue is behind | `SELECT count(*) FROM titles WHERE embedding IS NULL;` then trigger the chains (see health checks). |
 
 ## Health checks
 
@@ -128,4 +191,25 @@ SELECT count_missing_title_ids();
 
 -- Did the last runs actually do anything?
 SELECT * FROM sync_history;
+
+-- Can these titles actually be recommended? No embedding means not
+-- retrievable by match_titles_by_vector, so not eligible for For You.
+SELECT count(*) FILTER (WHERE keywords IS NULL)  AS awaiting_enrich,
+       count(*) FILTER (WHERE embedding IS NULL) AS awaiting_embed
+FROM titles;
+
+-- Chain health across all four sliced jobs.
+SELECT sync_type, status, titles_processed,
+       chain_state->>'slices'  AS slices,
+       chain_state->>'resumes' AS resumes,
+       chain_state->>'stopped_because' AS stopped_because
+FROM sync_log WHERE chain_state IS NOT NULL
+ORDER BY started_at DESC LIMIT 8;
+```
+
+Manual trigger for any sliced job (starts slice 0; the chain self-drives):
+
+```sql
+SELECT enqueue_function_call('enrich-new-titles');
+SELECT enqueue_function_call('embed-new-titles');
 ```
