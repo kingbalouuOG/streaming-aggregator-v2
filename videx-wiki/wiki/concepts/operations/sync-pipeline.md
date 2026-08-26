@@ -75,6 +75,33 @@ A title whose availability arrives in today's 06:00 sync is picked up by
 *tomorrow's* 05:00 backfill, so new titles carry a one-day lag. Deliberate:
 reordering backfill after the sync leaves no room before enrich.
 
+### Queue ordering (A3)
+
+`list_missing_title_ids` orders by **most recent availability**, not
+`tmdb_id`. Migration 070, shipped 2026-08-26.
+
+The original reason for changing it turned out to be obsolete: the plan
+said the head of the queue was dead low-ID stubs that mostly 404, but by
+the time A3 was implemented the skip-list had already drained that entire
+zone (zero rows below tmdb_id 10000 remained, 2,016 confirmed 404s
+recorded). The reason it was still worth doing is user-facing — the gap
+spans tmdb_id 11,035 to 26,522,482, so ascending order works the catalogue
+oldest-first:
+
+| Ordering | Head of queue |
+|---|---|
+| `tmdb_id ASC` (old) | tmdb_id 11,035-12,278, mostly pre-2000 |
+| most-recently-available | 250/250 available within the last 30 days |
+
+Ordering does not change *whether* a title is fetched, only *when* — the
+queue drains in ~14 days either way. It decides whether users see this
+month's additions on day 1 or day 14.
+
+> **Cost: ~9ms to ~1,025ms per call.** The ORDER BY forces a full
+> HashAggregate over the anti-join instead of streaming from
+> `idx_sa_lookup`. Fine at 12 calls per chain (~12s against a ~945s run).
+> **Do not call this RPC in a tighter loop than once per slice.**
+
 ### Why daily, not weekly
 
 The gap was **growing** under weekly cadence:
