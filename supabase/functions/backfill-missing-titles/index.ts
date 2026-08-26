@@ -214,7 +214,17 @@ interface MissingRow {
 }
 
 interface RunStats {
+  // Rows the RPC handed back for this slice.
   missing: number;
+  // Rows this slice actually reached a decision on (upserted, skipped as a
+  // confirmed 404, or failed). Diverges from `missing` whenever the
+  // elapsed-time budget cuts the loop short.
+  //
+  // Reported live 2026-08-26: a chain logged titles_processed=3000 while
+  // only 2,453 entries left the queue — the other 547 were fetched and
+  // never attempted. Overstating work done in sync_log is exactly the
+  // defect migration 066 exists to remove, so it should not survive here.
+  attempted: number;
   upserted: number;
   skipped404: number;
   failed: number;
@@ -239,7 +249,8 @@ let heartbeatRunId: string | undefined;
 
 async function runBackfillSlice(): Promise<RunStats> {
   const stats: RunStats = {
-    missing: 0, upserted: 0, skipped404: 0, failed: 0, remaining: 0, failures: {},
+    missing: 0, attempted: 0, upserted: 0, skipped404: 0, failed: 0,
+    remaining: 0, failures: {},
   };
   const startedAt = Date.now();
 
@@ -321,6 +332,7 @@ async function runBackfillSlice(): Promise<RunStats> {
         break;
       }
 
+      stats.attempted++;
       await sleep(TMDB_DELAY);
       const tmdb = await tmdbFetch(row.tmdb_id, row.media_type);
       if (tmdb === 'notfound') {
@@ -562,7 +574,7 @@ Deno.serve(async (req) => {
   }
 
   const totals = {
-    processed: (current.titles_processed ?? 0) + (stats?.missing ?? 0),
+    processed: (current.titles_processed ?? 0) + (stats?.attempted ?? 0),
     added: (current.titles_added ?? 0) + (stats?.upserted ?? 0),
     errors: (current.errors ?? 0) + (stats?.failed ?? 0) + (fatal ? 1 : 0),
   };

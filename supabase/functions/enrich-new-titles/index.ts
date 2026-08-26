@@ -2,8 +2,12 @@
  * Enrich New Titles Edge Function (Phase 0.5)
  *
  * Ongoing enrichment of new titles arriving from the daily sync and the
- * catalogue-gap backfill. Walks the `WHERE keywords IS NULL` work queue,
+ * catalogue-gap backfill. Walks the
+ * `WHERE keywords IS NULL AND enrich_skipped_at IS NULL` work queue,
  * populating the four enrichment columns plus runtime via TMDb.
+ *
+ * Confirmed TMDb 404s are recorded in `enrich_skipped_at` (migration 070)
+ * so they leave the queue instead of re-occupying the head of every slice.
  *
  * SLICED + SELF-CHAINING (2026-08-25). One invocation processes ONE slice
  * — SLICE_LIMIT rows or SLICE_BUDGET_MS, whichever comes first — records
@@ -145,6 +149,7 @@ async function runEnrichSlice(stats: SliceStats, runId: string): Promise<void> {
     .from('titles')
     .select('id, tmdb_id, media_type')
     .is('keywords', null)
+    .is('enrich_skipped_at', null)
     .order('id', { ascending: true })
     .limit(SLICE_LIMIT);
 
@@ -169,13 +174,26 @@ async function runEnrichSlice(stats: SliceStats, runId: string): Promise<void> {
       const tmdbResponse = await fetchTmdbDetail(row.tmdb_id, row.media_type);
 
       if (tmdbResponse === null) {
-        // 404 — TMDb deleted the title. Leave keywords NULL so a future
-        // invocation picks it up if TMDb re-adds it. Skipped, not failed.
+        // Confirmed TMDb 404. RECORD it (migration 070) rather than just
+        // counting it: keywords stays NULL, so without a marker the row
+        // sits at the head of the id-ordered queue and is re-fetched by
+        // every slice, not merely every run — 8 dead rows cost 56 wasted
+        // calls across one 7-slice chain on 2026-08-26. Worse, once the
+        // dead set exceeds SLICE_LIMIT every slice would fetch nothing but
+        // dead rows, process zero, and trip the no-progress guard.
         //
-        // NOTE: a permanently-404 row is re-fetched on every future chain,
-        // because unlike the backfill there is no skip-list here. Tolerable
-        // while the count is small; if it grows, mirror backfill_skips.
+        // Set enrich_skipped_at to NULL to force a re-check if TMDb
+        // restores the title.
         stats.skipped++;
+        const { error: skipError } = await supabase
+          .from('titles')
+          .update({ enrich_skipped_at: new Date().toISOString() })
+          .eq('id', row.id);
+        if (skipError) {
+          // Non-fatal — the enrichment work this slice did still stands;
+          // this row just resurfaces next slice as it did before.
+          console.error(`  skip-mark failed for ${row.media_type}/${row.tmdb_id}: ${skipError.message}`);
+        }
         console.warn(`  skip  ${row.media_type}/${row.tmdb_id}: TMDb 404`);
         continue;
       }
