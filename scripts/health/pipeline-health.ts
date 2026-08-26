@@ -69,6 +69,7 @@ const ERROR_RATE_MAX = 0.25;        // a quarter of rows failing is not a blip
 const STUCK_RUN_MINUTES = 30;       // reaper is 10min; 30 means IT failed too
 const HEARTBEAT_STALE_HOURS = 48;   // one skipped Actions run is tolerable
 const WARMER_STALE_MINUTES = 30;    // warmer runs every 5min; 30 = 6 missed
+const WARM_DURATION_MAX_MS = 750;   // warm ~90ms, cold 1,500-4,000ms
 const GAP_LOOKBACK_DAYS = 7;
 
 // Jobs that must show a sync_log row within RUN_WINDOW_HOURS. `changes`
@@ -311,10 +312,20 @@ async function run(): Promise<void> {
     if (!data) return [false, 'cache_warm_status is empty — the warmer has never run'];
     const ageM = (Date.now() - new Date(data.ran_at).getTime()) / 60_000;
     if (!data.ok) return [false, `last warm failed: ${data.error ?? 'unknown'}`];
+    if (ageM >= WARMER_STALE_MINUTES) {
+      return [false, `last warm ${ageM.toFixed(1)}m ago (limit ${WARMER_STALE_MINUTES}m)`];
+    }
+    // The warmer's OWN duration is the honest measure of whether the index
+    // is staying warm: it runs the same query a user's cold open would.
+    // ~90ms means the pages were resident; hundreds of ms or seconds means
+    // they were evicted between runs and the interval is too long. This is
+    // a better signal than any manual EXPLAIN — buffer counts at a
+    // function-scan boundary do not reflect what the function did.
+    const ms = data.duration_ms ?? 0;
     return [
-      ageM < WARMER_STALE_MINUTES,
-      `last warm ${ageM.toFixed(1)}m ago in ${data.duration_ms ?? '?'}ms ` +
-        `(limit ${WARMER_STALE_MINUTES}m)`,
+      ms < WARM_DURATION_MAX_MS,
+      `last warm ${ageM.toFixed(1)}m ago in ${ms}ms (limit ${WARM_DURATION_MAX_MS}ms — ` +
+        `above this the index is going cold between runs)`,
     ];
   });
 

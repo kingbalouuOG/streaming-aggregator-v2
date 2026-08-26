@@ -153,12 +153,27 @@ SELECT cron.schedule(
 --   SELECT public.warm_recommendation_caches();
 --   SELECT * FROM public.cache_warm_status;   -- ok=true, matched=200
 --
---   -- 2. Prove it is working: this should now be ~12ms, not ~4,000ms.
---   EXPLAIN (ANALYZE, BUFFERS)
---   SELECT * FROM public.match_titles_by_vector(
---     (SELECT embedding FROM public.titles WHERE embedding IS NOT NULL LIMIT 1), 200);
---   -- Buffers: read=0 is the tell. Any non-zero `read=` means pages had
---   -- been evicted and the warmer is not keeping up.
+--   -- 2. Prove it is working. USE cache_warm_status.duration_ms, NOT an
+--   --    EXPLAIN.
+--   SELECT ran_at, now() - ran_at AS age, duration_ms, ok FROM public.cache_warm_status;
+--   -- Warm is ~90ms (measured: 87ms). A duration in the hundreds of ms or
+--   -- seconds means the index went cold BETWEEN runs and the 5-minute
+--   -- interval is too long for this instance — shorten it.
+--
+--   -- CORRECTION (2026-08-26): an earlier version of this block said to
+--   -- run EXPLAIN (ANALYZE, BUFFERS) on match_titles_by_vector and treat
+--   -- `read=0` as proof of warmth. THAT IS WRONG and it misled a real
+--   -- verification. match_titles_by_vector is plpgsql, so the outer
+--   -- EXPLAIN reports a Function Scan node whose buffer counts do NOT
+--   -- include the index pages touched by the query inside the function.
+--   -- A genuinely cold call was observed reporting `hit=4054 read=0`
+--   -- while taking 2,136ms. Buffer counts at a function-scan boundary
+--   -- say nothing about what the function did; time it, or read
+--   -- duration_ms above.
+--
+--   -- If you do want to time it by hand, call it twice: the first call
+--   -- after an idle spell pays the cold cost, the second is the warm
+--   -- number (measured 1,471ms then 7ms).
 --
 --   -- 3. Cron registered.
 --   SELECT jobname, schedule, active FROM cron.job
