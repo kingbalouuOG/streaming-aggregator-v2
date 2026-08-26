@@ -739,3 +739,32 @@ Also corrected an assumption of mine mid-implementation: I expected `useHomeFeed
 - Verify: root + native `tsc --noEmit` clean, `vitest run` 229/229, `npx expo lint` clean (the one warning at index.tsx:56 is pre-existing — checked against main).
 - Workstream B now: B1 ✅, B3 ✅, B4 ✅, B6 ✅, B2 parked, **B5 open**.
 
+## [2026-08-26] ingest | C2 — retrieval headroom, and a latent 074 bug
+Branch `feat/c2-retrieval-headroom`. Migration 076. First piece of Workstream C.
+
+**Workstream C validated from impression data first.** The plan's headline (4.2x average, 52x max) is all-time and **Home-dominated** — C is written about For You. A 14-day window makes For You look healthy (avg 1.00, max 1) but that is a sampling artefact: only 2 users with 1 session each, so repetition physically cannot appear. The real signal is that views-per-title scales with return visits:
+
+| For You sessions | Distinct titles | Views/title |
+|---|---|---|
+| 1 | 18 | 1.00 |
+| 2 | 20 | 2.10 |
+| 6 | 40 | 2.93 |
+| **9** | **29** | **4.45** |
+
+Nine sessions, 129 impressions, 29 distinct titles from a catalogue of 24,496. That is the deterministic pipeline.
+
+**C is less greenfield than the plan implies.** `applyAvoidPenalty(scored, avoidSet, embeddingMap, gamma)` already exists as a score-penalty stage with a tunable gamma, and `seenIds` is already fetched every render (90-day window, cap 1000) — it is just wired only to `selectExplorationCandidates` and demotes nothing. C1 is "add a second penalty alongside the first", not new machinery.
+
+**C2 (this PR): pure headroom, no behaviour change.** `DEFAULT_CANDIDATE_LIMIT` 500 to 800, `PER_CENTROID_CANDIDATE_LIMIT` 200 to 400. A pure top-K pool cannot absorb demotions — evicting from the head shrinks the result rather than reaching deeper. Affordable because of B1: 23ms at 200, 33ms at 400, 38ms at 500.
+
+**Found a bug I introduced in 074.** `match_titles_by_vector` THROWS for any `match_limit` above 500 — 074 set `hnsw.ef_search` to `match_limit * 2` (capped 4000) but the extension's valid range is 1..1000. Invisible because every caller used 200 or 500; C2 would have broken For You on its first request. Migration 076 clamps breadth to 1000 and **raises** above `match_limit` 1000 rather than silently returning ~1000 rows.
+
+Method note worth keeping: `SELECT set_config('hnsw.ef_search','3000',true)` returns '3000' happily at the top level — the range check only fires when the index scan uses it. Probing a GUC directly is not a test of what a function will do with it.
+
+**Next: C1** at the gentler threshold chosen — bury at 4+ views without engagement, park below that, decaying with recency. Engagement = any of detail_view / dwell_event / watched / deep_link_click / watchlist_add / thumbs_up / share. The plan's clicked-but-not-converted nuance is deferred: only 10 `deep_link_click` rows exist, nothing to tune against.
+
+**Validation caveat, recorded honestly:** the plan says validate C1 via exploration CTR, not offline eval. With ~10 users and 42 For You impressions in 14 days there is no CTR signal and no A/B to run. C1 ships on reasoning; the check is re-measuring views-per-title for multi-session users in a few weeks.
+
+- Verify: root + native `tsc --noEmit` clean, `vitest run` 229/229, eslint clean.
+- **076 not applied.** No redeploys — C2 is shared-lib constants consumed by the Worker.
+
