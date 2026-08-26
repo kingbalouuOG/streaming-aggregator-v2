@@ -253,15 +253,36 @@ export const CONTEXTUAL_MOBILE_LONG_RUNTIME_PENALTY = 0.12;
 
 // ── Pipeline Constants ──
 
-/** Default candidate retrieval limit for shared pool */
-export const DEFAULT_CANDIDATE_LIMIT = 500;
+/**
+ * Default candidate retrieval limit for shared pool.
+ *
+ * C2 — raised 500 → 800. The pool was sized when it was the finished
+ * article: retrieve top-K, rank it, show it. C1 changes that by demoting
+ * titles the user has already been shown without engaging, and a pure
+ * top-K pool cannot absorb that — evicting from the head just shrinks the
+ * result, it does not reach deeper. The extra depth is the room those
+ * demotions fall into.
+ *
+ * Cost is why this is now affordable: measured 2026-08-26 post-B1,
+ * retrieval is 23ms at 200, 33ms at 400, 38ms at 500. Depth is close to
+ * free since the halfvec index stays resident.
+ *
+ * ⚠ Hard ceiling of 1000, enforced by match_titles_by_vector (migration
+ * 076): pgvector's hnsw.ef_search maxes at 1000, so a deeper request
+ * cannot be served and RAISES rather than silently returning short. Widen
+ * with more interest centroids, not a bigger number here.
+ */
+export const DEFAULT_CANDIDATE_LIMIT = 800;
 
 /**
  * Per-centroid retrieval limit on the ENG-1 multi-interest path.
- * K ≤ 3 centroids × 200 ≈ the single-vector 500 after dedupe — same
- * pool volume, proportionally interleaved by interest weight.
+ *
+ * C2 — raised 200 → 400. K ≤ 3 centroids × 400 ≈ the single-vector 800
+ * after dedupe, preserving the original "same pool volume either path"
+ * relationship. Same reasoning and same 1000 ceiling as above; 400 × 2
+ * over-fetch = 800 ef_search, comfortably inside it.
  */
-export const PER_CENTROID_CANDIDATE_LIMIT = 200;
+export const PER_CENTROID_CANDIDATE_LIMIT = 400;
 
 /** Max genre occurrences per row (default, modulated by variety slider) */
 export const DEFAULT_MAX_PER_GENRE = 4;
