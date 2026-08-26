@@ -35,7 +35,7 @@ function greetingLabel(): string {
 export default function ForYouScreen() {
   const router = useRouter();
   const { session } = useAuth();
-  const { data, isLoading, isError, refetch } = useForYou();
+  const { data, isLoading, isError, isBootstrapping, refetch } = useForYou();
   const [refreshing, setRefreshing] = useState(false);
 
   const name =
@@ -60,6 +60,14 @@ export default function ForYouScreen() {
       setRefreshing(false);
     }
   }, [refetch]);
+
+  // B6: order matters. While the MMKV cache is restoring (or services
+  // have not resolved) the query is paused — not loading, not errored,
+  // just empty — so without this branch the `!data` case below rendered
+  // the failure state for a frame on every cold start.
+  if (isBootstrapping && !data) {
+    return <ForYouSkeleton />;
+  }
 
   if (isLoading) {
     return <ForYouSkeleton />;
