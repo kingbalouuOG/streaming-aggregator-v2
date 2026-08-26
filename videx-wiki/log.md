@@ -625,3 +625,20 @@ That third one came from measuring rather than assuming. Batching the OpenAI cal
 - **069 not applied.** Apply, then redeploy `embed-new-titles` (backfill has docstring changes only).
 - Remaining from workstream A: **A3** (queue still `tmdb_id ASC`) is now a latency nicety rather than a drain problem. **A4 retired.** Exit criterion to watch: `count_missing_title_ids()` falling ~2,000/day then flattening near zero.
 
+## [2026-08-26] ingest | Workstream A closed — A3 shipped, three commits recovered
+PR #86 merged; migrations 069 + 070 applied; all four Edge Functions redeployed from a freshly pulled `main`.
+
+**Workstream A is complete.** A1 (observability), A2 (slicing/chaining), A3 (queue ordering), A5 (daily cadence) all shipped. **A4 retired** — the one-off bulk burst was only ever needed because the scheduled path could not keep up, and at daily cadence it does.
+
+A3 shipped with its rationale inverted. The plan justified it as "the queue head is dead low-ID stubs that mostly 404"; by implementation time that was **already solved** — zero rows below tmdb_id 10000 remained, the skip-list having recorded 2,016 confirmed 404s. What justified shipping it anyway was the user-facing half: the head went from tmdb_id 11,035-12,278 (pre-2000 catalogue) to 250/250 titles available within the last 30 days. Verified live post-deploy: 270 of the head's availability rows fall inside 30 days.
+
+Two defects found by the end-to-end run, both fixed in the same PR:
+- `titles_processed` counted rows **fetched**, not attempted — a chain logged 3,000 while 2,453 entries left the queue. Same class of defect migration 066 exists to remove, in the very job it was written for.
+- `enrich-new-titles` re-fetched dead rows once per **slice** (8 rows, 56 wasted calls in one chain). Trivial waste, real cliff: past `SLICE_LIMIT` dead rows the chain wedges permanently. Fixed with `titles.enrich_skipped_at` + matching partial index — the same shape as `backfill_skips`.
+
+**Process failure worth remembering:** PR #85 was merged three commits behind its branch tip, silently dropping the stall-trap fix, the `truncated` drain-check fix, and a wiki entry. It surfaced only because a later branch cut from `main` was missing a field, and it left the deployed functions ahead of `main` with no way to tell from behaviour alone. Recovered by cherry-pick. Logged as **R-023**; the mitigation is to check the commit count on the merge screen and to redeploy from a freshly pulled `main`, never a local tree.
+
+- Updated: `wiki/concepts/operations/sync-pipeline.md` (queue-ordering section with the cost warning), `wiki/concepts/operations/risks-register.md` (R-019 A3 marked shipped; R-023 added).
+- State at close: 24,496 titles, gap 20,276, 99.97% carrying embeddings, 0 chains running. Exit criterion to watch: `count_missing_title_ids()` falling ~1,450/day net and flattening near zero over ~14 days.
+- **Next: R-010 — nothing alerts.** Everything built this week is legible but silent; a human still has to read `sync_history`. That is the gap that let the original 79-day freeze happen.
+
