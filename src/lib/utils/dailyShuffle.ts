@@ -1,5 +1,5 @@
 /**
- * Day-seeded rotation helpers.
+ * Seeded rotation helpers (day- and bucket-scoped).
  *
  * The Home rails are otherwise deterministic (popularity snapshots), so
  * they look frozen day-to-day. These helpers add visible movement WITHOUT
@@ -7,6 +7,10 @@
  * within a day (no flicker on re-render, same result on web and Edge) and
  * changes at 00:00 UTC. Same seeding convention as the For You exploration
  * slot (recommendations-v2/exploration.ts).
+ *
+ * `bucketStamp` / `bucketedShuffleBands` are the C3 variants: same PRNG,
+ * but the seed advances every N minutes instead of daily, giving For You
+ * visible movement between opens rather than only across days.
  */
 
 /** FNV-1a 32-bit string hash. */
@@ -69,4 +73,54 @@ export function dailyPick<T>(items: T[], topN = items.length, salt = ''): T | un
   const n = Math.min(topN, items.length);
   const rng = dayRng(salt);
   return items[Math.floor(rng() * n)];
+}
+
+// ── Bucket-seeded rotation (Workstream C3) ──────────────────────────
+
+/**
+ * Stamp that advances every `bucketMinutes`. Same role as `utcDayStamp`
+ * but at a finer grain, and computed from epoch minutes so every caller
+ * (Worker, web, native) lands on the same bucket boundary regardless of
+ * timezone.
+ */
+export function bucketStamp(bucketMinutes: number, now: Date = new Date()): string {
+  const bucket = Math.floor(now.getTime() / (bucketMinutes * 60_000));
+  return `b${bucket}`;
+}
+
+/**
+ * Fisher-Yates shuffle WITHIN contiguous bands, seeded by
+ * `${salt}:${bucket}`.
+ *
+ * Bands rather than a head shuffle (`dailyShuffleTopN`) because the two
+ * do different jobs. Shuffling the whole head can send a rank-1 match to
+ * rank 20 — acceptable for Home's popularity rails, wrong for a
+ * personalised feed where the top result is genuinely the best match. A
+ * band of `bandSize` lets near-equal candidates trade places while
+ * bounding how far anything can fall: with bandSize 4 the best match can
+ * reach rank 4, never rank 20.
+ *
+ * Pure; returns a new array. Items beyond the last whole band are still
+ * shuffled among themselves.
+ */
+export function bucketedShuffleBands<T>(
+  items: T[],
+  bandSize: number,
+  salt: string,
+  bucketMinutes: number,
+  now: Date = new Date(),
+): T[] {
+  if (items.length <= 1 || bandSize <= 1) return [...items];
+
+  const rng = mulberry32(fnv1a(`${salt}:${bucketStamp(bucketMinutes, now)}`));
+  const out = [...items];
+
+  for (let start = 0; start < out.length; start += bandSize) {
+    const end = Math.min(start + bandSize, out.length);
+    for (let i = end - 1; i > start; i--) {
+      const j = start + Math.floor(rng() * (i - start + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+  }
+  return out;
 }
