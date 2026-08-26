@@ -594,3 +594,20 @@ Also: a slice refusing at `MAX_CHAIN_DEPTH` now closes its `sync_log` row rather
 - Migrations 066 + 067 are APPLIED. **068 is not** — apply before redeploying the four functions.
 - Still open: A5 (daily cadence) becomes safe once the chain is proven at the new sizing; A3 supported by the 36% dead-stub rate at the queue head; A4 probably unnecessary.
 
+## [2026-08-26] ingest | A5 — daily backfill cadence + bulk embedding writes
+Branch `feat/a5-daily-backfill-cadence`. Migration 069.
+
+**A5 turned out to be necessary, not just an optimisation.** The gap was *growing* under weekly cadence: `count_missing_title_ids()` 22,260 (08-25) to 22,729 (08-26), and that is after a chain removed 595 entries — so the daily SA sync adds ~1,000 gaps/day against a weekly chain's ~428/day. Inflow beat drain, so the backlog could never close. The original plan's "74 weeks to drain" was optimistic, not pessimistic. Daily cadence nets ~2,000/day and clears ~22.7k in about eleven days. **This is what makes A4 unnecessary.**
+
+Three parts to 069:
+- `backfill-missing-titles` weekly to **daily 05:00** (a 12-slice chain is ~16 min, clear of the 06:00 sync).
+- `embed-new-titles` **06:45 to 07:15**: daily backfill gives enrich real work every day, and a full enrich chain runs 06:30 to ~06:46, overlapping the old slot. Overlap is not destructive (embed selects `keywords IS NOT NULL`, so it correctly reports drained) but the stragglers would wait a day.
+- `bulk_set_title_embeddings(int[], text[])`: one statement per chunk instead of one UPDATE per row.
+
+That third one came from measuring rather than assuming. Batching the OpenAI calls yesterday only moved the bottleneck: two live chains ran **200 rows/78s** and **171 rows/70s**, about 400ms/row, all of it PostgREST round trips — capping embed near 2,400 rows/day against the ~1,900/day daily backfill will produce. A 25% margin was too thin to build a cadence change on. The function refuses a length mismatch rather than letting `unnest()` pad with NULL and overwrite good embeddings.
+
+- Updated: `wiki/concepts/operations/sync-pipeline.md` (full cron schedule table with the two ordering constraints, why-daily-not-weekly with the growth figures, and the per-row-round-trip lesson), `wiki/concepts/operations/risks-register.md` (R-019 addressed and A4 retired; R-022 per-row round trips capping sliced jobs).
+- Verify: root `tsc --noEmit` clean, `vitest run` 229/229, edge functions clean under standalone `tsc --noResolve`. The `unnest(a,b)` zip and `::vector` cast were dry-run against live as read-only SELECTs.
+- **069 not applied.** Apply, then redeploy `embed-new-titles` (backfill has docstring changes only).
+- Remaining from workstream A: **A3** (queue still `tmdb_id ASC`) is now a latency nicety rather than a drain problem. **A4 retired.** Exit criterion to watch: `count_missing_title_ids()` falling ~2,000/day then flattening near zero.
+
