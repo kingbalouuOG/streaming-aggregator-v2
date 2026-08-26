@@ -697,3 +697,26 @@ Also verified before dropping the old index that nothing else depends on it: the
 - Updated: `cold-start-latency.md` (sizing finding + halfvec section), `risks-register.md` (R-026 — warming cannot help when the object exceeds the cache).
 - **074 not applied.** CREATE INDEX takes a SHARE lock on `titles` (blocks writes, not reads) — apply outside the 05:00-07:15 pipeline window. Real test is `cache_warm_status.duration_ms` staying consistently low across several ticks.
 
+## [2026-08-26] ingest | B3 — availability filtering in SQL
+Branch `perf/b3-sql-availability`. Migration 075.
+
+Measured the payload before building: `get_available_tmdb_ids` returns **43,234 ids = 328,790 bytes (~321 KB)** — larger than the plan's 256KB estimate — and the mood-room RPCs take the same array as a *parameter*, so it goes up as well as down on every Home load.
+
+The observation that made it cheap: availability is only enormous as a flat id list. Per title it is tiny (**1.26 services average**, max 7). Migration 075 denormalises it to `titles.available_services` (GIN), so every query filters with one `.overlaps()` and fetches nothing extra.
+
+**Native Home now fetches the id list zero times, down from twice.** `fetchGenreSpotlight`/`fetchCriticallyAcclaimed` take services and filter in SQL; `fetchPopular` filters TMDb trending so it cannot be a predicate on our own query — it asks about the ~40 ids it holds via a new `filterToAvailable`. `buildFilterSets` dropped from the Home path entirely: Home only ever used its `availableTmdbIds` field, so its dismissed/thumbs-down/watchlist reads were dead weight.
+
+This supersedes B4's in-flight-dedup plumbing on this path — that existed to make one 321KB fetch serve two callers; now there are none.
+
+Guards, because a denormalised column is only safe if something checks it: row-level trigger, `refresh_title_available_services()` for repair/bulk loads, and `count_available_services_drift()` asserted daily by the health check. The trigger fires per row, so bulk loads must disable it and refresh after.
+
+Also note the **empty-array convention fails open**: `services.length === 0` means no filter, so a caller that gets it wrong silently shows unavailable titles rather than erroring.
+
+Deferred deliberately (none crossing a mobile connection): mood-room RPCs, `foryouRender`/`ranker` (server-side + KV-cached), web `useForYouContent` (legacy).
+
+Also captured `docs/v2/evaluations/2026-08-26-eng1-eval-post-halfvec.md` — ENG-1 gates all PASS for migration 074, but with the honest note that section B's recall gate passes as 0/2 vs 0/2 and proves nothing; the real verification was an exact-vs-approximate A/B (200/200 overlap, 20/20 identical top-20 positions).
+
+- New: `wiki/concepts/architecture/cold-start-latency.md` B3 section. Updated `risks-register.md` (R-027 drift).
+- Verify: root + native `tsc --noEmit` clean, `vitest run` 229/229, eslint clean on changed files.
+- **075 not applied.** No function redeploys; B3 is client code shipping with the next native build.
+
