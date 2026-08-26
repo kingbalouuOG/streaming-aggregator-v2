@@ -55,6 +55,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Two-surface architecture](wiki/concepts/architecture/two-surface-architecture.md) — Home (discovery) and For You (personalised) split.
 - [Home surface](wiki/concepts/architecture/home-surface.md) — Recency-led, lightly personalised, max 7-9 rows.
 - [For You surface](wiki/concepts/architecture/for-you-surface.md) — Heavy personalisation, sliders, mood rooms, max 7-8 rows.
+- [Cold-start latency](wiki/concepts/architecture/cold-start-latency.md) — why first open took 5s+: a cold HNSW index (4,156ms vs 12ms warm), the 5-minute warmer, and Home's two serial fetch stretches.
 - [Recommendation pipeline](wiki/concepts/architecture/recommendation-pipeline.md) — Multi-stage retrieval → ranking → row selection → ordering.
 - [User taste vector v2](wiki/concepts/architecture/taste-vector.md) — 1536D weighted aggregate, decay, confidence floor, hybrid update.
 - [Service fingerprints](wiki/concepts/architecture/service-fingerprints.md) — Per-service centroids for cold-start service-bias.

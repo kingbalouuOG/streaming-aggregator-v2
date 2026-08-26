@@ -110,6 +110,25 @@ function writeAvailableIdsCache(key: string, ids: Set<number>): void {
   }
 }
 
+/**
+ * In-flight de-duplication (B4).
+ *
+ * The localStorage cache is only written AFTER the RPC resolves, so two
+ * callers that start before the first one finishes both miss the cache
+ * and both fire the RPC — 1.2-2.9s and ~256 KB, twice.
+ *
+ * That is why `fetchHomeFeed` used to await this once up front before its
+ * parallel batch: serialising was the only way to guarantee one call. The
+ * cost was that seven unrelated requests sat behind an availability fetch
+ * they did not need. Sharing the in-flight promise removes the duplicate
+ * RPC *and* the need to serialise, so the hoist could go.
+ *
+ * Keyed by cache key (the sorted service list), so different service sets
+ * are independent. Cleared on settle, in a `finally`, so a rejected or
+ * empty result can never wedge the key permanently.
+ */
+const inFlightAvailableIds = new Map<string, Promise<Set<number>>>();
+
 export async function getAvailableTmdbIds(
   serviceIds: string[],
 ): Promise<Set<number>> {
@@ -119,6 +138,20 @@ export async function getAvailableTmdbIds(
   const cached = readAvailableIdsCache(cacheKey);
   if (cached) return cached;
 
+  const inFlight = inFlightAvailableIds.get(cacheKey);
+  if (inFlight) return inFlight;
+
+  const request = fetchAvailableTmdbIds(serviceIds, cacheKey).finally(() => {
+    inFlightAvailableIds.delete(cacheKey);
+  });
+  inFlightAvailableIds.set(cacheKey, request);
+  return request;
+}
+
+async function fetchAvailableTmdbIds(
+  serviceIds: string[],
+  cacheKey: string,
+): Promise<Set<number>> {
   try {
     // Migration 035 changed the RPC return shape from TABLE → jsonb
     // (single-row JSONB array). One round trip instead of 20 paginated

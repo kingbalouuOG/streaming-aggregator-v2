@@ -23,6 +23,13 @@ import type { ContentItem, ServiceId } from '@/lib/types/content';
 // personalised genre spotlights (the curated "For You on Home" rows).
 
 const SPOTLIGHT_COUNT = 3;
+// Items rendered per spotlight row.
+const SPOTLIGHT_SIZE = 15;
+// Fetched per spotlight. The surplus absorbs titles lost to an earlier
+// spotlight during the post-parallel dedup below, so a row still fills.
+// fetchGenreSpotlight already over-fetches limit*8 from the DB, so this
+// costs a slightly larger response, not an extra round trip.
+const SPOTLIGHT_FETCH_SIZE = 20;
 // UK free-to-air services — "Free Tonight" is no-subscription content, so it's
 // scoped to these regardless of the user's selected stack.
 const FREE_UK_SERVICES: ServiceId[] = ['bbc', 'itvx', 'channel4'];
@@ -244,17 +251,25 @@ async function fetchUpcoming(services: ServiceId[]): Promise<UpcomingItem[]> {
 }
 
 async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
-  // Resolved once up front so fetchPopular can filter trending to the
-  // user's services; buildFilterSets below reuses the same localStorage
-  // cache entry (no duplicate RPC), and it's skipped entirely on warm loads.
-  const availableTmdbIds = await getAvailableTmdbIds(services);
+  // B4: availability is STARTED here but not awaited. Only fetchPopular
+  // actually needs it, so only fetchPopular waits — the other seven
+  // requests fire immediately instead of queueing behind a 1.2-2.9s RPC
+  // they have no use for.
+  //
+  // This used to be `await`ed up front. That was not an oversight: without
+  // in-flight de-duplication, letting it race buildFilterSets (which calls
+  // getAvailableTmdbIds internally) meant BOTH missed the not-yet-written
+  // cache and fired the RPC. getAvailableTmdbIds now shares its in-flight
+  // promise, so the two callers below share one request and the serial
+  // hoist is no longer needed to guarantee that.
+  const availableIdsPromise = getAvailableTmdbIds(services);
 
   const [charts, profile, filterSets, recentlyAdded, popularRaw, freeTonight, paidRaw, upcoming] = await Promise.all([
     fetchPerServiceCharts(services),
     getV2TasteProfile(),
     buildFilterSets(services),
     fetchRecentlyAdded(services),
-    fetchPopular(services, availableTmdbIds),
+    availableIdsPromise.then((ids) => fetchPopular(services, ids)),
     fetchFreeTonight(),
     fetchPaidTitles(services),
     fetchUpcoming(services),
@@ -306,17 +321,41 @@ async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
   if (hero) exclude.add(hero.id);
   for (const i of paid) exclude.add(i.id);
 
+  // B4: the three spotlights fetch in PARALLEL rather than one after
+  // another — three sequential round trips were the last serial stretch
+  // in the whole feed.
+  //
+  // They cannot simply be parallelised, though: the sequential version
+  // fed each spotlight's results into `exclude` so the next one could not
+  // repeat them ("The Goldbergs in two consecutive sections"). Run
+  // concurrently, they all see the same starting `exclude` and can
+  // collide.
+  //
+  // So: fetch concurrently with the shared starting exclusions, then
+  // resolve collisions in order afterwards. Spotlight 0 keeps its picks,
+  // 1 drops anything 0 took, and so on — identical output ordering and
+  // dedup guarantees to the sequential version, one round trip instead of
+  // three. Over-fetch a little so a spotlight that loses items to an
+  // earlier one still fills its row.
+  const rawSpotlights = await Promise.all(
+    Array.from({ length: SPOTLIGHT_COUNT }, (_, offset) =>
+      fetchGenreSpotlight(
+        filterSets.availableTmdbIds,
+        SPOTLIGHT_FETCH_SIZE,
+        offset,
+        picks,
+        exclude,
+      ).catch(() => null), // A spotlight failure must not blank Home.
+    ),
+  );
+
   const spotlights: GenreSpotlight[] = [];
-  for (let offset = 0; offset < SPOTLIGHT_COUNT; offset++) {
-    try {
-      const sp = await fetchGenreSpotlight(filterSets.availableTmdbIds, 15, offset, picks, exclude);
-      if (sp.items.length > 0) {
-        spotlights.push(sp);
-        for (const i of sp.items) exclude.add(i.id);
-      }
-    } catch {
-      // A spotlight failure must not blank Home.
-    }
+  for (const sp of rawSpotlights) {
+    if (!sp) continue;
+    const items = sp.items.filter((i) => !exclude.has(i.id)).slice(0, SPOTLIGHT_SIZE);
+    if (items.length === 0) continue;
+    spotlights.push({ ...sp, items });
+    for (const i of items) exclude.add(i.id);
   }
 
   return { hero, recentlyAdded, popular, freeTonight, paid, upcoming, rows, spotlights };

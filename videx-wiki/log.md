@@ -660,3 +660,24 @@ Thresholds are deliberately loose (48h staleness, 25% error *rate* with a 20-err
 - **Migration 071 must be applied**, or checks 4 and 8 fail with "relation pipeline_health does not exist". No function redeploy needed.
 - Residual: a sustained GitHub Actions outage goes unnoticed. Far smaller than the zero coverage it replaces.
 
+## [2026-08-26] ingest | B1 + B4 — cold-start latency
+Branch `feat/b1-b4-cold-start-latency`. Migration 073. First of workstream B.
+
+**The cause of the 5s cold open is a cold index, not round trips.** Measured back-to-back on live, same query twice:
+
+| | Time | Buffers |
+|---|---|---|
+| Cold | **4,155.679 ms** | `shared hit=3546 read=508` |
+| Warm | **12.365 ms** | `shared hit=4054` (`read=0`) |
+
+336x, entirely those 508 HNSW pages coming off disk. The index is evicted whenever the DB idles, and a pre-launch app is idle almost always — so it is always cold for a real user, while any developer who has just been querying measures the warm number. `warmup-foryou` covered this and was retired in the Worker migration with no replacement.
+
+- **B1**: `warm_recommendation_caches()` every 5 min via pg_cron, using a REAL embedding (HNSW traversal is query-point dependent; a zero vector walks an unrepresentative part of the graph). pg_cron rather than a Worker cron because what is warmed is Postgres's own buffer cache — the opposite call to the health check in 071, and both are right: monitoring must be independent of what it watches, work should sit close to the data. Records to `cache_warm_status`, asserted by the daily health check, because a stopped warmer fails nothing and silently restores the 4s.
+- **B4a**: the `getAvailableTmdbIds` hoist in `fetchHomeFeed`. Removing it naively REGRESSES things — the localStorage cache is written only after the RPC resolves, so racing `buildFilterSets` makes both miss and both fire a 1.2-2.9s / 256KB RPC. The hoist existed for that reason. Real fix: in-flight de-duplication (promise shared by cache key, cleared in a `finally`). Then the hoist is unnecessary and seven requests stop queueing behind availability.
+- **B4b**: three sequential genre spotlights, sequential because each fed `exclude` for the next. Now fetched concurrently from the same starting exclusions with collisions resolved in order afterwards — identical dedup guarantees, one round trip instead of three, slight over-fetch so rows still fill.
+
+- New page: `wiki/concepts/architecture/cold-start-latency.md`. Updated: `index.md`, `risks-register.md` (R-024 cold index, R-025 caches that populate on completion do not dedup concurrent callers).
+- Verify: root `tsc --noEmit` clean, native `tsc --noEmit` clean, `vitest run` 229/229, eslint clean on changed shared-lib files.
+- **073 not applied.** No function redeploys needed. Post-apply check is `read=0` on the EXPLAIN in the migration footer.
+- Still open in B: B2 feed pre-warm, B3 SQL-side availability (stops shipping a 256KB id array), B5 `/v1/home`, B6 stale-while-revalidate.
+
