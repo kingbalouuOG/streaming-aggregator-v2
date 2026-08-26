@@ -794,3 +794,18 @@ Two caveats written onto the surface page: `card_impressions` has no `media_type
 - Verify: root + native `tsc --noEmit` clean, `vitest run` 242/242, eslint clean.
 - Remaining in C: **C3** (per-session ordering variation) — still needs the cache-key decision, since the feed is KV-cached 20 min and a per-session seed would either bust it every open or be ignored.
 
+## [2026-08-26] ingest | C3 — per-open ordering variation. Workstream C complete.
+Branch `feat/c3-session-ordering`. No migration; **Worker redeploy required**.
+
+`bucketedShuffleBands` added beside the existing `dailyShuffleTopN`, reusing its PRNG but doing a different job: shuffling within contiguous bands of 4 rather than the whole head. A head shuffle can send a rank-1 match to rank 20 — right for Home's popularity rails, wrong for a personalised feed. Banding bounds the fall.
+
+**The seed is deliberately NOT in the cache key.** A cached payload already carries its bucket's ordering, so the feed re-orders exactly when the 20-minute feed cache turns over — zero extra cache entries, zero hit-rate change. The cache-pressure objection I raised when proposing C3 turned out not to exist once framed this way. `ORDERING_BUCKET_MINUTES` must track the Worker's `FORYOU_CACHE_TTL_SECONDS`; both files now carry a comment naming the coupling, since a longer bucket stops variation and a shorter one varies invisibly.
+
+**Applied to the row input only.** `selectExplorationCandidates` keeps its daily seed and fixed splice positions [2,5,13], so the day's exploration pick survives while the material around it rotates. Shuffling its input would have made `EXPLORATION_SLOT_POSITIONS` meaningless — which is also the decisive argument against the client-side alternative, along with splitting ordering across two codebases, breaking `card_impressions.position` semantics, needing a web duplicate, and waiting on a native build.
+
+12 unit tests. The load-bearing one is that nothing ever crosses a band boundary — that invariant is the entire reason banding was chosen. Also: stability within a bucket (no flicker), change across buckets, per-user variation, timezone-independent boundaries, trailing partial bands.
+
+- Updated `wiki/concepts/architecture/for-you-surface.md` (C3 section, with the cache-key reasoning and why not client-side).
+- Verify: root + native `tsc --noEmit` clean, `vitest run` 254/254, eslint clean.
+- **Workstream C is complete**: C1 ✅ C2 ✅ C3 ✅. Remaining from the whole plan: **B5** only (`/v1/home` aggregator), and B2 parked.
+
