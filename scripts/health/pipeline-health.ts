@@ -329,7 +329,24 @@ async function run(): Promise<void> {
     ];
   });
 
-  // 9. The watchman's watchman. A scheduled Actions run that never happens
+  // 9. B3 denormalisation guard. titles.available_services is a copy of
+  //    what streaming_availability says, kept current by a trigger. A
+  //    denormalised column is only safe if something actually checks it —
+  //    drift here means users are shown titles that are not on their
+  //    services, or denied ones that are, and nothing else would notice.
+  await check('availability-not-drifted', async () => {
+    const { data, error } = await supabase.rpc('count_available_services_drift');
+    if (error) throw new Error(error.message);
+    const n = Number(data ?? 0);
+    return [
+      n === 0,
+      n === 0
+        ? 'titles.available_services matches streaming_availability'
+        : `${n} title(s) disagree — run: SELECT refresh_title_available_services();`,
+    ];
+  });
+
+  // 10. The watchman's watchman. A scheduled Actions run that never happens
   //    raises no alarm by itself — so each run checks that the PREVIOUS
   //    one happened. Only a sustained Actions outage escapes.
   await check('previous-check-ran', async () => {

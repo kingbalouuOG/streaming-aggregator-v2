@@ -168,7 +168,9 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     staleTime: 0,
     gcTime: 15 * 60 * 1000,
     queryFn: async () => {
-      const sf = sharedFilters as FilterSets;
+      // B3: sharedFilters is no longer read here — availability moved into
+      // the SQL predicate, and this query used it for nothing else. It is
+      // still the query's `enabled` gate, so the rows wait for it as before.
       const serviceIds: string[] = providerIds
         .map(id => providerIdToServiceId(id))
         .filter(Boolean) as string[];
@@ -176,7 +178,7 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
       const [profile, charts, acclaimed] = await Promise.all([
         getV2TasteProfile(),
         fetchPerServiceCharts(serviceIds),
-        fetchCriticallyAcclaimed(sf.availableTmdbIds),
+        fetchCriticallyAcclaimed(serviceIds),
       ]);
       const picks = profile?.selectedClusters ?? [];
 
@@ -184,7 +186,7 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
       for (const c of charts) for (const i of c.items) seedExclude.add(i.id);
 
       const primarySpotlight = await fetchGenreSpotlight(
-        sf.availableTmdbIds,
+        serviceIds,
         15,
         0,
         picks,
@@ -236,8 +238,15 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
       for (const sp of genreSpotlights) for (const i of sp.items) exclude.add(i.id);
       for (const c of perServiceCharts) for (const i of c.items) exclude.add(i.id);
 
+      // B3: availability is filtered in SQL now, so this needs the service
+      // ids rather than the resolved id Set (same derivation as the
+      // sharedFilters query above).
+      const serviceIds: string[] = providerIds
+        .map(id => providerIdToServiceId(id))
+        .filter(Boolean) as string[];
+
       const next = await fetchGenreSpotlight(
-        sharedFilters.availableTmdbIds,
+        serviceIds,
         15,
         offset,
         selectedClusters,
@@ -251,7 +260,7 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
     } finally {
       setSpotlightsLoading(false);
     }
-  }, [sharedFilters, spotlightsLoading, genreSpotlights, perServiceCharts, selectedClusters]);
+  }, [sharedFilters, spotlightsLoading, genreSpotlights, perServiceCharts, selectedClusters, providerIds]);
 
   // --- Render-time dedup ---
   const dedupedSections = useMemo(() => {

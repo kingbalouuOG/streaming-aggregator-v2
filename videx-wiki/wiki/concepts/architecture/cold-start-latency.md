@@ -182,6 +182,57 @@ on. Identical output ordering and dedup guarantees, one round trip instead
 of three. Each over-fetches slightly so a row still fills after losing
 items to an earlier spotlight.
 
+## B3 — availability filtering in SQL
+
+Every Home load fetched `get_available_tmdb_ids`: **43,234 ids, 328,790
+bytes (~321 KB)**, transferred, parsed, and rebuilt into a 43k-entry Set —
+to membership-test the ~100 titles actually rendered. The mood-room RPCs
+take the same array as a *parameter*, so it went **up as well as down**.
+
+B1 fixed the database; this is the wire. They were separate problems and
+only one of them was ever about the index.
+
+**The observation that made it cheap:** availability is only enormous as a
+flat id list. Per title it is tiny — measured 1.26 services each, max 7.
+
+Migration 075 denormalises it onto `titles.available_services` (GIN
+indexed), so every existing query filters with one predicate:
+
+```ts
+query.overlaps('available_services', services)
+```
+
+### The empty-array convention fails open — be careful
+
+`services.length === 0` means *no availability filter*, matching the old
+`availableTmdbIds.size > 0` guard. That convention **fails open**: get it
+wrong and users are silently shown titles they cannot watch, with no
+error. Any new caller must preserve it deliberately.
+
+### Denormalisation guards
+
+A copied column is only safe if something checks it:
+
+1. **Row-level trigger** on `streaming_availability` — the only writer in
+   normal operation.
+2. **`refresh_title_available_services()`** — full rebuild, for repair and
+   after bulk loads.
+3. **`count_available_services_drift()`** — asserted daily by the health
+   check. Drift means users see wrong availability and nothing else would
+   notice.
+
+> ⚠ The trigger fires **per row**. `scripts/sync-content.ts` stage `sa`
+> writes tens of thousands of rows — disable the trigger, load, re-enable,
+> then call the refresh. The daily incremental sync (~600–3,500 rows) needs
+> no special handling. Instructions are in the migration header.
+
+### What still uses the old path
+
+Deliberately deferred, none of it crossing a mobile connection: the
+mood-room RPCs (the array is a parameter — signature change plus a
+migration), `foryouRender`/`ranker` (server-side, inside the provider
+network, KV-cached), and web `useForYouContent` (legacy surface).
+
 ## Still open
 
 `B2` feed pre-warm, `B3` SQL-side availability filtering (stops shipping a
