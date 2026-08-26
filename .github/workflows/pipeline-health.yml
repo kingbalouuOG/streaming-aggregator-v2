@@ -1,0 +1,64 @@
+name: Pipeline health
+
+# R-010. Daily dead man's switch over the catalogue pipeline.
+#
+# The 2026-06-07 freeze ran for 79 days with ZERO errors: cron said
+# 'succeeded' nightly, the Edge Functions returned 200, sync_log.errors was
+# 0. Every conventional error-triggered alert would have stayed silent for
+# the whole outage. So these checks assert the ABSENCE OF EXPECTED SUCCESS
+# — "nothing new in titles for 48h" would have caught it on day two.
+#
+# WHY THIS IS A WORKFLOW AND NOT AN EDGE FUNCTION:
+# don't monitor Supabase from inside Supabase. We watched pg_net sever
+# calls at 30s and the Edge Runtime refuse invocations with a 502 — a
+# monitor invoked by pg_cron inherits both, so in exactly the scenarios
+# worth alerting on, the alarm would be the broken component. Actions is
+# independent infrastructure, and a failed run emails the repo owner, so
+# it is also the delivery mechanism at no extra cost.
+#
+# A skipped Actions run raises no alarm by itself, so each run records a
+# heartbeat (migration 071) and the NEXT run asserts that heartbeat is
+# fresh. Only a sustained Actions outage escapes.
+#
+# Required GitHub repo secrets (both already configured):
+#   SUPABASE_URL                — project API URL
+#   SUPABASE_SERVICE_ROLE_KEY   — bypasses RLS for sync_log / RPC reads
+
+on:
+  schedule:
+    # 09:00 UTC — after the full daily pipeline has finished
+    # (backfill 05:00, sync 06:00, enrich 06:30, embed 07:15), so the
+    # check always sees a complete cycle rather than one in progress.
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+# A queued second run would race the first on the heartbeat table and
+# report a confusing "previous check 0.0h ago".
+concurrency:
+  group: pipeline-health
+  cancel-in-progress: false
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      # Intentionally BLOCKING. A red X and the email it sends are the
+      # entire alerting mechanism — do not add continue-on-error here.
+      - name: Check pipeline health
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/health/pipeline-health.ts
