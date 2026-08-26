@@ -231,7 +231,21 @@ const MAX_SINCE_LOOKBACK_SECONDS = 36 * 3600;
 // the ~150s zone where runs were being killed. A full ~128s window is now
 // 2 slices instead of 8.
 const SLICE_BUDGET_MS = 75_000;
-const MAX_CHAIN_DEPTH = 10;
+
+// Depth 20 = ~25 minutes of slice time. Sized off a real catch-up run:
+// 2026-08-26 06:00 processed 3,518 changes in 540s of slice time and STILL
+// hit its depth cap without consuming the window, because two failed runs
+// in a row had pushed `since` back to the 36h lookback cap.
+//
+// That combination is a stall trap. getLastSyncTimestamp() only advances
+// on a COMPLETED run, so if a catch-up window can never finish inside the
+// cap, every subsequent run re-requests the same 36h window, hits the cap,
+// is marked failed, and re-requests it again — burning SA API quota
+// forever without ever making progress. The cap has to be comfortably
+// larger than the worst-case window, not merely larger than a normal one.
+// A routine 24h window consumes ~2 slices and stops early, so a high cap
+// costs nothing on ordinary days.
+const MAX_CHAIN_DEPTH = 20;
 
 // Pause before handing off, giving the outgoing worker a moment to wind
 // down before its successor starts.
