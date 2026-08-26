@@ -720,3 +720,22 @@ Also captured `docs/v2/evaluations/2026-08-26-eng1-eval-post-halfvec.md` — ENG
 - Verify: root + native `tsc --noEmit` clean, `vitest run` 229/229, eslint clean on changed files.
 - **075 not applied.** No function redeploys; B3 is client code shipping with the next native build.
 
+## [2026-08-26] ingest | B6 — paint from the persisted cache on launch
+Branch `perf/b6-stale-while-revalidate`. No migration, native-only.
+
+The plan framed B6 as "persistence already exists; the app just does not prefer speed on launch". The persistence was in fact **wired correctly** — `PersistQueryClientProvider`, MMKV, `maxAge`/`gcTime` both a day, cache buster. The render gates were the bug.
+
+Both Home and For You did `if (isLoading) -> spinner; if (!data) -> failure`. While the persister restores, queries are **paused**: `isFetching` false, so `isLoading` false, `data` still undefined — so both screens fell through to the failure branch and rendered *"Couldn't load tonight's shelf"* / `<NotReady/>` for a frame on every cold start, right before the cached payload would have painted. Same before `useUserServices` resolved (`enabled: !!services` false). **The app was rendering "nothing yet" as "something broke".**
+
+Second issue: the query key embeds the service list, so when services resolve the key changes and the new key has no in-memory data — dropping to empty even while the old key had content. Fixed with `placeholderData: keepPreviousData`.
+
+Both hooks now expose `isBootstrapping` (restoring OR services unresolved) and both screens branch on it before testing `data`. Revalidation deliberately unchanged — stale entries still refetch in the background, just behind visible content.
+
+Worth recording as a pattern: **any query keyed on another query's result needs both `useIsRestoring` and `keepPreviousData`**, and the screen must branch on bootstrapping before `data`.
+
+Also corrected an assumption of mine mid-implementation: I expected `useHomeFeed` to have no `staleTime` and was going to add one. It already had 30 minutes, which was already right. Left alone.
+
+- Updated `wiki/concepts/architecture/cold-start-latency.md` (B6 section + the pattern; B2 marked parked-not-pending with the reasoning).
+- Verify: root + native `tsc --noEmit` clean, `vitest run` 229/229, `npx expo lint` clean (the one warning at index.tsx:56 is pre-existing — checked against main).
+- Workstream B now: B1 ✅, B3 ✅, B4 ✅, B6 ✅, B2 parked, **B5 open**.
+

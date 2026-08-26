@@ -233,8 +233,63 @@ mood-room RPCs (the array is a parameter — signature change plus a
 migration), `foryouRender`/`ranker` (server-side, inside the provider
 network, KV-cached), and web `useForYouContent` (legacy surface).
 
+## B6 — stale-while-revalidate
+
+The plan read this as "persistence already exists; the app just does not
+prefer speed on launch". The persistence was in fact wired correctly —
+`PersistQueryClientProvider`, MMKV, `maxAge` and `gcTime` both a day, a
+cache buster. **The render gates were the problem.**
+
+Both surfaces did:
+
+```tsx
+if (isLoading) -> spinner / skeleton
+if (!data)     -> failure state
+```
+
+While `PersistQueryClientProvider` restores, queries are **paused**:
+`isFetching` is false, so `isLoading` is false, and `data` is still
+undefined. Both screens fell through to `!data` and rendered the failure
+state — *"Couldn't load tonight's shelf"*, `<NotReady/>` — for a frame on
+every cold start, immediately before the cached payload would have
+painted. The same held before `useUserServices` resolved, since
+`enabled: !!services` was false.
+
+> The app was not failing to cache. It was rendering **"nothing yet" as
+> "something broke"** — the worst possible reading of a cache that was
+> about to hit.
+
+Second problem: the query key embeds the service list, so the moment
+services resolve the **key changes**, and the new key has no in-memory
+data — dropping the screen back to empty even when the old key was
+showing content. `placeholderData: keepPreviousData` carries it across.
+
+### The pattern to copy
+
+Any query whose key depends on another query's result needs both:
+
+```ts
+const isRestoring = useIsRestoring();
+const query = useQuery({ ..., placeholderData: keepPreviousData });
+return { ...query, isBootstrapping: isRestoring || !dependency };
+```
+
+and the screen must branch on `isBootstrapping` **before** testing `data`.
+Three of the app's query families have this shape (`useHomeFeed`,
+`useForYou`, and anything else keyed on `useUserServices`).
+
+Revalidation is unchanged — a stale entry still refetches in the
+background, it just does so behind visible content. `useHomeFeed`'s
+30-minute and `useForYou`'s 10-minute `staleTime` were already correct and
+were deliberately left alone.
+
 ## Still open
 
-`B2` feed pre-warm, `B3` SQL-side availability filtering (stops shipping a
-256 KB id array to the client), `B5` `/v1/home` aggregator, `B6`
-stale-while-revalidate. See the plan.
+`B5` `/v1/home` aggregator — one Worker endpoint doing Home's orchestration
+server-side, collapsing ~15 client round trips to 1.
+
+`B2` (feed pre-warm) is **parked, not pending**: B1 removed its premise (a
+render's vector retrieval is now ~58ms, not 4-8s) and the feed cache TTL is
+20 minutes, so warming on the 04:00 cron would expire hours before anyone
+opened the app. Making it useful would mean a much longer TTL — which
+trades latency for exactly the staleness Workstream C exists to fix.
