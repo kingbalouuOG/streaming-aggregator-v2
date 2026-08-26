@@ -101,6 +101,29 @@ idempotent (`titles` upsert on `(tmdb_id, media_type)`, enrich/embed are
 single-row updates keyed by id) — so the cost is wasted work, never
 corruption. **Any new sliced job must preserve that property.**
 
+### Completion must mean "finished the work", not "fetched a short page"
+
+A sliced job stops chaining when it decides the queue is drained. Deriving
+that from the row count alone is wrong:
+
+```
+titles_processed: 200      queue_at_start: 371
+stopped_because: "queue drained"   queue_at_end: 171
+```
+
+That run (embed, 2026-08-26) fetched 371 rows under its 500 cap, processed
+200, hit the 75s budget, and called it drained — stopping barely half way
+through the work it was started to do, and recording that as success.
+
+**A short fetch only means "empty queue" if the slice got through
+everything it fetched.** Every row-count-driven job now sets a `truncated`
+flag when the elapsed-time budget cuts its loop short, and the drain check
+requires `!truncated`.
+
+`sync-incremental` never had this bug, because it derives completion from
+its loops actually running out rather than from a row count. That is the
+more robust shape — prefer it for new sliced jobs.
+
 ### The downstream jobs are the constraint
 
 Repairing the backfill made `enrich-new-titles` and `embed-new-titles` the

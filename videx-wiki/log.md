@@ -594,3 +594,17 @@ Also: a slice refusing at `MAX_CHAIN_DEPTH` now closes its `sync_log` row rather
 - Migrations 066 + 067 are APPLIED. **068 is not** — apply before redeploying the four functions.
 - Still open: A5 (daily cadence) becomes safe once the chain is proven at the new sizing; A3 supported by the 36% dead-stub rate at the queue head; A4 probably unnecessary.
 
+## [2026-08-26] ingest | Catalogue pipeline repair closed out
+Migrations 066/067/068 all applied, all four Edge Functions redeployed, and the queues drained live. **The pipeline is repaired end to end.**
+
+- `titles` 23,243, **99.81% carrying embeddings**. The residual 43 are TMDb-404 stubs that can never enrich, so `genuinely_pending` is 0.
+- enrich chain: 414 to 43 in **154s**, 371 enriched, 0 errors, 2 slices — four days of work at the old 100/day cap.
+- embed chain: 171 to **0**, 70s, 0 errors, `queue_at_end: 0`.
+
+One bug was caught by the drain itself and fixed: the drain check read `fetched < SLICE_LIMIT` as "queue empty", which is only true if the slice got THROUGH what it fetched. A budget-truncated slice was reporting `queue drained` with rows still pending — no data lost, but chains stopped short and said they had finished. All three row-count-driven jobs now carry a `truncated` flag. Recorded on the sync-pipeline page as a rule for future sliced jobs, along with the note that `sync-incremental` avoided it by deriving completion from its loops rather than a row count.
+
+Also fixed this session: `sync-incremental`'s chain depth cap raised 10 to 20 after the 2026-08-26 06:00 catch-up run processed 3,518 changes across 30 slices and still hit its cap — a stall trap, since `getLastSyncTimestamp()` only advances on a completed run, so an unfinishable window would re-burn SA quota forever.
+
+- Updated: `wiki/concepts/operations/sync-pipeline.md` (completion-vs-short-fetch rule).
+- Next: **A5** (daily backfill cadence) is now the sensible next step. A3 is supported by the measured 36% dead-stub rate at the queue head. A4 looks unnecessary.
+
