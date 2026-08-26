@@ -625,3 +625,21 @@ That third one came from measuring rather than assuming. Batching the OpenAI cal
 - **069 not applied.** Apply, then redeploy `embed-new-titles` (backfill has docstring changes only).
 - Remaining from workstream A: **A3** (queue still `tmdb_id ASC`) is now a latency nicety rather than a drain problem. **A4 retired.** Exit criterion to watch: `count_missing_title_ids()` falling ~2,000/day then flattening near zero.
 
+## [2026-08-26] ingest | R-010 — pipeline health alerting
+Branch `feat/r010-pipeline-health`. Migration 071 + `scripts/health/pipeline-health.ts` + `.github/workflows/pipeline-health.yml`.
+
+Closes the last open item from the catalogue work. A1 made failures **legible**; this makes them **loud**.
+
+**The design rule, worth carrying to any future job: alert on the absence of expected success, not the presence of errors.** The 79-day freeze produced zero errors — cron said `succeeded`, the functions returned 200, `sync_log.errors` was 0. Any conventional error hook would have stayed silent throughout. `catalogue-growing` ("nothing new in `titles` for 48h") would have caught it on day two.
+
+**Runs on GitHub Actions, not as an Edge Function** — deliberately. Do not monitor Supabase from inside Supabase: we have watched pg_net sever calls at 30s and the Edge Runtime refuse invocations with a 502, and a monitor invoked by pg_cron inherits both, so in exactly the scenarios worth alerting on the alarm would be the broken part. Actions is independent, already holds the secrets, and a failed run emails the repo owner — so it is the delivery mechanism at no extra cost. No new vendor, no new secret.
+
+Ten assertions, each mapped to a failure actually observed this week, not a hypothetical. `pipeline_health` (071) is the watchman's watchman: each run heartbeats, the next asserts that heartbeat is fresh, so a skipped Actions run is reported rather than silently missed.
+
+Thresholds are deliberately loose (48h staleness, 25% error *rate* with a 20-error floor, 7-day gap comparison) because **an alert that cries wolf gets muted, which recreates the original problem in a more irritating form**. `sync-did-work` is scoped to the SA sync only: enrich and embed legitimately process zero once drained, so asserting "did work" on them would go red precisely when the pipeline is healthiest.
+
+- Verified: all ten assertions run as SQL equivalents against live. Nine pass; `no-failed-runs` correctly reports 2 — today's depth-capped 06:00 sync and yesterday's reaped chain — both of which fall outside the 25h window by tomorrow.
+- Updated: `wiki/concepts/operations/sync-pipeline.md` (monitoring section with both design rules and the assertion table), `wiki/concepts/operations/risks-register.md` (**R-010 mitigated**).
+- **Migration 071 must be applied**, or checks 4 and 8 fail with "relation pipeline_health does not exist". No function redeploy needed.
+- Residual: a sustained GitHub Actions outage goes unnoticed. Far smaller than the zero coverage it replaces.
+

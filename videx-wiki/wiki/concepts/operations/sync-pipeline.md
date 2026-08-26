@@ -252,6 +252,61 @@ Since migration 066, `sync_log` columns mean what they say:
 | Chain stops mid-run; `slices` stops climbing | Handoff not delivered — HTTP 502 from the Edge Runtime under rapid invocation | The watchdog resumes it within 5 min. If `chain_state.resumes` keeps climbing, slices are too small: raise `SLICE_LIMIT`, lower `MAX_CHAIN_DEPTH`. |
 | Titles exist but never appear in For You | No embedding — the enrich/embed queue is behind | `SELECT count(*) FROM titles WHERE embedding IS NULL;` then trigger the chains (see health checks). |
 
+## Monitoring (R-010)
+
+`.github/workflows/pipeline-health.yml` runs `scripts/health/pipeline-health.ts`
+daily at 09:00 UTC, after the whole pipeline has finished. A failed run
+emails the repo owner — that email **is** the alerting mechanism.
+
+### Alert on the absence of success, not the presence of errors
+
+This is the design rule, and it is the one worth carrying to any future
+job. The 2026-06-07 freeze produced **zero errors for 79 days**: cron said
+`succeeded` nightly, the functions returned HTTP 200, `sync_log.errors` was
+0. Every conventional error-triggered alert would have stayed silent for
+the entire outage. "Nothing new in `titles` for 48h" catches it on day two.
+
+### Don't monitor Supabase from inside Supabase
+
+The check deliberately runs on GitHub Actions rather than as an Edge
+Function. We have watched pg_net sever calls at 30s and the Edge Runtime
+refuse invocations with a 502 — a monitor invoked by pg_cron inherits both,
+so in exactly the scenarios worth alerting on, the alarm would be the
+broken component.
+
+A skipped Actions run raises no alarm by itself, so each run writes a
+heartbeat to `pipeline_health` (migration 071) and the next run asserts
+that heartbeat is fresh. Only a sustained Actions outage escapes.
+
+### The assertions
+
+| Check | Catches |
+|---|---|
+| `catalogue-growing` | newest title older than 48h — **the 79-day freeze, on day 2** |
+| `jobs-ran` | a cron silently stopping |
+| `no-failed-runs` | a chain that gave up |
+| `sync-did-work` | ran, reported success, processed nothing (the 2026-08-12..15 signature) |
+| `error-rate-sane` | a large *share* of rows failing |
+| `gap-not-growing` | the gap widening rather than draining |
+| `embed-queue-not-backed-up` | titles that exist but cannot be recommended |
+| `chains-not-chronically-resumed` | handoffs failing repeatedly |
+| `nothing-stuck-running` | the reaper or watchdog itself failing |
+| `previous-check-ran` | the health check being skipped |
+
+Thresholds are deliberately loose — 48h staleness, a 25% error *rate* with
+a 20-error floor, a 7-day gap comparison. **An alert that cries wolf gets
+muted, which recreates the original problem in a more irritating form.**
+`sync-did-work` is scoped to the SA sync only: enrich and embed
+legitimately process zero once their queues drain, which is the steady
+state we want, so asserting "did work" on them would go red precisely when
+the pipeline is healthiest.
+
+Spot-check by hand:
+
+```sql
+SELECT * FROM pipeline_health_recent;
+```
+
 ## Health checks
 
 ```sql
