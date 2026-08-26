@@ -18,7 +18,8 @@
  * SELF-CHAINING (A2, 2026-08-25). One invocation processes ONE slice —
  * SLICE_LIMIT rows or SLICE_BUDGET_MS, whichever comes first — persists its
  * progress, then enqueues the next slice through `enqueue_function_call`
- * (migration 067) and returns. The weekly cron only ever starts slice 0.
+ * (migration 067) and returns. The daily 05:00 cron (migration 069 —
+ * weekly until then) only ever starts slice 0.
  *
  * Why: pg_net severs every cron→function call at 30s, so nothing
  * downstream ever learned whether a run worked. Measured on the 2026-08-23
@@ -84,9 +85,12 @@ const HANDOFF_DELAY_MS = 3_000;
 
 const FLUSH_EVERY = 10;
 
-// Hard ceiling on chain length: 12 x 250 = 3,000 titles per chain.
-// Clearing the 22,260-row backlog outright is A4 and needs its own
-// go-ahead.
+// Hard ceiling on chain length: 12 x 250 = 3,000 rows per chain. Against
+// ~1,000 rows/day of inflow from the daily SA sync, daily cadence (A5,
+// migration 069) nets ~2,000/day of drain and clears the ~22.7k backlog in
+// roughly eleven days — which is what makes A4's one-off bulk burst
+// unnecessary. Raise this if count_missing_title_ids() ever climbs on a
+// daily cadence, since that means inflow has outgrown the chain.
 const MAX_CHAIN_DEPTH = 12;
 
 // A chain that has not heartbeated in this long is presumed dead, so a new
@@ -210,11 +214,32 @@ interface MissingRow {
 }
 
 interface RunStats {
+  // Rows the RPC handed back for this slice.
   missing: number;
+  // Rows this slice actually reached a decision on (upserted, skipped as a
+  // confirmed 404, or failed). Diverges from `missing` whenever the
+  // elapsed-time budget cuts the loop short.
+  //
+  // Reported live 2026-08-26: a chain logged titles_processed=3000 while
+  // only 2,453 entries left the queue — the other 547 were fetched and
+  // never attempted. Overstating work done in sync_log is exactly the
+  // defect migration 066 exists to remove, so it should not survive here.
+  attempted: number;
   upserted: number;
   skipped404: number;
   failed: number;
   remaining: number;
+// A short fetch only means the queue is empty if the slice actually got
+// THROUGH everything it fetched. Set when the elapsed-time budget cuts the
+// loop short, so the drain check below cannot mistake "ran out of time" for
+// "ran out of work".
+//
+// Found live 2026-08-26: an embed chain fetched 371 rows (under its 500
+// cap), processed 200, hit the budget, and reported `queue drained` with
+// 171 still pending. Nothing was lost — the rows stayed queued for the next
+// scheduled run — but the chain stopped a tenth of the way through the work
+// it was started to do, and said it had finished.
+  truncated: boolean;
   // Aggregated by message so 300 identical failures collapse to one entry
   // with count=300 rather than 300 rows of the same string.
   failures: Record<string, number>;
@@ -235,7 +260,8 @@ let heartbeatRunId: string | undefined;
 
 async function runBackfillSlice(): Promise<RunStats> {
   const stats: RunStats = {
-    missing: 0, upserted: 0, skipped404: 0, failed: 0, remaining: 0, failures: {},
+    missing: 0, attempted: 0, upserted: 0, skipped404: 0, failed: 0,
+    remaining: 0, truncated: false, failures: {},
   };
   const startedAt = Date.now();
 
@@ -314,9 +340,11 @@ async function runBackfillSlice(): Promise<RunStats> {
       // next slice picks them up — nothing is lost by stopping early.
       if (Date.now() - startedAt > SLICE_BUDGET_MS) {
         console.log(`  slice budget reached after ${stats.upserted + stats.skipped404 + stats.failed} rows`);
+        stats.truncated = true;
         break;
       }
 
+      stats.attempted++;
       await sleep(TMDB_DELAY);
       const tmdb = await tmdbFetch(row.tmdb_id, row.media_type);
       if (tmdb === 'notfound') {
@@ -558,7 +586,7 @@ Deno.serve(async (req) => {
   }
 
   const totals = {
-    processed: (current.titles_processed ?? 0) + (stats?.missing ?? 0),
+    processed: (current.titles_processed ?? 0) + (stats?.attempted ?? 0),
     added: (current.titles_added ?? 0) + (stats?.upserted ?? 0),
     errors: (current.errors ?? 0) + (stats?.failed ?? 0) + (fatal ? 1 : 0),
   };
@@ -569,7 +597,7 @@ Deno.serve(async (req) => {
     stop = `fatal: ${fatal}`;
   } else if (stats && madeNoProgress(stats)) {
     stop = 'slice made no forward progress — head of queue is systematically failing';
-  } else if (stats && stats.missing < SLICE_LIMIT) {
+  } else if (stats && !stats.truncated && stats.missing < SLICE_LIMIT) {
     stop = 'queue drained';
   } else if (depth + 1 >= MAX_CHAIN_DEPTH) {
     stop = `chain depth cap (${MAX_CHAIN_DEPTH}) reached — backlog remains`;

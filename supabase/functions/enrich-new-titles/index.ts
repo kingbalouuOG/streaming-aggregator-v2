@@ -2,8 +2,12 @@
  * Enrich New Titles Edge Function (Phase 0.5)
  *
  * Ongoing enrichment of new titles arriving from the daily sync and the
- * catalogue-gap backfill. Walks the `WHERE keywords IS NULL` work queue,
+ * catalogue-gap backfill. Walks the
+ * `WHERE keywords IS NULL AND enrich_skipped_at IS NULL` work queue,
  * populating the four enrichment columns plus runtime via TMDb.
+ *
+ * Confirmed TMDb 404s are recorded in `enrich_skipped_at` (migration 070)
+ * so they leave the queue instead of re-occupying the head of every slice.
  *
  * SLICED + SELF-CHAINING (2026-08-25). One invocation processes ONE slice
  * — SLICE_LIMIT rows or SLICE_BUDGET_MS, whichever comes first — records
@@ -125,13 +129,24 @@ interface SliceStats {
   processed: number;
   skipped: number;
   failed: number;
+// A short fetch only means the queue is empty if the slice actually got
+// THROUGH everything it fetched. Set when the elapsed-time budget cuts the
+// loop short, so the drain check below cannot mistake "ran out of time" for
+// "ran out of work".
+//
+// Found live 2026-08-26: an embed chain fetched 371 rows (under its 500
+// cap), processed 200, hit the budget, and reported `queue drained` with
+// 171 still pending. Nothing was lost — the rows stayed queued for the next
+// scheduled run — but the chain stopped a tenth of the way through the work
+// it was started to do, and said it had finished.
+  truncated: boolean;
   // Aggregated by message so N identical failures collapse to one entry
   // with count=N rather than N rows of the same string.
   failures: Record<string, number>;
 }
 
 function emptySliceStats(): SliceStats {
-  return { fetched: 0, processed: 0, skipped: 0, failed: 0, failures: {} };
+  return { fetched: 0, processed: 0, skipped: 0, failed: 0, truncated: false, failures: {} };
 }
 
 function noteFailure(stats: SliceStats, message: string): void {
@@ -145,6 +160,7 @@ async function runEnrichSlice(stats: SliceStats, runId: string): Promise<void> {
     .from('titles')
     .select('id, tmdb_id, media_type')
     .is('keywords', null)
+    .is('enrich_skipped_at', null)
     .order('id', { ascending: true })
     .limit(SLICE_LIMIT);
 
@@ -159,6 +175,7 @@ async function runEnrichSlice(stats: SliceStats, runId: string): Promise<void> {
   for (const row of queue) {
     if (Date.now() - startedAt > SLICE_BUDGET_MS) {
       console.log(`  slice budget reached after ${stats.processed + stats.skipped + stats.failed} rows`);
+      stats.truncated = true;
       break;
     }
 
@@ -169,13 +186,26 @@ async function runEnrichSlice(stats: SliceStats, runId: string): Promise<void> {
       const tmdbResponse = await fetchTmdbDetail(row.tmdb_id, row.media_type);
 
       if (tmdbResponse === null) {
-        // 404 — TMDb deleted the title. Leave keywords NULL so a future
-        // invocation picks it up if TMDb re-adds it. Skipped, not failed.
+        // Confirmed TMDb 404. RECORD it (migration 070) rather than just
+        // counting it: keywords stays NULL, so without a marker the row
+        // sits at the head of the id-ordered queue and is re-fetched by
+        // every slice, not merely every run — 8 dead rows cost 56 wasted
+        // calls across one 7-slice chain on 2026-08-26. Worse, once the
+        // dead set exceeds SLICE_LIMIT every slice would fetch nothing but
+        // dead rows, process zero, and trip the no-progress guard.
         //
-        // NOTE: a permanently-404 row is re-fetched on every future chain,
-        // because unlike the backfill there is no skip-list here. Tolerable
-        // while the count is small; if it grows, mirror backfill_skips.
+        // Set enrich_skipped_at to NULL to force a re-check if TMDb
+        // restores the title.
         stats.skipped++;
+        const { error: skipError } = await supabase
+          .from('titles')
+          .update({ enrich_skipped_at: new Date().toISOString() })
+          .eq('id', row.id);
+        if (skipError) {
+          // Non-fatal — the enrichment work this slice did still stands;
+          // this row just resurfaces next slice as it did before.
+          console.error(`  skip-mark failed for ${row.media_type}/${row.tmdb_id}: ${skipError.message}`);
+        }
         console.warn(`  skip  ${row.media_type}/${row.tmdb_id}: TMDb 404`);
         continue;
       }
@@ -386,7 +416,7 @@ Deno.serve(async (req) => {
   else if (stats.fetched === 0) stop = 'queue drained';
   else if (stats.processed === 0 && stats.skipped === 0) {
     stop = 'slice made no forward progress — head of queue is systematically failing';
-  } else if (stats.fetched < SLICE_LIMIT) stop = 'queue drained';
+  } else if (!stats.truncated && stats.fetched < SLICE_LIMIT) stop = 'queue drained';
   else if (depth + 1 >= MAX_CHAIN_DEPTH) stop = `chain depth cap (${MAX_CHAIN_DEPTH}) reached`;
 
   const failureEntries = Object.entries(state.failures);

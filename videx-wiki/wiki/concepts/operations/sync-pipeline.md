@@ -49,6 +49,52 @@ pg_cron at 06:00 UTC (migration 006; timeout set in 062). Edge Function `supabas
 
 Manual: `supabase functions invoke sync-incremental --no-verify-jwt`.
 
+## Cron schedule
+
+| UTC | Job | Cadence |
+|---|---|---|
+| every 5 min | `chain-watchdog` | resumes stalled chains (SQL only) |
+| 05:00 | `backfill-missing-titles` | daily since migration 069 (was weekly) |
+| 06:00 | `daily-content-sync` | daily |
+| 06:30 | `enrich-new-titles` | daily |
+| 07:15 | `embed-new-titles` | daily since 069 (was 06:45) |
+| 07:00 Sun | `refresh-service-fingerprints` | weekly |
+| 08:00 | `daily-send-notifications` | daily |
+
+Two ordering constraints hold this together:
+
+- **backfill must finish before the sync.** A 12-slice chain is ~16 min, so
+  05:00-05:16 against a 06:00 sync.
+- **embed must start after enrich finishes.** Enrich runs 06:30 to ~06:46
+  on a full chain. Overlap is not destructive — embed only selects
+  `keywords IS NOT NULL`, so it would miss the tail and *correctly* report
+  the queue drained — but the stragglers would then wait a full day. Hence
+  07:15.
+
+A title whose availability arrives in today's 06:00 sync is picked up by
+*tomorrow's* 05:00 backfill, so new titles carry a one-day lag. Deliberate:
+reordering backfill after the sync leaves no room before enrich.
+
+### Why daily, not weekly
+
+The gap was **growing** under weekly cadence:
+
+```
+2026-08-25   count_missing_title_ids   22,260
+2026-08-26   count_missing_title_ids   22,729   (+469, after a chain drained 595)
+```
+
+The daily SA sync adds ~1,000 new `(tmdb_id, media_type)` gaps per day. A
+weekly chain delivers 3,000/week ≈ 428/day. **Inflow beat drain, so the
+backlog could never close** — the original plan's "74 weeks to drain" was
+optimistic rather than pessimistic. Daily nets ~2,000/day and clears
+~22.7k in roughly eleven days, then holds steady with one- or two-slice
+runs. This is why the A4 one-off bulk burst was never needed.
+
+If `count_missing_title_ids()` starts climbing again on a daily cadence,
+inflow has outgrown the chain: raise `MAX_CHAIN_DEPTH` in
+`backfill-missing-titles`.
+
 ## Sliced, self-chaining jobs (A2, 2026-08-25)
 
 Both long-running Edge Functions process **one slice per invocation** and hand off the next slice through `enqueue_function_call` (migration 067). Cron only ever starts slice 0.
@@ -101,6 +147,29 @@ idempotent (`titles` upsert on `(tmdb_id, media_type)`, enrich/embed are
 single-row updates keyed by id) — so the cost is wasted work, never
 corruption. **Any new sliced job must preserve that property.**
 
+### Completion must mean "finished the work", not "fetched a short page"
+
+A sliced job stops chaining when it decides the queue is drained. Deriving
+that from the row count alone is wrong:
+
+```
+titles_processed: 200      queue_at_start: 371
+stopped_because: "queue drained"   queue_at_end: 171
+```
+
+That run (embed, 2026-08-26) fetched 371 rows under its 500 cap, processed
+200, hit the 75s budget, and called it drained — stopping barely half way
+through the work it was started to do, and recording that as success.
+
+**A short fetch only means "empty queue" if the slice got through
+everything it fetched.** Every row-count-driven job now sets a `truncated`
+flag when the elapsed-time budget cuts its loop short, and the drain check
+requires `!truncated`.
+
+`sync-incremental` never had this bug, because it derives completion from
+its loops actually running out rather than from a row count. That is the
+more robust shape — prefer it for new sliced jobs.
+
 ### The downstream jobs are the constraint
 
 Repairing the backfill made `enrich-new-titles` and `embed-new-titles` the
@@ -118,6 +187,17 @@ invisible catalogue, and `count(*) FROM titles` will not show it.
 > has always exposed `embedBatch`, which accepts an array and returns one
 > embedding per input in positional order. It now sends 100 titles per
 > request. If you add another embedding path, batch it.
+
+Batching the OpenAI calls only moved the bottleneck. Measured on two live
+chains, 2026-08-26: **200 rows / 78s** and **171 rows / 70s** — about
+400ms per row, all of it one PostgREST `UPDATE` round trip per row. That
+capped a 75s slice near 200 rows and embed near 2,400 rows/day, against
+the ~1,900 rows/day daily backfill produces.
+
+`bulk_set_title_embeddings()` (migration 069) writes a whole chunk in one
+statement. **The general lesson: in a sliced Edge Function, per-row DB
+round trips are usually the real cost, not the third-party API.** Check
+that before sizing a slice.
 
 Why sliced rather than one long run:
 
