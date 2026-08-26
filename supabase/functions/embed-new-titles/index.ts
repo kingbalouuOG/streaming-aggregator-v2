@@ -90,11 +90,22 @@ interface SliceStats {
   processed: number;
   failed: number;
   total_tokens: number;
+// A short fetch only means the queue is empty if the slice actually got
+// THROUGH everything it fetched. Set when the elapsed-time budget cuts the
+// loop short, so the drain check below cannot mistake "ran out of time" for
+// "ran out of work".
+//
+// Found live 2026-08-26: an embed chain fetched 371 rows (under its 500
+// cap), processed 200, hit the budget, and reported `queue drained` with
+// 171 still pending. Nothing was lost — the rows stayed queued for the next
+// scheduled run — but the chain stopped a tenth of the way through the work
+// it was started to do, and said it had finished.
+  truncated: boolean;
   failures: Record<string, number>;
 }
 
 function emptySliceStats(): SliceStats {
-  return { fetched: 0, processed: 0, failed: 0, total_tokens: 0, failures: {} };
+  return { fetched: 0, processed: 0, failed: 0, total_tokens: 0, truncated: false, failures: {} };
 }
 
 function noteFailure(stats: SliceStats, message: string, count = 1): void {
@@ -125,6 +136,7 @@ async function runEmbeddingSlice(stats: SliceStats, runId: string): Promise<void
   for (let i = 0; i < queue.length; i += EMBED_CHUNK) {
     if (Date.now() - startedAt > SLICE_BUDGET_MS) {
       console.log(`  slice budget reached after ${stats.processed + stats.failed} rows`);
+      stats.truncated = true;
       break;
     }
 
@@ -369,7 +381,7 @@ Deno.serve(async (req) => {
     // service outage. Chaining another 11 slices into that just burns
     // requests, so stop and say so.
     stop = 'slice made no forward progress — OpenAI is failing every request';
-  } else if (stats.fetched < SLICE_LIMIT) stop = 'queue drained';
+  } else if (!stats.truncated && stats.fetched < SLICE_LIMIT) stop = 'queue drained';
   else if (depth + 1 >= MAX_CHAIN_DEPTH) stop = `chain depth cap (${MAX_CHAIN_DEPTH}) reached`;
 
   const failureEntries = Object.entries(state.failures);
