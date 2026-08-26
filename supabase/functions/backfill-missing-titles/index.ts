@@ -229,6 +229,17 @@ interface RunStats {
   skipped404: number;
   failed: number;
   remaining: number;
+// A short fetch only means the queue is empty if the slice actually got
+// THROUGH everything it fetched. Set when the elapsed-time budget cuts the
+// loop short, so the drain check below cannot mistake "ran out of time" for
+// "ran out of work".
+//
+// Found live 2026-08-26: an embed chain fetched 371 rows (under its 500
+// cap), processed 200, hit the budget, and reported `queue drained` with
+// 171 still pending. Nothing was lost — the rows stayed queued for the next
+// scheduled run — but the chain stopped a tenth of the way through the work
+// it was started to do, and said it had finished.
+  truncated: boolean;
   // Aggregated by message so 300 identical failures collapse to one entry
   // with count=300 rather than 300 rows of the same string.
   failures: Record<string, number>;
@@ -250,7 +261,7 @@ let heartbeatRunId: string | undefined;
 async function runBackfillSlice(): Promise<RunStats> {
   const stats: RunStats = {
     missing: 0, attempted: 0, upserted: 0, skipped404: 0, failed: 0,
-    remaining: 0, failures: {},
+    remaining: 0, truncated: false, failures: {},
   };
   const startedAt = Date.now();
 
@@ -329,6 +340,7 @@ async function runBackfillSlice(): Promise<RunStats> {
       // next slice picks them up — nothing is lost by stopping early.
       if (Date.now() - startedAt > SLICE_BUDGET_MS) {
         console.log(`  slice budget reached after ${stats.upserted + stats.skipped404 + stats.failed} rows`);
+        stats.truncated = true;
         break;
       }
 
@@ -585,7 +597,7 @@ Deno.serve(async (req) => {
     stop = `fatal: ${fatal}`;
   } else if (stats && madeNoProgress(stats)) {
     stop = 'slice made no forward progress — head of queue is systematically failing';
-  } else if (stats && stats.missing < SLICE_LIMIT) {
+  } else if (stats && !stats.truncated && stats.missing < SLICE_LIMIT) {
     stop = 'queue drained';
   } else if (depth + 1 >= MAX_CHAIN_DEPTH) {
     stop = `chain depth cap (${MAX_CHAIN_DEPTH}) reached — backlog remains`;
