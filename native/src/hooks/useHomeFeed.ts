@@ -8,7 +8,7 @@ import {
 } from '@/lib/adapters/contentAdapter';
 import { serviceIdsToProviderIds } from '@/lib/adapters/platformAdapter';
 import { discoverMovies, discoverTV, getTrendingMovies, getTrendingTV } from '@/lib/api/tmdb';
-import { buildFilterSets, getAvailableTmdbIds } from '@/lib/recommendations-v2/hardFilters';
+import { filterToAvailable } from '@/lib/recommendations-v2/hardFilters';
 import { dailyPick, dailyShuffleTopN } from '@/lib/utils/dailyShuffle';
 import { fetchGenreSpotlight } from '@/lib/recommendations-v2/rows/home/genreSpotlight';
 import { fetchPaidTitles } from '@/lib/recommendations-v2/rows/home/paidRow';
@@ -144,7 +144,6 @@ async function fetchPopularByProvider(services: ServiceId[]): Promise<ContentIte
  *  spotlight (the web reuses `home.popular`). */
 async function fetchPopular(
   services: ServiceId[],
-  availableTmdbIds: Set<number>,
 ): Promise<ContentItem[]> {
   const providerIds = serviceIdsToProviderIds(services);
   if (providerIds.length === 0) return [];
@@ -154,10 +153,17 @@ async function fetchPopular(
     getTrendingTV('week'),
   ]);
 
-  // Empty availability set = "skip availability filtering" (matches the
-  // ranker's hard-filter convention) — keep everything in that case.
-  const onServices = (r: TMDbContentResult) =>
-    availableTmdbIds.size === 0 || availableTmdbIds.has(r.id);
+  // B3: trending comes from TMDb, so availability cannot be a predicate on
+  // our own query — but it can be a question about the ~40 ids we actually
+  // hold, rather than downloading all 43,234 to rebuild a Set.
+  // filterToAvailable returns everything when `services` is empty, which
+  // preserves the old "no services = no availability filter" convention.
+  const trendingIds = [
+    ...((movieRes.data?.results ?? []) as TMDbContentResult[]),
+    ...((tvRes.data?.results ?? []) as TMDbContentResult[]),
+  ].map((r) => r.id);
+  const availableTmdbIds = await filterToAvailable(trendingIds, services);
+  const onServices = (r: TMDbContentResult) => availableTmdbIds.has(r.id);
 
   const movies = ((movieRes.data?.results ?? []) as TMDbContentResult[])
     .filter(onServices)
@@ -251,25 +257,26 @@ async function fetchUpcoming(services: ServiceId[]): Promise<UpcomingItem[]> {
 }
 
 async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
-  // B4: availability is STARTED here but not awaited. Only fetchPopular
-  // actually needs it, so only fetchPopular waits — the other seven
-  // requests fire immediately instead of queueing behind a 1.2-2.9s RPC
-  // they have no use for.
+  // B3: Home no longer fetches the availability id list at all.
   //
-  // This used to be `await`ed up front. That was not an oversight: without
-  // in-flight de-duplication, letting it race buildFilterSets (which calls
-  // getAvailableTmdbIds internally) meant BOTH missed the not-yet-written
-  // cache and fired the RPC. getAvailableTmdbIds now shares its in-flight
-  // promise, so the two callers below share one request and the serial
-  // hoist is no longer needed to guarantee that.
-  const availableIdsPromise = getAvailableTmdbIds(services);
-
-  const [charts, profile, filterSets, recentlyAdded, popularRaw, freeTonight, paidRaw, upcoming] = await Promise.all([
+  // It used to pull get_available_tmdb_ids — 43,234 ids, ~321 KB — on every
+  // load, twice over (once directly, once inside buildFilterSets), purely
+  // to membership-test the ~100 titles it renders. B4 had reduced that to
+  // one deduplicated request and unblocked the parallel batch; B3 removes
+  // the request outright. Availability is now a SQL predicate on
+  // titles.available_services (migration 075), and the one caller holding
+  // ids from an external source (fetchPopular, TMDb trending) asks about
+  // just those ids.
+  //
+  // buildFilterSets is gone from this path too: Home only ever used its
+  // availableTmdbIds field, so with that need removed the whole call — and
+  // its dismissed/thumbs-down/watchlist reads, which Home never used — is
+  // dead weight.
+  const [charts, profile, recentlyAdded, popularRaw, freeTonight, paidRaw, upcoming] = await Promise.all([
     fetchPerServiceCharts(services),
     getV2TasteProfile(),
-    buildFilterSets(services),
     fetchRecentlyAdded(services),
-    availableIdsPromise.then((ids) => fetchPopular(services, ids)),
+    fetchPopular(services),
     fetchFreeTonight(),
     fetchPaidTitles(services),
     fetchUpcoming(services),
@@ -340,7 +347,7 @@ async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
   const rawSpotlights = await Promise.all(
     Array.from({ length: SPOTLIGHT_COUNT }, (_, offset) =>
       fetchGenreSpotlight(
-        filterSets.availableTmdbIds,
+        services,
         SPOTLIGHT_FETCH_SIZE,
         offset,
         picks,

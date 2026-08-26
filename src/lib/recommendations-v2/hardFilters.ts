@@ -174,6 +174,39 @@ async function fetchAvailableTmdbIds(
   }
 }
 
+/**
+ * B3: which of THESE tmdb_ids are available on THESE services?
+ *
+ * For call sites that hold a small, known id list from an external source
+ * (TMDb trending, for instance) and cannot express availability as a
+ * predicate on their own query. Asks about the ~40 ids in hand instead of
+ * downloading all 43,234 to rebuild a Set — the same answer for ~1/1000th
+ * of the bytes.
+ *
+ * Returns every id unfiltered when `services` is empty, matching the
+ * long-standing "no services selected means no availability filter"
+ * convention.
+ */
+export async function filterToAvailable(
+  tmdbIds: number[],
+  services: string[],
+): Promise<Set<number>> {
+  if (services.length === 0) return new Set(tmdbIds);
+  if (tmdbIds.length === 0) return new Set();
+
+  try {
+    const { data, error } = await supabase
+      .from('titles')
+      .select('tmdb_id')
+      .in('tmdb_id', tmdbIds)
+      .overlaps('available_services', services);
+    if (error || !data) return new Set(tmdbIds); // fail open, as before
+    return new Set(data.map((r) => r.tmdb_id as number));
+  } catch {
+    return new Set(tmdbIds);
+  }
+}
+
 export interface FilterSets {
   dismissedIds: Set<string>;
   thumbsDownIds: Set<string>;

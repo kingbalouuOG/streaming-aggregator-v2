@@ -20,7 +20,9 @@ import type { ContentItem } from '@/lib/types/content';
  * Returns empty array if the feature flag is disabled.
  */
 export async function fetchCriticallyAcclaimed(
-  availableTmdbIds: Set<number>,
+  /** B3: services filtered in SQL via titles.available_services. Empty
+   *  array means no service filter (was: an empty availableTmdbIds Set). */
+  services: string[],
   limit: number = 15,
 ): Promise<ContentItem[]> {
   if (!CRITICALLY_ACCLAIMED_ROW_ENABLED) return [];
@@ -28,23 +30,26 @@ export async function fetchCriticallyAcclaimed(
   try {
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('titles')
       .select(EXTENDED_TITLE_SELECT)
       .gte('release_date', ninetyDaysAgo)
       .gte('imdb_rating', 7.5)
-      .gte('vote_count', 50)
+      .gte('vote_count', 50);
+
+    if (services.length > 0) {
+      query = query.overlaps('available_services', services);
+    }
+
+    const { data, error } = await query
       .order('vote_average', { ascending: false })
-      .limit(50); // overfetch for RT + availability filtering
+      .limit(50); // overfetch for the RT filter below
 
     if (error || !data) return [];
 
     const items: ContentItem[] = [];
     for (const row of data) {
       const typed = row as unknown as ExtendedTitleRow;
-
-      // Availability filter
-      if (availableTmdbIds.size > 0 && !availableTmdbIds.has(typed.tmdb_id)) continue;
 
       // RT score filter (parse "93%" string → 0.93, require >= 0.80)
       const rtScore = parseRtScore(typed.rt_score);

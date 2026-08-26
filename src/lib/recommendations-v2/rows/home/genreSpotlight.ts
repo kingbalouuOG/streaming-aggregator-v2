@@ -113,7 +113,14 @@ function getHeadlineGenre(cluster: TasteCluster): number | null {
  * filtered to user's available services.
  */
 export async function fetchGenreSpotlight(
-  availableTmdbIds: Set<number>,
+  /**
+   * B3: the user's services, filtered IN SQL via titles.available_services.
+   * Was a Set<number> of every available tmdb_id — which meant fetching
+   * 43,234 ids (~321 KB) over the wire just to test ~15 of them. Empty
+   * array means "no service filter", preserving the old empty-Set
+   * behaviour exactly.
+   */
+  services: string[],
   limit: number = 15,
   offset: number = 0,
   selectedClusterIds: string[] = [],
@@ -145,6 +152,12 @@ export async function fetchGenreSpotlight(
     query = requiredGenres
       ? query.contains('genre_ids', requiredGenres)
       : query.overlaps('genre_ids', [headlineGenre]);
+    // B3: availability is now a predicate, not a post-filter. Skipped when
+    // the user has no services selected — same semantics as the old
+    // `availableTmdbIds.size > 0` guard.
+    if (services.length > 0) {
+      query = query.overlaps('available_services', services);
+    }
     const { data, error } = await query
       .order('popularity', { ascending: false })
       .limit(limit * 8);
@@ -157,7 +170,6 @@ export async function fetchGenreSpotlight(
     for (const row of data) {
       const typed = row as unknown as ExtendedTitleRow;
 
-      if (availableTmdbIds.size > 0 && !availableTmdbIds.has(typed.tmdb_id)) continue;
       const item = titleRowToContentItem(typed);
       if (excludeIds.has(item.id)) continue;
 
