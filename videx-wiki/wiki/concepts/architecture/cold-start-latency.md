@@ -65,6 +65,56 @@ The warmer records to `cache_warm_status` and the daily health check
 asserts on it, because a warmer that quietly stops **fails nothing** — it
 just returns cold-open latency to 4s and waits for a user to complain.
 
+### The warmer alone was not enough — the index did not fit
+
+073 shipped a 5-minute warmer. It ran, it succeeded, and it did not work.
+Cron runs five minutes apart, measured live:
+
+```
+11:35:00 cron    2,637 ms   (cold)
+11:35:12 manual      87 ms   (warm, 12s later)
+11:40:00 cron    1,797 ms   (cold again)
+```
+
+The reason is sizing, and it is the check that should have been done
+before writing the warmer at all:
+
+| | |
+|---|---|
+| `shared_buffers` | **224 MB** |
+| `idx_titles_embedding_hnsw_half` | **191 MB** — 85% of the whole pool |
+| `titles` heap | 22 MB |
+
+With one index needing 85% of the buffer cache, any other activity evicts
+it. **No cron interval fixes a working set larger than the cache.**
+
+> Before adding a cache-warming job, compare the object's size against
+> `shared_buffers`. If it does not comfortably fit, warming is treating a
+> symptom.
+
+### The fix — halfvec (migration 074)
+
+pgvector 0.8 `halfvec` (16-bit floats) halves the index to ~95 MB, which
+fits alongside the heap. It is an **expression index** on
+`(embedding::halfvec(1536))`, so the column stays `vector(1536)` and no
+data migration is needed.
+
+Precision cost on two real embeddings from this table:
+
+```
+exact  0.69766901055306
+half   0.697668821958604
+error  0.00000019
+```
+
+Even so, `match_titles_by_vector` does not simply swap the operator — it
+feeds the entire recommendation pipeline. It now **retrieves 2× candidates
+through the halfvec index, then re-ranks at full precision**, so returned
+distances stay exact and ordering is unchanged for all but pathological
+ties. The re-rank is 2N exact distance computations: microseconds.
+
+Gate: `npm run eval:eng1` before trusting it in production.
+
 ### Diagnostic — use the warmer's own duration
 
 ```sql

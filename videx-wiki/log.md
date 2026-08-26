@@ -681,3 +681,19 @@ Branch `feat/b1-b4-cold-start-latency`. Migration 073. First of workstream B.
 - **073 not applied.** No function redeploys needed. Post-apply check is `read=0` on the EXPLAIN in the migration footer.
 - Still open in B: B2 feed pre-warm, B3 SQL-side availability (stops shipping a 256KB id array), B5 `/v1/home`, B6 stale-while-revalidate.
 
+## [2026-08-26] ingest | B1 follow-up — halfvec HNSW so the index actually fits
+Branch `perf/halfvec-hnsw-index`. Migration 074.
+
+**073's warmer ran, succeeded, and did not work.** Cron runs five minutes apart: 2,637ms, then 87ms on a manual run 12s later, then 1,797ms at the next tick. The index was being evicted between every tick.
+
+Cause, and the check that should have preceded 073: `idx_titles_embedding_hnsw` was **191MB against 224MB of `shared_buffers`** — 85% of the entire pool for one index, competing with the heap and every write the sync chains do. No cron interval fixes a working set larger than the cache.
+
+Fix: pgvector 0.8 `halfvec` expression index on `(embedding::halfvec(1536))` — ~95MB, fits alongside the 22MB heap, and needs no data migration because the column stays `vector(1536)`. Measured precision error on two real embeddings: **1.9e-7**.
+
+`match_titles_by_vector` was not a straight operator swap — it feeds the whole recommendation pipeline. It now retrieves 2x candidates through the halfvec index and **re-ranks at full precision**, so returned distances stay exact and ordering is unchanged bar pathological ties. Gated on `npm run eval:eng1`.
+
+Also verified before dropping the old index that nothing else depends on it: the only other function using `<=>` is `get_mood_rooms_for_user`, which distances against `mood_rooms.centroid`.
+
+- Updated: `cold-start-latency.md` (sizing finding + halfvec section), `risks-register.md` (R-026 — warming cannot help when the object exceeds the cache).
+- **074 not applied.** CREATE INDEX takes a SHARE lock on `titles` (blocks writes, not reads) — apply outside the 05:00-07:15 pipeline window. Real test is `cache_warm_status.duration_ms` staying consistently low across several ticks.
+
