@@ -299,6 +299,44 @@ export const MAX_CONSECUTIVE_SAME_SERVICE = 2;
  */
 export const AVOID_PENALTY_GAMMA = 0.15;
 
+// ── Workstream C1: engagement fatigue ──
+
+/**
+ * Views (without engagement) at which a title is BURIED rather than
+ * parked. Set to 4 deliberately: the heaviest real user averages 4.45
+ * views per title, so 4 catches the actual problem while leaving normal
+ * repeat exposure alone.
+ *
+ * The gentler setting is a hedge against thin validation — with ~10 users
+ * there is no CTR signal to tell us quickly if this is too aggressive,
+ * and an over-eager bury degrades relevance in a way we would not measure
+ * for weeks. Raise the aggression only once there is data to read.
+ */
+export const FATIGUE_BURY_THRESHOLD = 4;
+
+/**
+ * Per-view penalty while parked. Three views therefore cost at most 0.12
+ * — a nudge, comparable to but below AVOID_PENALTY_GAMMA (0.15), because
+ * "you have seen this and ignored it" is weaker evidence than "you told
+ * us you dislike something like this".
+ */
+export const FATIGUE_PARK_PENALTY_PER_VIEW = 0.04;
+
+/**
+ * Penalty once buried. Large relative to the 0..1 score range: the intent
+ * is decisive removal from the top of the feed, not a nudge. A buried
+ * title can still surface if its base score is exceptional.
+ */
+export const FATIGUE_BURY_PENALTY = 0.5;
+
+/**
+ * Days over which a fatigue penalty decays linearly to zero. Three weeks
+ * — long enough that a title does not reappear next session, short enough
+ * that the catalogue genuinely recycles. This is what makes parking
+ * temporary rather than a permanent blacklist.
+ */
+export const FATIGUE_DECAY_DAYS = 21;
+
 // ── ENG-1 Workstream C: exploration slot ──
 
 /** Exploration candidates reserved per Recommended For You render */

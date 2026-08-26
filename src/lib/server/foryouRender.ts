@@ -46,6 +46,10 @@ import {
   getComfortZoneRowCount,
   HIDDEN_GEMS_FILTERS,
   AVOID_PENALTY_GAMMA,
+  FATIGUE_BURY_THRESHOLD,
+  FATIGUE_PARK_PENALTY_PER_VIEW,
+  FATIGUE_BURY_PENALTY,
+  FATIGUE_DECAY_DAYS,
   EXPLORATION_COUNT,
   EXPLORATION_SLOT_POSITIONS,
   EXPLORATION_BAND,
@@ -58,6 +62,10 @@ import {
   spliceAtPositions,
   explorationDayStamp,
 } from '../recommendations-v2/exploration';
+import {
+  applyFatiguePenalty,
+  fetchFatigueScoped,
+} from '../recommendations-v2/fatigue';
 import {
   EXTENDED_TITLE_SELECT,
   type CandidatePool,
@@ -193,15 +201,33 @@ export async function renderForYou(
 
   // Top-200 embeddings for MMR + the avoid set + the exploration seen
   // set, all in one parallel network window (ENG-1 contract).
-  const [embeddingMap, avoidSet, seenIds] = await Promise.all([
+  const [embeddingMap, avoidSet, seenIds, fatigueData] = await Promise.all([
     fetchEmbeddingsForCandidates(client, scored.slice(0, 200)),
     fetchAvoidSetScoped(scope, client),
     fetchSeenContentIdsScoped(scope),
+    // C1: impression counts + engagement, in the same parallel window as
+    // the rest — fatigue must not add a serial round trip to the render.
+    fetchFatigueScoped(scope),
   ]);
 
   // ENG-1 Workstream B: avoid-set penalty after the embedding fetch,
   // before row building — same contract as the client pipeline.
-  const ranked = applyAvoidPenalty(scored, avoidSet, embeddingMap, AVOID_PENALTY_GAMMA);
+  const avoidPenalised = applyAvoidPenalty(scored, avoidSet, embeddingMap, AVOID_PENALTY_GAMMA);
+
+  // Workstream C1: demote titles this user has already been shown and
+  // ignored. Applied AFTER the avoid penalty and before row building, so
+  // every downstream stage — rows, MMR, exploration — sees the adjusted
+  // order without needing to know fatigue exists.
+  //
+  // Note this also improves the exploration slot for free: it samples a
+  // percentile band of `ranked`, so demoting stale titles changes which
+  // candidates fall into that band.
+  const ranked = applyFatiguePenalty(avoidPenalised, fatigueData, {
+    buryThreshold: FATIGUE_BURY_THRESHOLD,
+    parkPenaltyPerView: FATIGUE_PARK_PENALTY_PER_VIEW,
+    buryPenalty: FATIGUE_BURY_PENALTY,
+    decayDays: FATIGUE_DECAY_DAYS,
+  });
 
   // Taste-vector rows. usedIds is shared across rec/gems/outside for
   // cross-row dedup — same contract as src/hooks/useForYouContent.ts.
