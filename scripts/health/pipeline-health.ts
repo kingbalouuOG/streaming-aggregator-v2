@@ -68,6 +68,7 @@ const ERROR_FLOOR = 20;             // below this, don't even look at the rate
 const ERROR_RATE_MAX = 0.25;        // a quarter of rows failing is not a blip
 const STUCK_RUN_MINUTES = 30;       // reaper is 10min; 30 means IT failed too
 const HEARTBEAT_STALE_HOURS = 48;   // one skipped Actions run is tolerable
+const WARMER_STALE_MINUTES = 30;    // warmer runs every 5min; 30 = 6 missed
 const GAP_LOOKBACK_DAYS = 7;
 
 // Jobs that must show a sync_log row within RUN_WINDOW_HOURS. `changes`
@@ -296,7 +297,28 @@ async function run(): Promise<void> {
     ];
   });
 
-  // 8. The watchman's watchman. A scheduled Actions run that never happens
+  // 8. B1's cache warmer. If it stops, nothing FAILS — cold-open latency
+  //     just silently returns to ~4s (measured 2026-08-26: 4,156ms cold
+  //     vs 12ms warm on the same query) and waits for a user to complain.
+  //     That is the silent-degradation shape this whole check exists for.
+  await check('cache-warmer-running', async () => {
+    const { data, error } = await supabase
+      .from('cache_warm_status')
+      .select('ran_at, ok, error, duration_ms')
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return [false, 'cache_warm_status is empty — the warmer has never run'];
+    const ageM = (Date.now() - new Date(data.ran_at).getTime()) / 60_000;
+    if (!data.ok) return [false, `last warm failed: ${data.error ?? 'unknown'}`];
+    return [
+      ageM < WARMER_STALE_MINUTES,
+      `last warm ${ageM.toFixed(1)}m ago in ${data.duration_ms ?? '?'}ms ` +
+        `(limit ${WARMER_STALE_MINUTES}m)`,
+    ];
+  });
+
+  // 9. The watchman's watchman. A scheduled Actions run that never happens
   //    raises no alarm by itself — so each run checks that the PREVIOUS
   //    one happened. Only a sustained Actions outage escapes.
   await check('previous-check-ran', async () => {
