@@ -3,6 +3,14 @@
     "name": "Videx",
     "slug": "videx",
     "version": "2.1.5",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9b9b5960-22f4-40a5-89a4-80c0738cb526",
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "videx",
