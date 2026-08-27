@@ -46,6 +46,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      # Pinned to a major, not `latest`: this workflow PARSES eas-cli's JSON,
+      # and the field names changed between 20.x and 22.x (see the verify
+      # step). `latest` let that contract move without warning.
+      EAS_CLI_MAJOR: '22'
     steps:
       - name: Checkout (full repo — native/ depends on ../src/lib)
         uses: actions/checkout@v4
@@ -65,7 +69,7 @@ jobs:
           set -euo pipefail
           # --environment is mandatory in non-interactive mode; production
           # is where the EXPO_PUBLIC_* values live.
-          npx eas-cli@latest update \
+          npx eas-cli@$EAS_CLI_MAJOR update \
             --channel "${{ inputs.channel }}" \
             --platform "${{ inputs.platform }}" \
             --message "${{ inputs.message }}" \
@@ -81,14 +85,26 @@ jobs:
         working-directory: native
         run: |
           set -euo pipefail
-          UPDATE_RT="$(jq -r '[.. | objects | select(has("runtimeVersion")) | .runtimeVersion] | first // empty' /tmp/update.json)"
+          UPDATE_RT="$(jq -r '[.. | objects | (.runtimeVersion? // .runtime?.version?) | select(type == "string")] | first // empty' /tmp/update.json)"
 
-          # Channel is filtered in jq, NOT via `build:list --channel`: on
-          # eas-cli 22.6.0 that flag returned an empty list where an older
-          # local CLI returned the build, and the empty result made this very
-          # step pass having verified nothing (run 33096069758).
-          BUILDS="$(npx eas-cli@latest build:list --platform ios --limit 20 --json --non-interactive)"
-          BUILD_RT="$(printf '%s' "$BUILDS" | jq -r --arg ch '${{ inputs.channel }}' '[.[] | select(.channel == $ch and .runtimeVersion != null)] | .[0].runtimeVersion // empty')"
+          # eas-cli RENAMED these JSON fields between majors — 20.3.0 emits
+          # `channel` / `runtimeVersion`, 22.6.0 emits `updateChannel.name` /
+          # `runtime.version`. Reading only the old names is why this step
+          # found no build twice (runs 33096069758, 33096981708). Both shapes
+          # are accepted, and eas-cli is pinned to a major below so the
+          # contract cannot shift underneath this again.
+          #
+          # Deliberately NOT falling back to `.fingerprint.hash`: a build made
+          # before expo-updates has a fingerprint but a null runtime, and can
+          # receive no update at all. Treating it as comparable would let a
+          # mismatch look like a match.
+          BUILDS="$(npx eas-cli@$EAS_CLI_MAJOR build:list --platform ios --limit 20 --json --non-interactive)"
+          BUILD_RT="$(printf '%s' "$BUILDS" | jq -r --arg ch '${{ inputs.channel }}' '
+            [ .[]
+              | { ch: (.updateChannel.name // .channel)
+                , rt: (.runtime.version // .runtimeVersion) }
+              | select(.ch == $ch and .rt != null)
+            ] | .[0].rt // empty')"
 
           echo "update runtimeVersion  : ${UPDATE_RT:-<none>}"
           echo "newest build on channel: ${BUILD_RT:-<none>}"
