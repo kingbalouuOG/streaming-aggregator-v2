@@ -137,3 +137,25 @@ Seeded shuffle within score bands so consecutive opens differ, using the techniq
 - **C1** trades relevance for novelty — validate via exploration CTR (ENG-2), not offline eval; the harness does not gate slot composition.
 - **A3** reordering may surface lower-quality titles if the relevance proxy is poor; sample the first batch manually.
 - Restoring `src/lib` (wiped 2026-08-25 by a recursive delete following the `native/src/lib` symlink) is unrelated but worth guarding: avoid `rm -rf` inside `native/`.
+
+
+---
+
+## Follow-up (2026-08-27) — ordering bucket vs. quick re-opens
+
+`ORDERING_BUCKET_MINUTES` = 20 is matched to the Worker's 20-minute feed-cache
+TTL, so closing and reopening the app inside 20 minutes shows an **identical
+feed**. That is correct behaviour — it is what stops the feed flickering on
+every re-open — but it is also precisely the scenario behind the original
+"same titles in the same order every time" complaint.
+
+Current evidence says leave it alone: `npm run eval:novelty` shows a median 18%
+new titles between sessions, and every 0% session so far is explained by the
+bucket rather than by broken rotation.
+
+If it still feels static on quick re-opens once real users arrive, the lever is
+**decoupling ordering from the cache TTL** — vary the order on read while still
+serving one cached payload — rather than shortening the TTL, which would cost
+re-renders and undo part of the B-workstream latency work.
+
+**Watch, do not change on current evidence.**

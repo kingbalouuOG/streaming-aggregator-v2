@@ -1,9 +1,9 @@
 ---
 title: Evaluation harness reference
 type: concept
-tags: [evaluation, harness, ndcg, cluster-coherence, service-discrimination, rank-eval]
+tags: [evaluation, harness, ndcg, cluster-coherence, service-discrimination, rank-eval, novelty]
 created: 2026-04-26
-updated: 2026-07-01
+updated: 2026-08-27
 sources:
   - raw/reference/eval-harness-reference.md
 related:
@@ -66,6 +66,20 @@ Thresholds (per source; values that gate any release are in script header):
 
 **Run 3 (2026-07-01)** — regression check for the content-freshness pass's `weights.ts` edit (`EXPLORATION_COUNT` 2→3, positions `[5,13]`→`[2,5,13]`). All sections identical to runs 1–2 (deterministic harness): τ=0.80 → 0 merges, coverage 3 (PASS), γ=0.15 suppression 2→0 positives Δ0 (PASS). Confirms the freshness pass is retrieval-neutral. Report: `docs/v2/phase-summaries/content-freshness-2026-07-01.md`.
 
+## Novelty eval
+
+**Script**: `scripts/evaluation/novelty-eval.ts` (`npm run eval:novelty`). Answers the original C-workstream complaint — *"For You shows the same titles in the same order every time"* — as **session-over-session novelty**: of the titles shown this session, how many were absent from the previous one. Flags: `--surface for_you|home` (default `for_you`), `--days N` (default 30), `--user <uuid>`. Read-only.
+
+> ⚠ **The plan's own metric was wrong.** The C plan proposed *average impressions per title*. That scales with how often the app is opened, so it cannot separate rotation quality from usage intensity — during heavy testing on 2026-08-27 it rose **1.62 → 6.23 while rotation was demonstrably working**. A metric that degrades as the product is used more is measuring usage, not rotation. Novelty is per-session-pair and so is unaffected by session count.
+
+**Reading 0% rows.** A 0% session is usually **correct**. `ORDERING_BUCKET_MINUTES` (weights.ts) is deliberately matched to the Worker's 20-minute feed-cache TTL, so ordering turns over exactly when the cache does; two sessions inside one bucket are served the same cached payload and *must* score 0%. The script prints the gap since the previous session and marks with `!` only those 0% rows whose gap exceeds the bucket. The summary separates the two counts for the same reason — judge the second number, not the first.
+
+`card_impressions.session_id` is a real uuid and never null, so sessions are read directly rather than inferred from impression gaps.
+
+**Baseline (2026-08-27)** — healthy. 9 sessions / 2 users over 30 days: median **18%** new vs previous, range 10–65%, with genuinely first-seen titles entering each session. Both 0% rows had gaps of 0–1 min (same bucket); **zero** rows flagged. The 21-minute gap crossing a bucket boundary scored 40% new, independently corroborating the C3 verification done from `card_impressions` position data.
+
+> ⚠ PostgREST caps an unpaginated read at 1000 rows and returns page one with **no error and no truncation signal**. The script pages to exhaustion (`.range`, stop on a short page). This silence already produced one wrong number during the C investigation.
+
 ## When to run each
 
 | Trigger | Eval(s) |
@@ -76,6 +90,7 @@ Thresholds (per source; values that gate any release are in script header):
 | New row builder added | rank-eval |
 | Slider mapping change | rank-eval |
 | Multi-interest grouping / avoid-set / exploration change | eng1-eval |
+| Ranking / ordering / fatigue change (rotation quality) | novelty-eval |
 | Pre-release of any phase touching the engine | All of the above |
 
 ## Output convention

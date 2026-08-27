@@ -23,6 +23,7 @@
     "backfill:tmdb-providers": "npx tsx scripts/fingerprints/backfill-tmdb-providers.ts",
     "eval:search-semantic": "npx tsx scripts/test/search-semantic-eval.ts",
     "eval:eng1": "npx tsx scripts/evaluation/eng1-eval.ts",
+    "eval:novelty": "npx tsx scripts/evaluation/novelty-eval.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
