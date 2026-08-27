@@ -8,7 +8,11 @@ name: Android Release (AAB)
 #
 # Triggers:
 #   • push a tag `v*`  (e.g. `git tag v2.0.2 && git push --tags`) → build + submit to Play
-#   • manual "Run workflow"                                        → build-only (artifact, no submit)
+#   • manual "Run workflow"                                        → build-only (artifacts, no submit)
+#
+# Artifacts from every run: `videx-release-aab` (Play upload format, NOT
+# installable on a device) and `videx-release-apk` (universal, sideload
+# with `adb install -r` for on-device testing).
 #
 # Required repository secrets (Settings → Secrets and variables → Actions):
 #   ANDROID_KEYSTORE_BASE64       base64 of the upload keystore (videx-release, 99:CE:FF:7E)
@@ -91,6 +95,42 @@ jobs:
         with:
           name: videx-release-aab
           path: native/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+      # An .aab cannot be installed on a device — it is a publishing format
+      # that Play unpacks into per-device split APKs. Getting a build onto a
+      # handset otherwise means tagging a release, which publishes. So also
+      # emit a universal APK: same upload key, directly `adb install`-able,
+      # and cheap here because bundleRelease has already produced the JS
+      # bundle and compiled the native libs in this same Gradle project.
+      #
+      # It is universal (every ABI and density) where Play would ship a
+      # slimmer split, so install size is not representative — but the JS
+      # bundle, the native libs actually loaded at runtime and the network
+      # path are identical, so cold-open timing measured off it is fair.
+      #
+      # Sequenced AFTER the AAB upload on purpose: the AAB is the release
+      # artifact and must not be put at risk by a step that exists only for
+      # device testing.
+      - name: Build sideloadable universal APK
+        working-directory: native/android
+        env:
+          ORG_GRADLE_PROJECT_VIDEX_UPLOAD_STORE_PASSWORD: ${{ secrets.VIDEX_UPLOAD_STORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_VIDEX_UPLOAD_KEY_PASSWORD: ${{ secrets.VIDEX_UPLOAD_KEY_PASSWORD }}
+          # assembleRelease pulls in the same SentryUpload task as
+          # bundleRelease; without the token sentry-cli exits 1 and fails
+          # the build. Same reasoning as the AAB step above.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Verify APK is signed with the same key as the AAB
+        run: keytool -printcert -jarfile native/android/app/build/outputs/apk/release/app-release.apk | grep -iA1 'SHA256'
+
+      - name: Upload APK artifact (sideload for device testing)
+        uses: actions/upload-artifact@v4
+        with:
+          name: videx-release-apk
+          path: native/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
       # Submit to Google Play — ONLY on a version tag (manual runs stay build-only).
