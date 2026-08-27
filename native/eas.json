@@ -12,7 +12,8 @@
       "distribution": "internal",
       "ios": {
         "simulator": false
-      }
+      },
+      "environment": "production"
     },
     "production": {
       "android": {
