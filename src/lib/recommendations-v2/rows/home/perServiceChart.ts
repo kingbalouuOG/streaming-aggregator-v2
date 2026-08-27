@@ -7,7 +7,9 @@
  * Within each row: popular titles on that specific service.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import type { UserScope } from '@/lib/server/userScope';
 import { getAuthUserId, isSupabaseActive } from '@/lib/storage';
 import { titleRowToContentItem } from '../../titleAdapter';
 import { EXTENDED_TITLE_SELECT } from '../../types';
@@ -37,6 +39,74 @@ const SERVICE_DISPLAY_NAMES: Record<string, string> = {
  * Fetch per-service chart rows for the Home surface.
  * Returns up to 3 rows, one per most-used service.
  */
+/**
+ * B5 server variant. `titles` / `streaming_availability` are public
+ * content-cache tables so they take an explicit client, but the
+ * click-ordering read hits `user_interactions`, which is user-owned and
+ * must go through UserScope. Hence both, unlike fetchPaidTitlesScoped.
+ */
+export async function fetchPerServiceChartsScoped(
+  client: SupabaseClient,
+  scope: UserScope,
+  userServiceIds: string[],
+  limit?: number,
+): Promise<PerServiceChartRow[]> {
+  if (userServiceIds.length === 0) return [];
+
+  const orderedServices = await getServiceOrderScoped(scope, userServiceIds);
+  const topServices = limit != null ? orderedServices.slice(0, limit) : orderedServices;
+
+  const rows = await Promise.all(
+    topServices.map((serviceId) => fetchServiceRow(serviceId, client)),
+  );
+
+  return rows.filter((row) => row.items.length > 0);
+}
+
+/** Click-ordering via UserScope — same shape as getServiceOrder, but the
+ *  user_id filter is applied by the scope rather than by hand. */
+async function getServiceOrderScoped(
+  scope: UserScope,
+  userServiceIds: string[],
+): Promise<string[]> {
+  try {
+    const { data } = await scope
+      .select('user_interactions', 'metadata')
+      .eq('event_type', 'deep_link_click')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    return orderServicesByClicks(
+      (data ?? []) as { metadata: unknown }[],
+      userServiceIds,
+    );
+  } catch {
+    return userServiceIds;
+  }
+}
+
+/** Shared by both paths so the ordering rule cannot drift between them. */
+function orderServicesByClicks(
+  rows: { metadata: unknown }[],
+  userServiceIds: string[],
+): string[] {
+  if (rows.length === 0) return userServiceIds;
+
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const meta = row.metadata as { service_id?: string } | null;
+    const sid = meta?.service_id;
+    if (sid && userServiceIds.includes(sid)) {
+      counts.set(sid, (counts.get(sid) ?? 0) + 1);
+    }
+  }
+  if (counts.size === 0) return userServiceIds;
+
+  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([sid]) => sid);
+  const remaining = userServiceIds.filter((sid) => !counts.has(sid));
+  return [...sorted, ...remaining];
+}
+
 export async function fetchPerServiceCharts(
   userServiceIds: string[],
   // Caller may cap; default is unlimited (one row per picked service that
@@ -72,24 +142,7 @@ async function getServiceOrder(userServiceIds: string[]): Promise<string[]> {
       .order('created_at', { ascending: false })
       .limit(200);
 
-    if (!data || data.length === 0) return userServiceIds;
-
-    // Count clicks per service
-    const counts = new Map<string, number>();
-    for (const row of data) {
-      const meta = row.metadata as { service_id?: string } | null;
-      const sid = meta?.service_id;
-      if (sid && userServiceIds.includes(sid)) {
-        counts.set(sid, (counts.get(sid) ?? 0) + 1);
-      }
-    }
-
-    if (counts.size === 0) return userServiceIds;
-
-    // Sort by count DESC, then append services with no clicks
-    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([sid]) => sid);
-    const remaining = userServiceIds.filter(sid => !counts.has(sid));
-    return [...sorted, ...remaining];
+    return orderServicesByClicks((data ?? []) as { metadata: unknown }[], userServiceIds);
   } catch {
     return userServiceIds;
   }
@@ -120,7 +173,10 @@ function recencyFactor(releaseYear: number | null): number {
   return 0.25;
 }
 
-async function fetchServiceRow(serviceId: string): Promise<PerServiceChartRow> {
+async function fetchServiceRow(
+  serviceId: string,
+  db: SupabaseClient = supabase,
+): Promise<PerServiceChartRow> {
   const serviceName = SERVICE_DISPLAY_NAMES[serviceId] ?? serviceId;
 
   try {
@@ -137,7 +193,7 @@ async function fetchServiceRow(serviceId: string): Promise<PerServiceChartRow> {
     //     paywall" risk as rent/buy. Free-tier UK broadcasters (BBC /
     //     Channel 4 / Sky Go) surface via 'free', not 'addon', so this
     //     doesn't re-suppress them.
-    const { data: saData } = await supabase
+    const { data: saData } = await db
       .from('streaming_availability')
       .select('tmdb_id')
       .eq('service_id', serviceId)
@@ -154,7 +210,7 @@ async function fetchServiceRow(serviceId: string): Promise<PerServiceChartRow> {
     // (popularity × recencyFactor) and take top 15. The over-fetch is
     // 60 (4× target) so the recency re-rank has enough headroom to
     // promote newer content over very-popular-but-old titles.
-    const { data: titleData } = await supabase
+    const { data: titleData } = await db
       .from('titles')
       .select(EXTENDED_TITLE_SELECT)
       .in('tmdb_id', tmdbIds)

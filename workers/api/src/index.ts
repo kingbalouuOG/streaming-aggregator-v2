@@ -60,7 +60,11 @@ import {
 } from '../../../src/lib/taste-v2/tasteProfileV2';
 import type { TmdbIdsCache } from '../../../src/lib/recommendations-v2/hardFilters';
 import { recomputeStaleProfiles } from '../../../src/lib/server/staleRecompute';
-import { buildFeedCacheKey, coalesce } from './foryouCache';
+import { renderHome, FREE_UK_SERVICES } from '../../../src/lib/server/homeRender';
+import { createTmdbServerClient } from '../../../src/lib/server/tmdbServer';
+import { serviceIdsToProviderIds } from '../../../src/lib/adapters/platformAdapter';
+import type { ServiceId } from '../../../src/lib/types/content';
+import { buildFeedCacheKey, buildHomeCacheKey, coalesce } from './foryouCache';
 
 type Env = {
   TMDB_API_KEY: string;
@@ -377,6 +381,7 @@ const AVAILABLE_IDS_CACHE_TTL_SECONDS = 10 * 60;
 // feed cache. Coalesces concurrent misses for one user+taste+services so
 // a stampede runs one pgvector render, not N.
 const foryouInflight = new Map<string, Promise<string>>();
+const homeInflight = new Map<string, Promise<string>>();
 
 app.get('/v1/foryou', async (c) => {
   const servicesRaw = c.req.query('services') ?? '';
@@ -498,6 +503,103 @@ app.get('/v1/foryou', async (c) => {
     // Log the real error; return a generic body - postgrest messages
     // can leak table/column/constraint names (security review LOW-1).
     console.error('[foryou] uncaught error:', err);
+    return c.json({ error: 'internal error' }, 500);
+  }
+});
+
+// ── Home aggregator (B5) ──────────────────────────────────────────────
+//
+// One endpoint doing Home's orchestration server-side, the treatment
+// /v1/foryou already had. Home was making ~15-20 round trips per uncached
+// load from the device (~10 TMDb through the proxy, ~9 Supabase); this
+// collapses them to one.
+//
+// Cached like the feed, but keyed differently: Home is not personalised by
+// the taste vector (only the genre spotlights use selected clusters), so
+// the key is services + clusters rather than taste_vector_updated_at.
+const HOME_CACHE_TTL_SECONDS = 10 * 60;
+
+app.get('/v1/home', async (c) => {
+  const servicesRaw = c.req.query('services') ?? '';
+  // Same normalise-once discipline as /v1/foryou: case and duplicates are
+  // folded before the ids reach either the cache key or a DB filter.
+  const services = servicesRaw
+    ? [...new Set(servicesRaw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean))]
+    : [];
+  if (services.length > MAX_SERVICES) {
+    return c.json({ error: `services exceeds ${MAX_SERVICES}` }, 400);
+  }
+  if (services.some((s) => !VALID_SERVICE_IDS.has(s))) {
+    return c.json({ error: 'unknown service id' }, 400);
+  }
+
+  const token = (c.req.header('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
+  const userId = await verifySupabaseJwt(token, c.env.SUPABASE_URL);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  // Rate limit AFTER auth on the verified userId, sharing /v1/foryou's
+  // budget: a Home render costs the same class of work, and the two are
+  // never issued in a tight loop by a real session.
+  const { success: withinLimit } = await c.env.FORYOU_RATELIMIT.limit({ key: userId });
+  if (!withinLimit) {
+    return c.json({ error: 'rate limited' }, 429, { 'Retry-After': '60' });
+  }
+
+  const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
+  const scope = withUserScope(client, userId);
+
+  try {
+    // Clusters are needed for the cache key AND the spotlights, so read the
+    // profile before deciding on a cache hit. It is one small row.
+    const profile = await getV2TasteProfileScoped(scope);
+    const clusters = profile?.selectedClusters ?? [];
+
+    const cacheKey = buildHomeCacheKey(userId, services, clusters);
+    const cached = await c.env.FORYOU_CACHE.get(cacheKey, 'text');
+    if (cached) {
+      return new Response(cached, {
+        headers: { 'Content-Type': 'application/json', 'x-videx-cache': 'hit' },
+      });
+    }
+
+    // Single-flight, same reasoning as the feed: concurrent misses on one
+    // key would otherwise each run the full ~15-call orchestration.
+    const { promise, leader } = coalesce(homeInflight, cacheKey, async () => {
+      const payload = await renderHome(
+        { client, scope, tmdb: createTmdbServerClient(c.env.TMDB_API_KEY) },
+        {
+          services,
+          providerIds: serviceIdsToProviderIds(services as ServiceId[]),
+          freeProviderIds: serviceIdsToProviderIds(FREE_UK_SERVICES as ServiceId[]),
+          selectedClusters: clusters,
+        },
+      );
+      const body = JSON.stringify(payload);
+      // Don't cache an empty Home — a user mid-onboarding with no services
+      // would otherwise get a blank shelf pinned for the full TTL.
+      const hasContent =
+        payload.rows.length > 0 ||
+        payload.recentlyAdded.length > 0 ||
+        payload.popular.length > 0;
+      if (hasContent) {
+        c.executionCtx.waitUntil(
+          c.env.FORYOU_CACHE.put(cacheKey, body, { expirationTtl: HOME_CACHE_TTL_SECONDS }),
+        );
+      }
+      return body;
+    });
+
+    const body = await promise;
+    return new Response(body, {
+      headers: {
+        'Content-Type': 'application/json',
+        'x-videx-cache': leader ? 'miss' : 'coalesced',
+      },
+    });
+  } catch (err) {
+    // Log the real error, return a generic body — postgrest messages can
+    // leak table/column names (security review LOW-1).
+    console.error('[home] uncaught error:', err);
     return c.json({ error: 'internal error' }, 500);
   }
 });

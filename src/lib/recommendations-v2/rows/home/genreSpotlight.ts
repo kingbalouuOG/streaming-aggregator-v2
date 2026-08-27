@@ -10,6 +10,7 @@
  */
 
 import { TASTE_CLUSTERS, type TasteCluster } from '@/lib/taste-v2/tasteClusters';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { titleRowToContentItem } from '../../titleAdapter';
 import { EXTENDED_TITLE_SELECT } from '../../types';
@@ -131,6 +132,13 @@ export async function fetchGenreSpotlight(
    * dedup failure ("The Goldbergs in two consecutive sections").
    */
   excludeIds: Set<string> = new Set(),
+  /**
+   * B5: explicit client for the Worker's Home render. Reads only the
+   * public `titles` content cache, so an explicit client is enough — no
+   * UserScope, same as fetchPaidTitlesScoped. Defaults to the singleton
+   * so every existing caller is unchanged.
+   */
+  db: SupabaseClient = supabase,
 ): Promise<{ clusterName: string; items: ContentItem[] }> {
   const cluster = getWeeklyCluster(offset, selectedClusterIds);
   const headlineGenre = getHeadlineGenre(cluster);
@@ -146,7 +154,7 @@ export async function fetchGenreSpotlight(
   const requiredGenres = SPOTLIGHT_REQUIRED_GENRES[cluster.id];
 
   try {
-    let query = supabase
+    let query = db
       .from('titles')
       .select(EXTENDED_TITLE_SELECT);
     query = requiredGenres
