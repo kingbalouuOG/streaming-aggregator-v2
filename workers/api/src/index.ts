@@ -358,6 +358,12 @@ const VALID_SERVICE_IDS = new Set([
 ]);
 // 20 min — mid-range of the brief's 15–30. Stale-feed worst case is one
 // TTL; vector-moving interactions bust earlier via the key timestamp.
+// ⚠ C3 COUPLING: ORDERING_BUCKET_MINUTES (src/lib/recommendations-v2/
+// weights.ts) must match this. The per-open ordering seed advances on
+// that bucket and is deliberately NOT in the cache key, so a cached
+// payload carries its bucket's order and the feed re-orders exactly when
+// this TTL expires. Change one and you must change the other, or the feed
+// either stops varying or varies invisibly.
 const FORYOU_CACHE_TTL_SECONDS = 20 * 60;
 // Available-ids KV cache (finding 4): the user-independent
 // get_available_tmdb_ids RPC (~130KB full-table DISTINCT) keyed on the

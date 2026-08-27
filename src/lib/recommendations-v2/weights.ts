@@ -299,6 +299,31 @@ export const MAX_CONSECUTIVE_SAME_SERVICE = 2;
  */
 export const AVOID_PENALTY_GAMMA = 0.15;
 
+// ── Workstream C3: per-open ordering variation ──
+
+/**
+ * Minutes per ordering seed. The feed is deterministic, so without this
+ * two opens produce byte-identical order.
+ *
+ * ⚠ MUST TRACK the Worker's FORYOU_CACHE_TTL_SECONDS (workers/api/src/
+ * index.ts, currently 20 min). The seed is deliberately NOT part of the
+ * cache key: a cached payload already has its bucket's order baked in, so
+ * ordering changes exactly when the cache turns over. Matching the two
+ * means zero extra cache entries and zero hit-rate change. If the TTL
+ * moves and this does not, the feed either stops varying (bucket longer
+ * than TTL) or varies invisibly (bucket shorter — the cache serves the
+ * old order anyway).
+ */
+export const ORDERING_BUCKET_MINUTES = 20;
+
+/**
+ * Band width for the per-open shuffle. Candidates inside a band trade
+ * places; nothing crosses a band boundary. At 4, the best match can reach
+ * rank 4 but never rank 20 — visible movement without letting a weaker
+ * title displace a genuinely better one.
+ */
+export const ORDERING_BAND_SIZE = 4;
+
 // ── Workstream C1: engagement fatigue ──
 
 /**

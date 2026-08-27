@@ -50,6 +50,8 @@ import {
   FATIGUE_PARK_PENALTY_PER_VIEW,
   FATIGUE_BURY_PENALTY,
   FATIGUE_DECAY_DAYS,
+  ORDERING_BUCKET_MINUTES,
+  ORDERING_BAND_SIZE,
   EXPLORATION_COUNT,
   EXPLORATION_SLOT_POSITIONS,
   EXPLORATION_BAND,
@@ -66,6 +68,7 @@ import {
   applyFatiguePenalty,
   fetchFatigueScoped,
 } from '../recommendations-v2/fatigue';
+import { bucketedShuffleBands } from '../utils/dailyShuffle';
 import {
   EXTENDED_TITLE_SELECT,
   type CandidatePool,
@@ -244,7 +247,28 @@ export async function renderForYou(
   });
   explorationPicks.forEach((c) => usedIds.add(c.contentKey));
 
-  const recBase = buildRowFromPool(ranked, profile.sliders, {
+  // Workstream C3: vary ordering between opens. Bands only — near-equal
+  // candidates trade places, nothing crosses a band boundary, so the feed
+  // moves without a weaker title displacing a genuinely better one.
+  //
+  // Applied to the ROW input only, deliberately. selectExplorationCandidates
+  // above keeps its daily seed and its fixed splice positions, so the
+  // day's exploration pick stays the day's exploration pick while the
+  // material around it rotates. Shuffling its input too would have made
+  // EXPLORATION_SLOT_POSITIONS meaningless.
+  //
+  // The seed advances every ORDERING_BUCKET_MINUTES, matched to the
+  // Worker's feed-cache TTL: a cached payload already carries its
+  // bucket's order, so ordering changes exactly when the cache turns
+  // over. No cache-key change, no extra entries.
+  const varied = bucketedShuffleBands(
+    ranked,
+    ORDERING_BAND_SIZE,
+    `foryou:${userId}`,
+    ORDERING_BUCKET_MINUTES,
+  );
+
+  const recBase = buildRowFromPool(varied, profile.sliders, {
     config: { limit: 20 - explorationPicks.length, excludeIds: usedIds },
     embeddingMap,
   });

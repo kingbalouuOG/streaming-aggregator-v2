@@ -102,6 +102,51 @@ did not come back. There are 10 such rows in the entire database, so
 there is nothing to tune against; it counts as ordinary engagement.
 
 
+## Per-open ordering variation (C3)
+
+C1 changes *what* is eligible; C3 changes the *order within* it. Without
+it the pipeline is deterministic and two opens are byte-identical.
+
+`bucketedShuffleBands` (`utils/dailyShuffle.ts`) shuffles within
+contiguous bands of `ORDERING_BAND_SIZE` (4), seeded on a bucket that
+advances every `ORDERING_BUCKET_MINUTES` (20).
+
+**Bands, not a head shuffle.** `dailyShuffleTopN` shuffles the whole head
+and can send a rank-1 match to rank 20 — right for Home's popularity
+rails, wrong for a personalised feed where the top result is genuinely the
+best match. At band size 4 the best match can reach rank 4 and never rank
+20.
+
+### The seed is deliberately not in the cache key
+
+A cached payload already carries its bucket's ordering, so the feed
+re-orders exactly when the 20-minute feed cache turns over. That gives
+**zero extra cache entries and zero hit-rate change**.
+
+> ⚠ `ORDERING_BUCKET_MINUTES` **must track** the Worker's
+> `FORYOU_CACHE_TTL_SECONDS`. A longer bucket stops the feed varying; a
+> shorter one varies invisibly, because the cache serves the old order
+> anyway. Both files carry a comment naming the coupling.
+
+### Why server-side rather than a client shuffle
+
+A client-side shuffle would have been simpler and given true per-launch
+variation, but it moves `EXPLORATION_SLOT_POSITIONS` to arbitrary places —
+dismantling the deliberate composition decision that puts one daily pick
+above the fold while the head two cards stay fully personalised. It would
+also split ordering across two codebases, break the meaning of
+`card_impressions.position`, need duplicating for web, and wait on a
+native build.
+
+So C3 is applied to the **row input only**: exploration keeps its daily
+seed and fixed splice positions, and the material around it rotates.
+
+Practical effect: two opens inside 20 minutes are identical; opens further
+apart differ visibly. That is arguably better than true per-session —
+reshuffling on every launch makes backgrounding and reopening the app
+rearrange the feed under you, which reads as instability rather than
+freshness.
+
 ## Exploration slot (ENG-1 Workstream C)
 
 Structural filter-bubble defence inside **row 1**. Reserves a few positions for titles with zero prior impressions (not among the user's most-recent-1,000 in a 90-day window), sampled from the moderate-similarity taste band `[0.40, 0.70]`, popularity-weighted. Sampling is seeded from `${userId}:${UTC-day}` → stable within a day, **rotates daily** (this is the main day-to-day novelty in For You when the taste vector is idle). Picks carry `exploration: true` into `card_impressions.metadata` so ENG-2 can read exploration CTR from the training extract.
