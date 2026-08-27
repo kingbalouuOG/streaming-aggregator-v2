@@ -3,7 +3,7 @@ title: Risks register
 type: concept
 tags: [risks, mitigations, ops]
 created: 2026-04-26
-updated: 2026-08-25
+updated: 2026-08-27
 sources:
   - raw/reference/risks-register.md
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
@@ -46,6 +46,8 @@ Living list of known risks and mitigations. Severity is engineering judgement; r
 | R-025 | A read-through cache that populates on completion does not de-duplicate concurrent callers | Low | `getAvailableTmdbIds` wrote its localStorage entry only after the RPC resolved, so two concurrent callers both missed and both fired a 1.2-2.9s / 256KB RPC. This forced `fetchHomeFeed` to serialise the call, blocking seven unrelated requests. Fixed 2026-08-26 with an in-flight promise map (B4). Applies to any cache fronting an expensive call — a result store is not enough on its own. | Eng |
 | R-026 | A cache-warming job cannot help when the object is larger than the cache | Medium | Migration 073 added a 5-min HNSW warmer that ran, succeeded, and did not work: the index was 191MB against 224MB of `shared_buffers`, so ordinary activity evicted it between ticks (measured 87ms warm vs 1,797-2,637ms five minutes later). Fixed by migration 074 — halfvec halves the index to ~95MB so it fits. **Before adding any warming job, compare the object size to `shared_buffers`.** If it does not comfortably fit, warming is treating a symptom. | Eng |
 | R-027 | `titles.available_services` drifts from `streaming_availability` | Medium | B3 (migration 075) denormalises availability onto `titles` so queries filter in SQL instead of shipping 321KB. A copied column can drift, and the failure is silent and user-visible: wrong availability shown, no error anywhere. Guarded by a row-level trigger, `refresh_title_available_services()` for repair, and `count_available_services_drift()` asserted daily by the health check. **The per-row trigger must be disabled around bulk loads** (`sync-content.ts` stage `sa`) and the refresh run afterwards. | Eng |
+
+| R-028 | A shared-lib import drags a build-time define or a browser client into the Worker bundle | Medium | Happened 2026-08-27: B5's `homeRender` imported `contentAdapter`, which took its two image-URL builders from `../api/tmdb` — a module reading `__DEV__` (a Vite/Metro define that does not exist in the Workers runtime) at module scope. Cloudflare rejected the upload with `ReferenceError: __DEV__ is not defined`, so C1, C3 and B5 were all absent from production while `main` looked green. **Root, native and Worker `tsc --noEmit`, 260 tests and eslint all passed** — it is a bundling failure, not a type or logic one, and the deploy is the only gate that sees it. Fixed by importing from `../api/imageUrls` (dependency-free), which also cut the bundle 903.90 to 715.67 KiB by dropping axios. Mitigation: run `cd workers/api && npx wrangler deploy --dry-run --outdir .wrangler-check` on any PR that adds a `src/lib` import to the Worker — it reproduces the failure in seconds, before merge. | Eng |
 
 ## Strategy-doc risks (resolved or tracked)
 

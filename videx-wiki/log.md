@@ -828,3 +828,23 @@ Client side: `tryFetchHomeFromWorker` returns null and never throws, with a **sh
 - **The remediation plan is now complete**: A1-A3/A5 ✅ (A4 retired), B1/B3/B4/B5/B6 ✅ (B2 parked), C1-C3 ✅.
 - ⚠ **Unverified on a device.** B3, B4, B6 and now B5 are all client-side changes sitting in main with no native build cut. Four changes to the cold-open path validated only by types, tests and reasoning. A build and a timed cold launch is the outstanding work.
 
+## [2026-08-27] ingest | Worker deploy broken by a build-time define; /v1/home verified live
+PR #99, branch `fix/worker-bundle-dev-define`. One-line import redirect. New risk **R-028**.
+
+**The B5 merge deployed nothing.** `deploy-worker.yml` failed on the #98 merge with `Uncaught ReferenceError: __DEV__ is not defined at src/lib/api/tmdb.ts:19`. The chain: `homeRender` -> `contentAdapter` -> `../api/tmdb` for `buildPosterUrl`/`buildBackdropUrl`. `api/tmdb.ts` reads `__DEV__` at module scope — a Vite/Metro define with no equivalent in the Workers runtime — so importing through it both dragged axios into the bundle and made the script unloadable. Cloudflare rejected the upload, the previous version stayed live, and **C1, C3 and B5 were all absent from production while `main` looked green**.
+
+`api/tmdb.ts:282` only *re-exports* those two builders from `./imageUrls`, which has no imports of its own. Fix was to import from there directly.
+
+| | Before | After |
+|---|---|---|
+| Bundle | 903.90 KiB | 715.67 KiB |
+| gzip | 201.61 KiB | 158.60 KiB |
+| `__DEV__` references | 1 (fatal) | 0 |
+| `axios` in bundle | present | absent |
+
+**The lesson worth keeping.** Root, native and Worker `tsc --noEmit` were all clean, 260/260 tests passed, eslint passed. None of them can see this class of failure: the types are correct and the logic is correct, but the module graph pulls a define that only exists under a bundler. The deploy is the only gate that catches it, and it runs *after* merge. `cd workers/api && npx wrangler deploy --dry-run --outdir .wrangler-check` reproduces it in seconds — run it on any PR that adds a `src/lib` import to the Worker.
+
+Generalises past this repo: a shared source tree consumed by three runtimes (Vite, Metro, workerd) means "compiles" and "bundles for the target" are different questions.
+
+- Verified live after merge (`videxstreaming.com`): `/v1/home?services=netflix` -> `401 {"error":"unauthorized"}`; `/v1/definitely-not-a-route` -> `404`, proving the 401 is a registered route and not a catch-all; `?services=notaservice` -> `400 {"error":"unknown service id"}`, proving validation runs ahead of the JWT check and so could only come from B5's own handler.
+- Android build dispatched on `main` at `9bc69d9` (`workflow_dispatch` is build-only — only a `v*` tag submits to Play).
