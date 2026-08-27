@@ -1,0 +1,119 @@
+name: OTA Update (EAS Update)
+
+# Publishes a JS-only update to an EAS channel. Installed builds pick it up
+# on their next-but-one launch (fallbackToCacheTimeout is 0, so a launch
+# renders from cache and fetches in the background).
+#
+# WHY THIS CANNOT BE RUN LOCALLY ON WINDOWS.
+#
+# `runtimeVersion` uses the `fingerprint` policy: an update is only served
+# to builds whose fingerprint matches exactly. The fingerprint hashes file
+# CONTENT — and `core.autocrlf=true` means a Windows checkout has CRLF
+# where the Linux runner has LF (.easignore alone carries 49 such lines).
+# So a locally-published update gets a different runtime version and is
+# served to nothing. Measured 2026-08-27:
+#
+#   CI-built binary  513081d509c4dafc6220eb1c3ecfd929502a1b53
+#   published on Windows  45748201ac9d222338c970697df691496b02a815
+#
+# Publishing here reproduces the build's own environment, so the
+# fingerprint matches by construction rather than by luck.
+#
+# Triggers: manual only. A JS change still has to be merged to main first.
+#
+# Required repository secret: EXPO_TOKEN
+
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: 'Update message (shown in the EAS dashboard)'
+        type: string
+        required: true
+      channel:
+        description: 'Target channel — preview = ad-hoc builds, production = TestFlight/Play'
+        type: choice
+        options: [preview, production]
+        default: preview
+      platform:
+        description: 'Platform to publish for'
+        type: choice
+        options: [ios, android, all]
+        default: ios
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Checkout (full repo — native/ depends on ../src/lib)
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install native deps (postinstall makes ../src/lib + ../src/assets real symlinks)
+        working-directory: native
+        run: npm install
+
+      - name: Publish the update
+        working-directory: native
+        run: |
+          set -euo pipefail
+          # --environment is mandatory in non-interactive mode; production
+          # is where the EXPO_PUBLIC_* values live.
+          npx eas-cli@latest update \
+            --channel "${{ inputs.channel }}" \
+            --platform "${{ inputs.platform }}" \
+            --message "${{ inputs.message }}" \
+            --environment production \
+            --non-interactive \
+            --json > /tmp/update.json
+          cat /tmp/update.json
+
+      # The failure this workflow exists to prevent is silent: a mismatched
+      # runtime version publishes happily and reaches no device. So compare
+      # against the newest build on the same channel and say so plainly.
+      - name: Verify the update can actually reach a build
+        working-directory: native
+        run: |
+          set -euo pipefail
+          UPDATE_RT="$(jq -r '[.. | objects | select(has("runtimeVersion")) | .runtimeVersion] | first // empty' /tmp/update.json)"
+          BUILD_RT="$(npx eas-cli@latest build:list --platform ios --channel '${{ inputs.channel }}' \
+                        --limit 1 --json --non-interactive | jq -r '.[0].runtimeVersion // empty')"
+
+          echo "update runtimeVersion : ${UPDATE_RT:-<none>}"
+          echo "newest build on channel: ${BUILD_RT:-<none>}"
+
+          {
+            echo "## OTA update published"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| channel | \`${{ inputs.channel }}\` |"
+            echo "| platform | \`${{ inputs.platform }}\` |"
+            echo "| update runtimeVersion | \`${UPDATE_RT:-none}\` |"
+            echo "| newest build runtimeVersion | \`${BUILD_RT:-none}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -z "$BUILD_RT" ]; then
+            echo "::warning::No build found on channel ${{ inputs.channel }} — cannot verify reachability."
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "No build on this channel to compare against." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ "$UPDATE_RT" = "$BUILD_RT" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Fingerprints match — installed builds will receive this update." >> "$GITHUB_STEP_SUMMARY"
+            echo "It applies on the SECOND launch: the first renders from cache and fetches in the background." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Fingerprints DIFFER — no installed build will receive this update.**" >> "$GITHUB_STEP_SUMMARY"
+            echo "A native dependency or config change since that build alters the fingerprint; cut a new build." >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Update runtimeVersion ($UPDATE_RT) does not match the newest build ($BUILD_RT) — no device will receive it."
+            exit 1
+          fi
