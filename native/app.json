@@ -2,7 +2,7 @@
   "expo": {
     "name": "Videx",
     "slug": "videx",
-    "version": "2.1.5",
+    "version": "2.1.6",
     "runtimeVersion": {
       "policy": "fingerprint"
     },
@@ -19,7 +19,7 @@
     "ios": {
       "icon": "./assets/images/icon-ios.png",
       "bundleIdentifier": "app.videx.streaming",
-      "buildNumber": "8",
+      "buildNumber": "9",
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -28,7 +28,7 @@
     "android": {
       "package": "app.videx.streaming",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 11,
+      "versionCode": 12,
       "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#0a0a0f",
