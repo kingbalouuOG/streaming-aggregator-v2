@@ -73,3 +73,27 @@ export function coalesce<T>(
     .catch(() => {});
   return { promise, leader: true };
 }
+
+/**
+ * Home cache key (B5).
+ *
+ * Home is NOT personalised by the taste vector — only the genre
+ * spotlights use the user's selected clusters — so unlike the feed key
+ * this embeds services + clusters rather than taste_vector_updated_at. A
+ * taste interaction should not bust Home; changing your services or your
+ * onboarding clusters should.
+ *
+ * Still per-user despite containing no user-specific inputs beyond those
+ * two: the per-service rows are click-ordered from the user's own
+ * interaction history, so two users with identical services can legitimately
+ * get different row order.
+ */
+export function buildHomeCacheKey(
+  userId: string,
+  services: string[],
+  clusters: string[],
+): string {
+  const svc = [...services].sort().join(',');
+  const cls = [...clusters].sort().join(',');
+  return `home:v1:${userId}:${svc}:${cls}`;
+}

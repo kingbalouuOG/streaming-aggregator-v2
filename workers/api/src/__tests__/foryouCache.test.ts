@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildFeedCacheKey, sliderHashOf, coalesce } from '../foryouCache';
+import { buildFeedCacheKey, sliderHashOf, coalesce, buildHomeCacheKey } from '../foryouCache';
 
 const SLIDERS = { catalogueAge: 0.5, comfortZone: 0.25, contentMix: 0.5, variety: 0.5 };
 
@@ -80,5 +80,36 @@ describe('coalesce (finding 3 single-flight)', () => {
     await expect(follower.promise).rejects.toThrow('render failed');
     await Promise.resolve();
     expect(inflight.has('k')).toBe(false);
+  });
+});
+
+describe('buildHomeCacheKey', () => {
+  it('is stable regardless of service order or duplication in the caller', () => {
+    expect(buildHomeCacheKey('u1', ['prime', 'netflix'], ['a']))
+      .toBe(buildHomeCacheKey('u1', ['netflix', 'prime'], ['a']));
+  });
+
+  it('is stable regardless of cluster order', () => {
+    expect(buildHomeCacheKey('u1', ['netflix'], ['b', 'a']))
+      .toBe(buildHomeCacheKey('u1', ['netflix'], ['a', 'b']));
+  });
+
+  it('separates users — per-service rows are click-ordered per user', () => {
+    expect(buildHomeCacheKey('u1', ['netflix'], []))
+      .not.toBe(buildHomeCacheKey('u2', ['netflix'], []));
+  });
+
+  it('busts when services change', () => {
+    expect(buildHomeCacheKey('u1', ['netflix'], []))
+      .not.toBe(buildHomeCacheKey('u1', ['netflix', 'prime'], []));
+  });
+
+  it('busts when selected clusters change — spotlights depend on them', () => {
+    expect(buildHomeCacheKey('u1', ['netflix'], ['a']))
+      .not.toBe(buildHomeCacheKey('u1', ['netflix'], ['b']));
+  });
+
+  it('does not collide with the feed namespace', () => {
+    expect(buildHomeCacheKey('u1', [], [])).toMatch(/^home:v1:/);
   });
 });
