@@ -82,10 +82,15 @@ jobs:
         run: |
           set -euo pipefail
           UPDATE_RT="$(jq -r '[.. | objects | select(has("runtimeVersion")) | .runtimeVersion] | first // empty' /tmp/update.json)"
-          BUILD_RT="$(npx eas-cli@latest build:list --platform ios --channel '${{ inputs.channel }}' \
-                        --limit 1 --json --non-interactive | jq -r '.[0].runtimeVersion // empty')"
 
-          echo "update runtimeVersion : ${UPDATE_RT:-<none>}"
+          # Channel is filtered in jq, NOT via `build:list --channel`: on
+          # eas-cli 22.6.0 that flag returned an empty list where an older
+          # local CLI returned the build, and the empty result made this very
+          # step pass having verified nothing (run 33096069758).
+          BUILDS="$(npx eas-cli@latest build:list --platform ios --limit 20 --json --non-interactive)"
+          BUILD_RT="$(printf '%s' "$BUILDS" | jq -r --arg ch '${{ inputs.channel }}' '[.[] | select(.channel == $ch and .runtimeVersion != null)] | .[0].runtimeVersion // empty')"
+
+          echo "update runtimeVersion  : ${UPDATE_RT:-<none>}"
           echo "newest build on channel: ${BUILD_RT:-<none>}"
 
           {
@@ -97,21 +102,22 @@ jobs:
             echo "| platform | \`${{ inputs.platform }}\` |"
             echo "| update runtimeVersion | \`${UPDATE_RT:-none}\` |"
             echo "| newest build runtimeVersion | \`${BUILD_RT:-none}\` |"
+            echo
           } >> "$GITHUB_STEP_SUMMARY"
 
+          # Fail rather than warn when there is nothing to compare against.
+          # An unverifiable publish is the same silent-success shape this
+          # step exists to catch.
           if [ -z "$BUILD_RT" ]; then
-            echo "::warning::No build found on channel ${{ inputs.channel }} — cannot verify reachability."
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "No build on this channel to compare against." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            echo "**No build found on channel \`${{ inputs.channel }}\` — reachability NOT verified.**" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::No build on channel ${{ inputs.channel }} to compare against — cannot confirm any device will receive this update."
+            exit 1
           fi
 
           if [ "$UPDATE_RT" = "$BUILD_RT" ]; then
-            echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "Fingerprints match — installed builds will receive this update." >> "$GITHUB_STEP_SUMMARY"
             echo "It applies on the SECOND launch: the first renders from cache and fetches in the background." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "**Fingerprints DIFFER — no installed build will receive this update.**" >> "$GITHUB_STEP_SUMMARY"
             echo "A native dependency or config change since that build alters the fingerprint; cut a new build." >> "$GITHUB_STEP_SUMMARY"
             echo "::error::Update runtimeVersion ($UPDATE_RT) does not match the newest build ($BUILD_RT) — no device will receive it."
