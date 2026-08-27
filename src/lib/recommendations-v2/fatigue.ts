@@ -129,6 +129,50 @@ interface InteractionRow {
  * Never throws — a fatigue failure must degrade to "no demotion", not to
  * a broken feed.
  */
+/**
+ * How many times each title has occupied the HERO slot, for this user.
+ *
+ * Separate from the fatigue map on purpose. The hero is `shift()`ed off
+ * the recommended row, so it never renders as a row card — its rivals at
+ * ranks 2-4 log a row impression on every open while the incumbent logs
+ * only its single hero impression. Ranking the hero slot by TOTAL
+ * impressions therefore always favours the incumbent and pins it
+ * permanently, which is the opposite of the intent.
+ *
+ * Rotating a slot requires that slot's own history, which is what
+ * `metadata->>role = 'hero'` records.
+ *
+ * Titles absent from the map have never been hero and sort freshest.
+ * Never throws — a failure degrades to "no hero history", which falls
+ * back to pure ranking order.
+ */
+export async function fetchHeroViewsScoped(scope: UserScope): Promise<Map<number, number>> {
+  const counts = new Map<number, number>();
+  const since = new Date(Date.now() - FATIGUE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  try {
+    const { data, error } = await scope
+      .select('card_impressions', 'content_id')
+      .gte('shown_at', since)
+      .eq('metadata->>role', 'hero')
+      .limit(FATIGUE_FETCH_CAP);
+
+    if (error) {
+      console.error('[Fatigue] hero-impression query failed:', error.message);
+      return counts;
+    }
+
+    for (const row of (data ?? []) as InteractionRow[]) {
+      if (row.content_id == null) continue;
+      counts.set(row.content_id, (counts.get(row.content_id) ?? 0) + 1);
+    }
+  } catch (err) {
+    console.error('[Fatigue] hero fetch threw:', err instanceof Error ? err.message : String(err));
+  }
+
+  return counts;
+}
+
 export async function fetchFatigueScoped(scope: UserScope): Promise<FatigueData> {
   const empty: FatigueData = { fatigue: new Map(), engaged: new Set() };
 
