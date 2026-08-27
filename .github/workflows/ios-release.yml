@@ -12,6 +12,12 @@ name: iOS Release (EAS build → TestFlight)
 # Triggers:
 #   • push a tag `v*`  (e.g. `git tag v2.0.2 && git push --tags`) → build + submit to TestFlight
 #   • manual "Run workflow"                                        → build-only (no submit)
+#   • manual "Run workflow" with `submit: true`                    → build + submit to TestFlight
+#
+# The `submit` input exists so an iOS-only TestFlight build can be cut
+# WITHOUT tagging. A `v*` tag also fires android-release.yml, which submits
+# the AAB to Google Play — coupling the two platforms into one publish. When
+# only an iOS test build is wanted, dispatch this workflow with submit: true.
 #
 # Required repository secret:
 #   EXPO_TOKEN   Expo access token (expo.dev → Account → Settings → Access tokens)
@@ -20,6 +26,11 @@ name: iOS Release (EAS build → TestFlight)
 
 on:
   workflow_dispatch:
+    inputs:
+      submit:
+        description: 'Submit the build to TestFlight (internal testers)'
+        type: boolean
+        default: false
   push:
     tags: ['v*']
 
@@ -45,10 +56,15 @@ jobs:
         working-directory: native
         run: npx eas-cli@latest build --platform ios --profile production --non-interactive
 
-      # Submit to TestFlight — ONLY on a version tag (manual runs stay build-only).
+      # Submit to TestFlight on a version tag, or on a manual run that opted in
+      # via the `submit` input. Default-false keeps a bare manual run build-only.
       # Uses the App Store Connect API key already stored on EAS, so there is no
       # .p8 in the repo and no Apple login here — just EXPO_TOKEN.
+      #
+      # NOTE: `buildNumber` in app.json must be unique per version string —
+      # App Store Connect rejects a duplicate outright. Bump it before any run
+      # that submits.
       - name: Submit to TestFlight
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.submit
         working-directory: native
         run: npx eas-cli@latest submit --platform ios --latest --profile production --non-interactive
