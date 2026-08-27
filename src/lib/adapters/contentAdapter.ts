@@ -6,7 +6,13 @@
 import type { ContentItem } from '@/lib/types/content';
 import type { ServiceId } from '@/lib/types/content';
 import type { WatchlistItem } from '../storage/watchlist';
-import { buildPosterUrl, buildBackdropUrl } from '../api/tmdb';
+// Import the URL builders from their own module, NOT via the api/tmdb
+// re-export. tmdb.ts pulls in axios and reads `__DEV__` at module scope —
+// a Vite define that does not exist in the Worker runtime — so importing
+// through it drags the whole HTTP client into the server bundle and the
+// deploy fails with "ReferenceError: __DEV__ is not defined". These are
+// pure string builders with no dependencies of their own.
+import { buildPosterUrl, buildBackdropUrl } from '../api/imageUrls';
 import { GENRE_NAMES } from '../constants/genres';
 
 /**
