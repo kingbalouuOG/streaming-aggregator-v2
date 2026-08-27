@@ -809,3 +809,22 @@ Branch `feat/c3-session-ordering`. No migration; **Worker redeploy required**.
 - Verify: root + native `tsc --noEmit` clean, `vitest run` 254/254, eslint clean.
 - **Workstream C is complete**: C1 ✅ C2 ✅ C3 ✅. Remaining from the whole plan: **B5** only (`/v1/home` aggregator), and B2 parked.
 
+## [2026-08-27] ingest | B5 — /v1/home aggregator. The plan is complete.
+Branch `feat/b5-home-aggregator`. No migration; **Worker redeploy required**.
+
+Home was making ~15-20 round trips per uncached load from the device (~10 TMDb via the proxy, ~9 Supabase). `/v1/home` collapses that to one.
+
+**The blocker that shaped the design.** `lib/api/tmdb.ts` cannot run server-side — PLAT-2 commit 6 removed the API key from client code entirely, and the module's own comment calls direct mode "a keyless degraded path". It is also axios- and localStorage-bound. The Worker could have called its own `/v1/tmdb` proxy over loopback and reused it unchanged, but that turns every Home render into ~8 extra self-requests to avoid writing 60 lines. Hence `src/lib/server/tmdbServer.ts`: plain fetch, explicit key, only the four endpoints Home needs, axios-shaped envelope so row builders read identically on both paths.
+
+**Scoped variants, following `fetchPaidTitlesScoped`.** `fetchGenreSpotlight` gained an optional trailing client (public `titles` only, no UserScope). `fetchPerServiceChartsScoped` needs BOTH a client and a scope — titles/streaming_availability are public but the click-ordering read hits `user_interactions`, which is user-owned. The ordering rule is now one shared function so the two paths cannot drift.
+
+**The client path stays as the fallback.** This is a second implementation, not a move: row builders are shared, but composition (interleave, dedup, hero extraction, daily rotation) is duplicated and both files say so. Deleting the client path would leave Home with no fallback when the Worker is down — For You accepts that, Home should not, since it is where a user lands when For You fails.
+
+Cache keyed on **services + clusters, not `taste_vector_updated_at`**: Home is not personalised by the taste vector (only spotlights use clusters), so a taste interaction should not bust it. Still per-user, because per-service rows are click-ordered from the user's own history. 10-min TTL, single-flighted, and an empty Home is never cached — a user mid-onboarding would otherwise get a blank shelf pinned for the TTL.
+
+Client side: `tryFetchHomeFromWorker` returns null and never throws, with a **shape guard** — a payload missing its arrays would render an empty shelf that looks real, and the Worker caches its own responses, so drift could pin a blank Home. 12s timeout, tighter than For You's 20s, because Home has a working local path to fall back to.
+
+- Verify: root + native + worker `tsc --noEmit` clean, `vitest run` 260/260 (6 new on the Home cache key), `expo lint` clean (one pre-existing warning).
+- **The remediation plan is now complete**: A1-A3/A5 ✅ (A4 retired), B1/B3/B4/B5/B6 ✅ (B2 parked), C1-C3 ✅.
+- ⚠ **Unverified on a device.** B3, B4, B6 and now B5 are all client-side changes sitting in main with no native build cut. Four changes to the cold-open path validated only by types, tests and reasoning. A build and a timed cold launch is the outstanding work.
+
