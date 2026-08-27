@@ -883,3 +883,20 @@ Baseline (2026-08-27), 9 sessions / 2 users / 30 days: **median 18% new**, range
 - Paginates to exhaustion. PostgREST caps an unpaginated read at 1000 rows and returns page one with no error and no truncation signal; that silence already produced one wrong number during this investigation.
 - Verify: `npx tsc --noEmit` clean, `npx eslint` clean, runs clean against prod read-only.
 - Follow-up recorded in the plan doc, **not actioned**: the 20-minute bucket means a close-and-reopen inside 20 minutes shows an identical feed — correct for anti-flicker, but it is exactly the scenario behind the original complaint. If it still feels static once real users arrive, the lever is decoupling ordering from the cache TTL (vary order on read, one cached payload) rather than shortening the TTL, which would cost re-renders. Watch, do not change on current evidence.
+
+## [2026-08-27] ingest | For You hero rotation — the slot was exempt from its own telemetry (R-030)
+PRs #114 (log + promote) and #115 (correct the ranking signal). Worker deploy + OTA; no migration.
+
+Joe reported the For You hero stuck on one title **for months**. Not tuning — structural, in two parts.
+
+**The hero logged nothing.** `recordImpression` has exactly one caller, `PosterCard`. The hero renders as `MagazineHero`, and `recommended.shift()` removes it before any PosterCard sees it. So the largest card on the page produced no `card_impressions` row, ever. C1 fatigue is computed entirely from that table, so the hero accrued zero views and was **structurally immune to the mechanism built to stop repetition** — everything below it demoted, the hero could not. The novelty eval reads the same table, so its median-18% baseline never included it either. The stuck title had **4 impressions across all users and 0 interactions**.
+
+**My first fix would have made it worse.** #114 promoted the least-seen title in the top band, ranked on total impressions. But the hero is excluded from the row, so its rivals at ranks 2-4 log a row impression on every open while the incumbent logs only its single hero impression — "least seen" therefore always selects the incumbent, and each open adds +1 to all of them so the gap is constant. It would also have overridden C3's per-open shuffle, which was already rotating that slot. Caught after merging, corrected in #115.
+
+**What works.** Log the hero with `metadata->>role = 'hero'`, and rank the slot on hero-slot history (`fetchHeroViewsScoped`) rather than a global counter. This converges because the counter is incremented by the decision it drives: hold the slot, become less eligible for it. Confirmed live within minutes — *One Battle After Another* held 3 turns, then yielded to *Havoc*.
+
+- Ranks on hero history, **not** the fatigue penalty: C1 exempts engaged titles, and the hero is the card most likely to be tapped, so honouring that exemption would pin exactly the title that has been over-shown.
+- Band-limited to `HERO_CANDIDATE_BAND = 4`; ties keep ranking order, so equal freshness still means best match wins.
+- The `role` metadata also starts closing the row-identity gap that forced the C3 verification through a time-ordering proxy.
+- Caught in review of my own draft: the impression `useEffect` sat below the loading/error early returns, violating the Rules of Hooks.
+- **Home's hero has the identical blind spot** — same `MagazineHero`, still logs nothing. Not fixed; the ask was For You.
