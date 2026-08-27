@@ -13,6 +13,7 @@ name: iOS Release (EAS build → TestFlight)
 #   • push a tag `v*`  (e.g. `git tag v2.0.2 && git push --tags`) → build + submit to TestFlight
 #   • manual "Run workflow"                                        → build-only (no submit)
 #   • manual "Run workflow" with `submit: true`                    → build + submit to TestFlight
+#   • manual "Run workflow" with `profile: preview`                → ad-hoc build, install link, no TestFlight
 #
 # The `submit` input exists so an iOS-only TestFlight build can be cut
 # WITHOUT tagging. A `v*` tag also fires android-release.yml, which submits
@@ -23,12 +24,23 @@ name: iOS Release (EAS build → TestFlight)
 #   EXPO_TOKEN   Expo access token (expo.dev → Account → Settings → Access tokens)
 # Also required (one-time, already set): the EAS "production" environment
 #   variables (EXPO_PUBLIC_*), and the EAS-stored iOS cert + ASC API key.
+#
+# WHY AN AD-HOC BUILD ALSO HAS TO RUN HERE, NOT LOCALLY: on Windows eas-cli
+# fails to package the junction tree when building the upload tarball, with
+# "EPERM: operation not permitted, symlink" on src/assets. The preview profile
+# hits this exactly as production does. Device registration
+# (eas device:create) DOES work from Windows — it never builds a tarball.
 
 on:
   workflow_dispatch:
     inputs:
+      profile:
+        description: 'EAS build profile — preview = ad-hoc, installs from a link'
+        type: choice
+        options: [production, preview]
+        default: production
       submit:
-        description: 'Submit the build to TestFlight (internal testers)'
+        description: 'Submit to TestFlight (production profile only)'
         type: boolean
         default: false
   push:
@@ -39,6 +51,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      # A tag push carries no inputs, so this falls back to production and the
+      # release path is unchanged.
+      EAS_PROFILE: ${{ inputs.profile || 'production' }}
     steps:
       - name: Checkout (full repo — native/ depends on ../src/lib)
         uses: actions/checkout@v4
@@ -52,9 +67,31 @@ jobs:
         working-directory: native
         run: npm install
 
-      - name: EAS build (iOS, production) — runs on EAS, waits for the .ipa
+      - name: EAS build (iOS) — runs on EAS, waits for the .ipa
         working-directory: native
-        run: npx eas-cli@latest build --platform ios --profile production --non-interactive
+        run: npx eas-cli@latest build --platform ios --profile "$EAS_PROFILE" --non-interactive
+
+      # An ad-hoc build is installed from a link rather than TestFlight, so the
+      # link IS the deliverable. Put it in the run summary rather than making
+      # someone dig it out of expo.dev.
+      - name: Surface the install link (ad-hoc builds)
+        if: env.EAS_PROFILE == 'preview'
+        working-directory: native
+        run: |
+          set -euo pipefail
+          BUILD_ID="$(npx eas-cli@latest build:list --platform ios --limit 1 --json --non-interactive | jq -r '.[0].id')"
+          URL="https://expo.dev/accounts/kingbalouu/projects/videx/builds/$BUILD_ID"
+          {
+            echo "## Install on device"
+            echo
+            echo "Open on the iPhone **in Safari** and tap Install:"
+            echo
+            echo "$URL"
+            echo
+            echo "Delete the existing Videx app first — updating over it keeps the"
+            echo "MMKV cache, which invalidates a cold-open measurement."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "install page: $URL"
 
       # Submit to TestFlight on a version tag, or on a manual run that opted in
       # via the `submit` input. Default-false keeps a bare manual run build-only.
@@ -65,6 +102,6 @@ jobs:
       # App Store Connect rejects a duplicate outright. Bump it before any run
       # that submits.
       - name: Submit to TestFlight
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.submit
+        if: startsWith(github.ref, 'refs/tags/v') || (inputs.submit && inputs.profile == 'production')
         working-directory: native
         run: npx eas-cli@latest submit --platform ios --latest --profile production --non-interactive
