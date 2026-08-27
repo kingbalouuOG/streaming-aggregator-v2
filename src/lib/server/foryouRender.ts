@@ -68,7 +68,7 @@ import {
 import {
   applyFatiguePenalty,
   fetchFatigueScoped,
-  type FatigueData,
+  fetchHeroViewsScoped,
 } from '../recommendations-v2/fatigue';
 import { bucketedShuffleBands } from '../utils/dailyShuffle';
 import {
@@ -206,13 +206,14 @@ export async function renderForYou(
 
   // Top-200 embeddings for MMR + the avoid set + the exploration seen
   // set, all in one parallel network window (ENG-1 contract).
-  const [embeddingMap, avoidSet, seenIds, fatigueData] = await Promise.all([
+  const [embeddingMap, avoidSet, seenIds, fatigueData, heroViews] = await Promise.all([
     fetchEmbeddingsForCandidates(client, scored.slice(0, 200)),
     fetchAvoidSetScoped(scope, client),
     fetchSeenContentIdsScoped(scope),
     // C1: impression counts + engagement, in the same parallel window as
     // the rest — fatigue must not add a serial round trip to the render.
     fetchFatigueScoped(scope),
+    fetchHeroViewsScoped(scope),
   ]);
 
   // ENG-1 Workstream B: avoid-set penalty after the embedding fetch,
@@ -282,15 +283,18 @@ export async function renderForYou(
   // strong favourite still returns to the top most opens.
   //
   // Within the top band (near-equal candidates by definition), prefer the
-  // one the user has seen least. Impression counts come from the fatigue
-  // map that is already fetched, so this costs no extra query.
+  // title that has held the HERO SLOT least often.
   //
-  // Uses RAW impression counts, not the fatigue penalty: an engaged title
-  // is exempt from fatigue entirely, and the hero is the card most likely
-  // to be tapped — so scoring it by fatigue would exempt exactly the title
-  // that has been over-shown. Ties keep ranking order, so equal freshness
-  // still means best-match wins.
-  promoteFreshestHero(recBase, fatigueData);
+  // Deliberately NOT total impressions. The hero is shift()ed off this row,
+  // so it never renders as a card: its rivals at ranks 2-4 log a row
+  // impression every open while the incumbent logs only its one hero
+  // impression. Ranking by total impressions therefore always favours the
+  // incumbent, pins it permanently, and would override the per-open shuffle
+  // that was already rotating this slot — strictly worse than doing nothing.
+  //
+  // Ties keep ranking order, so equal hero history still means best-match
+  // wins, and a title never shown as hero sorts freshest.
+  promoteFreshestHero(recBase, heroViews);
 
   const explorationItems = explorationPicks.map((c) => ({
     ...titleRowToContentItem(c.meta, scoreToMatchPercentage(c.finalScore)),
@@ -362,7 +366,8 @@ export async function renderForYou(
 // rationale (cosine aperture / IMDb floor / maxPerGenre 4).
 
 /**
- * Move the least-seen title within the top band to index 0, in place.
+ * Move the title that has been hero least often within the top band to
+ * index 0, in place.
  *
  * Only the first HERO_CANDIDATE_BAND items are considered: those are
  * near-equal by score, so promoting among them costs little alignment,
@@ -372,7 +377,7 @@ export async function renderForYou(
  * `Array.prototype.reduce` keeps the FIRST minimum, so a tie falls back
  * to ranking order — equal freshness means best match still wins.
  */
-export function promoteFreshestHero(row: ContentItem[], fatigueData: FatigueData): void {
+export function promoteFreshestHero(row: ContentItem[], heroViews: Map<number, number>): void {
   if (row.length < 2) return;
 
   const band = Math.min(HERO_CANDIDATE_BAND, row.length);
@@ -383,7 +388,7 @@ export function promoteFreshestHero(row: ContentItem[], fatigueData: FatigueData
   // content_id the fatigue map is keyed by.
   const views = (item: ContentItem): number => {
     const tmdbId = Number(item.id.slice(item.id.indexOf('-') + 1));
-    return Number.isFinite(tmdbId) ? fatigueData.fatigue.get(tmdbId)?.views ?? 0 : 0;
+    return Number.isFinite(tmdbId) ? heroViews.get(tmdbId) ?? 0 : 0;
   };
 
   let bestIdx = 0;
