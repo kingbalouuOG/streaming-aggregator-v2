@@ -1,6 +1,8 @@
 import { keepPreviousData, useIsRestoring, useQuery } from '@tanstack/react-query';
 
 import { useUserServices } from '@/hooks/useUserServices';
+import { env } from '@/lib/env';
+import { readAccessToken } from '@/lib/recommendations-v2/edgeRender';
 import {
   tmdbMovieToContentItem,
   tmdbTVToContentItem,
@@ -256,7 +258,65 @@ async function fetchUpcoming(services: ServiceId[]): Promise<UpcomingItem[]> {
   return out.slice(0, 12);
 }
 
+/**
+ * B5: ask the Worker for a finished Home payload.
+ *
+ * Returns null — never throws — on anything that is not a usable payload,
+ * so the caller falls through to the client render below. Home keeps that
+ * fallback deliberately, unlike For You: it is the surface a user lands on
+ * when For You fails, so it should not fail with it.
+ */
+const HOME_WORKER_TIMEOUT_MS = 12_000;
+
+async function tryFetchHomeFromWorker(services: ServiceId[]): Promise<HomeFeed | null> {
+  const proxyUrl = env.API_PROXY_URL;
+  if (!proxyUrl || services.length === 0) return null;
+
+  const accessToken = await readAccessToken();
+  if (!accessToken) return null;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), HOME_WORKER_TIMEOUT_MS);
+  try {
+    const params = new URLSearchParams({ services: services.join(',') });
+    const res = await fetch(`${proxyUrl}/v1/home?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as Partial<HomeFeed> | null;
+    // Shape guard: a payload missing its arrays would render an empty
+    // shelf that looks like a real (and cacheable) result. Treat a
+    // wire-format drift as a miss and let the client render instead.
+    if (!data || !Array.isArray(data.rows) || !Array.isArray(data.recentlyAdded)) {
+      console.warn('[useHomeFeed] worker payload shape drift — falling back');
+      return null;
+    }
+    return {
+      hero: data.hero ?? null,
+      recentlyAdded: data.recentlyAdded ?? [],
+      popular: data.popular ?? [],
+      freeTonight: data.freeTonight ?? [],
+      paid: data.paid ?? [],
+      upcoming: data.upcoming ?? [],
+      rows: data.rows ?? [],
+      spotlights: data.spotlights ?? [],
+    };
+  } catch {
+    // Timeout, offline, DNS — all just "no worker payload".
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
+  // B5: one round trip when the Worker answers; the ~15-call client
+  // orchestration below is now the fallback rather than the default.
+  const fromWorker = await tryFetchHomeFromWorker(services);
+  if (fromWorker) return fromWorker;
+
   // B3: Home no longer fetches the availability id list at all.
   //
   // It used to pull get_available_tmdb_ids — 43,234 ids, ~321 KB — on every
