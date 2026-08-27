@@ -324,6 +324,19 @@ export const ORDERING_BUCKET_MINUTES = 20;
  */
 export const ORDERING_BAND_SIZE = 4;
 
+/**
+ * How far down the recommended row the hero slot may look for a
+ * less-seen title.
+ *
+ * The hero is the single most prominent card on For You, and it is also
+ * the one the ranking pins hardest: it is simply `recommendedForYou[0]`,
+ * so a deterministic top pick sits there indefinitely. Reaching past the
+ * top candidate lets it rotate, but reaching far would put a materially
+ * worse title in the biggest slot — so this is kept to one band, the
+ * same width the per-open shuffle already treats as "near-equal".
+ */
+export const HERO_CANDIDATE_BAND = 4;
+
 // ── Workstream C1: engagement fatigue ──
 
 /**

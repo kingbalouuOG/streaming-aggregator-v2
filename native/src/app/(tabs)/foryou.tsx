@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { Sparkles } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -14,6 +14,8 @@ import { TasteFingerprint } from '@/components/TasteFingerprint';
 import { WatchlistListRow } from '@/components/WatchlistListRow';
 import { WideCard } from '@/components/WideCard';
 import { useForYou } from '@/hooks/useForYou';
+import { parseContentItemId } from '@/lib/adapters/contentAdapter';
+import { recordImpression } from '@/lib/instrumentation/impressionBatcher';
 import { DEFAULT_SLIDERS } from '@/lib/taste-v2/types';
 import type { ContentItem } from '@/lib/types/content';
 import { useAuth } from '@/providers/auth';
@@ -37,6 +39,35 @@ export default function ForYouScreen() {
   const { session } = useAuth();
   const { data, isLoading, isError, isBootstrapping, refetch } = useForYou();
   const [refreshing, setRefreshing] = useState(false);
+
+  // The hero renders as MagazineHero, not PosterCard — and PosterCard is the
+  // ONLY caller of recordImpression. So until this existed the most prominent
+  // card on the page logged nothing at all, with two consequences:
+  //
+  //   1. C1 fatigue is computed entirely from card_impressions, so the hero
+  //      accrued zero views and was structurally immune to the mechanism
+  //      built to stop repetition. Everything below it demoted; the hero
+  //      could not. That is why one title held the slot for months.
+  //   2. The novelty eval reads the same table, so its numbers silently
+  //      excluded the one card the user actually looks at.
+  //
+  // `role: 'hero'` separates these from the row impression at position 0 and
+  // starts giving card_impressions the row identity it has always lacked.
+  //
+  // Placed ABOVE the loading/error early returns below: hooks must run on
+  // every render, so it reads defensively from a possibly-undefined payload
+  // rather than from the destructured `hero`.
+  const heroId = data?.recommendedForYou?.[0]?.id ?? null;
+  useEffect(() => {
+    if (!heroId) return;
+    const { tmdbId } = parseContentItemId(heroId);
+    recordImpression({
+      contentId: tmdbId,
+      sourceSurface: 'for_you',
+      position: 0,
+      metadata: { role: 'hero' },
+    });
+  }, [heroId]);
 
   const name =
     ((session?.user?.user_metadata?.username as string | undefined) ?? '') ||

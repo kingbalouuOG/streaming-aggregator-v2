@@ -51,6 +51,7 @@ import {
   FATIGUE_BURY_PENALTY,
   FATIGUE_DECAY_DAYS,
   ORDERING_BUCKET_MINUTES,
+  HERO_CANDIDATE_BAND,
   ORDERING_BAND_SIZE,
   EXPLORATION_COUNT,
   EXPLORATION_SLOT_POSITIONS,
@@ -67,6 +68,7 @@ import {
 import {
   applyFatiguePenalty,
   fetchFatigueScoped,
+  type FatigueData,
 } from '../recommendations-v2/fatigue';
 import { bucketedShuffleBands } from '../utils/dailyShuffle';
 import {
@@ -274,6 +276,22 @@ export async function renderForYou(
   });
   recBase.forEach((item) => usedIds.add(item.id));
 
+  // Hero freshness. The client takes recommendedForYou[0] as the hero, so
+  // whatever the ranking pins at rank 1 occupies the largest card on the
+  // page indefinitely — C3's shuffle can move it within its band, but a
+  // strong favourite still returns to the top most opens.
+  //
+  // Within the top band (near-equal candidates by definition), prefer the
+  // one the user has seen least. Impression counts come from the fatigue
+  // map that is already fetched, so this costs no extra query.
+  //
+  // Uses RAW impression counts, not the fatigue penalty: an engaged title
+  // is exempt from fatigue entirely, and the hero is the card most likely
+  // to be tapped — so scoring it by fatigue would exempt exactly the title
+  // that has been over-shown. Ties keep ranking order, so equal freshness
+  // still means best-match wins.
+  promoteFreshestHero(recBase, fatigueData);
+
   const explorationItems = explorationPicks.map((c) => ({
     ...titleRowToContentItem(c.meta, scoreToMatchPercentage(c.finalScore)),
     exploration: true,
@@ -342,6 +360,47 @@ export async function renderForYou(
 // Mirrors the client's buildRows() for this row exactly. See the long
 // comment block in src/hooks/useForYouContent.ts for the three-knob
 // rationale (cosine aperture / IMDb floor / maxPerGenre 4).
+
+/**
+ * Move the least-seen title within the top band to index 0, in place.
+ *
+ * Only the first HERO_CANDIDATE_BAND items are considered: those are
+ * near-equal by score, so promoting among them costs little alignment,
+ * whereas reaching further would put a materially worse title in the
+ * biggest slot on the page.
+ *
+ * `Array.prototype.reduce` keeps the FIRST minimum, so a tie falls back
+ * to ranking order — equal freshness means best match still wins.
+ */
+export function promoteFreshestHero(row: ContentItem[], fatigueData: FatigueData): void {
+  if (row.length < 2) return;
+
+  const band = Math.min(HERO_CANDIDATE_BAND, row.length);
+  // Parsed inline rather than importing parseContentItemId from
+  // contentAdapter: R-028 was a Worker deploy failure caused by exactly
+  // that kind of incidental import pulling a build-time define into the
+  // bundle. `id` is the "movie-123" contentKey; the numeric half is the
+  // content_id the fatigue map is keyed by.
+  const views = (item: ContentItem): number => {
+    const tmdbId = Number(item.id.slice(item.id.indexOf('-') + 1));
+    return Number.isFinite(tmdbId) ? fatigueData.fatigue.get(tmdbId)?.views ?? 0 : 0;
+  };
+
+  let bestIdx = 0;
+  let bestViews = views(row[0]);
+  for (let i = 1; i < band; i++) {
+    const v = views(row[i]);
+    if (v < bestViews) {
+      bestIdx = i;
+      bestViews = v;
+    }
+  }
+
+  if (bestIdx !== 0) {
+    const [hero] = row.splice(bestIdx, 1);
+    row.unshift(hero);
+  }
+}
 
 function buildOutsideYourUsual(
   scored: ScoredCandidate[],
