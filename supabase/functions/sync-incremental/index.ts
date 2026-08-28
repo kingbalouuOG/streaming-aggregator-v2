@@ -169,6 +169,24 @@ async function heartbeat(syncId: string | undefined, force = false): Promise<voi
   if (error) console.error('heartbeat failed:', error.message);
 }
 
+/**
+ * RapidAPI has refused because the plan's quota is spent, not because we
+ * are briefly too fast.
+ *
+ * The distinction matters at a hard spend cap. A short-term rate limit
+ * SHOULD be retried — it clears in a second. An exhausted quota will not
+ * clear for the rest of the billing period, so retrying it three times
+ * per request, across every remaining change-type and service, spends
+ * money to be told "no" repeatedly. This carries the refusal straight out
+ * of the slice instead.
+ */
+class QuotaError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'QuotaError';
+  }
+}
+
 // Billable SA (RapidAPI) requests made by THIS invocation.
 //
 // Counted here rather than in saApiFetch because RapidAPI bills every
@@ -192,7 +210,17 @@ async function fetchWithRetry(
       saRequestsThisSlice++;
       const res = await fetch(url, options);
       if (res.ok || res.status === 404) return res;
-      // Retry on server errors and rate limits
+      // A 429 carrying "no requests remaining" is quota exhaustion, not
+      // pacing: RapidAPI sets this header on every response, so an
+      // explicit '0' is a reliable signal. Fail out rather than retry —
+      // see QuotaError.
+      if (res.status === 429 && res.headers.get('x-ratelimit-requests-remaining') === '0') {
+        const limit = res.headers.get('x-ratelimit-requests-limit') ?? 'unknown';
+        throw new QuotaError(
+          `RapidAPI quota exhausted (limit ${limit}, remaining 0) — aborting without retry`,
+        );
+      }
+      // Retry on server errors and transient rate limits
       if (res.status >= 500 || res.status === 429) {
         if (attempt < maxRetries) {
           // Honour Retry-After when present (RapidAPI returns it on 429).
@@ -207,6 +235,7 @@ async function fetchWithRetry(
       }
       throw new Error(`HTTP ${res.status}: ${url}`);
     } catch (err: any) {
+      if (err instanceof QuotaError) throw err;
       if (attempt < maxRetries && err.message?.includes('fetch failed')) {
         const backoff = Math.pow(2, attempt) * 1000;
         console.log(`Retry ${attempt + 1}/${maxRetries} after ${backoff}ms (network error)`);
@@ -246,6 +275,25 @@ const MAX_SINCE_LOOKBACK_SECONDS = 36 * 3600;
 // 2 slices instead of 8.
 const SLICE_BUDGET_MS = 75_000;
 
+// ── SA request budget (A2 cost control) ──────────────────
+// A hard ceiling on billable RapidAPI requests per CHAIN, so a pathological
+// window cannot spend without bound. Sized above real need, not at it:
+//
+//   healthy day        ~145 requests (3.5k changes at SA's fixed 25/page)
+//   catch-up after a
+//   failed run (36h)   ~220
+//   plus retries       some headroom
+//
+// 500 is ~3.4x a healthy day — high enough that it should never fire in
+// normal operation, low enough to bound a runaway. If it starts tripping
+// routinely that is a signal to investigate, not to raise the number.
+//
+// Tripping is NOT data loss: the slice saves its resume point, the run is
+// marked 'failed' so getLastSyncTimestamp() does not advance past pages
+// nobody fetched, and the next run picks the window up from the same
+// place. Work is deferred, never dropped.
+const SA_REQUEST_BUDGET = 500;
+
 // Depth 20 = ~25 minutes of slice time. Sized off a real catch-up run:
 // 2026-08-26 06:00 processed 3,518 changes in 540s of slice time and STILL
 // hit its depth cap without consuming the window, because two failed runs
@@ -280,6 +328,10 @@ interface SyncChainState {
   stats: SyncStats;
   errorBuckets: ErrorBucket[];
   stopped_because: string | null;
+  // Set when the SA request budget trips. Distinct from stopped_because
+  // (which the handler writes) because it must also STOP the chain rather
+  // than hand off — a handoff would resume and immediately re-trip.
+  sa_budget_stop?: string | null;
   // Set after each handoff so resume_stalled_chains() (migration 068) can
   // report WHY a chain stalled, not merely that it did.
   last_request_id: number | null;
@@ -381,6 +433,9 @@ async function runSyncSlice(
   stats: SyncStats
 ): Promise<boolean> {
   const since = state.since;
+  // Cleared per slice so a flag left in chain_state by an earlier slice
+  // cannot stop a later one that has not itself overspent.
+  state.sa_budget_stop = null;
   const historyEvents: HistoryEvent[] = [];
   const startTime = Date.now();
   const overBudget = () => Date.now() - startTime > SLICE_BUDGET_MS;
@@ -419,6 +474,20 @@ async function runSyncSlice(
       let hasMore = true;
 
       while (hasMore) {
+        // Chain total: what earlier slices already spent, plus this one.
+        const saSpent = stats.saRequests + saRequestsThisSlice;
+        if (saSpent >= SA_REQUEST_BUDGET) {
+          state.ti = ti;
+          state.si = si;
+          state.cursor = cursor ?? null;
+          state.sa_budget_stop =
+            `SA request budget reached (${saSpent}/${SA_REQUEST_BUDGET}) at [${ti}/${si}] ` +
+            `(${changeType}/${service}) — deferring the rest of the window`;
+          await flushHistory();
+          console.warn(state.sa_budget_stop);
+          return false;
+        }
+
         if (overBudget()) {
           // Save the exact resume point and flush before handing off, so a
           // slice that stops early loses nothing.
@@ -589,6 +658,11 @@ async function runSyncSlice(
           // Pace requests below RapidAPI's per-second cap on the BASIC tier.
           await delay(1100);
         } catch (err: any) {
+          // Anything else here is per-(type,service) and the loop moves on.
+          // A quota refusal is not: continuing would issue another request
+          // for every remaining pair, each one spending to be refused
+          // again. Abandon the slice so the chain stops and resumes later.
+          if (err instanceof QuotaError) throw err;
           console.error(`Error fetching ${changeType} changes for ${service}:`, err.message);
           errors.record(`fetch.${changeType}`, err, service);
           hasMore = false;
@@ -815,6 +889,9 @@ Deno.serve(async (req) => {
   let stop: string | null = null;
   if (fatal) stop = `fatal: ${fatal}`;
   else if (windowConsumed) stop = 'window consumed';
+  // Before the depth check: handing off after a budget trip would resume
+  // and re-trip immediately, burning an invocation to learn nothing.
+  else if (state.sa_budget_stop) stop = state.sa_budget_stop;
   else if (depth + 1 >= MAX_CHAIN_DEPTH) {
     stop = `chain depth cap (${MAX_CHAIN_DEPTH}) reached before the window was consumed`;
   }
