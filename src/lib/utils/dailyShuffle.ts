@@ -63,16 +63,35 @@ export function dailyShuffleTopN<T>(items: T[], topN: number, salt = ''): T[] {
   return [...head, ...items.slice(n)];
 }
 
+/** Days since the Unix epoch, UTC. Integer, advances at 00:00 UTC. */
+function utcDayNumber(now: Date = new Date()): number {
+  return Math.floor(Date.parse(utcDayStamp(now)) / 86_400_000);
+}
+
 /**
  * Deterministic daily pick of one element from the first `topN` items.
- * Returns undefined for an empty list. Used to rotate the hero among the
- * top contenders while leaving the underlying ranking intact.
+ * Returns undefined for an empty list. Rotates the hero among the top
+ * contenders while leaving the underlying ranking intact.
+ *
+ * CYCLES rather than sampling. The original drew a day-seeded random
+ * index, which meant consecutive days repeated the same title roughly
+ * 1-in-topN of the time — and because the hero logged no impression
+ * (R-030), nothing could see that it had. Advancing the index by one each
+ * day guarantees a different slot for `topN` days running.
+ *
+ * The salt still sets the starting offset, so two services (or two
+ * surfaces) do not march in lockstep; only the per-day step is shared.
+ *
+ * Note the guarantee is on the SLOT, not the title: the underlying list
+ * is re-ranked daily, so the same title can reappear if it moves into the
+ * slot the cycle lands on. That is far rarer than a 1-in-topN collision,
+ * and the impression log now makes it visible when it happens.
  */
 export function dailyPick<T>(items: T[], topN = items.length, salt = ''): T | undefined {
   if (items.length === 0) return undefined;
   const n = Math.min(topN, items.length);
-  const rng = dayRng(salt);
-  return items[Math.floor(rng() * n)];
+  const offset = fnv1a(salt) % n;
+  return items[(offset + utcDayNumber()) % n];
 }
 
 // ── Bucket-seeded rotation (Workstream C3) ──────────────────────────
