@@ -169,6 +169,19 @@ async function heartbeat(syncId: string | undefined, force = false): Promise<voi
   if (error) console.error('heartbeat failed:', error.message);
 }
 
+// Billable SA (RapidAPI) requests made by THIS invocation.
+//
+// Counted here rather than in saApiFetch because RapidAPI bills every
+// request that leaves, including the retries a 429 or 5xx provokes — so a
+// count of logical calls would understate spend exactly when spend spikes.
+// fetchWithRetry has one caller (saApiFetch), so this counts SA and
+// nothing else.
+//
+// Folded into stats.saRequests after each slice; that field rides in
+// chain_state, so a chained run reports the whole chain's total rather
+// than the last slice's.
+let saRequestsThisSlice = 0;
+
 async function fetchWithRetry(
   url: string,
   options: RequestInit,
@@ -176,6 +189,7 @@ async function fetchWithRetry(
 ): Promise<Response> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      saRequestsThisSlice++;
       const res = await fetch(url, options);
       if (res.ok || res.status === 404) return res;
       // Retry on server errors and rate limits
@@ -331,6 +345,8 @@ interface SyncStats {
   availabilityAdded: number;
   availabilityUpdated: number;
   availabilityRemoved: number;
+  /** Billable SA requests across the whole chain (A2 cost control). */
+  saRequests: number;
 }
 
 function emptyStats(): SyncStats {
@@ -339,6 +355,7 @@ function emptyStats(): SyncStats {
     availabilityAdded: 0,
     availabilityUpdated: 0,
     availabilityRemoved: 0,
+    saRequests: 0,
   };
 }
 
@@ -609,6 +626,7 @@ function syncLogUpdate(
     availability_added: stats.availabilityAdded,
     availability_updated: stats.availabilityUpdated,
     availability_removed: stats.availabilityRemoved,
+    sa_requests: stats.saRequests,
     errors: errors.total,
     error_details: errors.toJson(),
   };
@@ -786,6 +804,10 @@ Deno.serve(async (req) => {
     console.error('Sync slice failed:', fatal);
   }
 
+  // After the try/catch, so a slice that died partway still reports the
+  // requests it had already paid for.
+  stats.saRequests += saRequestsThisSlice;
+
   state.stats = stats;
   state.errorBuckets = errors.toBuckets();
 
@@ -812,7 +834,8 @@ Deno.serve(async (req) => {
       `sync chain ${runId} ${status} after ${state.slices} slice(s): ` +
       `processed=${stats.processed} availability_added=${stats.availabilityAdded} ` +
       `availability_updated=${stats.availabilityUpdated} ` +
-      `availability_removed=${stats.availabilityRemoved} errors=${errors.total} — ${stop}`
+      `availability_removed=${stats.availabilityRemoved} sa_requests=${stats.saRequests} ` +
+      `errors=${errors.total} — ${stop}`
     );
     return json(
       {
@@ -839,6 +862,7 @@ Deno.serve(async (req) => {
       availability_added: stats.availabilityAdded,
       availability_updated: stats.availabilityUpdated,
       availability_removed: stats.availabilityRemoved,
+      sa_requests: stats.saRequests,
       errors: errors.total,
       error_details: errors.toJson(),
       chain_state: state,
