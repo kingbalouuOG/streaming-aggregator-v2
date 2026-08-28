@@ -566,31 +566,27 @@ async function runSyncSlice(
                 stats.availabilityRemoved++;
               } else {
                 // new / updated / expiring: upsert this individual streaming option.
-                // For 'updated': read existing row before delete for price comparison.
-                let existingRow: { price_amount: number | null; price_currency: string | null } | null = null;
-                if (changeType === 'updated') {
-                  const { data } = await supabase
-                    .from('streaming_availability')
-                    .select('price_amount, price_currency')
-                    .eq('tmdb_id', tmdbId)
-                    .eq('media_type', mediaType)
-                    .eq('service_id', serviceId)
-                    .eq('stream_type', streamType)
-                    .limit(1)
-                    .maybeSingle();
-                  existingRow = data;
-                }
-
+                //
                 // Delete existing row(s) for this option, then insert fresh.
                 // Scoped to service_id + stream_type (not whole title) to avoid
                 // clobbering other services' rows as the old upsertAvailability did.
-                await supabase
+                //
+                // `.select()` on the delete returns the rows it removed, which
+                // IS the existence check — so "did this option already exist?"
+                // costs nothing extra and is answered for EVERY change type,
+                // not just 'updated'. The previous conditional pre-read both
+                // cost a query and only ran for 'updated', which is why
+                // existence could not be used for labelling.
+                const { data: deletedRows } = await supabase
                   .from('streaming_availability')
                   .delete()
                   .eq('tmdb_id', tmdbId)
                   .eq('media_type', mediaType)
                   .eq('service_id', serviceId)
-                  .eq('stream_type', streamType);
+                  .eq('stream_type', streamType)
+                  .select('price_amount, price_currency');
+
+                const existingRow = deletedRows?.[0] ?? null;
 
                 const newRow = {
                   tmdb_id: tmdbId,
@@ -620,10 +616,18 @@ async function runSyncSlice(
                 // Log history event
                 const newPrice = change.price ? parseFloat(change.price.amount) : null;
                 const oldPrice = existingRow?.price_amount ?? null;
-                const isPriceChanged = changeType === 'updated' && existingRow && newPrice !== null && oldPrice !== null && newPrice !== oldPrice;
+                // Existence, not change_type. 78% of first-ever-seen titles
+                // arrive as change_type='updated' (3,011 of 3,838 over 7
+                // days) because SA classifies a catalogue movement as an
+                // update regardless of whether WE had the row. Labelling on
+                // change_type therefore filed most genuine arrivals as
+                // updates — which is exactly what hid that 78% figure.
+                const isNewToUs = !existingRow;
+                const isPriceChanged =
+                  !isNewToUs && newPrice !== null && oldPrice !== null && newPrice !== oldPrice;
                 historyEvents.push({
                   tmdb_id: tmdbId, media_type: mediaType, service_id: serviceId,
-                  event_type: changeType === 'new' ? 'added' : isPriceChanged ? 'price_changed' : 'updated',
+                  event_type: isNewToUs ? 'added' : isPriceChanged ? 'price_changed' : 'updated',
                   stream_type: streamType,
                   quality: change.quality || null,
                   link: change.link,
@@ -632,7 +636,7 @@ async function runSyncSlice(
                   sync_run_id: syncId || null,
                 });
 
-                if (changeType === 'new') stats.availabilityAdded++;
+                if (isNewToUs) stats.availabilityAdded++;
                 else stats.availabilityUpdated++;
 
                 // Phase 1: embeddings handled by embed-new-titles cron (06:45 UTC)
