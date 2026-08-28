@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -23,12 +23,38 @@ import { MagazineHero } from '@/components/MagazineHero';
 import { Reveal } from '@/components/Reveal';
 import { TrendingRibbon } from '@/components/TrendingRibbon';
 import { useHomeFeed } from '@/hooks/useHomeFeed';
+import { parseContentItemId } from '@/lib/adapters/contentAdapter';
+import { recordImpression } from '@/lib/instrumentation/impressionBatcher';
 import type { ContentItem } from '@/lib/types/content';
 
 export default function HomeScreen() {
   const router = useRouter();
   const feed = useHomeFeed();
   const [refreshing, setRefreshing] = useState(false);
+
+  // Same blind spot For You had (R-030): the hero renders as MagazineHero,
+  // and PosterCard is the only caller of recordImpression — so the largest
+  // card on Home logged nothing at all. It was therefore invisible to the
+  // novelty eval, and to any future mechanism reading card_impressions.
+  //
+  // Home's hero is not "stuck" the way For You's was: dailyPick already
+  // rotates it daily among the top 5 of the first service chart. But that
+  // pick has no memory, so it can repeat by chance — and nothing could see
+  // that it had, because nothing was recorded.
+  //
+  // Placed ABOVE the loading/error early returns below: hooks must run on
+  // every render, so this reads defensively from a possibly-undefined feed.
+  const homeHeroId = feed.data?.hero?.id ?? null;
+  useEffect(() => {
+    if (!homeHeroId) return;
+    const { tmdbId } = parseContentItemId(homeHeroId);
+    recordImpression({
+      contentId: tmdbId,
+      sourceSurface: 'home',
+      position: 0,
+      metadata: { role: 'hero' },
+    });
+  }, [homeHeroId]);
 
   const editorNote = useQuery({
     queryKey: ['native', 'home', 'editorNote'],
