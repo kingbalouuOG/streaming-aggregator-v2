@@ -277,13 +277,49 @@ def write_mood_rooms(
     cur,
     rooms: list[tuple[uuid.UUID, str, str | None, np.ndarray, dict, bool, int, int]],
 ) -> None:
-    """Bulk insert mood_rooms.
+    """Upsert mood_rooms, and clear the memberships of every room written.
 
     Each row tuple: (id, label, description, centroid, cluster_params,
     is_curated, title_count, version).
+
+    WHY UPSERT RATHER THAN INSERT. label.py deliberately reuses a previous
+    room's id when a new cluster matches it at Jaccard >= 0.8, so a mood
+    room keeps its identity across reclusters. That is the right call —
+    anything referencing a room stays valid. But a plain INSERT then
+    collides with the row already holding that id:
+
+        duplicate key value violates unique constraint "mood_rooms_pkey"
+
+    The first-ever recluster worked because there was nothing to match.
+    Every run since has failed the moment any cluster carried over, which
+    is the normal case — the monthly cron failed on 2026-08-01 and again
+    on 2026-09-01, both times here.
+
+    A carried-over room is UPDATED in place and its `version` moves to the
+    new generation; a genuinely new room inserts. Rooms that did not carry
+    over keep their old version and simply fall out of the frontend's
+    MAX(version) filter, which is how generations were always meant to
+    separate. They are left alone rather than deleted: nothing here knows
+    what else references them.
     """
     if not rooms:
         return
+
+    room_ids = [rid for rid, *_ in rooms]
+
+    # Memberships are keyed (mood_room_id, tmdb_id, media_type), so a reused
+    # room id would collide on re-insert for any title that stayed put, and
+    # would strand rows for titles that left the cluster. Clearing first
+    # makes the membership set exact for this generation.
+    #
+    # Runs BEFORE the upsert deliberately: doing it after would still be
+    # correct, but this way the rooms and their memberships are only ever
+    # inconsistent inside one transaction.
+    cur.execute(
+        "DELETE FROM mood_room_titles WHERE mood_room_id = ANY(%s)",
+        (room_ids,),
+    )
+
     records = [
         (rid, label, description, _vector_literal(centroid), Json(params), is_curated, tcount, version)
         for rid, label, description, centroid, params, is_curated, tcount, version in rooms
@@ -295,6 +331,15 @@ def write_mood_rooms(
           (id, label, description, centroid, cluster_params,
            is_curated, title_count, version)
         VALUES %s
+        ON CONFLICT (id) DO UPDATE SET
+          label          = EXCLUDED.label,
+          description    = EXCLUDED.description,
+          centroid       = EXCLUDED.centroid,
+          cluster_params = EXCLUDED.cluster_params,
+          is_curated     = EXCLUDED.is_curated,
+          title_count    = EXCLUDED.title_count,
+          version        = EXCLUDED.version,
+          updated_at     = NOW()
         """,
         records,
         template="(%s, %s, %s, %s::vector, %s, %s, %s, %s)",
