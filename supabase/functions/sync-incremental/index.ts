@@ -210,10 +210,15 @@ async function fetchWithRetry(
       saRequestsThisSlice++;
       const res = await fetch(url, options);
       if (res.ok || res.status === 404) return res;
-      // A 429 carrying "no requests remaining" is quota exhaustion, not
-      // pacing: RapidAPI sets this header on every response, so an
-      // explicit '0' is a reliable signal. Fail out rather than retry —
-      // see QuotaError.
+      // Fast path: a 429 that explicitly says nothing remains. Cheapest
+      // possible exit — no retry, no backoff.
+      //
+      // ⚠ DO NOT rely on this header alone. It was the only quota test
+      // here, and on 29-30 Aug it never matched: every one of the 32
+      // change-type/service pairs took the generic retry path instead,
+      // spending 128 requests a day to be refused. RapidAPI evidently
+      // does not set it on every 429. The exhausted-retries branch below
+      // is the real guard; this is only an optimisation.
       if (res.status === 429 && res.headers.get('x-ratelimit-requests-remaining') === '0') {
         const limit = res.headers.get('x-ratelimit-requests-limit') ?? 'unknown';
         throw new QuotaError(
@@ -232,6 +237,16 @@ async function fetchWithRetry(
           await delay(backoff);
           continue;
         }
+      }
+      // A 429 still refusing after every backoff is not transient pacing.
+      // Whatever the cause — quota, or throttling we cannot wait out —
+      // the next 31 change-type/service pairs will be refused too, so
+      // this must abandon the slice rather than be swallowed and retried
+      // per pair. Raising it as QuotaError is what makes that happen.
+      if (res.status === 429) {
+        throw new QuotaError(
+          `RapidAPI still returning 429 after ${maxRetries} retries — treating as quota exhausted: ${url}`,
+        );
       }
       throw new Error(`HTTP ${res.status}: ${url}`);
     } catch (err: any) {
@@ -332,6 +347,11 @@ interface SyncChainState {
   // (which the handler writes) because it must also STOP the chain rather
   // than hand off — a handoff would resume and immediately re-trip.
   sa_budget_stop?: string | null;
+  // (change_type, service) pairs this chain failed to FETCH. Distinct from
+  // the error buckets, which also hold per-title processing errors that do
+  // not mean data was missed. Only a fetch failure means a page was never
+  // seen — and therefore that the window is not safe to advance past.
+  fetch_failures?: number;
   // Set after each handoff so resume_stalled_chains() (migration 068) can
   // report WHY a chain stalled, not merely that it did.
   last_request_id: number | null;
@@ -669,6 +689,11 @@ async function runSyncSlice(
           if (err instanceof QuotaError) throw err;
           console.error(`Error fetching ${changeType} changes for ${service}:`, err.message);
           errors.record(`fetch.${changeType}`, err, service);
+          // Counted so the handler can refuse to call the window consumed.
+          // Swallowing here and carrying on is deliberate — one bad service
+          // should not abort the other seven — but it means these changes
+          // were NEVER FETCHED, and the run must not report success.
+          state.fetch_failures = (state.fetch_failures ?? 0) + 1;
           hasMore = false;
         }
       }
@@ -890,9 +915,27 @@ Deno.serve(async (req) => {
   state.errorBuckets = errors.toBuckets();
 
   // ── Decide whether the chain continues ───────────────────────────
+  // A window is only consumed if every page of it was actually fetched.
+  //
+  // THE BUG THIS FIXES (29-30 Aug): every one of the 32 change-type/service
+  // fetches returned 429. Each was swallowed by the per-page catch, which
+  // set hasMore = false, so all the loops ran to completion and
+  // runSyncSlice returned true. The run was marked 'completed',
+  // getLastSyncTimestamp() advanced past it, and ~48h of availability
+  // changes were skipped — twice, silently, with a green status.
+  //
+  // Fetch failures are the only errors that count here: a per-title
+  // processing error means one row was dropped, but a fetch failure means
+  // a whole page was never seen.
+  const fetchFailures = state.fetch_failures ?? 0;
+  const trulyConsumed = windowConsumed && fetchFailures === 0;
+
   let stop: string | null = null;
   if (fatal) stop = `fatal: ${fatal}`;
-  else if (windowConsumed) stop = 'window consumed';
+  else if (windowConsumed && fetchFailures > 0) {
+    stop = `window NOT consumed: ${fetchFailures} fetch failure(s) — refusing to advance the window`;
+  }
+  else if (trulyConsumed) stop = 'window consumed';
   // Before the depth check: handing off after a budget trip would resume
   // and re-trip immediately, burning an invocation to learn nothing.
   else if (state.sa_budget_stop) stop = state.sa_budget_stop;
@@ -905,7 +948,7 @@ Deno.serve(async (req) => {
     // ONLY a fully consumed window may be marked 'completed'. Anything else
     // must stay 'failed' so getLastSyncTimestamp() does not advance past
     // pages this chain never fetched.
-    const status = windowConsumed && !fatal ? 'completed' : 'failed';
+    const status = trulyConsumed && !fatal ? 'completed' : 'failed';
     await supabase
       .from('sync_log')
       .update({ ...syncLogUpdate(status, stats, errors), chain_state: state })
@@ -916,7 +959,7 @@ Deno.serve(async (req) => {
       `processed=${stats.processed} availability_added=${stats.availabilityAdded} ` +
       `availability_updated=${stats.availabilityUpdated} ` +
       `availability_removed=${stats.availabilityRemoved} sa_requests=${stats.saRequests} ` +
-      `errors=${errors.total} — ${stop}`
+      `fetch_failures=${fetchFailures} errors=${errors.total} — ${stop}`
     );
     return json(
       {
