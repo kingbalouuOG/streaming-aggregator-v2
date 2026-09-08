@@ -1,5 +1,5 @@
 import { FlashList } from '@shopify/flash-list';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronDown, Search, Sparkles, SlidersHorizontal, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
@@ -10,6 +10,7 @@ import {
   applyBrowseFilters,
   countActiveFilters,
   DEFAULT_FILTERS,
+  type ContentType,
   SORT_LABELS,
   sortItems,
   type BrowseFilters,
@@ -39,7 +40,18 @@ export default function BrowseScreen() {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [category, setCategory] = useState<SearchCategory>('All');
-  const [filters, setFilters] = useState<BrowseFilters>(DEFAULT_FILTERS);
+  // Seeded from the route so the quick-filter empty state's "Browse all
+  // documentaries" button lands on documentaries rather than dropping the
+  // user into an unfiltered grid (recommendation 2026-09-08-002 §1.2). This
+  // is the ONLY thing a quick-filter chip may navigate to, and only as an
+  // explicit second tap. Read once, as the initial value — a later param
+  // change should not yank filters out from under someone mid-browse.
+  const { contentType: contentTypeParam } = useLocalSearchParams<{ contentType?: string }>();
+  const [filters, setFilters] = useState<BrowseFilters>(() =>
+    isContentType(contentTypeParam) && contentTypeParam !== 'all'
+      ? { ...DEFAULT_FILTERS, contentType: contentTypeParam }
+      : DEFAULT_FILTERS,
+  );
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('best');
   const [sortOpen, setSortOpen] = useState(false);
@@ -391,4 +403,9 @@ function NoResults({
       <Text className="mt-2 text-center font-sans text-body text-muted-foreground">{body}</Text>
     </View>
   );
+}
+
+/** Narrows an untrusted route param to the filter vocabulary. */
+function isContentType(value: string | undefined): value is ContentType {
+  return value === 'all' || value === 'movie' || value === 'tv' || value === 'doc';
 }

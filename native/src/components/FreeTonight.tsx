@@ -1,5 +1,6 @@
 import { ScrollView, Text, View } from 'react-native';
 
+import type { RecordImpressionInput } from '@/lib/instrumentation/impressionBatcher';
 import type { ContentItem } from '@/lib/types/content';
 import { PosterCard } from './PosterCard';
 
@@ -11,9 +12,12 @@ import { PosterCard } from './PosterCard';
 export function FreeTonight({
   items,
   onItemPress,
+  impressionMetadata,
 }: {
   items: ContentItem[];
   onItemPress: (item: ContentItem) => void;
+  /** Stamped onto every card's impression — see PosterCard. */
+  impressionMetadata?: RecordImpressionInput['metadata'];
 }) {
   const free = items.slice(0, 10);
   if (free.length === 0) return null;
@@ -33,7 +37,14 @@ export function FreeTonight({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, gap: 12 }}>
         {free.map((item, i) => (
-          <PosterCard key={item.id} item={item} onPress={onItemPress} surface="home" position={i} />
+          <PosterCard
+            key={item.id}
+            item={item}
+            onPress={onItemPress}
+            surface="home"
+            position={i}
+            impressionMetadata={impressionMetadata}
+          />
         ))}
       </ScrollView>
     </View>
