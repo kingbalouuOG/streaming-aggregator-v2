@@ -1,13 +1,14 @@
 ---
 title: For You surface
 type: concept
-tags: [for-you, surface, personalised, sliders, mood-rooms, anchored-rooms, edge-function, paid-titles]
+tags: [for-you, surface, personalised, sliders, mood-rooms, anchored-rooms, edge-function, paid-titles, quick-filters]
 created: 2026-04-26
-updated: 2026-08-26
+updated: 2026-09-08
 sources:
   - raw/v2-strategy/Videx_v2_Home_and_ForYou_Composition_Hypothesis_v0.4.md
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.7.md
   - raw/phase-summaries/phase-4-summary.md
+  - raw/plans/2026-09-08-002-recommendation-quick-filters-and-search-presets.md
 related:
   - wiki/concepts/architecture/two-surface-architecture.md
   - wiki/concepts/architecture/home-surface.md
@@ -15,6 +16,7 @@ related:
   - wiki/concepts/architecture/mood-rooms.md
   - wiki/concepts/architecture/recommendation-pipeline.md
   - wiki/concepts/operations/phase-4.md
+  - wiki/concepts/architecture/signal-architecture.md
 ---
 
 # For You surface
@@ -189,3 +191,23 @@ Founder beta feedback (2026-07-09): the Home surface gained a dedicated rent/buy
 ⚠ **Payload shape changed.** `paidTitles` is additive but changes the wire contract, so: (a) native `QUERY_CACHE_BUSTER` bumped `v3`→`v4` (`native/src/queryPersist.ts`); (b) the foryou-parity golden (`scripts/test/foryou-parity-golden.json`) does NOT yet capture `paidTitles` (the snapshot in `foryou-parity-probe.mjs` was not extended — the golden must be regenerated with `--update-golden` against live secrets before the parity CI passes cleanly). The Worker route (`workers/api/src/index.ts`) is untouched — it `JSON.stringify`s the payload wholesale, so the new field flows through automatically. Web (`src/hooks/useForYouContent.ts`) does not yet consume `paidTitles` — a noted legacy-surface parity gap.
 
 Pipeline code lives in `supabase/functions/_shared/recommendations-v2/` and `_shared/taste-v2/` (mirror of `src/lib/`, ADR-011). The `shared-tree-drift` CI workflow fails any PR that touches one tree without the other.
+
+## Quick filters (native, 2026-09-08)
+
+The same four-chip strip as [Home](home-surface.md#quick-filters-native-2026-09-08) — `All · Movies · TV · Documentaries` — sits under the taste fingerprint and filters the rendered rows client-side. [Recommendation 2026-09-08-002](../../../raw/plans/2026-09-08-002-recommendation-quick-filters-and-search-presets.md) §1.4.
+
+**Not a Worker parameter, and not a cache-key dimension.** The KV key is `user:taste_updated_at:sliders:services`. Four chip states would multiply entries four-fold and force B2's pre-warm cron to write four per user — or the chip would guarantee a cold render, which is the one thing it exists to avoid.
+
+**And not a client-side backfill from `payload.pool`.** That pool is the RAW retrieval, before `applyFatiguePenalty` and the avoid set have run (`foryouRender.ts`). Drawing from it inside a filter would resurrect exactly the fatigued and parked titles [Workstream C](#engagement-fatigue-c1) exists to suppress — the regression the brief explicitly forbids.
+
+**Instead: longer rendered rows.** `RENDERED_ROW_LENGTH = 36` in `foryouRender.ts` renders `recommendedForYou` and `hiddenGems` to 36 items each (from 20 and 15). The client shows the first 20 / 15 unfiltered — so an unfiltered For You is unchanged — and up to 20 survivors when filtered. This is the answer to "a filtered For You always shows the same 20": the filter draws on a tail that has already been scored, fatigue-adjusted, avoid-penalised, MMR'd and C3-rotated, because it is the same ranked list.
+
+`buildRowFromPool` passes `limit` straight to MMR's `k`, so the tail is diversified rather than an undiversified remainder stapled onto a diversified head. The exploration slots (`EXPLORATION_SLOT_POSITIONS = [2,5,13]`) and the hero band (`HERO_CANDIDATE_BAND = 4`) all sit inside the first 20, so neither moves.
+
+Measured cost, sampling 400 real `titles` rows through `titleRowToContentItem`: a `ContentItem` serialises to 295 B mean / 320 B p95, so the two rows go 10.1 KB → 20.7 KB — a payload delta of ~10.6 KB. Bytes, not compute: one `buildRowFromPool` call with a larger `k` over candidates already scored and already holding embeddings.
+
+**Mood rooms hide while a chip is active.** An `AnchorRoomPreview` is a navigation card into an UNFILTERED collection — four thumbnails over a `titleCount` for the whole room. There is no honest way to render one under a filter: trimming the thumbnails leaves the count lying about what is behind the card, and leaving them alone puts TV on a page that says Movies. The section hides and is named in the hidden-rails note.
+
+**The hero re-picks for free**, because it is `recommendedForYou[0]` and the row is filtered before the hero is shifted off it.
+
+**Chips are logged, not learned from (§1.7).** A chip says "tonight", not "me". Changes emit a `mode: 'filter'` search row carrying `surface`, `category`, `rails_visible` and `items_visible` — and, carrying no `mood_key`, they are excluded from the search-attribution boost by `isContentIntentSearch`. That is the rule working as designed, not a gap: the explicit, visible, reversible control for a movie/TV preference is the `contentMix` slider. If the logging shows someone filtering to Movies on most opens, the move is to SUGGEST that slider, not to nudge the vector silently.
