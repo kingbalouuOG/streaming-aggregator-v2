@@ -3,7 +3,7 @@ title: Signal architecture
 type: concept
 tags: [signals, instrumentation, lifecycle, dwell, deep-link]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-09-08
 sources:
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
   - raw/v2-strategy/Videx_v2_Detail_Page_Signal_Capture_Spec_v0.3.2.md
@@ -26,7 +26,7 @@ Two signal categories: **explicit** (user-initiated, intentional) and **silent**
 
 | Destination | Events | Backed by |
 |---|---|---|
-| `user_interactions` | thumbs ±, watchlist ±, marked watched, `not_interested`, detail_view, dwell_event, deep_link_click, section_expanded, cast_carousel_scroll, back_navigation_speed, report_availability | Migration 010, expanded migration 013 (`session_id`, `source_surface` top-level). |
+| `user_interactions` | thumbs ±, watchlist ±, marked watched, `not_interested`, detail_view, dwell_event, deep_link_click, section_expanded, cast_carousel_scroll, back_navigation_speed, report_availability, **search** | Migration 010, expanded migration 013 (`session_id`, `source_surface` top-level). Search-text retention: migration 079. |
 | `card_impressions` | impressions | Migration 014 (pg_partman monthly). See [ADR-006](../decisions/adr-006-card-impressions-dedicated-table.md), [ADR-010](../decisions/adr-010-pg-partman-card-impressions.md). |
 | Onboarding analytics table | onboarding funnel events | `lib/analytics/logger.ts`. Separate from `user_interactions`. |
 
@@ -37,6 +37,27 @@ Two signal categories: **explicit** (user-initiated, intentional) and **silent**
 3. **Detail page unmount**: `dwell_event` fires once with `dwell_seconds` and `exit_reason`.
 4. **Explicit interactions** (thumbs, watchlist, watched, not_interested, deep-link click): emit immediately. Replace previous signal on same title (rule 2 of combination).
 5. **Card shown**: `recordImpression` to in-memory buffer. Flushed by [impression batcher](#impression-batcher) on six triggers.
+6. **Search**: one `search` row per *settled* search intent — see below.
+
+## Search events
+
+`emitSearch` (`src/lib/storage/interactions.ts`) has existed since Phase Search V2, but until 2026-09-08 **only the web app called it**: `native/` never did, so production held **zero** `search` rows. Native now emits from `native/src/hooks/useSearchLogging.ts`, wired into `browse.tsx`.
+
+| Trigger | `mode` | `metadata` |
+|---|---|---|
+| Typed query, settled | `lookup` | `query`, `result_count`, `category` |
+| Mood card tap, `search_semantic` ON | `semantic` | `query` (the app-authored mood phrase), `result_count`, `mood_key`, `semantic: true` |
+| Mood card tap, flag OFF (filter preset) | `filter` | `query: null`, `result_count`, `mood_key`, `semantic: false` |
+| FilterSheet apply | `filter` | `query: null`, `result_count`, `filters` |
+
+**Settled, never per keystroke.** A typed query is logged once when its results have arrived AND the text has been unchanged for ≥ 1.5 s — short-circuited by the keyboard's search key or the first result tap. A strict prefix of a longer query never settles, because every keystroke restarts the timer. Dedupe key is `(query, category)`.
+
+Two consequences worth knowing:
+
+- `emitSearch` also calls `recordSearchTimestamp`, which marks the session "recently searched" so the next positive interaction inside the 60 s window gets the search-attribution taste boost (IN-PX-43). Preset taps and filter applies now trigger that boost on native, as they already did on web.
+- The taste recompute reads these rows for `created_at` + `session_id` only — never the query text. That is what lets migration 079 null the text without breaking attribution.
+
+See [privacy-and-gdpr](../product/privacy-and-gdpr.md) for the 30-day retention on the text.
 
 ## Interpretation matrix (canonical)
 

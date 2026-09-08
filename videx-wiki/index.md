@@ -196,3 +196,5 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Reference](wiki/sources/reference.md) — Glossary, phase timeline, risks, eval harness, version log.
 - [USP and Strategy Summary](wiki/sources/usp-and-strategy-summary.md) — Top-level design-review framing.
 - [raw/ README](wiki/sources/raw-readme.md) — Drop-zone convention.
+- [Brief: quick filters + search presets (2026-09-08)](wiki/sources/quick-filters-and-search-presets-brief-2026-09-08.md) — Joe's problem statement; chips exist but do nothing; two of its claims proved wrong.
+- [Recommendation: quick filters + search presets (2026-09-08)](wiki/sources/quick-filters-and-search-presets-recommendation-2026-09-08.md) — All decisions closed; Session 1 (search-term logging) shipped, Sessions 2–4 not started.
