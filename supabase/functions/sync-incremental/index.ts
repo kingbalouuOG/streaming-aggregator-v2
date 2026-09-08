@@ -335,6 +335,29 @@ const SA_REQUEST_BUDGET = 500;
 // costs nothing on ordinary days.
 const MAX_CHAIN_DEPTH = 20;
 
+// ── CATCH-UP overrides ───────────────────────────────────
+// SA_REQUEST_BUDGET and MAX_CHAIN_DEPTH are sized for a NORMAL daily
+// window (~36h, ~213 requests, ~9 slices). They exist to bound a runaway,
+// and they do their job — which is precisely why they also block a
+// deliberate backlog recovery: catching up an 11-day gap needs roughly
+// 1,400 requests across ~51 slices, and would otherwise stop at 500/20.
+//
+// Rather than weaken the defaults for every run, both are overridable per
+// invocation:
+//
+//   select enqueue_function_call('sync-incremental',
+//     '{"since": 1787897520, "budget": 2500, "maxDepth": 70}'::jsonb);
+//
+// A normal run sends neither and is unchanged. An override is visible in
+// chain_state afterwards, so a run that spent more than usual says why.
+function resolveBudget(state: SyncChainState): number {
+  return state.budget && state.budget > 0 ? state.budget : SA_REQUEST_BUDGET;
+}
+
+function resolveMaxDepth(state: SyncChainState): number {
+  return state.max_depth && state.max_depth > 0 ? state.max_depth : MAX_CHAIN_DEPTH;
+}
+
 // Pause before handing off, giving the outgoing worker a moment to wind
 // down before its successor starts.
 const HANDOFF_DELAY_MS = 3_000;
@@ -358,6 +381,10 @@ interface SyncChainState {
   // (which the handler writes) because it must also STOP the chain rather
   // than hand off — a handoff would resume and immediately re-trip.
   sa_budget_stop?: string | null;
+  // Per-run overrides of the two safety rails, carried across slices.
+  // Absent on every normal run, which then uses the module defaults.
+  budget?: number;
+  max_depth?: number;
   // (change_type, service) pairs this chain failed to FETCH. Distinct from
   // the error buckets, which also hold per-title processing errors that do
   // not mean data was missed. Only a fetch failure means a page was never
@@ -507,12 +534,13 @@ async function runSyncSlice(
       while (hasMore) {
         // Chain total: what earlier slices already spent, plus this one.
         const saSpent = stats.saRequests + saRequestsThisSlice;
-        if (saSpent >= SA_REQUEST_BUDGET) {
+        const budget = resolveBudget(state);
+        if (saSpent >= budget) {
           state.ti = ti;
           state.si = si;
           state.cursor = cursor ?? null;
           state.sa_budget_stop =
-            `SA request budget reached (${saSpent}/${SA_REQUEST_BUDGET}) at [${ti}/${si}] ` +
+            `SA request budget reached (${saSpent}/${budget}) at [${ti}/${si}] ` +
             `(${changeType}/${service}) — deferring the rest of the window`;
           await flushHistory();
           console.warn(state.sa_budget_stop);
@@ -766,6 +794,9 @@ interface ChainBody {
   depth?: number;
   runId?: string;
   since?: number;
+  /** One-off overrides for a deliberate catch-up. See CATCH-UP below. */
+  budget?: number;
+  maxDepth?: number;
 }
 
 function emptySyncChainState(since: number): SyncChainState {
@@ -813,11 +844,15 @@ Deno.serve(async (req) => {
   let depth = 0;
   let runId: string | undefined;
   let sinceOverride: number | undefined;
+  let budgetOverride: number | undefined;
+  let maxDepthOverride: number | undefined;
   try {
     const body = (await req.json()) as ChainBody;
     if (typeof body?.depth === 'number') depth = body.depth;
     if (typeof body?.runId === 'string') runId = body.runId;
     if (typeof body?.since === 'number') sinceOverride = body.since;
+    if (typeof body?.budget === 'number') budgetOverride = body.budget;
+    if (typeof body?.maxDepth === 'number') maxDepthOverride = body.maxDepth;
   } catch {
     // No body, or not JSON — treat as a fresh chain.
   }
@@ -846,6 +881,21 @@ Deno.serve(async (req) => {
     }
 
     const since = sinceOverride || (await getLastSyncTimestamp());
+
+    // Overrides are stamped onto the chain state at chain start, so every
+    // later slice honours them without the caller having to repeat them on
+    // each handoff — and so the finished run records what it was allowed
+    // to spend, not just what it spent.
+    const initialState = emptySyncChainState(since);
+    if (budgetOverride && budgetOverride > 0) initialState.budget = budgetOverride;
+    if (maxDepthOverride && maxDepthOverride > 0) initialState.max_depth = maxDepthOverride;
+    if (initialState.budget || initialState.max_depth) {
+      console.log(
+        `catch-up overrides: budget=${resolveBudget(initialState)} ` +
+        `maxDepth=${resolveMaxDepth(initialState)} since=${new Date(since * 1000).toISOString()}`,
+      );
+    }
+
     const { data: syncLog, error: logError } = await supabase
       .from('sync_log')
       .insert({
@@ -853,7 +903,7 @@ Deno.serve(async (req) => {
         source: 'sa_api',
         status: 'running',
         heartbeat_at: new Date().toISOString(),
-        chain_state: emptySyncChainState(since),
+        chain_state: initialState,
       })
       .select('id')
       .single();
@@ -953,8 +1003,8 @@ Deno.serve(async (req) => {
   // Before the depth check: handing off after a budget trip would resume
   // and re-trip immediately, burning an invocation to learn nothing.
   else if (state.sa_budget_stop) stop = state.sa_budget_stop;
-  else if (depth + 1 >= MAX_CHAIN_DEPTH) {
-    stop = `chain depth cap (${MAX_CHAIN_DEPTH}) reached before the window was consumed`;
+  else if (depth + 1 >= resolveMaxDepth(state)) {
+    stop = `chain depth cap (${resolveMaxDepth(state)}) reached before the window was consumed`;
   }
 
   if (stop) {
