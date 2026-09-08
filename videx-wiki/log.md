@@ -900,3 +900,27 @@ Joe reported the For You hero stuck on one title **for months**. Not tuning — 
 - The `role` metadata also starts closing the row-identity gap that forced the C3 verification through a time-ordering proxy.
 - Caught in review of my own draft: the impression `useEffect` sat below the loading/error early returns, violating the Rules of Hooks.
 - **Home's hero has the identical blind spot** — same `MagazineHero`, still logs nothing. Not fixed; the ask was For You.
+
+## [2026-09-08] ingest | SA quota incident — 11 days blind, four green ticks, and the move off RapidAPI
+PRs #121-#129, migration 078. New risks **R-031** to **R-034**.
+
+**What happened.** A2 unfroze the catalogue, which raised availability changes from ~600/day to ~4,200/day — and with them the API request volume. On 29 Aug the RapidAPI quota ran out. Every subsequent run hit 429s, and because the per-page catch swallows fetch errors to keep one bad service from aborting the other seven, **all 32 (change_type, service) loops "completed", the run was marked `completed`, and the window advanced past data nobody had fetched**. Four consecutive days of green ticks over ~96 hours of skipped changes, at 128 wasted requests a day. See R-031 — the generalisable half is that *"the loop finished" is not "the work was done"*.
+
+**Instrument before tuning.** The brief's step 1 was to record SA requests per run and take a baseline BEFORE optimising (#121, migration 078). That ordering paid for itself twice: it revealed the 128-requests-for-nothing pattern, and it later let the catch-up be sized against a measured 213-requests-per-36h rather than a guess.
+
+**Two of the brief's five steps were wrong, and the data said so.**
+- *Page size* — no such parameter exists. `/changes` is fixed at 25 per page. The docs list every accepted parameter and none controls result count. Dead end.
+- *Lookback overlap* — the premise ("36h on a 24h cadence, so a third is re-fetched") misread the code: `MAX_SINCE_LOOKBACK_SECONDS` is a floor applied via `Math.max(lastCompleted, now-36h)`, so it never extends a healthy window. Measured across real runs: overlap **0.00h** when runs succeed; the 36h only engages after a failure, which is catch-up working. Trimming it would have saved nothing and dropped data after a failure.
+- What the docs DID surface: `catalogs` takes a comma-separated list (up to 32), so per-service calls could be batched. Estimated from `streaming_history`: only **~13%**. Real, modest, not the answer.
+
+**The answer was the plan, not the code.** Measured usage ~213 requests/day ≈ 6,400/month against a free tier of 1,000. Pre-A2's ~30/day fitted only because the pipeline was broken. And the API has **no pay-as-you-go** — quota is a hard wall — so there was nothing to optimise toward. Moving to the vendor direct (#126) costs **$49/mo vs ~$69 on RapidAPI for identical 25,000 requests**; the vendor names the markup explicitly. See R-032.
+
+**Verified with one request, not two hundred.** Before switching, a single live `/changes` call confirmed the direct channel's envelope matches the parser (`changes[]`, `hasMore`, `showId`, `showType`, `service.id`, `streamingOptionType`) — and revealed it returns **no `x-ratelimit-*` headers**, so the quota fast-path added in #122 cannot fire there and the exhausted-retries branch is the real guard. Same discipline settled the recovery question: an over-old `from` returns `HTTP 400 parameter "from" cannot be more than 31 days in the past`, which proved the 11-day gap was recoverable after an earlier probe had wrongly suggested otherwise.
+
+**The safety rails correctly blocked the recovery.** `SA_REQUEST_BUDGET` (500) and `MAX_CHAIN_DEPTH` (20) are sized for a normal daily window. A backlog recovery is not one. Rather than weaken the defaults for every scheduled run, both became per-invocation overrides stamped onto `chain_state` (#127), so a run that spends more than usual records what it was *allowed* to spend.
+
+**Outcome.** Catch-up: `since` = 28 Aug 06:12 → **completed**, 27 slices, **594 requests** (I had estimated ~1,400 — over by 2.3x, because a longer window fills pages more completely rather than adding partial ones), **14,431 changes** recovered — 3,605 added, 8,661 updated, **2,165 removed**. That last number matters most: titles that had left services while we were blind and were still being shown as available.
+
+- **R-033**: the 4 errors on the first good run were a real data-loss bug — delete-then-insert with no transaction, plus `String(err)` on a `PostgrestError` yielding `[object Object]`. Fixed in #128 and proven in production within the hour: the catch-up hit 20 link-less changes and **preserved all 20 rows**, with legible messages. The delete+insert is still not transactional.
+- **R-034**: `no-failed-runs` counted raw failures in a 25h window, so it stayed red all day over a failure two later runs had already recovered from. Fixed in #129. Its sibling `catalogue-growing` was left alone — it was a true positive (newest title 54.5h old because we were blind), and 2,497 titles are queued for the next backfill.
+- Steady state now: ~213 requests/day ≈ **26% of the 25,000/month** Starter plan.
