@@ -1,8 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { getFlag } from '@/lib/featureFlags';
 import { subscribe as appStateSubscribe } from '@/lib/lifecycle/appState';
 import { reconcileSettled, type SettledQuery } from '@/lib/search/settledQuery';
 import { emitSearch, type SearchMode } from '@/lib/storage/interactions';
@@ -21,12 +19,13 @@ import { emitSearch, type SearchMode } from '@/lib/storage/interactions';
 // each. Never one row per keystroke — and, since the first real capture,
 // never one row per pause either (see `settledQuery.ts`).
 //
-// SHIPS DARK. Every emit here is gated on the per-user `search_logging`
-// flag, default false. The policy text describing search capture is live
-// from the same build, but no row is written for a user until Joe turns
-// the flag on for them, having told them first. That per-user consent is
-// the interim stand-in for the policy's section 10 in-app change notice,
-// which does not exist yet (IN-SL-003, deferred to H1).
+// SHIPS DARK — but the gate is no longer here. `emitSearch` itself checks
+// the per-user `search_logging` flag (default false), so no caller can
+// bypass it by forgetting. This module therefore buffers and reconciles
+// unconditionally and lets the emitter decide; the wasted work for a
+// user with logging off is a couple of timers and no network at all.
+// See `src/lib/storage/interactions.ts` for the reasoning and the
+// consent position (IN-SL-003).
 
 /** How long the typed text must hold still before a query counts as settled. */
 const SETTLE_MS = 1500;
@@ -44,25 +43,6 @@ const FLUSH_IDLE_MS = 8000;
 
 /** Below this the search itself does not run (see `useSearch`). */
 const MIN_QUERY_LENGTH = 2;
-
-/**
- * Per-user gate for everything in this module, cached the way
- * `useSemanticFlag` caches `search_semantic`: one round-trip held for the
- * session. `getFlag` memoises per (user, flag), so the call sites below
- * share a single read.
- *
- * Fails CLOSED. A logged-out user, an unset flag and a failed query all
- * resolve to `false`, and `data` is `undefined` until the read lands --
- * every one of those means "do not log", which is the only safe default
- * for a capture the user has not been told about yet.
- */
-export function useSearchLoggingFlag() {
-  return useQuery({
-    queryKey: ['native', 'flag', 'search_logging'],
-    queryFn: () => getFlag('search_logging', false),
-    staleTime: 10 * 60 * 1000,
-  });
-}
 
 /**
  * Log a typed query — once per search, not once per pause.
@@ -88,7 +68,6 @@ export function useTypedSearchLog(args: {
 }): () => void {
   const { query, resultsFor, category, results, isFetching } = args;
   const q = query.trim();
-  const { data: loggingOn } = useSearchLoggingFlag();
 
   // `force` marks a terminal signal: write immediately instead of holding.
   const [settled, setSettled] = useState<{ text: string; force: boolean } | null>(null);
@@ -132,9 +111,6 @@ export function useTypedSearchLog(args: {
     // what stops a submitted query being logged as its own prefix.
     if (settled.text !== resultsFor.trim()) return;
     if (isFetching || !results) return;
-    // Checked BEFORE anything is held or written, so a flag turned on
-    // mid-session can still log a query that settled while it was off.
-    if (!loggingOn) return;
 
     const candidate: SettledQuery = {
       query: settled.text,
@@ -151,7 +127,7 @@ export function useTypedSearchLog(args: {
     } else {
       setPending(next.pending);
     }
-  }, [settled, q, resultsFor, category, results, isFetching, loggingOn, write]);
+  }, [settled, q, resultsFor, category, results, isFetching, write]);
 
   // Idle flush — a search abandoned in place still gets recorded.
   useEffect(() => {
@@ -240,11 +216,9 @@ export function useSearchIntentLog(
   loading: boolean,
 ): void {
   const loggedNonceRef = useRef(0);
-  const { data: loggingOn } = useSearchLoggingFlag();
 
   useEffect(() => {
     if (!intent || loading || !results) return;
-    if (!loggingOn) return;
     if (loggedNonceRef.current === intent.nonce) return;
     loggedNonceRef.current = intent.nonce;
 
@@ -252,5 +226,5 @@ export function useSearchIntentLog(
       mode: intent.mode,
       metadata: { query: intent.query, ...intent.metadata },
     });
-  }, [intent, results, loading, loggingOn]);
+  }, [intent, results, loading]);
 }
