@@ -13,6 +13,7 @@ import { invalidateDismissedIdsCache } from './recommendations';
 import { getCurrentSessionId } from '../instrumentation/sessionId';
 import { getCardClickContext } from '../instrumentation/clickContext';
 import { isContentIntentSearch, recordSearchTimestamp } from '../taste-v2/searchAttribution';
+import { getFlag } from '../featureFlags';
 
 // — Event types ——————————————————————————————————————————————————
 
@@ -185,6 +186,31 @@ export type SearchMode = 'lookup' | 'filter' | 'semantic';
  * Emit a search event. `session_id` + `mode` were added in Phase Search
  * V2 — they're optional on the wire (column allows NULL) so older
  * captures don't break, but every new emission populates them.
+ *
+ * GATED on the per-user `search_logging` flag (default false). The gate
+ * lives HERE, not at the call sites, because it is a safety property:
+ * search text is the only free text Videx stores, and "no row unless the
+ * user has been told" must not depend on every future caller remembering
+ * to ask. It first shipped in the native hooks, and Session 2's
+ * quick-filter chips would have called this directly and logged for
+ * everyone — hence the move.
+ *
+ * Consequences worth knowing:
+ *
+ * - The three web call sites (`useSearch.ts`, `BrowsePage.tsx`) are now
+ *   gated too, so the web app logs nothing unless a user's flag is on.
+ *   That is intentional: the consent story cannot have a hole in it just
+ *   because a surface predates the flag.
+ * - The attribution boost is gated with it. Recording the timestamp while
+ *   writing no row would make the incremental path boost a search the
+ *   nightly recompute cannot see, and the recompute — the source of truth
+ *   — would then take the boost away. Flag off means the search is
+ *   invisible to the whole system, consistently.
+ * - `getCurrentSessionId()` is captured BEFORE the await so the row
+ *   carries the session the search happened in, not whatever it has
+ *   rolled to by the time the flag read resolves.
+ *
+ * Still fire-and-forget: `getFlag` fails closed and the emit never throws.
  */
 export function emitSearch(
   query: string,
@@ -194,24 +220,29 @@ export function emitSearch(
   const { mode = 'lookup', metadata = {} } = options;
   const sessionId = getCurrentSessionId();
   const row = { query, result_count: resultCount, mode, ...metadata };
-  // Mark the session as "recently searched" so the next content
-  // interaction within SEARCH_ATTRIBUTION_WINDOW_SECONDS gets a taste-
-  // vector boost. The incremental path reads from this cache; the
-  // 24h recompute reads search rows from the DB instead.
-  //
-  // Only rows that express content intent qualify: a bare filter apply
-  // or a quick-filter chip is a re-slice of the current page, not a
-  // statement of what the user wants. isContentIntentSearch is the
-  // single definition, shared with the batch path so the two cannot
-  // drift apart.
-  if (isContentIntentSearch(row)) {
-    recordSearchTimestamp(sessionId);
-  }
-  emitInteraction({
-    event_type: 'search',
-    session_id: sessionId,
-    metadata: row,
-  }).catch(() => {});
+
+  void (async () => {
+    if (!(await getFlag('search_logging', false))) return;
+
+    // Mark the session as "recently searched" so the next content
+    // interaction within SEARCH_ATTRIBUTION_WINDOW_SECONDS gets a taste-
+    // vector boost. The incremental path reads from this cache; the
+    // 24h recompute reads search rows from the DB instead.
+    //
+    // Only rows that express content intent qualify: a bare filter apply
+    // or a quick-filter chip is a re-slice of the current page, not a
+    // statement of what the user wants. isContentIntentSearch is the
+    // single definition, shared with the batch path so the two cannot
+    // drift apart.
+    if (isContentIntentSearch(row)) {
+      recordSearchTimestamp(sessionId);
+    }
+    await emitInteraction({
+      event_type: 'search',
+      session_id: sessionId,
+      metadata: row,
+    });
+  })().catch(() => {});
 }
 
 /**
