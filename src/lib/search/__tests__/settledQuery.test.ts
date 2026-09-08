@@ -34,7 +34,22 @@ describe("collapsesInto", () => {
 
   it("does NOT collapse two unrelated searches", () => {
     expect(collapsesInto("severance", "the bear")).toBe(false);
-    expect(collapsesInto("severance", "severed")).toBe(false);
+    expect(collapsesInto("the bear", "lord of the")).toBe(false);
+  });
+
+  it("collapses a typo corrected mid-word, where neither is a prefix", () => {
+    // The second real capture. `severenc` and `severance` diverge at
+    // character six, so the prefix test alone called them unrelated and
+    // wrote the abandoned typo as a row.
+    expect("severance".startsWith("severenc")).toBe(false);
+    expect("severenc".startsWith("severance")).toBe(false);
+    expect(collapsesInto("severenc", "severance")).toBe(true);
+  });
+
+  it("does not fuzzy-match short queries, where two edits is the word", () => {
+    expect(collapsesInto("cars", "bars")).toBe(true); // distance 1, still one word being fixed
+    expect(collapsesInto("cat", "dog")).toBe(false); // under the length floor
+    expect(collapsesInto("severance", "severed")).toBe(false); // distance 3
   });
 
   it("ignores case and surrounding space, as the daily aggregate does", () => {
@@ -86,6 +101,14 @@ describe("reconcileSettled", () => {
     const finalRows: SettledQuery[] = pending ? [...written, pending] : written;
     const zeroRate = finalRows.filter((r) => r.resultCount === 0).length / finalRows.length;
     expect(zeroRate).toBe(0);
+  });
+
+  it("collapses the second capture — a mid-word correction — to one row", () => {
+    // Verbatim from production: severenc (0) then severance (13), which
+    // the prefix-only rule split into two rows and a fake 50% zero rate.
+    const r = reconcileSettled(q("severenc", 0), q("severance", 13));
+    expect(r.emit).toBe(null);
+    expect(r.pending).toEqual(q("severance", 13));
   });
 
   it("still separates two genuine searches in one session", () => {

@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getFlag } from '@/lib/featureFlags';
+import { subscribe as appStateSubscribe } from '@/lib/lifecycle/appState';
 import { reconcileSettled, type SettledQuery } from '@/lib/search/settledQuery';
 import { emitSearch, type SearchMode } from '@/lib/storage/interactions';
 
@@ -32,11 +34,11 @@ const SETTLE_MS = 1500;
 /**
  * How long a settled query is held before being written anyway.
  *
- * Generous on purpose. Every *terminal* signal flushes the buffer already
- * (submit, result tap, cleared box, leaving the screen), so this only
- * catches a search abandoned in place. Making it short would reintroduce
- * the bug it sits alongside: a user who pauses, then resumes typing, would
- * have their prefix written before the real query ever arrived.
+ * Generous on purpose. Every *terminal* signal flushes the buffer already,
+ * so this only catches a search abandoned with the app still open and
+ * Browse still on screen. Making it short would reintroduce the bug it
+ * sits alongside: a user who pauses, then resumes typing, would have their
+ * prefix written before the real query ever arrived.
  */
 const FLUSH_IDLE_MS = 8000;
 
@@ -168,7 +170,40 @@ export function useTypedSearchLog(args: {
     setPending(null);
   }, [q, pending, write]);
 
-  // Leaving the screen.
+  // — Terminal signals that a held query would otherwise die with —————
+  // Buffering trades fabricated rows for lost ones, and the first test of
+  // it lost two real searches ("The Bear", "Lord of The..."): both were
+  // held, and neither a following query, a tap, a clear nor the 8 s idle
+  // ever came. Holding is only safe if every way of leaving writes first.
+  // `write` dedupes on (query, category), so overlapping flushes are free.
+
+  // App backgrounded — same terminal signal, and the same subscriber, the
+  // impression batcher already uses for its own buffer.
+  useEffect(
+    () =>
+      appStateSubscribe((isActive) => {
+        if (isActive || !pendingRef.current) return;
+        write(pendingRef.current);
+        setPending(null);
+      }),
+    [write],
+  );
+
+  // Navigating away from Browse — switching tabs does not unmount the
+  // screen, so the unmount cleanup below never fires for the commonest
+  // way of leaving a search behind.
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        if (pendingRef.current) write(pendingRef.current);
+      },
+      [write],
+    ),
+  );
+
+  // Unmount. Last resort; a hard kill with no background event still
+  // loses the held query, which is an accepted under-count — better than
+  // writing a query the user was still editing.
   useEffect(
     () => () => {
       if (pendingRef.current) write(pendingRef.current);

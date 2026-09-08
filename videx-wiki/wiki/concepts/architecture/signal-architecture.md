@@ -54,7 +54,9 @@ Two signal categories: **explicit** (user-initiated, intentional) and **silent**
 
 **Settled, never per keystroke — and never per pause.** A typed query settles when its results have arrived AND the text has been unchanged for ≥ 1.5 s, short-circuited by the keyboard's search key or the first result tap.
 
-A settled query is then **held, not written**. The next settled query decides its fate: if either is a prefix of the other (compared case-insensitively, **in both directions**), the newer supersedes it and the older is never written. The held query is written when an unrelated query settles, on a terminal signal (submit, result tap, cleared box, leaving the screen), or after an 8 s idle. `reconcileSettled` in `src/lib/search/settledQuery.ts` is the rule; dedupe key is `(query, category)`.
+A settled query is then **held, not written**. The next settled query decides its fate: if the two are the same search still being typed or fixed, the newer supersedes it and the older is never written. Two tests, both earned by a real capture — **prefix in either direction** (typing and backspacing), and **edit distance ≤ 2** on queries of 4+ characters (a correction mid-word, where neither is a prefix of the other).
+
+The held query is written when an unrelated query settles, on a terminal signal, or after an 8 s idle. The terminal signals are: submit, first result tap, cleared box, **app backgrounded** (via the same `appState.subscribe` the impression batcher uses), **Browse losing focus** (`useFocusEffect` — switching tabs does not unmount the screen), and unmount. `reconcileSettled` in `src/lib/search/settledQuery.ts` is the rule; the write dedupes on `(query, category)`, so overlapping flushes are free.
 
 > ⚠ The original implementation assumed the settle timer made §5.3's prefix rule redundant — "a prefix can only settle if the user stopped on it". **The first real capture disproved that** (2026-09-08, one search for "severance"):
 >
@@ -66,6 +68,10 @@ A settled query is then **held, not written**. The next settled query decides it
 > | 17:58:43 | `severance` | 13 |
 >
 > Four rows ~2.8 s apart for one search: people type in bursts and read between them, and a mid-word pause is indistinguishable from a finished query by elapsed time alone. The cost is not just noise — §6 treats zero-result rate as the retrieval-bug tripwire at ~10%, and that session reports **25%** off an ordinary typo, plus `sev`/`sever` counted as intended terms in `search_terms_daily`. The bidirectional test matters because the correction backspaced: a forward-only prefix check still emits three of the four.
+>
+> ⚠ The **second** capture then broke the prefix rule itself: `severenc` → `severance` diverge at character six, so neither is a prefix of the other and the abandoned typo was written as a real row anyway. Hence the edit-distance test. The first capture only collapsed because the user happened to pause on the stem `sever` long enough for it to settle — the prefix chain had no hole in it by luck.
+>
+> ⚠ That same round **lost two real searches** ("The Bear", "Lord of The…"): both were held, and no following query, tap, clear or 8 s idle ever came. Buffering trades fabricated rows for lost ones, and holding is only safe if every way of leaving writes first — which is why background and blur are now terminal signals. A hard kill with no background event still loses the held query: an accepted under-count, and the safer failure of the two.
 
 ### Not every `search` row earns the attribution boost
 

@@ -33,14 +33,56 @@ export interface SettledQuery {
   resultCount: number;
 }
 
+/** Shortest query the fuzzy test will touch — below this, edits are the word. */
+const MIN_FUZZY_LENGTH = 4;
+
+/** Edits tolerated before two queries count as different searches. */
+const MAX_TYPO_DISTANCE = 2;
+
+/** Levenshtein distance, answering only "is it within `max`?". */
+function withinEditDistance(a: string, b: string, max: number): boolean {
+  if (Math.abs(a.length - b.length) > max) return false;
+  // Full DP over two rows. Queries are short; clarity beats cleverness.
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j++) {
+      current[j] = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    // Every path through the remaining rows only adds cost, so once a whole
+    // row exceeds the budget the answer is settled.
+    if (Math.min(...current) > max) return false;
+    previous = current;
+  }
+  return previous[b.length] <= max;
+}
+
 /**
- * Are these two settled queries the same search, still being typed?
+ * Are these two settled queries the same search, still being typed or fixed?
  *
- * True when either is a prefix of the other. The check is deliberately
- * **bidirectional**: a forward-only test handles typing (`sev` →
- * `severance`) but not correcting (`severence` → `sever`), and the real
- * capture above did both. Equal strings collapse too — the same query
- * settling twice is one search.
+ * Two tests, because real captures broke each one on its own:
+ *
+ * 1. **Prefix, in both directions.** Handles typing (`sev` → `severance`)
+ *    and backspacing (`severence` → `sever`). Forward-only misses the
+ *    second, which the 2026-09-08 capture did.
+ * 2. **Edit distance ≤ {@link MAX_TYPO_DISTANCE}.** Handles a correction
+ *    that changes a character mid-word, where neither string is a prefix
+ *    of the other. The second capture was exactly this: `severenc` →
+ *    `severance` diverges at character six, so the prefix test called them
+ *    unrelated searches and wrote the abandoned typo as a real row.
+ *
+ * The {@link MIN_FUZZY_LENGTH} floor keeps the fuzzy test off short
+ * queries, where two edits is most of the word (`cars` / `bars` are
+ * different searches; `severenc` / `severance` are one).
+ *
+ * This can still merge two genuinely different searches that happen to
+ * look alike (`the bear` / `the bees`). That is the intended trade: a
+ * merge costs one data point, while a false split fabricates a
+ * zero-result row and corrupts the retrieval-bug tripwire (§6).
  *
  * Compared case-insensitively, matching how `search_terms_daily`
  * normalises terms, so `Sev` → `severance` collapses like `sev` would.
@@ -48,7 +90,9 @@ export interface SettledQuery {
 export function collapsesInto(previous: string, next: string): boolean {
   const a = previous.trim().toLowerCase();
   const b = next.trim().toLowerCase();
-  return a.startsWith(b) || b.startsWith(a);
+  if (a.startsWith(b) || b.startsWith(a)) return true;
+  if (a.length < MIN_FUZZY_LENGTH || b.length < MIN_FUZZY_LENGTH) return false;
+  return withinEditDistance(a, b, MAX_TYPO_DISTANCE);
 }
 
 /**
