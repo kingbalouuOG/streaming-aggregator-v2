@@ -112,12 +112,15 @@ const UK_PROVIDER_STRING = UK_PROVIDER_IDS.join('|'); // OR logic
 
 // ── SA API helpers ───────────────────────────────────────
 
-const SA_HOST = 'streaming-availability.p.rapidapi.com';
-const SA_DELAY = 120; // ~8 req/s (Pro allows 100/s but be conservative)
+// Movie of the Night direct — see the note in
+// supabase/functions/sync-incremental/index.ts. Both callers must move
+// together: they share the SA_API_KEY secret, and a key issued by one
+// channel is rejected by the other.
+const SA_BASE_URL = 'https://api.movieofthenight.com/v4';
+const SA_DELAY = 120; // ~8 req/s — conservative regardless of tier
 
 const SA_HEADERS = {
-  'X-RapidAPI-Key': SA_API_KEY,
-  'X-RapidAPI-Host': SA_HOST,
+  'X-API-Key': SA_API_KEY,
 };
 
 // SA API service slug → Videx ServiceId
@@ -135,7 +138,7 @@ const SA_TO_VIDEX: Record<string, string> = {
 };
 
 async function saApiFetch(path: string): Promise<any> {
-  const url = `https://${SA_HOST}${path}`;
+  const url = `${SA_BASE_URL}${path}`;
   const res = await rateLimitedFetch(url, { headers: SA_HEADERS }, SA_DELAY);
   if (!res.ok) {
     if (res.status === 404) return null; // Title not found

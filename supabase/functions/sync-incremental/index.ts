@@ -34,7 +34,18 @@ interface HistoryEvent {
 // ── Config ───────────────────────────────────────────────
 
 const SA_API_KEY = Deno.env.get('SA_API_KEY')!;
-const SA_API_HOST = 'streaming-availability.p.rapidapi.com';
+
+// Movie of the Night DIRECT, not the RapidAPI marketplace proxy.
+//
+// Same API, same v4 endpoints, same quota tiers — but RapidAPI resells it
+// with a markup the vendor names explicitly ("due to extra fees applied by
+// RapidAPI, our prices there are accordingly higher"): $49/mo direct vs
+// ~$69/mo there for the identical 25,000 requests.
+//
+// Auth differs: one X-API-Key header instead of the RapidAPI key/host pair.
+// SA_API_KEY keeps its name so the existing Supabase secret and .env entry
+// are reused — no rename, and no stale second secret to go looking for.
+const SA_BASE_URL = 'https://api.movieofthenight.com/v4';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -42,8 +53,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const SA_HEADERS = {
-  'X-RapidAPI-Key': SA_API_KEY,
-  'X-RapidAPI-Host': SA_API_HOST,
+  'X-API-Key': SA_API_KEY,
 };
 
 // SA API service slug → Videx ServiceId
@@ -170,7 +180,7 @@ async function heartbeat(syncId: string | undefined, force = false): Promise<voi
 }
 
 /**
- * RapidAPI has refused because the plan's quota is spent, not because we
+ * The SA API has refused because the plan's quota is spent, not because we
  * are briefly too fast.
  *
  * The distinction matters at a hard spend cap. A short-term rate limit
@@ -187,9 +197,9 @@ class QuotaError extends Error {
   }
 }
 
-// Billable SA (RapidAPI) requests made by THIS invocation.
+// Billable SA API requests made by THIS invocation.
 //
-// Counted here rather than in saApiFetch because RapidAPI bills every
+// Counted here rather than in saApiFetch because the vendor bills every
 // request that leaves, including the retries a 429 or 5xx provokes — so a
 // count of logical calls would understate spend exactly when spend spikes.
 // fetchWithRetry has one caller (saApiFetch), so this counts SA and
@@ -216,19 +226,20 @@ async function fetchWithRetry(
       // ⚠ DO NOT rely on this header alone. It was the only quota test
       // here, and on 29-30 Aug it never matched: every one of the 32
       // change-type/service pairs took the generic retry path instead,
-      // spending 128 requests a day to be refused. RapidAPI evidently
-      // does not set it on every 429. The exhausted-retries branch below
-      // is the real guard; this is only an optimisation.
+      // spending 128 requests a day to be refused. That was measured
+      // against RapidAPI; whether the direct channel sets the header is
+      // unverified. Either way the exhausted-retries branch below is the
+      // real guard — this is only a cheaper exit when it happens to fire.
       if (res.status === 429 && res.headers.get('x-ratelimit-requests-remaining') === '0') {
         const limit = res.headers.get('x-ratelimit-requests-limit') ?? 'unknown';
         throw new QuotaError(
-          `RapidAPI quota exhausted (limit ${limit}, remaining 0) — aborting without retry`,
+          `SA API quota exhausted (limit ${limit}, remaining 0) — aborting without retry`,
         );
       }
       // Retry on server errors and transient rate limits
       if (res.status >= 500 || res.status === 429) {
         if (attempt < maxRetries) {
-          // Honour Retry-After when present (RapidAPI returns it on 429).
+          // Honour Retry-After when present (returned on 429).
           // Falls back to exponential backoff for 5xx without a header.
           const retryAfter = res.headers.get('retry-after');
           const headerMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 0;
@@ -245,7 +256,7 @@ async function fetchWithRetry(
       // per pair. Raising it as QuotaError is what makes that happen.
       if (res.status === 429) {
         throw new QuotaError(
-          `RapidAPI still returning 429 after ${maxRetries} retries — treating as quota exhausted: ${url}`,
+          `SA API still returning 429 after ${maxRetries} retries — treating as quota exhausted: ${url}`,
         );
       }
       throw new Error(`HTTP ${res.status}: ${url}`);
@@ -264,7 +275,7 @@ async function fetchWithRetry(
 }
 
 async function saApiFetch(path: string): Promise<any> {
-  const url = `https://${SA_API_HOST}${path}`;
+  const url = `${SA_BASE_URL}${path}`;
   const res = await fetchWithRetry(url, { headers: SA_HEADERS });
   if (res.status === 404) return null;
   return res.json();
@@ -291,7 +302,7 @@ const MAX_SINCE_LOOKBACK_SECONDS = 36 * 3600;
 const SLICE_BUDGET_MS = 75_000;
 
 // ── SA request budget (A2 cost control) ──────────────────
-// A hard ceiling on billable RapidAPI requests per CHAIN, so a pathological
+// A hard ceiling on billable SA API requests per CHAIN, so a pathological
 // window cannot spend without bound. Sized above real need, not at it:
 //
 //   healthy day        ~145 requests (3.5k changes at SA's fixed 25/page)
@@ -679,7 +690,10 @@ async function runSyncSlice(
           hasMore = result.hasMore || false;
           cursor = result.nextCursor;
           await heartbeat(syncId);
-          // Pace requests below RapidAPI's per-second cap on the BASIC tier.
+          // Conservative pacing, well under any tier's per-second cap.
+          // Not re-tuned for the direct channel: 150 requests at ~1.1s is
+          // ~3 minutes, comfortably inside the slice budget, so there is
+          // nothing to buy by going faster.
           await delay(1100);
         } catch (err: any) {
           // Anything else here is per-(type,service) and the loop moves on.
