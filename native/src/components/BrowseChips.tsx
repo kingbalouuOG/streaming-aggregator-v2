@@ -30,8 +30,12 @@ interface BrowseChipsProps {
 }
 
 export function BrowseChips({ active = 'All', onSelect, visible }: BrowseChipsProps) {
+  // The ACTIVE chip always renders, even when the payload no longer clears
+  // the bar. A background refetch can drop a category below the threshold
+  // while it is selected, and a chip disappearing out from under the filter
+  // it is applying leaves the page filtered by an invisible control.
   const categories = QUICK_FILTER_CATEGORIES.filter(
-    (cat) => !visible || cat === 'All' || visible.includes(cat),
+    (cat) => !visible || cat === 'All' || cat === active || visible.includes(cat),
   );
 
   // A strip offering only "All" offers nothing — there is no second state

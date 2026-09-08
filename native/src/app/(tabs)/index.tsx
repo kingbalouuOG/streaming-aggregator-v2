@@ -248,7 +248,8 @@ export default function HomeScreen() {
   const browseAll = useCallback(() => {
     router.push({
       pathname: '/browse',
-      params: { contentType: categoryToContentType(category) },
+      // `seed` makes Browse apply this once per tap — see browse.tsx.
+      params: { contentType: categoryToContentType(category), seed: String(Date.now()) },
     });
   }, [router, category]);
 
@@ -320,7 +321,9 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#e85d25" />
         }
         contentContainerClassName="pb-8">
-        {hero ? (
+        {/* §1.2 asks for ONE card when everything hides — a surviving hero
+            above "Not many films this week" would contradict it. */}
+        {hero && !isEmpty ? (
           <Reveal index={0}>
             <MagazineHero
               item={hero}

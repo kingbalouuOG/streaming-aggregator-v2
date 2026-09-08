@@ -239,7 +239,8 @@ export default function ForYouScreen() {
   const browseAll = useCallback(() => {
     router.push({
       pathname: '/browse',
-      params: { contentType: categoryToContentType(category) },
+      // `seed` makes Browse apply this once per tap — see browse.tsx.
+      params: { contentType: categoryToContentType(category), seed: String(Date.now()) },
     });
   }, [router, category]);
 
