@@ -1,0 +1,160 @@
+import { useQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { getFlag } from '@/lib/featureFlags';
+import { emitSearch, type SearchMode } from '@/lib/storage/interactions';
+
+// Search-term logging on native (recommendation 2026-09-08-002 §5).
+//
+// The emitter has existed since Phase Search V2 — `emitSearch` writes a
+// `user_interactions` row with `event_type = 'search'`, a session id and a
+// `metadata` blob. The web app has called it since 2026-05; native never did,
+// so production held zero `search` rows. These hooks are the native call
+// sites. No new table, no new column: deletion (migration 042) and export
+// (043/061) already cover `user_interactions`, and the 30-day retention on
+// the free-text field lands in migration 079.
+//
+// The rule that matters for the privacy promise: SETTLED queries only, once
+// each. Never one row per keystroke.
+//
+// SHIPS DARK. Every emit here is gated on the per-user `search_logging`
+// flag, default false. The policy text describing search capture is live
+// from the same build, but no row is written for a user until Joe turns
+// the flag on for them, having told them first. That per-user consent is
+// the interim stand-in for the policy's section 10 in-app change notice,
+// which does not exist yet (IN-SL-003, deferred to H1).
+
+/** How long the typed text must hold still before a query counts as settled. */
+const SETTLE_MS = 1500;
+
+/** Below this the search itself does not run (see `useSearch`). */
+const MIN_QUERY_LENGTH = 2;
+
+/**
+ * Per-user gate for everything in this module, cached the way
+ * `useSemanticFlag` caches `search_semantic`: one round-trip held for the
+ * session. `getFlag` memoises per (user, flag), so the call sites below
+ * share a single read.
+ *
+ * Fails CLOSED. A logged-out user, an unset flag and a failed query all
+ * resolve to `false`, and `data` is `undefined` until the read lands --
+ * every one of those means "do not log", which is the only safe default
+ * for a capture the user has not been told about yet.
+ */
+export function useSearchLoggingFlag() {
+  return useQuery({
+    queryKey: ['native', 'flag', 'search_logging'],
+    queryFn: () => getFlag('search_logging', false),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+/**
+ * Log a typed query once it settles.
+ *
+ * Settled means: the result set for this exact text has arrived AND the text
+ * has been unchanged for {@link SETTLE_MS} — or the user short-circuited that
+ * wait by hitting the keyboard's search key or tapping a result (call the
+ * returned `markSettled`). Whichever comes first; once per (query, category).
+ *
+ * The "a strict prefix of the next query is not emitted" rule in §5.3 falls
+ * out of the timer rather than needing lookahead: while the user is still
+ * typing, every keystroke restarts the 1.5 s wait, so no prefix ever settles.
+ * A prefix that DOES settle is a query the user stopped on and looked at.
+ *
+ * Category is part of the dedupe key, so re-slicing the same text through the
+ * All / Movies / TV / Docs chips logs one row per slice — each is a distinct
+ * intent with a distinct `result_count`, and the set is bounded at four.
+ */
+export function useTypedSearchLog(args: {
+  /** Raw box text. Drives the settle timer, so it measures from the keystroke. */
+  query: string;
+  /** The text `results` were fetched for (the debounced value). */
+  resultsFor: string;
+  category: string;
+  results: readonly unknown[] | undefined;
+  isFetching: boolean;
+}): () => void {
+  const { query, resultsFor, category, results, isFetching } = args;
+  const q = query.trim();
+  const { data: loggingOn } = useSearchLoggingFlag();
+
+  const [settled, setSettled] = useState('');
+  const loggedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (q.length < MIN_QUERY_LENGTH) {
+      setSettled('');
+      return;
+    }
+    const t = setTimeout(() => setSettled(q), SETTLE_MS);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  /** Submit / first-result-tap: settle now instead of waiting out the timer. */
+  const markSettled = useCallback(() => {
+    if (q.length >= MIN_QUERY_LENGTH) setSettled(q);
+  }, [q]);
+
+  useEffect(() => {
+    // `settled !== q` means the text moved on while we were waiting — the
+    // settled value is stale and its result count would be for other text.
+    if (!settled || settled !== q) return;
+    // On submit/tap the settle timer is short-circuited, so the debounce may
+    // still be trailing a keystroke behind. Waiting for it to catch up is
+    // what stops a submitted query being logged as its own prefix.
+    if (settled !== resultsFor.trim()) return;
+    if (isFetching || !results) return;
+    // Checked BEFORE the dedupe set is touched, so a flag turned on
+    // mid-session can still log a query that settled while it was off.
+    if (!loggingOn) return;
+
+    const key = `${settled}\u0000${category}`;
+    if (loggedRef.current.has(key)) return;
+    loggedRef.current.add(key);
+
+    emitSearch(settled, results.length, { mode: 'lookup', metadata: { category } });
+  }, [settled, q, resultsFor, category, results, isFetching, loggingOn]);
+
+  return markSettled;
+}
+
+/**
+ * A discrete, non-typed search intent: a mood card tap or a FilterSheet
+ * apply. Unlike a typed query these are already settled at the moment of the
+ * tap — the only thing worth waiting for is the result count.
+ *
+ * `nonce` is what makes each tap its own event: tapping mood A, then B, then
+ * A again is three intents, not two. `query` is the semantic phrase on the
+ * flag-on path and null everywhere else, and it is passed through metadata so
+ * it overrides the positional argument `emitSearch` spreads in.
+ */
+export interface SearchIntent {
+  nonce: number;
+  mode: SearchMode;
+  /** Free text actually sent to retrieval, or null when there is none. */
+  query: string | null;
+  metadata: Record<string, unknown>;
+}
+
+/** Emit one row per {@link SearchIntent} as soon as its results land. */
+export function useSearchIntentLog(
+  intent: SearchIntent | null,
+  results: readonly unknown[] | undefined,
+  loading: boolean,
+): void {
+  const loggedNonceRef = useRef(0);
+  const { data: loggingOn } = useSearchLoggingFlag();
+
+  useEffect(() => {
+    if (!intent || loading || !results) return;
+    if (!loggingOn) return;
+    if (loggedNonceRef.current === intent.nonce) return;
+    loggedNonceRef.current = intent.nonce;
+
+    emitSearch(intent.query ?? '', results.length, {
+      mode: intent.mode,
+      metadata: { query: intent.query, ...intent.metadata },
+    });
+  }, [intent, results, loading, loggingOn]);
+}

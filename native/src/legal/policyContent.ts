@@ -20,7 +20,7 @@ export const TERMS_LAST_UPDATED = '6 July 2026';
 
 export const PRIVACY_POLICY_MD = `# Privacy Policy
 
-**Last updated:** 7 July 2026
+**Last updated:** 8 September 2026
 **Effective from:** 6 July 2026
 
 ## 1. Who we are
@@ -36,7 +36,7 @@ If you have any questions about how Videx handles your data, or you want to exer
 When you create an account and use the app, Videx stores the following data in the database tables listed:
 
 - **Account record** (profiles): your username, your UK region, your theme preference, the viewing context you picked at onboarding (solo / with partner / with family / with friends / wind down / background / focused), your age range, and whether you finished the onboarding flow.
-- **Interaction history** (user_interactions): every thumbs up, thumbs down, watched mark, watchlist add, dismiss, detail-page view, and time-on-detail-page reading you do in the app — each stamped with the content's TMDb id and the time you did it. This also includes your click-outs: when you tap through to a streaming service to watch something, Videx records which service you tapped, whether it sent you to an exact title link or to a search page, and the rent or buy price (if any) that was shown on screen at the moment you tapped.
+- **Interaction history** (user_interactions): every thumbs up, thumbs down, watched mark, watchlist add, dismiss, detail-page view, and time-on-detail-page reading you do in the app — each stamped with the content's TMDb id and the time you did it. This also includes your click-outs: when you tap through to a streaming service to watch something, Videx records which service you tapped, whether it sent you to an exact title link or to a search page, and the rent or buy price (if any) that was shown on screen at the moment you tapped. It also includes your searches: when you search, the words you typed or the mood card you tapped, together with how many results came back.
 - **Impression log** (card_impressions): which titles surfaced in front of you, in which row, in what position, at what time, and with what context. Rolled up to daily aggregates after 90 days; see §7.
 - **Taste profile** (taste_profiles): a 1,536-dimensional taste vector computed locally from your interaction history, plus the four slider positions (catalogue age, comfort zone, content mix, variety) you set on the For You page.
 - **Service selections** (user_services): which UK streaming services you've told Videx you subscribe to.
@@ -71,7 +71,7 @@ Your data does not leave the UK except for the third-party API traffic described
 
 Videx queries a small number of external APIs to enrich the title catalogue. The flows below describe what leaves the project and what does NOT.
 
-- **The Movie Database (TMDb), themoviedb.org.** Videx queries TMDb for film and TV metadata (titles, posters, cast, genre IDs, release dates). Only catalogue identifiers and search queries flow to TMDb. No user PII is sent — TMDb cannot see who you are.
+- **The Movie Database (TMDb), themoviedb.org.** Videx queries TMDb for film and TV metadata (titles, posters, cast, genre IDs, release dates). Only catalogue identifiers and search queries flow to TMDb. No user PII is sent — TMDb cannot see who you are. Videx also keeps a copy of your search text itself — see §2 and §7.
 - **OMDb, omdbapi.com.** Same shape: catalogue enrichment only, no PII.
 - **Streaming Availability API via RapidAPI** (moviesofthenight.com). Videx queries this API to learn which UK streaming services currently carry which titles, and to fetch deep-link URLs. Catalogue identifiers only, no PII.
 - **OpenAI.** Videx uses OpenAI's text-embedding-3-small and gpt-4o-mini models during scheduled catalogue-maintenance jobs to (a) compute title-similarity embeddings and (b) generate thematic labels for "If you love X" recommendation rooms. These jobs run server-side against the catalogue, not in your session. No user data flows to OpenAI — only title text (name + synopsis + cast). Your taste vector is computed locally from your interaction history; OpenAI never sees it.
@@ -103,6 +103,7 @@ Under UK GDPR you have the following rights over your data. Each is exposed in t
 ## 7. How long we keep your data
 
 - card_impressions rows older than 90 days are rolled up into daily aggregates and the original rows are deleted. This is an automatic database job; nothing you do triggers it.
+- The text of your searches is removed from user_interactions rows after 30 days. Before it is removed we add it to a count of how often each search term was used across all users; that count has no link to you. The rest of the row (the time, how many results came back, which mood card you tapped) is kept.
 - All other tables described in §2 persist until you delete your account.
 
 If you sign up and never come back, your data persists indefinitely until you delete it. We do not auto-prune inactive accounts.
@@ -135,7 +136,7 @@ For a regulatory complaint, contact the UK Information Commissioner's Office: ht
 
 ---
 
-Videx is operated by Joe Green as an individual data controller based in the United Kingdom. This page describes how the app actually handles your data; if that changes, we update this page and (per §10) notify signed-in users. Last updated 7 July 2026.`;
+Videx is operated by Joe Green as an individual data controller based in the United Kingdom. This page describes how the app actually handles your data; if that changes, we update this page and (per §10) notify signed-in users. Last updated 8 September 2026.`;
 
 export const TERMS_MD = `# Terms of Service
 

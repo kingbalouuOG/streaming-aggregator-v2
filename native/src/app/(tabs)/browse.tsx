@@ -20,6 +20,11 @@ import { PosterGridCard } from '@/components/PosterGridCard';
 import { PosterGridSkeleton } from '@/components/Skeleton';
 import { useBrowseDiscover } from '@/hooks/useBrowseDiscover';
 import { useSearch, type SearchCategory } from '@/hooks/useSearch';
+import {
+  useSearchIntentLog,
+  useTypedSearchLog,
+  type SearchIntent,
+} from '@/hooks/useSearchLogging';
 import { useSemanticFlag, useSemanticSearch } from '@/hooks/useSemanticSearch';
 import { useUserServices } from '@/hooks/useUserServices';
 import { useWatchlist } from '@/hooks/useWatchlist';
@@ -38,8 +43,13 @@ export default function BrowseScreen() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('best');
   const [sortOpen, setSortOpen] = useState(false);
-  // Active mood when semantic search is on — { label, phrase }, else null.
-  const [mood, setMood] = useState<{ label: string; phrase: string } | null>(null);
+  // Active mood when semantic search is on — { key, label, phrase }, else null.
+  const [mood, setMood] = useState<{ key: string; label: string; phrase: string } | null>(null);
+  // Search-term logging (§5). Typed queries log themselves once settled; the
+  // two discrete intents — a mood tap and a FilterSheet apply — each stage a
+  // SearchIntent that fires as soon as its result count is known.
+  const [semanticIntent, setSemanticIntent] = useState<SearchIntent | null>(null);
+  const [filterIntent, setFilterIntent] = useState<SearchIntent | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query), 300);
@@ -83,18 +93,50 @@ export default function BrowseScreen() {
   // exclusive with typed search, so each clears the other.
   const handleMood = useCallback(
     (m: Mood) => {
+      // One row per tap, so the nonce is the tap time — tapping A, then B,
+      // then A again is three intents. `mood_key` rather than the phrase
+      // keeps rows small and lets the copy be reworded without breaking
+      // history (§5.2).
+      const nonce = Date.now();
       if (semanticOn) {
         setQuery('');
         setDebounced('');
         setFilters(DEFAULT_FILTERS);
-        setMood({ label: m.label, phrase: m.phrase });
+        setFilterIntent(null);
+        setMood({ key: m.key, label: m.label, phrase: m.phrase });
+        setSemanticIntent({
+          nonce,
+          mode: 'semantic',
+          query: m.phrase,
+          metadata: { mood_key: m.key, semantic: true },
+        });
       } else {
         setMood(null);
+        setSemanticIntent(null);
         setFilters(m.preset);
+        // Flag off: the same tap resolves to a deterministic filter preset,
+        // so it logs as `filter` with no free text.
+        setFilterIntent({
+          nonce,
+          mode: 'filter',
+          query: null,
+          metadata: { mood_key: m.key, semantic: false },
+        });
       }
     },
     [semanticOn],
   );
+
+  // FilterSheet apply. Clearing every filter is not a search, so it stages
+  // nothing.
+  const handleApplyFilters = useCallback((next: BrowseFilters) => {
+    setFilters(next);
+    setFilterIntent(
+      countActiveFilters(next) > 0
+        ? { nonce: Date.now(), mode: 'filter', query: null, metadata: { filters: next } }
+        : null,
+    );
+  }, []);
 
   const shown = useMemo(() => {
     if (semanticMode) return semantic.data ?? [];
@@ -121,11 +163,35 @@ export default function BrowseScreen() {
       ? isFetching && !results
       : filterOnlyMode && browse.isFetching && !browse.data;
 
-  const openDetail = (item: ContentItem) =>
-    router.push({
+  // — Search-term logging (§5) —————————————————————————————————————
+  // Typed queries: settled only, once each. `markSettled` is the
+  // short-circuit for the keyboard's search key and the first result tap.
+  const markQuerySettled = useTypedSearchLog({
+    query,
+    resultsFor: debounced,
+    category,
+    results,
+    isFetching,
+  });
+  // Mood taps on the semantic path log against the semantic result set.
+  useSearchIntentLog(
+    semanticMode ? semanticIntent : null,
+    semantic.data,
+    semantic.isFetching,
+  );
+  // Preset taps (flag off) and FilterSheet applies log against what is
+  // actually on screen, whichever list that came from.
+  useSearchIntentLog(semanticMode ? null : filterIntent, shown, loading);
+
+  const openDetail = (item: ContentItem) => {
+    // First result tap settles the query immediately — the strongest signal
+    // that the user stopped on this text.
+    markQuerySettled();
+    return router.push({
       pathname: '/detail/[id]',
       params: { id: item.id, title: item.title, image: item.image },
     });
+  };
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-background">
@@ -136,12 +202,17 @@ export default function BrowseScreen() {
             value={query}
             onChangeText={(t) => {
               setQuery(t);
-              if (t.length > 0) setMood(null);
+              if (t.length > 0) {
+                setMood(null);
+                setSemanticIntent(null);
+                setFilterIntent(null);
+              }
             }}
             placeholder="Search films & shows"
             placeholderTextColor="rgba(245,241,232,0.4)"
             autoCapitalize="none"
             returnKeyType="search"
+            onSubmitEditing={markQuerySettled}
             className="flex-1 font-sans text-body text-foreground"
           />
           {query.length > 0 ? (
@@ -183,7 +254,10 @@ export default function BrowseScreen() {
               </Text>
             </View>
             <Pressable
-              onPress={() => setMood(null)}
+              onPress={() => {
+                setMood(null);
+                setSemanticIntent(null);
+              }}
               hitSlop={8}
               className="flex-row items-center gap-1 rounded-pill px-2 py-1.5 active:opacity-70">
               <X size={12} color="rgba(245,241,232,0.5)" />
@@ -209,7 +283,7 @@ export default function BrowseScreen() {
               </Pressable>
               {activeCount > 0 ? (
                 <Pressable
-                  onPress={() => setFilters(DEFAULT_FILTERS)}
+                  onPress={() => handleApplyFilters(DEFAULT_FILTERS)}
                   hitSlop={6}
                   className="flex-row items-center gap-1 rounded-pill px-2 py-1.5 active:opacity-70">
                   <X size={12} color="rgba(245,241,232,0.5)" />
@@ -273,7 +347,12 @@ export default function BrowseScreen() {
         />
       )}
 
-      <FilterSheet visible={sheetOpen} filters={filters} onApply={setFilters} onClose={() => setSheetOpen(false)} />
+      <FilterSheet
+        visible={sheetOpen}
+        filters={filters}
+        onApply={handleApplyFilters}
+        onClose={() => setSheetOpen(false)}
+      />
     </SafeAreaView>
   );
 }

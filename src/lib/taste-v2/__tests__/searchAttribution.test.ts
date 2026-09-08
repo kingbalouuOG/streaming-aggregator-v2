@@ -9,6 +9,7 @@ import {
   recordSearchTimestamp,
   getMostRecentSearchAt,
   resetSearchAttributionCache,
+  isContentIntentSearch,
   isWithinAttributionWindow,
 } from "../searchAttribution.ts";
 import { SEARCH_ATTRIBUTION_WINDOW_SECONDS } from "../types.ts";
@@ -111,5 +112,75 @@ describe("isWithinAttributionWindow", () => {
   it("returns true when event and search are simultaneous", () => {
     const t = 1000;
     expect(isWithinAttributionWindow(t, t)).toBe(true);
+  });
+});
+
+describe("isContentIntentSearch", () => {
+  // The four cases that decide whether a `search` row hands the next
+  // interaction in its session a 1.3x taste boost. Both the emit path
+  // (emitSearch) and the batch recompute (recomputeFromInteractionsScoped)
+  // route through this one predicate, so these four cover both.
+
+  it("boosts a typed lookup", () => {
+    expect(
+      isContentIntentSearch({
+        query: "heat 1995",
+        result_count: 11,
+        mode: "lookup",
+        category: "Movies",
+      }),
+    ).toBe(true);
+  });
+
+  it("boosts a semantic mood tap", () => {
+    expect(
+      isContentIntentSearch({
+        query: "an eerie, unsettling and atmospheric horror or thriller",
+        result_count: 48,
+        mode: "semantic",
+        mood_key: "late",
+        semantic: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("boosts a mood preset tap with the semantic flag off", () => {
+    // Same user intent as the semantic case — a described vibe — just a
+    // different retrieval path, so it must not be treated differently.
+    expect(
+      isContentIntentSearch({
+        query: null,
+        result_count: 26,
+        mode: "filter",
+        mood_key: "comfort",
+        semantic: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("does NOT boost a bare filter apply (no mood_key)", () => {
+    // This is the case that matters: Session 2's quick-filter chips emit
+    // one of these on every chip change on New and For You. Boosting them
+    // would turn an idle browse into a taste event.
+    expect(
+      isContentIntentSearch({
+        query: null,
+        result_count: 26,
+        mode: "filter",
+        filters: { contentType: "movie" },
+      }),
+    ).toBe(false);
+  });
+
+  it("treats an explicitly null mood_key the same as an absent one", () => {
+    expect(
+      isContentIntentSearch({ query: null, mode: "filter", mood_key: null }),
+    ).toBe(false);
+  });
+
+  it("keeps rows that predate the mode field rather than dropping history", () => {
+    expect(isContentIntentSearch({ query: "the bear", result_count: 3 })).toBe(true);
+    expect(isContentIntentSearch(null)).toBe(true);
+    expect(isContentIntentSearch(undefined)).toBe(true);
   });
 });

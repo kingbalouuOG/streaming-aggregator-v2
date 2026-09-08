@@ -3,7 +3,7 @@ title: Signal architecture
 type: concept
 tags: [signals, instrumentation, lifecycle, dwell, deep-link]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-09-08
 sources:
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
   - raw/v2-strategy/Videx_v2_Detail_Page_Signal_Capture_Spec_v0.3.2.md
@@ -26,7 +26,7 @@ Two signal categories: **explicit** (user-initiated, intentional) and **silent**
 
 | Destination | Events | Backed by |
 |---|---|---|
-| `user_interactions` | thumbs ±, watchlist ±, marked watched, `not_interested`, detail_view, dwell_event, deep_link_click, section_expanded, cast_carousel_scroll, back_navigation_speed, report_availability | Migration 010, expanded migration 013 (`session_id`, `source_surface` top-level). |
+| `user_interactions` | thumbs ±, watchlist ±, marked watched, `not_interested`, detail_view, dwell_event, deep_link_click, section_expanded, cast_carousel_scroll, back_navigation_speed, report_availability, **search** | Migration 010, expanded migration 013 (`session_id`, `source_surface` top-level). Search-text retention: migration 079. |
 | `card_impressions` | impressions | Migration 014 (pg_partman monthly). See [ADR-006](../decisions/adr-006-card-impressions-dedicated-table.md), [ADR-010](../decisions/adr-010-pg-partman-card-impressions.md). |
 | Onboarding analytics table | onboarding funnel events | `lib/analytics/logger.ts`. Separate from `user_interactions`. |
 
@@ -37,6 +37,42 @@ Two signal categories: **explicit** (user-initiated, intentional) and **silent**
 3. **Detail page unmount**: `dwell_event` fires once with `dwell_seconds` and `exit_reason`.
 4. **Explicit interactions** (thumbs, watchlist, watched, not_interested, deep-link click): emit immediately. Replace previous signal on same title (rule 2 of combination).
 5. **Card shown**: `recordImpression` to in-memory buffer. Flushed by [impression batcher](#impression-batcher) on six triggers.
+6. **Search**: one `search` row per *settled* search intent — see below.
+
+## Search events
+
+`emitSearch` (`src/lib/storage/interactions.ts`) has existed since Phase Search V2, but until 2026-09-08 **only the web app called it**: `native/` never did, so production held **zero** `search` rows. Native now emits from `native/src/hooks/useSearchLogging.ts`, wired into `browse.tsx`.
+
+**Native emission ships dark.** Every emit is gated on the per-user `search_logging` flag (`src/lib/featureFlags.ts`, default false), cached the way `search_semantic` is. The policy text describing search capture went live in the same build, but no row is written for a user until Joe turns the flag on for them, having told them first — the interim stand-in for the §10 in-app change notice that does not exist yet (IN-SL-003). The gate fails closed: logged out, flag unset, query failed, or read still in flight all mean "do not log".
+
+| Trigger | `mode` | `metadata` |
+|---|---|---|
+| Typed query, settled | `lookup` | `query`, `result_count`, `category` |
+| Mood card tap, `search_semantic` ON | `semantic` | `query` (the app-authored mood phrase), `result_count`, `mood_key`, `semantic: true` |
+| Mood card tap, flag OFF (filter preset) | `filter` | `query: null`, `result_count`, `mood_key`, `semantic: false` |
+| FilterSheet apply | `filter` | `query: null`, `result_count`, `filters` |
+
+**Settled, never per keystroke.** A typed query is logged once when its results have arrived AND the text has been unchanged for ≥ 1.5 s — short-circuited by the keyboard's search key or the first result tap. A strict prefix of a longer query never settles, because every keystroke restarts the timer. Dedupe key is `(query, category)`.
+
+### Not every `search` row earns the attribution boost
+
+`emitSearch` marks the session "recently searched" so the next positive interaction inside the 60 s window gets the search-attribution taste boost (IN-PX-43). **That is gated on content intent**, because a `search` row is not always a search for something:
+
+| `mode` | `mood_key` | Boost |
+|---|---|---|
+| `lookup` | — | yes — the user typed what they wanted |
+| `semantic` | present | yes — the user picked a described vibe |
+| `filter` | present | yes — a mood preset with the flag off: same intent, different retrieval |
+| `filter` | absent | **no** — a bare FilterSheet apply or a quick-filter chip |
+| absent (legacy) | — | yes — keeping real history beats dropping it |
+
+Why it matters: Session 2's quick-filter chips will emit a `mode: 'filter'` row on **every chip change** on New and For You. Ungated, tapping "Movies" would hand a 1.3x boost to every interaction on that page for the next minute, turning an idle browse into a taste event.
+
+`isContentIntentSearch` (`src/lib/taste-v2/searchAttribution.ts`) is the **single definition**. Both paths route through it — `emitSearch` before `recordSearchTimestamp` (incremental), and `recomputeFromInteractionsScoped` when it builds `searchesBySession` (batch, which is why that query now selects `metadata`). The rule is deliberately *not* duplicated as a PostgREST filter: two copies silently disagreeing is the bug class it exists to prevent. Covered by `src/lib/taste-v2/__tests__/searchAttribution.test.ts`.
+
+One more thing worth knowing: the taste recompute reads these rows for `created_at` + `session_id` only — never the query text. That is what lets migration 079 null the text without breaking attribution.
+
+See [privacy-and-gdpr](../product/privacy-and-gdpr.md) for the 30-day retention on the text.
 
 ## Interpretation matrix (canonical)
 

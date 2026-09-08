@@ -220,7 +220,17 @@ Surfaced during the end-to-end visual review against the design reference. UI sh
 |---|---|---|
 | IN-V3-001 | Long Read editorial-spotlight data layer (`long_reads` table parallel to `editor_notes`) — currently a hardcoded sample in `LongRead.tsx` | ⏳ Filed |
 | IN-V3-002 | Taste-v2 surface for hero match% + per-title mood signals — match% wires to ranker output when present, mood is hardcoded "contemplative" | ⏳ Filed (IN YOUR PLAN client-side signal: ✅ wired) |
-| IN-V3-003 | Wire "Refine by feeling" mood refiner to taste-v2 — UI complete and hidden behind `MOOD_REFINER_ENABLED=false` flag in `ForYouPage.tsx` pending the data-layer work | ⏳ Filed |
+| IN-V3-003 | Wire "Refine by feeling" mood refiner to taste-v2 — UI complete and hidden behind `MOOD_REFINER_ENABLED=false` flag in `ForYouPage.tsx` pending the data-layer work | 🛑 **Closed — retired 2026-09-08.** Joe's decision in the [presets recommendation](../sources/quick-filters-and-search-presets-recommendation-2026-09-08.md) §2.1/§7: the strip is a *fourth* overlapping taxonomy that duplicates the Browse presets by label but not by definition. Delete it rather than re-point it; removal happens in the presets session (§10 Session 3). |
+
+## Search-term logging follow-ups (filed 2026-09-08 at Session 1 close-out)
+
+Found while wiring `emitSearch` on native. See the [recommendation source page](../sources/quick-filters-and-search-presets-recommendation-2026-09-08.md).
+
+| ID | Subject | Status |
+|---|---|---|
+| IN-SL-001 | **Native Browse/search results record no impressions.** `browse.tsx` renders its `FlashList` with `PosterGridCard` and never calls `recordImpression`, so search and filter result sets are invisible to `card_impressions`. Consequence: search CTR cannot be computed properly — a `search` row gives `result_count`, and a later `detail_view` gives the click, but there is no denominator for *which* results were actually seen. The presets measurement plan (§6: "tap → `detail_view` within the 60 s window (needs §4's impression fix for CTR proper)") depends on this. | ⏳ Filed |
+| IN-SL-002 | **Free-only filter on the semantic path needs a `stream_type`-aware availability filter.** `useSemanticSearch` runs `semanticSearch` with `defaultFor([])` — a no-op post-filter — so a "free" (subscription-included, per Joe's 2026-09-08 decision) constraint cannot be expressed on the semantic path at all. `titles.available_services` records service membership but the free/rent/buy distinction lives in `stream_type`, which the vector path does not carry into its post-filter. Blocks any constraint-led preset that says "free tonight" while `search_semantic` is on. | ⏳ Filed |
+| IN-SL-003 | **Privacy policy §10 promises an in-app change notification that does not exist.** §10 commits to notifying signed-in users at least 30 days before a material change takes effect. Verified 2026-09-08: the policy is a static string rendered on demand, with no stored policy version (no `profiles` column, no consent table), no changelog surface and no notice UI. The push transport exists but is blocked on FCM/APNs credentials and carries recommendations, not legal notices. The 2026-09-08 search-logging change is the first live test of the promise. | ⏳ Filed (Joe-owned — needs a product decision, not just wiring) |
 
 ## Phase ENG-1 follow-ups (filed 2026-06-10 at close-out)
 
@@ -234,11 +244,11 @@ Recorded in the docs parking lot v0.7 ENG-1 section; see `docs/v2/phase-summarie
 
 ## Counts
 
-- Total entries: **100** (Pre-PRE 1 + P0 13 + P0.5 7 + P0/0.5 cross 6 + P1 5 + P2 3 + P3 3 + P4 4 + P4.5 16 + OB 6 + XPS 14 + PX-21..35 15 + PX-36..38 3 + PX-39..45 7 + PX-50..54 5 + PX-55..57 3 + V3-001..003 3).
+- Total entries: **103** (Pre-PRE 1 + P0 13 + P0.5 7 + P0/0.5 cross 6 + P1 5 + P2 3 + P3 3 + P4 4 + P4.5 16 + OB 6 + XPS 14 + PX-21..35 15 + PX-36..38 3 + PX-39..45 7 + PX-50..54 5 + PX-55..57 3 + V3-001..003 3 + SL-001..003 3).
 - ✅ Incorporated: **65** (H0 Stream D 2026-07-06 added: IN-PX-29, IN-PX-30, IN-PX-50, IN-XPS-003, IN-XPS-007, IN-461. Phase 5.5 close 2026-05-15 added: IN-PX-21..28 except 29/30/32, IN-PX-31, IN-PX-33, IN-PX-34, IN-PX-35, IN-PX-51, IN-XPS-001, IN-XPS-006, IN-465; bumped IN-XPS-012 from partial → ✅ on parity activation).
-- ⏳ Pending / Not yet incorporated: **24** (H0 Stream D closed 6 of the prior 30; Phase 5.5 added: IN-XPS-014, IN-PX-52, IN-PX-53, IN-PX-54; reclassified IN-458, IN-462 to Phase 6; ENG-1 close 2026-06-10 added IN-PX-55, IN-PX-56, IN-PX-57).
+- ⏳ Pending / Not yet incorporated: **26** (H0 Stream D closed 6 of the prior 30; Phase 5.5 added: IN-XPS-014, IN-PX-52, IN-PX-53, IN-PX-54; reclassified IN-458, IN-462 to Phase 6; ENG-1 close 2026-06-10 added IN-PX-55, IN-PX-56, IN-PX-57; search-logging close 2026-09-08 added IN-SL-001, IN-SL-002, IN-SL-003 and closed IN-V3-003).
 - ⚠ Partial: **2** (IN-104; IN-XPS-004 — now unblocked but rotation is a pending Joe-owned dashboard ceremony).
-- 🛑 Discharged: **1** (IN-260).
+- 🛑 Discharged: **2** (IN-260; IN-V3-003 retired 2026-09-08).
 - 🅿 Parked: **6** (IN-PX-06, IN-261, IN-XPS-008, IN-XPS-009, IN-OB-006, IN-PX-42).
 
 ## Pre-launch blockers (subset of pending)
