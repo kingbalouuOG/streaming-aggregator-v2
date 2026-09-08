@@ -106,9 +106,43 @@ class ErrorCollector {
   private totalCount = 0;
   private droppedDistinct = 0;
 
+  /**
+   * Render any thrown value as something a human can act on.
+   *
+   * `String(err)` was the fallback, and on a Supabase PostgrestError —
+   * a PLAIN OBJECT, not an Error — that yields the literal string
+   * "[object Object]". Database failures are the likeliest errors in this
+   * function, so the fallback destroyed detail on exactly the cases that
+   * needed it: the 2026-09-08 run recorded 4 identical `[object Object]`
+   * errors and the cause had to be reconstructed from the schema.
+   *
+   * PostgrestError carries { message, details, hint, code }; code and
+   * details are what distinguish a NOT NULL violation from a timeout, so
+   * they are kept.
+   */
+  static describe(err: unknown): string {
+    if (err instanceof Error) return err.message;
+    if (typeof err === 'string') return err;
+    if (err && typeof err === 'object') {
+      const e = err as Record<string, unknown>;
+      const parts = [
+        typeof e.message === 'string' ? e.message : null,
+        typeof e.code === 'string' ? `[${e.code}]` : null,
+        typeof e.details === 'string' ? e.details : null,
+      ].filter(Boolean);
+      if (parts.length) return parts.join(' ');
+      try {
+        return JSON.stringify(err).slice(0, 300);
+      } catch {
+        return '[unserialisable error object]';
+      }
+    }
+    return String(err);
+  }
+
   record(scope: string, err: unknown, sample?: string): void {
     this.totalCount++;
-    const message = err instanceof Error ? err.message : String(err);
+    const message = ErrorCollector.describe(err);
     const key = `${scope} :: ${message}`;
     const existing = this.buckets.get(key);
     if (existing) {
@@ -624,6 +658,27 @@ async function runSyncSlice(
                   .eq('stream_type', streamType);
                 stats.availabilityRemoved++;
               } else {
+                // A change with no deep link cannot satisfy
+                // streaming_availability.deep_link_url NOT NULL. Checked
+                // BEFORE the delete, because the delete is not rolled back
+                // when the insert fails: on 2026-09-08 four `expiring`
+                // changes arrived without a link, the delete removed the
+                // row, the insert violated NOT NULL, and the availability
+                // option was gone — no row, no history, and an error
+                // recorded as "[object Object]".
+                //
+                // Skipping keeps the existing row, which is the safer of
+                // the two wrong answers: slightly stale availability beats
+                // availability that silently vanished.
+                if (!change.link) {
+                  errors.record(
+                    `change.${changeType}`,
+                    'no deep link on change — skipping to avoid deleting the existing row',
+                    `${mediaType}/${tmdbId} ${serviceId}/${streamType}`,
+                  );
+                  continue;
+                }
+
                 // new / updated / expiring: upsert this individual streaming option.
                 //
                 // Delete existing row(s) for this option, then insert fresh.
