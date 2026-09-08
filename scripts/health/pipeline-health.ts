@@ -142,23 +142,55 @@ async function run(): Promise<void> {
     ];
   });
 
-  // 3. A chain that gave up. Deliberately NOT "errors > 0": a single
-  //    transient TMDb 500 sets errors=1, and an alert that goes red on
-  //    one bad row gets muted within a fortnight — which recreates the
-  //    original problem in a more irritating form.
+  // 3. A job that is failing and has NOT recovered. Deliberately NOT
+  //    "errors > 0": a single transient TMDb 500 sets errors=1, and an
+  //    alert that goes red on one bad row gets muted within a fortnight —
+  //    which recreates the original problem in a more irritating form.
+  //
+  //    Equally deliberately NOT "any failed run in the window". That was
+  //    the original test and it cried wolf: on 2026-09-08 the 06:00 sync
+  //    failed on the old RapidAPI quota, the channel was switched, and two
+  //    later runs succeeded — yet the check stayed red for the rest of the
+  //    day because a failure sat inside its 25h window. A failure that a
+  //    later run of the same type has already superseded is history, not a
+  //    fault, and reporting it as one is how a daily alert gets ignored.
+  //
+  //    What matters is whether a sync_type is currently broken: failed,
+  //    with no successful run of that type since.
   await check('no-failed-runs', async () => {
     const { data, error } = await supabase
       .from('sync_log')
       .select('sync_type, status, errors, chain_state, started_at')
-      .eq('status', 'failed')
-      .gte('started_at', hoursAgo(RUN_WINDOW_HOURS));
+      .gte('started_at', hoursAgo(RUN_WINDOW_HOURS))
+      .order('started_at', { ascending: true });
     if (error) throw new Error(error.message);
-    const bad = data ?? [];
+    const runs = data ?? [];
+
+    // Latest successful run per type, so "recovered" is judged per job
+    // rather than globally — embed succeeding must not mask incremental
+    // still being broken.
+    const lastSuccessMs = new Map<string, number>();
+    for (const r of runs) {
+      if (r.status !== 'completed') continue;
+      const t = Date.parse(r.started_at);
+      const prev = lastSuccessMs.get(r.sync_type);
+      if (prev === undefined || t > prev) lastSuccessMs.set(r.sync_type, t);
+    }
+
+    const unrecovered = runs.filter((r) => {
+      if (r.status !== 'failed') return false;
+      const recoveredAt = lastSuccessMs.get(r.sync_type);
+      return recoveredAt === undefined || recoveredAt <= Date.parse(r.started_at);
+    });
+
+    const recoveredCount = runs.filter((r) => r.status === 'failed').length - unrecovered.length;
+    const recoveredNote = recoveredCount > 0 ? ` (${recoveredCount} earlier failure(s) since recovered)` : '';
+
     return [
-      bad.length === 0,
-      bad.length === 0
-        ? `no failed runs in ${RUN_WINDOW_HOURS}h`
-        : bad
+      unrecovered.length === 0,
+      unrecovered.length === 0
+        ? `no unrecovered failures in ${RUN_WINDOW_HOURS}h${recoveredNote}`
+        : unrecovered
             .map((r) => `${r.sync_type}: ${r.chain_state?.stopped_because ?? `errors=${r.errors}`}`)
             .join('; '),
     ];
