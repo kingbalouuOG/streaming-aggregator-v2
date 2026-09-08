@@ -1,7 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getFlag } from '@/lib/featureFlags';
+import { subscribe as appStateSubscribe } from '@/lib/lifecycle/appState';
+import { reconcileSettled, type SettledQuery } from '@/lib/search/settledQuery';
 import { emitSearch, type SearchMode } from '@/lib/storage/interactions';
 
 // Search-term logging on native (recommendation 2026-09-08-002 §5).
@@ -15,7 +18,8 @@ import { emitSearch, type SearchMode } from '@/lib/storage/interactions';
 // the free-text field lands in migration 079.
 //
 // The rule that matters for the privacy promise: SETTLED queries only, once
-// each. Never one row per keystroke.
+// each. Never one row per keystroke — and, since the first real capture,
+// never one row per pause either (see `settledQuery.ts`).
 //
 // SHIPS DARK. Every emit here is gated on the per-user `search_logging`
 // flag, default false. The policy text describing search capture is live
@@ -26,6 +30,17 @@ import { emitSearch, type SearchMode } from '@/lib/storage/interactions';
 
 /** How long the typed text must hold still before a query counts as settled. */
 const SETTLE_MS = 1500;
+
+/**
+ * How long a settled query is held before being written anyway.
+ *
+ * Generous on purpose. Every *terminal* signal flushes the buffer already,
+ * so this only catches a search abandoned with the app still open and
+ * Browse still on screen. Making it short would reintroduce the bug it
+ * sits alongside: a user who pauses, then resumes typing, would have their
+ * prefix written before the real query ever arrived.
+ */
+const FLUSH_IDLE_MS = 8000;
 
 /** Below this the search itself does not run (see `useSearch`). */
 const MIN_QUERY_LENGTH = 2;
@@ -50,21 +65,17 @@ export function useSearchLoggingFlag() {
 }
 
 /**
- * Log a typed query once it settles.
+ * Log a typed query — once per search, not once per pause.
  *
- * Settled means: the result set for this exact text has arrived AND the text
- * has been unchanged for {@link SETTLE_MS} — or the user short-circuited that
- * wait by hitting the keyboard's search key or tapping a result (call the
- * returned `markSettled`). Whichever comes first; once per (query, category).
+ * A query settles when its results have arrived AND the text has been
+ * unchanged for {@link SETTLE_MS}, or when the user short-circuits that wait
+ * via the returned `markSettled` (keyboard search key, first result tap).
  *
- * The "a strict prefix of the next query is not emitted" rule in §5.3 falls
- * out of the timer rather than needing lookahead: while the user is still
- * typing, every keystroke restarts the 1.5 s wait, so no prefix ever settles.
- * A prefix that DOES settle is a query the user stopped on and looked at.
- *
- * Category is part of the dedupe key, so re-slicing the same text through the
- * All / Movies / TV / Docs chips logs one row per slice — each is a distinct
- * intent with a distinct `result_count`, and the set is bounded at four.
+ * A settled query is then **held, not written**, because the next settled
+ * query may reveal it was only half-typed. `settledQuery.ts` has the capture
+ * that forced this. The held query is written when an unrelated query
+ * settles, on a terminal signal (`markSettled`, cleared box, leaving the
+ * screen), or after {@link FLUSH_IDLE_MS}.
  */
 export function useTypedSearchLog(args: {
   /** Raw box text. Drives the settle timer, so it measures from the keystroke. */
@@ -79,42 +90,126 @@ export function useTypedSearchLog(args: {
   const q = query.trim();
   const { data: loggingOn } = useSearchLoggingFlag();
 
-  const [settled, setSettled] = useState('');
+  // `force` marks a terminal signal: write immediately instead of holding.
+  const [settled, setSettled] = useState<{ text: string; force: boolean } | null>(null);
+  const [pending, setPending] = useState<SettledQuery | null>(null);
   const loggedRef = useRef<Set<string>>(new Set());
+  // Mirror of `pending` for the unmount flush, whose closure cannot see the
+  // latest state.
+  const pendingRef = useRef<SettledQuery | null>(null);
+  pendingRef.current = pending;
+
+  const write = useCallback((row: SettledQuery) => {
+    const key = JSON.stringify([row.query, row.category]);
+    if (loggedRef.current.has(key)) return;
+    loggedRef.current.add(key);
+    emitSearch(row.query, row.resultCount, {
+      mode: 'lookup',
+      metadata: { category: row.category },
+    });
+  }, []);
 
   useEffect(() => {
     if (q.length < MIN_QUERY_LENGTH) {
-      setSettled('');
+      setSettled(null);
       return;
     }
-    const t = setTimeout(() => setSettled(q), SETTLE_MS);
+    const t = setTimeout(() => setSettled({ text: q, force: false }), SETTLE_MS);
     return () => clearTimeout(t);
   }, [q]);
 
-  /** Submit / first-result-tap: settle now instead of waiting out the timer. */
+  /** Submit / first-result-tap: settle now, and write rather than hold. */
   const markSettled = useCallback(() => {
-    if (q.length >= MIN_QUERY_LENGTH) setSettled(q);
+    if (q.length >= MIN_QUERY_LENGTH) setSettled({ text: q, force: true });
   }, [q]);
 
   useEffect(() => {
-    // `settled !== q` means the text moved on while we were waiting — the
-    // settled value is stale and its result count would be for other text.
-    if (!settled || settled !== q) return;
+    // `settled.text !== q` means the text moved on while we were waiting —
+    // the settled value is stale and its count would be for other text.
+    if (!settled || settled.text !== q) return;
     // On submit/tap the settle timer is short-circuited, so the debounce may
     // still be trailing a keystroke behind. Waiting for it to catch up is
     // what stops a submitted query being logged as its own prefix.
-    if (settled !== resultsFor.trim()) return;
+    if (settled.text !== resultsFor.trim()) return;
     if (isFetching || !results) return;
-    // Checked BEFORE the dedupe set is touched, so a flag turned on
+    // Checked BEFORE anything is held or written, so a flag turned on
     // mid-session can still log a query that settled while it was off.
     if (!loggingOn) return;
 
-    const key = `${settled}\u0000${category}`;
-    if (loggedRef.current.has(key)) return;
-    loggedRef.current.add(key);
+    const candidate: SettledQuery = {
+      query: settled.text,
+      category,
+      resultCount: results.length,
+    };
+    const next = reconcileSettled(pendingRef.current, candidate);
+    if (next.emit) write(next.emit);
 
-    emitSearch(settled, results.length, { mode: 'lookup', metadata: { category } });
-  }, [settled, q, resultsFor, category, results, isFetching, loggingOn]);
+    if (settled.force) {
+      // Terminal signal — nothing can supersede this one.
+      write(next.pending);
+      setPending(null);
+    } else {
+      setPending(next.pending);
+    }
+  }, [settled, q, resultsFor, category, results, isFetching, loggingOn, write]);
+
+  // Idle flush — a search abandoned in place still gets recorded.
+  useEffect(() => {
+    if (!pending) return;
+    const t = setTimeout(() => {
+      write(pending);
+      setPending(null);
+    }, FLUSH_IDLE_MS);
+    return () => clearTimeout(t);
+  }, [pending, write]);
+
+  // Cleared box: the search is over, so whatever is held is final.
+  useEffect(() => {
+    if (q.length >= MIN_QUERY_LENGTH || !pending) return;
+    write(pending);
+    setPending(null);
+  }, [q, pending, write]);
+
+  // — Terminal signals that a held query would otherwise die with —————
+  // Buffering trades fabricated rows for lost ones, and the first test of
+  // it lost two real searches ("The Bear", "Lord of The..."): both were
+  // held, and neither a following query, a tap, a clear nor the 8 s idle
+  // ever came. Holding is only safe if every way of leaving writes first.
+  // `write` dedupes on (query, category), so overlapping flushes are free.
+
+  // App backgrounded — same terminal signal, and the same subscriber, the
+  // impression batcher already uses for its own buffer.
+  useEffect(
+    () =>
+      appStateSubscribe((isActive) => {
+        if (isActive || !pendingRef.current) return;
+        write(pendingRef.current);
+        setPending(null);
+      }),
+    [write],
+  );
+
+  // Navigating away from Browse — switching tabs does not unmount the
+  // screen, so the unmount cleanup below never fires for the commonest
+  // way of leaving a search behind.
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        if (pendingRef.current) write(pendingRef.current);
+      },
+      [write],
+    ),
+  );
+
+  // Unmount. Last resort; a hard kill with no background event still
+  // loses the held query, which is an accepted under-count — better than
+  // writing a query the user was still editing.
+  useEffect(
+    () => () => {
+      if (pendingRef.current) write(pendingRef.current);
+    },
+    [write],
+  );
 
   return markSettled;
 }
@@ -122,7 +217,8 @@ export function useTypedSearchLog(args: {
 /**
  * A discrete, non-typed search intent: a mood card tap or a FilterSheet
  * apply. Unlike a typed query these are already settled at the moment of the
- * tap — the only thing worth waiting for is the result count.
+ * tap — there is no half-typed state to collapse, so they are written as soon
+ * as the result count is known.
  *
  * `nonce` is what makes each tap its own event: tapping mood A, then B, then
  * A again is three intents, not two. `query` is the semantic phrase on the
