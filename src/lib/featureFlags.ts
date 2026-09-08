@@ -15,7 +15,15 @@ import { supabase } from './supabase';
 // Allow-list of known flag names. Extend the union when adding a new
 // per-user gated feature; the database column is `flag_name TEXT` and
 // accepts anything, but routing through this type keeps callers honest.
-export type FlagName = 'search_semantic';
+export type FlagName =
+  | 'search_semantic'
+  // Search-term logging on native (2026-09-08). Ships DARK: the privacy
+  // policy text describing search capture is live from the same build,
+  // but no row is written until this flag is turned on for a user, which
+  // Joe does per tester after telling them. Default false everywhere.
+  // See IN-SL-003 — §10's in-app change notice does not exist yet, so
+  // per-user consent is the interim mechanism.
+  | 'search_logging';
 
 // Module-scope cache. Key = `${userId}:${flagName}`. Promise valued so
 // concurrent callers during the initial fetch share the round-trip

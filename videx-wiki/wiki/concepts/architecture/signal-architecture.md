@@ -43,6 +43,8 @@ Two signal categories: **explicit** (user-initiated, intentional) and **silent**
 
 `emitSearch` (`src/lib/storage/interactions.ts`) has existed since Phase Search V2, but until 2026-09-08 **only the web app called it**: `native/` never did, so production held **zero** `search` rows. Native now emits from `native/src/hooks/useSearchLogging.ts`, wired into `browse.tsx`.
 
+**Native emission ships dark.** Every emit is gated on the per-user `search_logging` flag (`src/lib/featureFlags.ts`, default false), cached the way `search_semantic` is. The policy text describing search capture went live in the same build, but no row is written for a user until Joe turns the flag on for them, having told them first — the interim stand-in for the §10 in-app change notice that does not exist yet (IN-SL-003). The gate fails closed: logged out, flag unset, query failed, or read still in flight all mean "do not log".
+
 | Trigger | `mode` | `metadata` |
 |---|---|---|
 | Typed query, settled | `lookup` | `query`, `result_count`, `category` |
@@ -52,10 +54,23 @@ Two signal categories: **explicit** (user-initiated, intentional) and **silent**
 
 **Settled, never per keystroke.** A typed query is logged once when its results have arrived AND the text has been unchanged for ≥ 1.5 s — short-circuited by the keyboard's search key or the first result tap. A strict prefix of a longer query never settles, because every keystroke restarts the timer. Dedupe key is `(query, category)`.
 
-Two consequences worth knowing:
+### Not every `search` row earns the attribution boost
 
-- `emitSearch` also calls `recordSearchTimestamp`, which marks the session "recently searched" so the next positive interaction inside the 60 s window gets the search-attribution taste boost (IN-PX-43). Preset taps and filter applies now trigger that boost on native, as they already did on web.
-- The taste recompute reads these rows for `created_at` + `session_id` only — never the query text. That is what lets migration 079 null the text without breaking attribution.
+`emitSearch` marks the session "recently searched" so the next positive interaction inside the 60 s window gets the search-attribution taste boost (IN-PX-43). **That is gated on content intent**, because a `search` row is not always a search for something:
+
+| `mode` | `mood_key` | Boost |
+|---|---|---|
+| `lookup` | — | yes — the user typed what they wanted |
+| `semantic` | present | yes — the user picked a described vibe |
+| `filter` | present | yes — a mood preset with the flag off: same intent, different retrieval |
+| `filter` | absent | **no** — a bare FilterSheet apply or a quick-filter chip |
+| absent (legacy) | — | yes — keeping real history beats dropping it |
+
+Why it matters: Session 2's quick-filter chips will emit a `mode: 'filter'` row on **every chip change** on New and For You. Ungated, tapping "Movies" would hand a 1.3x boost to every interaction on that page for the next minute, turning an idle browse into a taste event.
+
+`isContentIntentSearch` (`src/lib/taste-v2/searchAttribution.ts`) is the **single definition**. Both paths route through it — `emitSearch` before `recordSearchTimestamp` (incremental), and `recomputeFromInteractionsScoped` when it builds `searchesBySession` (batch, which is why that query now selects `metadata`). The rule is deliberately *not* duplicated as a PostgREST filter: two copies silently disagreeing is the bug class it exists to prevent. Covered by `src/lib/taste-v2/__tests__/searchAttribution.test.ts`.
+
+One more thing worth knowing: the taste recompute reads these rows for `created_at` + `session_id` only — never the query text. That is what lets migration 079 null the text without breaking attribution.
 
 See [privacy-and-gdpr](../product/privacy-and-gdpr.md) for the 30-day retention on the text.
 

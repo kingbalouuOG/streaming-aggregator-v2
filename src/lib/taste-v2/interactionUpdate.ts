@@ -25,6 +25,7 @@ import {
 } from './types';
 import {
   getMostRecentSearchAt,
+  isContentIntentSearch,
   isWithinAttributionWindow,
 } from './searchAttribution';
 import { weightedKMeans } from './kmeans';
@@ -165,6 +166,8 @@ interface ReplayInteractionRow {
 interface ReplaySearchRow {
   created_at: string | null;
   session_id: string | null;
+  /** Needed only to apply isContentIntentSearch — see below. */
+  metadata: unknown;
 }
 
 interface EmbeddingTitleRow {
@@ -247,7 +250,11 @@ export async function recomputeFromInteractionsScoped(
       .not('content_id', 'is', null)
       .order('created_at', { ascending: true }),
     scope
-      .select('user_interactions', 'created_at, session_id')
+      // `metadata` is fetched so the content-intent rule can be applied
+      // below. It is deliberately NOT a server-side filter: the rule is
+      // shared with the emit path as one predicate, and a duplicated
+      // PostgREST expression is exactly how the two drift apart.
+      .select('user_interactions', 'created_at, session_id, metadata')
       .eq('event_type', 'search')
       .not('session_id', 'is', null)
       .order('created_at', { ascending: true }),
@@ -270,6 +277,11 @@ export async function recomputeFromInteractionsScoped(
   const searchesBySession = new Map<string, number[]>();
   for (const row of (searchesResult.data ?? []) as ReplaySearchRow[]) {
     if (!row.session_id || !row.created_at) continue;
+    // Skip rows with no content intent — a bare filter apply, or (from
+    // Session 2) a quick-filter chip change. Without this the batch
+    // recompute would disagree with the incremental path, which already
+    // refuses to record them. Same predicate, both paths.
+    if (!isContentIntentSearch(row.metadata as Record<string, unknown> | null)) continue;
     const ts = new Date(row.created_at).getTime();
     const arr = searchesBySession.get(row.session_id) ?? [];
     arr.push(ts);

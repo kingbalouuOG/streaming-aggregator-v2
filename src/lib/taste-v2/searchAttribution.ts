@@ -46,6 +46,48 @@ export function resetSearchAttributionCache(): void {
   recentSearches.clear();
 }
 
+// ── Content-intent gate (used by both paths) ────────────────────────
+
+/**
+ * Does a `search` row express *content intent* — i.e. should the next
+ * interaction in its session get the attribution boost?
+ *
+ * Not every `search` row is a search for something. Since 2026-09-08 the
+ * native Browse screen emits `mode: 'filter'` rows for a FilterSheet
+ * apply, and Session 2's quick-filter chips will emit one on **every chip
+ * change** on New and For You. Those are re-slices of a page the user is
+ * already looking at, not a statement of what they want. Left ungated,
+ * a tap on the "Movies" chip would mark the session "recently searched"
+ * and hand a 1.3x boost to every interaction on that page for the next
+ * 60 seconds — turning an idle browse into a taste-vector event.
+ *
+ * The rule, and the ONLY definition of it:
+ *
+ * | `mode`     | `mood_key` | Boost |
+ * |------------|------------|-------|
+ * | `lookup`   | —          | yes — the user typed what they wanted |
+ * | `semantic` | present    | yes — the user picked a described vibe |
+ * | `filter`   | present    | yes — a mood preset with the flag off; same intent, different retrieval |
+ * | `filter`   | absent     | **no** — a filter apply or a quick-filter chip |
+ *
+ * A row with no `mode` at all is treated as intent-bearing: the only way
+ * to produce one is a caller predating the field, and dropping real
+ * history is worse than an occasional boost.
+ *
+ * Both paths call this: `emitSearch` before `recordSearchTimestamp`
+ * (incremental), and `recomputeFromInteractionsScoped` when it builds
+ * `searchesBySession` (batch). Keeping one predicate is the point — the
+ * two paths silently disagreeing is exactly the bug class this prevents.
+ */
+export function isContentIntentSearch(
+  metadata: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!metadata) return true;
+  if (metadata.mode !== 'filter') return true;
+  const moodKey = metadata.mood_key;
+  return moodKey !== null && moodKey !== undefined && moodKey !== '';
+}
+
 // ── Pure window check (used by both paths) ──────────────────────────
 
 /**

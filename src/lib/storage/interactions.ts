@@ -12,7 +12,7 @@ import type { Json } from '../database.types';
 import { invalidateDismissedIdsCache } from './recommendations';
 import { getCurrentSessionId } from '../instrumentation/sessionId';
 import { getCardClickContext } from '../instrumentation/clickContext';
-import { recordSearchTimestamp } from '../taste-v2/searchAttribution';
+import { isContentIntentSearch, recordSearchTimestamp } from '../taste-v2/searchAttribution';
 
 // — Event types ——————————————————————————————————————————————————
 
@@ -193,15 +193,24 @@ export function emitSearch(
 ): void {
   const { mode = 'lookup', metadata = {} } = options;
   const sessionId = getCurrentSessionId();
+  const row = { query, result_count: resultCount, mode, ...metadata };
   // Mark the session as "recently searched" so the next content
   // interaction within SEARCH_ATTRIBUTION_WINDOW_SECONDS gets a taste-
   // vector boost. The incremental path reads from this cache; the
   // 24h recompute reads search rows from the DB instead.
-  recordSearchTimestamp(sessionId);
+  //
+  // Only rows that express content intent qualify: a bare filter apply
+  // or a quick-filter chip is a re-slice of the current page, not a
+  // statement of what the user wants. isContentIntentSearch is the
+  // single definition, shared with the batch path so the two cannot
+  // drift apart.
+  if (isContentIntentSearch(row)) {
+    recordSearchTimestamp(sessionId);
+  }
   emitInteraction({
     event_type: 'search',
     session_id: sessionId,
-    metadata: { query, result_count: resultCount, mode, ...metadata },
+    metadata: row,
   }).catch(() => {});
 }
 
