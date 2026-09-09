@@ -32,7 +32,14 @@ import type { ContentItem } from '../types/content';
  */
 export const CONFIDENT_TITLE_HIT = 0.55;
 
-/** Below this the query does not appear in the title in any usable way. */
+/**
+ * Below this the query does not appear in the title in any usable way.
+ *
+ * Deliberately unchanged on 2026-09-09 when partial matching was widened.
+ * The floor is the conservative half of the rule and the reason a wrong
+ * title card is rare; what was wrong was the measurement underneath it, not
+ * where the bar sat.
+ */
 const MIN_TITLE_MATCH = 0.5;
 
 /** Votes at which a title is "prominent enough to be the one meant". */
@@ -99,6 +106,27 @@ export function looksLikeDescription(query: string, exactTitleMatch = false): bo
 }
 
 /**
+ * Is the query a contiguous run of WHOLE words of the title?
+ *
+ * The distinction this draws is between naming part of a title and matching
+ * some characters of it. "hail mary" is two complete words of "Project Hail
+ * Mary"; "sever" is five characters of "Severance" and names nothing. Both
+ * are substrings, and until 2026-09-09 the scorer could not tell them apart.
+ *
+ * Order and adjacency are both required. "mary hail" is not how anyone
+ * half-remembers a title, and "project mary" skips a word, so neither counts
+ * here — reordering is the weaker `base = 0.55` rung below, which is where
+ * it belongs.
+ */
+function isWholeWordRun(titleWords: readonly string[], queryWords: readonly string[]): boolean {
+  if (queryWords.length === 0 || queryWords.length > titleWords.length) return false;
+  for (let i = 0; i + queryWords.length <= titleWords.length; i += 1) {
+    if (queryWords.every((w, j) => titleWords[i + j] === w)) return true;
+  }
+  return false;
+}
+
+/**
  * How well the query names this title, 0–1.
  *
  * The ladder mirrors `reRankSearchResults` (which orders the list but throws
@@ -111,23 +139,41 @@ export function titleMatchScore(title: string, query: string): number {
   if (!t || !q) return 0;
   if (t === q) return 1;
 
+  const titleWords = t.split(' ');
+  const queryWords = q.split(' ');
+  const namedRun = isWholeWordRun(titleWords, queryWords);
+
   // Partial matches are scaled by how much of the title the query accounts
   // for. Without this, "the" is a prefix of half the catalogue and would
   // score as though the user had named a film; and "sever" would open the
   // Severance card before they had finished typing it. A partial query is
   // exactly the case where the grid is the right answer.
-  const coverage = Math.min(q.length / t.length, 1);
+  //
+  // Measured in CHARACTERS for a partial word, and in WORDS as well once the
+  // query names whole ones. Characters alone had "hail mary" account for
+  // 9/17ths of "Project Hail Mary" — a smaller share than "sever" covers of
+  // "Severance" — when what the user had actually done was name two of its
+  // three words. The larger of the two is taken, so this can only raise a
+  // score and never lower one: `max` is what keeps "project hail" (a longer
+  // prefix, but a smaller share of the words) exactly where it was.
+  const charCoverage = Math.min(q.length / t.length, 1);
+  const wordCoverage = Math.min(queryWords.length / titleWords.length, 1);
+  const coverage = namedRun ? Math.max(charCoverage, wordCoverage) : charCoverage;
 
   let base = 0;
-  if (t.startsWith(q)) base = 0.85;
+  // A named run scores like a prefix, because that is what it is: a prefix is
+  // simply the run that starts at word 0, and "Hail Mary" sitting at the end
+  // of the title says nothing about how well the user remembered it. Coverage
+  // still separates the two cases — one word of a two-word title lands at
+  // 0.425 either way, under the floor, and stays a grid.
+  if (namedRun || t.startsWith(q)) base = 0.85;
   else if (t.includes(q)) base = 0.6;
   else {
     // Every query word present somewhere in the title, in any order —
     // catches reordering and dropped articles.
-    const words = q.split(' ');
-    const titleWords = new Set(t.split(' '));
-    const covered = words.filter((w) => titleWords.has(w)).length;
-    base = covered === words.length ? 0.55 : 0;
+    const present = new Set(titleWords);
+    const covered = queryWords.filter((w) => present.has(w)).length;
+    base = covered === queryWords.length ? 0.55 : 0;
   }
   return base * coverage;
 }

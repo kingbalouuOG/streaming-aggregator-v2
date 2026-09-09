@@ -354,6 +354,29 @@ there is nowhere else to go. The tests that looked like they covered it passed
 on the rotation alone. Branch gone, property asserted directly.
 
 
+### Half-remembered titles (2026-09-09, evening)
+
+`titleMatchScore` measured a partial match by its share of the title's
+CHARACTERS. "hail mary" is nine of the seventeen in "project hail mary" and
+does not start it, so it scored 0.32 against a 0.5 floor — less than "sever"
+scores against "Severance", the case the floor exists to reject. A user who
+had named two of a title's three words did worse than one who had typed half
+of one word, and the grid they got instead was then emptied by filters
+carried in from two preset taps.
+
+The scorer now recognises a contiguous run of WHOLE title words and treats it
+like a prefix, since a prefix is that same run starting at word 0. Coverage
+is the larger of the character share and the word share, so nothing that
+passed before can fail now: "project hail" is unchanged at 0.60, "hail mary"
+goes 0.32 → 0.567, "sever" stays at 0.47. Adjacency and order are required,
+so "mary hail" falls to the weaker reordering rung. Prominence still has to
+supply the rest of the confidence for any partial name.
+
+The eight known-title fixtures and the eight preset sentences are now asserted
+against this module directly. `titleHit.ts` had always said its thresholds were
+calibrated against them; nothing had held that true.
+
+
 ## Decisions resolved (locked during plan-mode)
 
 1. **Salmon `#ff8d5a` token bump** app-wide. Minor visual drift on Calendar / Detail / Watchlist accepted.

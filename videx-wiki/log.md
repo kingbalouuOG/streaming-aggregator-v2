@@ -1260,3 +1260,67 @@ property asserted directly.
 Migration 081 applied live and verified: job 24 unchanged in name and
 schedule, cutoff now `(now() AT TIME ZONE 'UTC')::date`, `ON CONFLICT` adding
 rather than overwriting.
+
+
+## [2026-09-09] ingest | "Hail Mary" found nothing; "Project Hail" found the film
+
+- Updated: wiki/concepts/operations/phase-search-v2.md (whole-word title matching)
+- Updated: wiki/registers/parking-lot.md (IN-SL-011 closed; IN-SL-010 filed; IN-SL-005 gains a third named example)
+- Source: device testing of the review follow-up, 2026-09-09 evening
+
+Two findings from twenty minutes on a handset, and the smaller one is the
+better story.
+
+**A user typed two of a title's three words and got nothing.** "Hail Mary"
+returned an empty grid; deleting it and typing "Project Hail" returned
+*Project Hail Mary* immediately. Both are substrings of the same title, and
+`titleMatchScore` scaled every partial match by how many CHARACTERS of the
+title the query accounted for, giving a match that starts the title far more
+credit than one inside it. "hail mary" is nine of seventeen characters and
+does not start it: 0.32 against a floor of 0.5 — **less than "sever" scores
+against "Severance"**, which is the case the floor exists to reject.
+
+The floor was not wrong. The measurement under it was. Characters cannot
+tell "named two of the three words" apart from "matched an arbitrary run of
+letters", and those deserve opposite answers. The scorer now recognises a
+contiguous run of whole title words and scores it like a prefix — because a
+prefix IS such a run, the one starting at word 0, and where the words sit
+says nothing about how well the title was remembered. Coverage takes the
+larger of the character share and the word share, so no existing score can
+fall: "project hail" stays at exactly 0.60. "sever" stays at 0.47, because a
+partial word names nothing however it is measured.
+
+A partial name still cannot clear the confidence bar on the match alone, so
+prominence has to supply the rest — about 256 votes. That is deliberate: it
+is what stops an obscure title that merely contains the words from opening a
+card.
+
+Two things compounded the original failure and neither is fixed by this. The
+film has no `titles` row at all, so the Postgres substring path — which
+would have matched it exactly as the user typed it — returned nothing. That
+is the same ingest gap as *Mousetrap* and *Mayday*, now with a third named
+example and a user actively looking for it. And once the query routed to the
+described layout, the genres carried in from a Comfort tap plus the recency
+and rating floor from *New & actually good* emptied the semantic grid too.
+
+**The other finding is bigger and has no fix yet.** Trying to reproduce review
+finding 5 — the banner naming the last card tapped rather than the card
+whose phrase is running — showed that the state it describes cannot be
+produced by tapping. The four preset cards render only in the pre-search
+state, and every card sets a phrase or a filter, so the first tap makes the
+other three disappear. Getting back to them means *Clear all*, which resets
+exactly what the second tap was supposed to build on.
+
+So the two-tap composition the recommendation is built on — its motivating
+sentence is described as two taps throughout — is not reachable in the
+shipped UI, and has not been since the presets landed. Composition itself
+works: the five refine chips cover cost, recency, runtime, media type and
+rating, which is most of what the constraint cards carry, and card-plus-chips
+is what real usage does. What is missing is the path the plan describes.
+Filed as IN-SL-010 for a product decision rather than patched, because the
+answer is a layout question, not a bug.
+
+Worth noting how both were found. The first came from a user forgetting a
+title, which no fixture contains. The second came from trying to reproduce a
+finding a code review had made with confidence — the reviewer read the state
+machine correctly and never asked whether the UI could reach that state.
