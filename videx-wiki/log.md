@@ -1081,3 +1081,20 @@ The **category pills rendered on the described route**. They filter Mode A's lis
 
 The pattern is worth naming, because it is the third session in a row to hit it: **the defects that survive CI are the ones where a control is attached to the wrong data source.** Session 1 and Session 2 each found three this way; neither type checking nor tests can see them, because every individual piece is correct. Querying `user_interactions` after the fact is what makes them visible — the screen looked fine.
 
+
+## [2026-09-09] ingest | The store forms said we do not collect search history. We do.
+Updated: `docs/legal/store-privacy-disclosures.md`, `docs/legal/launch-compliance-checklist.md`, `wiki/concepts/product/privacy-and-gdpr.md`.
+
+**The answer sheet asserted the opposite of the truth.** Apple's "explicitly NOT collected" list carried *Search History*, justified as *"app-internal genre/taste selection is Product Interaction, not web/app search history"*. That reasoning was correct when written — the app collected genre picks, not typed text. It stopped being correct on 2026-09-08, when search-term logging shipped and began storing the words users type.
+
+**Found by looking at the release rather than the code.** v2.3.0 merged on 2026-09-09 and is the first *native* binary carrying search logging — iOS had it by OTA, Android had never had it at all. Its iOS build reached TestFlight before anyone checked the disclosures. Nothing in CI could have caught this: the code was correct, the in-app policy was correct, and the only wrong artefact was a markdown file describing two web forms.
+
+**What the forms now need:** Play *App activity → In-app search history*; Apple *Search History*. Both Linked to You, neither used for tracking.
+
+**Purpose is Analytics + Personalisation, deliberately not App Functionality.** Search works with logging off — the flag defaults to off and most accounts have never had it on. The rows exist to measure the funnel and to feed the search-attribution boost. Claiming App Functionality would have overstated the need, which is the easy mistake in the other direction.
+
+The sheet also now records the follow-up answers both forms ask for and that are easy to get wrong under time pressure: the text is linked to `user_id`, it is nulled after 30 days but the row survives, there is **no** in-app opt-out (so Play's "users can choose" does not apply), export and erasure both cover it, and the text reaches TMDb and OpenAI without a user identifier — collected, not shared.
+
+**The generalisable bit.** A policy change and a store-form change are two obligations with two owners, and satisfying the first is exactly what makes the second overdue. The sheet's own "re-submit triggers" note listed push notifications and crash reporting. Search logging was a third trigger that nobody had written down, so nothing pointed at it when it shipped. The note now names it, and the compliance checklist carries it as an open item.
+
+**Not re-submitted.** Both forms are due with v2.3.1, after Session 4.

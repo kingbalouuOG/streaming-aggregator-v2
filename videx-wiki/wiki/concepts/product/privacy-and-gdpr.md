@@ -3,7 +3,7 @@ title: Privacy and GDPR
 type: concept
 tags: [privacy, gdpr, draft, legal]
 created: 2026-04-26
-updated: 2026-09-08
+updated: 2026-09-09
 sources:
   - raw/product/privacy-policy-draft.md
   - raw/v2-strategy/Videx_v2_Detail_Page_Signal_Capture_Spec_v0.3.2.md
@@ -119,3 +119,14 @@ Capacitor-wrapped app does not use third-party tracking SDKs. No analytics SDK, 
 - **Onboarding**: brief modal — "Videx learns from what you watch, rate, and explore… you can see and delete your data anytime from your profile."
 - **Privacy policy**: full disclosure, accessible from Profile → Settings → Privacy.
 - **In-product**: Profile → Settings → "What Videx learns from you" page translating signals list into user-facing language.
+- **Store data-safety forms**: Google Play Data Safety and Apple App Privacy. Copy-ready answers at `docs/legal/store-privacy-disclosures.md`.
+
+### Known gap: the store forms do not yet declare search history
+
+The in-app policy was updated for search-term logging on 2026-09-08 (§2 interaction-history bullet, §4 TMDb bullet, §7 retention). **The two store forms were not**, and the answer sheet actively asserted the opposite — Search History sat under Apple's "explicitly NOT collected" list, justified as *"app-internal genre/taste selection is Product Interaction, not web/app search history"*. True when it was written; false from the moment the app began storing typed query text.
+
+Found 2026-09-09 while reviewing **v2.3.0**, which is the first native binary carrying the feature and had already reached TestFlight. The answer sheet now carries **Play: App activity → In-app search history** and **Apple: Search History**, both Linked to You, purpose Analytics + Personalisation (not App Functionality — search works with the flag off, which is its default).
+
+**Neither form has been re-submitted.** Both are due with v2.3.1. Tracked in the [launch-compliance checklist](../../../docs/legal/launch-compliance-checklist.md) §E.
+
+The general lesson, worth more than the instance: a policy change and a store-form change are two separate obligations with two separate owners, and shipping the first is what makes the second overdue. The answer sheet's own "re-submit triggers" note listed push notifications and crash reporting; search logging was a third trigger nobody had written down.

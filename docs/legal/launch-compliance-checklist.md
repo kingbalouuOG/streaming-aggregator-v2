@@ -89,6 +89,7 @@ Both stores make you self-declare what data the app collects. Answers must be **
 - [ ] **Google Play Data Safety form** — fill from the Play section of the answer sheet.
 - [ ] **Apple App Privacy labels** — fill from the Apple section of the answer sheet.
 - [ ] Re-check both when push notifications ship (adds a "device/other identifiers" data type).
+- [ ] **Outstanding since 2026-09-08: the search-history rows.** Search-term logging shipped that day and reached a native binary in v2.3.0, so Play needs *App activity → In-app search history* and Apple needs *Search History*. The answer sheet carried the opposite claim until 2026-09-09 and now carries the rows. Due with v2.3.1; neither form has been re-submitted.
 
 ---
 
