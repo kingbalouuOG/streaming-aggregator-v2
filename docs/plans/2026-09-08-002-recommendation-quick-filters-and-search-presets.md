@@ -386,6 +386,8 @@ Joe asked whether "search, then adjust filters in a sheet" still holds. It does 
 
 **Presearch grid.** Unchanged 2×2, four cards chosen per §2.4. Kicker copy becomes *"Or just say what you want"*.
 
+> ⚠ **The presearch grid is the only place the cards render, which makes the two-tap composition above unreachable.** `presearch` requires no text, no running phrase and no active filters, and every card sets at least one of those — so the first tap removes the other three cards, and the only way back is *Clear all*, which resets what the second tap was meant to build on. Found on device 2026-09-09. Composition still works through the refine chips, which carry cost, recency, runtime, media type and rating; the two-card path does not. Filed as IN-SL-010 for a layout decision.
+
 ### 9.3 What this is not
 
 - Not a chat window. No message history, no assistant turns. The one platform that shipped mobile text-chat search quietly shelved it (§8).
