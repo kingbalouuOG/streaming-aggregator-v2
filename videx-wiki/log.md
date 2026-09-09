@@ -1324,6 +1324,7 @@ Worth noting how both were found. The first came from a user forgetting a
 title, which no fixture contains. The second came from trying to reproduce a
 finding a code review had made with confidence — the reviewer read the state
 machine correctly and never asked whether the UI could reach that state.
+
 ## [2026-09-09] ingest | The reserve was treated as seen, and the diversity bill came due
 Updated: `wiki/concepts/architecture/for-you-surface.md` (the reserve is not something the user has seen), `wiki/concepts/operations/phase-search-v2.md` (`released` moved inside the vector scan), `wiki/registers/parking-lot.md` (IN-SL-005 cause 2).
 
@@ -1375,3 +1376,52 @@ The worst two were not in the review's list at all. Both the web Browse *Docs* s
 **A PR that names the cost it measured has told you which cost it did not.** "Bytes, not compute" was a true sentence, carefully evidenced, and a complete answer to the wrong half of the question.
 
 **And a caveat is a prediction, so it has to be measured like one.** The HNSW post-filter caveat was written into the migration before the migration ran, from correct facts about pgvector, and it described the wrong branch of the planner. It survived only because the after-measurement came back at 150 of 150 — a number good enough to be suspicious of, which is the only reason `EXPLAIN` got run at all. A result that beats the prediction is evidence the prediction was wrong, not evidence of a win.
+
+## [2026-09-09] query | "the two-card compose is unreachable" — what are the options?
+
+- Updated: docs/plans/2026-09-08-002 §2.3 (correction + decision), §9.2 (settled), §6 (reopening metric)
+- Updated: wiki/registers/parking-lot.md (IN-SL-010 discharged by decision)
+- Decision: Joe, 2026-09-09
+
+The finding was that the four preset cards vanish after the first tap, so the
+two-tap composition the recommendation is built on cannot be performed. The
+question was what to do about the layout. The answer turned out not to be a
+layout question at all, and the useful part is how that became visible.
+
+**Checking the cards against the chips first changed the shape of the
+problem.** Three of the four constraint cards add nothing the refine row does
+not already carry: *New & actually good* is `released` + `minRating`, which is
+*Newer* + *Higher rated*; *Free to watch* is `cost`; *Finish it tonight* is
+`contentType` + `runtime`. Only *Whole family* has filters with no chip.
+
+**And `intent.phrase` is a single string.** A second phrase-bearing card
+replaces the first rather than stacking, so two vibe cards could never have
+composed as a query whatever the layout did. The mental model in §2.3 —
+cards stack — was half wrong independently of the bug.
+
+Between those two facts, exactly one composition was ever real: a vibe card
+plus a phrase-less constraint card, where the vibe's phrase survives and the
+constraint's filters merge. That one is reachable today through the chips.
+The brief's own motivating sentence — "a new film I don't have to pay for
+that isn't cheesy crap" — is three chips and needs no card at all.
+
+So the capability was never missing. What is missing is the card-shaped route
+to it, and the plain words on the cards, which are the thing that teaches a
+new user that anything composes. That is a real loss and a small one.
+
+**Decision: the refine row is the composition surface; the layout is not
+rebuilt.** Restoring a card row above the results would put back a second
+control cluster over the grid, which is precisely what Session 4 removed on
+device evidence.
+
+**The part worth keeping is the reopening condition.** It is a metric in §6
+rather than a note to revisit: a *Clear all* followed by a preset tap within
+about ten seconds is the observable form of "I wanted to stack these", and
+the preset rows already carry everything needed to count it. Two weeks of
+real use decides whether the card affordance goes back — into the refine
+block, not above the grid.
+
+The general lesson: before designing around a missing interaction, check
+whether the capability is missing or only the route to it. Here three of four
+cards were duplicates of controls already on screen, and the fourth was the
+only thing at stake.
