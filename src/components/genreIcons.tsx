@@ -9,7 +9,6 @@ import { GLYPHS, type GlyphName } from "@/lib/constants/genreGlyphs";
 export {
   GLYPHS,
   CLUSTER_GLYPHS,
-  MOOD_GLYPH_NAMES,
   PROFILE_GLYPHS,
   type GlyphName,
   type GlyphDef,

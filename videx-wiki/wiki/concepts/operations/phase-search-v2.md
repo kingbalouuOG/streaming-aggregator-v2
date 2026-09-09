@@ -3,7 +3,7 @@ title: Phase Search V2 — Filtered + Semantic Search
 type: concept
 tags: [phase, phase-search-v2, search, semantic, filtered, feature-flag, embeddings, mode-a, mode-c]
 created: 2026-05-13
-updated: 2026-06-18
+updated: 2026-09-09
 sources:
   - docs/v2/phase-summaries/phase-search-v2-summary.md
   - docs/design/search/Phase_Search_V2_Kickoff.md
@@ -125,7 +125,65 @@ The semantic-search machinery shipped here carried over to the RN/Expo app (now 
 
 - **Browse moods → vector search behind `search_semantic`.** The native Browse mood path calls [`useSemanticSearch`/`useSemanticFlag`](../../entities/codebase/hooks.md#native-hooks), which reuses the **same** shared engine (`getFlag` → `embed-query` Edge fn → `match_titles_by_vector` → rank). The mood phrase **is** the query (`defaultFor([])` = no-op post-filter).
 - **Presets are the OFF fallback.** When the `search_semantic` flag is OFF for the user, Browse falls back to the deterministic mood-filter **presets** — the same per-user opt-in gate as the web (composite-PK `user_feature_flags`, migration 041). No rebuild to enable — a DB flag flip.
-- **Shipped eval gate = `scripts/search/eval-moods.ts`.** The native mood quality floor (rating>0, voteCount≥20, ≥40-min movies) mirrors this script, which is the **shipped** validation gate for the mood→vector path. This is distinct from **IN-PX-40** (the 20-query semantic-eval fixture), which remains the **later, broader** fixture gating the global flag-flip beyond Joe/prototype users — the B6 fixture is still a 2-query stub.
+- **Shipped eval gate = `scripts/search/eval-moods.ts`.** The native mood quality floor (rating>0, voteCount≥20, ≥40-min movies) mirrors this script, which is the **shipped** validation gate for the mood→vector path. This was distinct from **IN-PX-40** (the broader semantic-eval fixture gating the global flag-flip beyond Joe/prototype users) for as long as the B6 fixture stayed a 2-query stub. **That stub was replaced on 2026-09-09** — see the presets addendum below.
+
+## Addendum — Presets, one-intent Browse and free-text routing (2026-09-09)
+
+Session 3 of the [quick-filters and preset-search recommendation](../../sources/quick-filters-and-search-presets-recommendation-2026-09-08.md) (§2, §9). PR #139, branch `feat/native-presets-and-routing`. Sessions 1 (search-term logging) and 2 (quick filters) preceded it.
+
+### Browse is one intent, not three modes
+
+Before this, `browse.tsx` held three **mutually exclusive** states — typed search, semantic mood, filter-only discover — and each cleared the others: a mood tap called `setFilters(DEFAULT_FILTERS)`, typing called `setMood(null)`. The motivating sentence of the whole brief ("a new film I don't have to pay for that isn't cheesy crap") was therefore inexpressible, because its halves lived in different modes.
+
+It is now a single `intent` object — `{ text, phrase, moodKey, filters }` — and nothing clears anything else. A preset tap **merges** its filter patch and sets its phrase; typing takes over the phrase and leaves the filters alone. "Clear all" resets the lot.
+
+### The preset pool
+
+`src/lib/content/presets.ts` — eight cards, four shown, chosen by `selectPresets({ hour, dow, selectedClusters, weekBucket })`:
+
+| Slot | Rule | `selection_reason` |
+|---|---|---|
+| A | Vibe by time of day, via the pipeline's own `getContextualTimeBucket` so the card and the ranking agree | `time` |
+| B | Vibe by taste-cluster affinity, rotating weekly and never repeating last week | `taste` / `rotation` |
+| C | *New & actually good*, fixed | `fixed` |
+| D | Constraint by time of day — cost on weekdays, audience Fri–Sun daytime, commitment after 21:00 on a weeknight | `time` |
+
+No new persistence and no server round trip: it runs off the clock and the onboarding clusters the app already holds. The "not last week" property needs no storage either — the same question is asked of the previous week's seed and the answer excluded. Slot and reason are stamped on every preset-tap `search` row so §6 can judge whether the selection logic earns its keep.
+
+**`Free to watch` carries `phrase: null` on purpose.** Cost is a fact about availability, not a feeling; embedding it returns titles *about* money. Tapping it keeps whatever phrase is already running and contributes only its filter — which is what makes *Comfort* + *Free to watch* one query with two constraints.
+
+### Two new axes, and where `cost` is actually applied
+
+`released: 'any' | 'last_12_months'` and `cost: 'any' | 'free'` joined `BrowseFilters`, which moved to `src/lib/content/browseFilters.ts` (native re-exports it) for the same reason `quickFilter.ts` did — the shared tree is where vitest can reach it.
+
+`cost` is **server-side only**. Nothing on `ContentItem` carries a stream type, so `applyBrowseFilters` deliberately ignores it rather than guessing, and guessing would fail in the one direction that matters — hiding titles the user *can* watch.
+
+| Path | How `cost: 'free'` is applied |
+|---|---|
+| `/discover` (`useBrowseDiscover`) | `with_watch_monetization_types=flatrate\|free\|ads`, ported from the web's `useBrowse` |
+| Semantic (`semanticRetrieval`) | `subscription_included_titles` RPC (migration 080) over the retrieved candidate ids |
+
+`released` is exact server-side (`primary_release_date.gte` / `first_air_date.gte`, and a `release_year` predicate on the semantic post-filter) and deliberately coarser client-side, where only `ContentItem.year` exists.
+
+### Free text routes by shape
+
+`src/lib/search/titleHit.ts` decides. A confident title hit renders the retrieval layout — `TitleHitCard`, with where-to-watch and the deep-link button first, other matches in the grid below, and no controls above it. Everything else, with `search_semantic` on, sends the text to the engine with the banner *"Reading that as a feeling, not a title"* and a one-tap *"Search titles instead"*.
+
+The rule is conservative by design: a hit needs the query to actually appear in the title **and** the query not to read as a sentence. Partial matches are scaled by how much of the title the query covers, so "the" cannot name a film and "sever" does not open the *Severance* card before the word is finished.
+
+### The measurement that matters
+
+See [semantic-search-quality.md](../evaluations/semantic-search-quality.md). Two findings from the first real run of the eval fixture, both of which change how the flag should be treated:
+
+1. **The preset `phrase` works; the short `sentence` does not.** The long descriptive phrases retrieve the right register. The short sentences a user would actually type match surface *words* instead.
+2. **The eval rig was scoring rows no user can see** — it called the RPC raw, without the app's post-retrieval quality floor.
+
+The free-text route ships as specified and stays safe: `search_semantic` is per-user and default-off, the banner is honest, and the escape is one tap. But flipping the flag on the strength of the preset path alone would be flipping it for free text too, and free text is the weaker half.
+
+### Retired here
+
+The web "Refine by feeling" mood refiner (`MOOD_CHIPS` / `MOOD_GLYPHS` / `MOOD_REFINER_ENABLED` in `ForYouPage.tsx`, plus the orphaned `MOOD_GLYPH_NAMES` map) — a fourth overlapping mood taxonomy that duplicated the Browse presets by label but not by definition, and had never been wired to anything. Closes IN-V3-003.
+
 
 ## Decisions resolved (locked during plan-mode)
 

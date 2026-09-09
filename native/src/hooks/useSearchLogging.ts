@@ -65,9 +65,21 @@ export function useTypedSearchLog(args: {
   category: string;
   results: readonly unknown[] | undefined;
   isFetching: boolean;
+  /**
+   * Extra fields for the row — currently the layout the query resolved to
+   * (`route`: 'title' | 'described' | 'lookup'), which is the measurement
+   * §6 wants and cannot reconstruct afterwards: the same text routes
+   * differently depending on the `search_semantic` flag and on what Mode A
+   * returned that day. Captured at write time, once, like the count.
+   */
+  metadata?: Record<string, unknown>;
 }): () => void {
-  const { query, resultsFor, category, results, isFetching } = args;
+  const { query, resultsFor, category, results, isFetching, metadata } = args;
   const q = query.trim();
+  // Mirror, so `write` can read the latest without being re-created (and
+  // re-running the effects keyed on it) every time the route flips.
+  const metadataRef = useRef<Record<string, unknown> | undefined>(metadata);
+  metadataRef.current = metadata;
 
   // `force` marks a terminal signal: write immediately instead of holding.
   const [settled, setSettled] = useState<{ text: string; force: boolean } | null>(null);
@@ -84,7 +96,7 @@ export function useTypedSearchLog(args: {
     loggedRef.current.add(key);
     emitSearch(row.query, row.resultCount, {
       mode: 'lookup',
-      metadata: { category: row.category },
+      metadata: { category: row.category, ...metadataRef.current },
     });
   }, []);
 

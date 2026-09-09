@@ -1,27 +1,466 @@
 {
-  "version": 1,
-  "description": "Phase Search V2 Cluster B (B6) — semantic search eval fixtures. Each entry is a hand-written descriptive query with the top-N TMDb IDs the eval expects to surface. Joe authors the real set; this stub keeps the script + workflow runnable until the real fixtures land.",
+  "version": 2,
+  "description": "Semantic search eval fixtures. Authored 2026-09-09 in the presets session (recommendation 2026-09-08-002 §10 Session 3), replacing the two-query stub that landed with the rig in Phase Search V2 Cluster B (B6). Sixteen entries in two halves. PRESET half (8, diagnostic): the `phrase` each preset card sends to the engine when the search_semantic flag is on, copied verbatim from src/lib/content/presets.ts, with the user-facing `sentence` recorded alongside it. TITLE half (8, gating): a title a user would plausibly type. Expected sets were curated from the live catalogue on 2026-09-09 by objective criteria — genre, runtime, rating and vote floors, availability for the free entry — and deliberately NOT from what the engine already returns, so the fixture measures retrieval rather than confirming it. Every expected tmdb_id was verified present in `titles` with a non-null embedding.",
   "thresholds": {
-    "precisionAt10": 0.6,
-    "mrr": 0.7
+    "precisionAt10": 0.9,
+    "mrr": 0.75
   },
+  "_thresholds_note": "Thresholds apply to the GATING (known-title) entries only, and are set from the measured baseline of 2026-09-09 with margin: p@10 1.00 and MRR 0.90 across all eight, so 0.9/0.75 catches a real regression without failing on noise. The stub's 0.6/0.7 were written before any query had ever been run. The preset entries are DIAGNOSTIC, not gating, and the reason is measurable rather than convenient: they are scored against six or seven hand-picked titles out of a six-figure catalogue, so an answer that is entirely good but picks DIFFERENT good titles scores zero. Measured that day, every preset phrase scored p@10 = 0.00 against these sets while returning results that read correctly by eye — the `slow` phrase returned Small Things Like These, The Quiet Girl and I'm Thinking of Ending Things, and the `late` phrase returned The Haunting of Hill House and Marrowbone. Gating on that number would fail the build for being right. The same run produced the finding that justifies keeping `phrase` and `sentence` distinct: the short SENTENCES retrieve near-literal word matches rather than the intent — 'something fast and fun' returned the Fast & Furious franchise, 'something easy and warm I can half-watch' returned Hot Frosty and Melting Me Softly, and 'something long and absorbing I can sink into' returned The Abyss and Deep Sea. That is the free-text (described) route's weakness, it is why the route ships behind the search_semantic flag with a visible 'Search titles instead' escape, and it is the strongest argument for the Worker-side query-understanding step in §8.2.",
   "queries": [
     {
-      "query": "slow burn psychological thrillers",
+      "query": "an understated, meditative drama that unfolds gradually and rewards your attention — thoughtful, restrained, character-driven and emotionally rich",
+      "presetKey": "slow",
+      "kind": "preset-sentence",
       "expected": [
-        { "tmdbId": 14336, "mediaType": "movie", "title": "Drive" },
-        { "tmdbId": 365, "mediaType": "movie", "title": "Mulholland Drive" },
-        { "tmdbId": 466272, "mediaType": "movie", "title": "Once Upon a Time in Hollywood" }
+        {
+          "tmdbId": 278,
+          "mediaType": "movie",
+          "title": "The Shawshank Redemption"
+        },
+        {
+          "tmdbId": 238,
+          "mediaType": "movie",
+          "title": "The Godfather"
+        },
+        {
+          "tmdbId": 497,
+          "mediaType": "movie",
+          "title": "The Green Mile"
+        },
+        {
+          "tmdbId": 13,
+          "mediaType": "movie",
+          "title": "Forrest Gump"
+        },
+        {
+          "tmdbId": 157336,
+          "mediaType": "movie",
+          "title": "Interstellar"
+        },
+        {
+          "tmdbId": 281957,
+          "mediaType": "movie",
+          "title": "The Revenant"
+        },
+        {
+          "tmdbId": 597,
+          "mediaType": "movie",
+          "title": "Titanic"
+        }
       ],
-      "_note": "Placeholder — replace with real curated top-10 set."
+      "_note": "Long (>120 min), highly rated, character-led drama with no action lead. Popularity-ordered candidates were pruned by hand: Django Unchained and Inglourious Basterds are long and well rated but are not what 'sink into' means.",
+      "gate": false,
+      "sentence": "something long and absorbing I can sink into"
     },
     {
-      "query": "comfort comedy from the 90s",
+      "query": "an exciting, high-energy crowd-pleaser — thrilling, entertaining and effortless to enjoy, an adrenaline-fuelled popcorn film",
+      "presetKey": "quick",
+      "kind": "preset-sentence",
       "expected": [
-        { "tmdbId": 808, "mediaType": "movie", "title": "Shrek" },
-        { "tmdbId": 105, "mediaType": "movie", "title": "Back to the Future" }
+        {
+          "tmdbId": 24428,
+          "mediaType": "movie",
+          "title": "The Avengers"
+        },
+        {
+          "tmdbId": 293660,
+          "mediaType": "movie",
+          "title": "Deadpool"
+        },
+        {
+          "tmdbId": 118340,
+          "mediaType": "movie",
+          "title": "Guardians of the Galaxy"
+        },
+        {
+          "tmdbId": 284053,
+          "mediaType": "movie",
+          "title": "Thor: Ragnarok"
+        },
+        {
+          "tmdbId": 299536,
+          "mediaType": "movie",
+          "title": "Avengers: Infinity War"
+        },
+        {
+          "tmdbId": 19995,
+          "mediaType": "movie",
+          "title": "Avatar"
+        }
       ],
-      "_note": "Placeholder — replace with real curated top-10 set."
+      "_note": "Action/adventure crowd-pleasers. Inception and Interstellar are excluded on purpose despite topping the same genre query — 'don't have to think' rules them out, and the engine putting them first would be a real miss.",
+      "gate": false,
+      "sentence": "something fast and fun where I don't have to think"
+    },
+    {
+      "query": "an eerie, unsettling and atmospheric horror or thriller — creepy, ominous, mysterious, tense and haunting",
+      "presetKey": "late",
+      "kind": "preset-sentence",
+      "expected": [
+        {
+          "tmdbId": 807,
+          "mediaType": "movie",
+          "title": "Se7en"
+        },
+        {
+          "tmdbId": 694,
+          "mediaType": "movie",
+          "title": "The Shining"
+        },
+        {
+          "tmdbId": 419430,
+          "mediaType": "movie",
+          "title": "Get Out"
+        },
+        {
+          "tmdbId": 11324,
+          "mediaType": "movie",
+          "title": "Shutter Island"
+        },
+        {
+          "tmdbId": 346364,
+          "mediaType": "movie",
+          "title": "It"
+        },
+        {
+          "tmdbId": 66732,
+          "mediaType": "tv",
+          "title": "Stranger Things"
+        },
+        {
+          "tmdbId": 210577,
+          "mediaType": "movie",
+          "title": "Gone Girl"
+        }
+      ],
+      "gate": false,
+      "sentence": "something dark and strange for late at night"
+    },
+    {
+      "query": "a heartwarming, gentle and uplifting film — sweet, charming, tender and reassuring, an easy and soothing watch",
+      "presetKey": "comfort",
+      "kind": "preset-sentence",
+      "expected": [
+        {
+          "tmdbId": 105,
+          "mediaType": "movie",
+          "title": "Back to the Future"
+        },
+        {
+          "tmdbId": 150540,
+          "mediaType": "movie",
+          "title": "Inside Out"
+        },
+        {
+          "tmdbId": 14160,
+          "mediaType": "movie",
+          "title": "Up"
+        },
+        {
+          "tmdbId": 354912,
+          "mediaType": "movie",
+          "title": "Coco"
+        },
+        {
+          "tmdbId": 12,
+          "mediaType": "movie",
+          "title": "Finding Nemo"
+        },
+        {
+          "tmdbId": 862,
+          "mediaType": "movie",
+          "title": "Toy Story"
+        },
+        {
+          "tmdbId": 13,
+          "mediaType": "movie",
+          "title": "Forrest Gump"
+        }
+      ],
+      "_note": "The comedy+romance genre query returns Pulp Fiction and The Wolf of Wall Street near the top on vote count alone. Neither is 'easy and warm'; both are excluded, which is the point of curating rather than taking the head of a popularity list.",
+      "gate": false,
+      "sentence": "something easy and warm I can half-watch"
+    },
+    {
+      "query": "a recent, well-reviewed film or series from the last year that both critics and audiences rated highly",
+      "presetKey": "new-good",
+      "kind": "preset-sentence",
+      "expected": [
+        {
+          "tmdbId": 693134,
+          "mediaType": "movie",
+          "title": "Dune: Part Two"
+        },
+        {
+          "tmdbId": 1184918,
+          "mediaType": "movie",
+          "title": "The Wild Robot"
+        },
+        {
+          "tmdbId": 1022789,
+          "mediaType": "movie",
+          "title": "Inside Out 2"
+        },
+        {
+          "tmdbId": 1233413,
+          "mediaType": "movie",
+          "title": "Sinners"
+        },
+        {
+          "tmdbId": 974576,
+          "mediaType": "movie",
+          "title": "Conclave"
+        },
+        {
+          "tmdbId": 1064213,
+          "mediaType": "movie",
+          "title": "Anora"
+        },
+        {
+          "tmdbId": 933260,
+          "mediaType": "movie",
+          "title": "The Substance"
+        },
+        {
+          "tmdbId": 786892,
+          "mediaType": "movie",
+          "title": "Furiosa: A Mad Max Saga"
+        }
+      ],
+      "_note": "2024–2025, vote_average >= 7.2, vote_count >= 2500. In the product this preset also carries a hard `released` + `minRating` filter, so the engine is not asked to infer recency on its own; this entry measures how much of the intent the phrasing alone recovers.",
+      "gate": false,
+      "sentence": "something recent that isn't rubbish"
+    },
+    {
+      "query": "something I don't have to pay for",
+      "presetKey": "free",
+      "kind": "preset-sentence",
+      "expected": [
+        {
+          "tmdbId": 155,
+          "mediaType": "movie",
+          "title": "The Dark Knight"
+        },
+        {
+          "tmdbId": 550,
+          "mediaType": "movie",
+          "title": "Fight Club"
+        },
+        {
+          "tmdbId": 24428,
+          "mediaType": "movie",
+          "title": "The Avengers"
+        },
+        {
+          "tmdbId": 278,
+          "mediaType": "movie",
+          "title": "The Shawshank Redemption"
+        },
+        {
+          "tmdbId": 680,
+          "mediaType": "movie",
+          "title": "Pulp Fiction"
+        },
+        {
+          "tmdbId": 13,
+          "mediaType": "movie",
+          "title": "Forrest Gump"
+        }
+      ],
+      "_note": "EXPECTED TO BE THE WEAKEST ENTRY, and kept for exactly that reason. Cost is a fact about availability, not a property any embedding can carry, so this sentence has no semantic answer — the expected set is simply well-rated titles verified as subscription-included on 2026-09-09. This is the measured evidence for the 'Free to watch' card carrying `phrase: null` and contributing only a filter (§2.3), and for the stream_type-aware RPC in migration 080. A future session that gives this card a phrase should have to justify it against this number.",
+      "gate": false,
+      "sentence": "something I don't have to pay for"
+    },
+    {
+      "query": "a tight, satisfying, self-contained film under two hours",
+      "presetKey": "finish-tonight",
+      "kind": "preset-sentence",
+      "expected": [
+        {
+          "tmdbId": 105,
+          "mediaType": "movie",
+          "title": "Back to the Future"
+        },
+        {
+          "tmdbId": 329865,
+          "mediaType": "movie",
+          "title": "Arrival"
+        },
+        {
+          "tmdbId": 419430,
+          "mediaType": "movie",
+          "title": "Get Out"
+        },
+        {
+          "tmdbId": 354912,
+          "mediaType": "movie",
+          "title": "Coco"
+        },
+        {
+          "tmdbId": 10681,
+          "mediaType": "movie",
+          "title": "WALL·E"
+        },
+        {
+          "tmdbId": 293660,
+          "mediaType": "movie",
+          "title": "Deadpool"
+        },
+        {
+          "tmdbId": 150540,
+          "mediaType": "movie",
+          "title": "Inside Out"
+        }
+      ],
+      "_note": "Self-contained films of 85–118 minutes, rating >= 7.6. Runtime is enforced by the preset's filter in the product; this measures the phrasing alone.",
+      "gate": false,
+      "sentence": "a film I can actually finish tonight"
+    },
+    {
+      "query": "a warm, funny family film or series that adults enjoy as much as children — nothing frightening or adult",
+      "presetKey": "family",
+      "kind": "preset-sentence",
+      "expected": [
+        {
+          "tmdbId": 862,
+          "mediaType": "movie",
+          "title": "Toy Story"
+        },
+        {
+          "tmdbId": 12,
+          "mediaType": "movie",
+          "title": "Finding Nemo"
+        },
+        {
+          "tmdbId": 8587,
+          "mediaType": "movie",
+          "title": "The Lion King"
+        },
+        {
+          "tmdbId": 14160,
+          "mediaType": "movie",
+          "title": "Up"
+        },
+        {
+          "tmdbId": 354912,
+          "mediaType": "movie",
+          "title": "Coco"
+        },
+        {
+          "tmdbId": 10681,
+          "mediaType": "movie",
+          "title": "WALL·E"
+        },
+        {
+          "tmdbId": 585,
+          "mediaType": "movie",
+          "title": "Monsters, Inc."
+        },
+        {
+          "tmdbId": 150540,
+          "mediaType": "movie",
+          "title": "Inside Out"
+        }
+      ],
+      "gate": false,
+      "sentence": "something we can all watch together"
+    },
+    {
+      "query": "severance",
+      "kind": "known-title",
+      "expected": [
+        {
+          "tmdbId": 95396,
+          "mediaType": "tv",
+          "title": "Severance"
+        }
+      ],
+      "_note": "The known-title half exists to calibrate the title-hit threshold in src/lib/search/titleHit.ts (§9.2 routing rule 2). Each of these is a title a user would plausibly type; the engine should return it first, and the app should never send it to the engine at all.",
+      "gate": true
+    },
+    {
+      "query": "the bear",
+      "kind": "known-title",
+      "expected": [
+        {
+          "tmdbId": 136315,
+          "mediaType": "tv",
+          "title": "The Bear"
+        }
+      ],
+      "gate": true
+    },
+    {
+      "query": "dune part two",
+      "kind": "known-title",
+      "expected": [
+        {
+          "tmdbId": 693134,
+          "mediaType": "movie",
+          "title": "Dune: Part Two"
+        }
+      ],
+      "gate": true
+    },
+    {
+      "query": "conclave",
+      "kind": "known-title",
+      "expected": [
+        {
+          "tmdbId": 974576,
+          "mediaType": "movie",
+          "title": "Conclave"
+        }
+      ],
+      "gate": true
+    },
+    {
+      "query": "anora",
+      "kind": "known-title",
+      "expected": [
+        {
+          "tmdbId": 1064213,
+          "mediaType": "movie",
+          "title": "Anora"
+        }
+      ],
+      "gate": true
+    },
+    {
+      "query": "the substance",
+      "kind": "known-title",
+      "expected": [
+        {
+          "tmdbId": 933260,
+          "mediaType": "movie",
+          "title": "The Substance"
+        }
+      ],
+      "gate": true
+    },
+    {
+      "query": "chernobyl",
+      "kind": "known-title",
+      "expected": [
+        {
+          "tmdbId": 87108,
+          "mediaType": "tv",
+          "title": "Chernobyl"
+        }
+      ],
+      "gate": true
+    },
+    {
+      "query": "everything everywhere all at once",
+      "kind": "known-title",
+      "expected": [
+        {
+          "tmdbId": 545611,
+          "mediaType": "movie",
+          "title": "Everything Everywhere All at Once"
+        }
+      ],
+      "gate": true
     }
   ]
 }

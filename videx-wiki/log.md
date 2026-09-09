@@ -1046,3 +1046,38 @@ Which is coherent rather than contradictory. New is built from recency and per-s
 - New page: wiki/concepts/operations/ota-updates.md
 - Fix: native/plugins/withUpdatesChannel.js writes the channel at prebuild; expo-updates' own plugin is registered later by prebuild-config and so runs first, including the branch that deletes that key, which is why writing it from app.json's plugin list wins
 - Guards: android-release.yml now asserts the channel is in the AAB and publishes its baked fingerprint as an artifact; ota-update.yml compares Android against that artifact instead of `eas build:list`
+
+## [2026-09-09] ingest | Presets, one-intent Browse, and the first real semantic eval
+PR #139 (branch `feat/native-presets-and-routing`), Session 3 of the quick-filters/presets recommendation. Updated: `wiki/concepts/operations/phase-search-v2.md`, `wiki/registers/parking-lot.md` (IN-SL-002 closed, IN-V3-003 code removal recorded). New: `wiki/concepts/evaluations/semantic-search-quality.md`.
+
+**Browse stopped being three modes.** The screen held typed search, semantic mood and filter-only discover as mutually exclusive states, each clearing the others. That is why the brief's motivating sentence was inexpressible — not because any axis was missing, but because a mood tap called `setFilters(DEFAULT_FILTERS)`. One `intent` object now, and nothing clears anything else.
+
+**The eval fixture was run for the first time, and it found two things the code could not tell us.**
+
+The first is a rig defect. `search-semantic-eval.ts` scored the raw `match_titles_by_vector` output, with none of the quality floor the app applies afterwards. So it was grading rows no user can ever see — "something easy and warm I can half-watch" was being scored against *Snug And Cozi* and *Home Made Easy*, both zero votes. Applying the app's own floor before scoring took the known-title half from 7/8 to 8/8 on its own.
+
+The second is a product finding, and it is the one worth carrying forward. The long preset **phrases** retrieve the right register: `slow` returns *Small Things Like These*, *The Quiet Girl*, *I'm Thinking of Ending Things*; `late` returns *The Haunting of Hill House* and *Marrowbone*. The short **sentences** a person would actually type do not — they match surface words:
+
+| Typed sentence | What came back |
+|---|---|
+| "something fast and fun where I don't have to think" | the *Fast & Furious* franchise |
+| "something easy and warm I can half-watch" | *Hot Frosty*, *Melting Me Softly*, *Country Comfort* |
+| "something long and absorbing I can sink into" | *The Abyss*, *Deep*, *Deep Sea*, *Deeply* |
+| "something we can all watch together" | *As We See It*, *Here We Go* |
+
+"fast", "warm", "deep"/"sink", "we". Every one is a word match.
+
+**What that means for the flag.** The free-text route shipped as specified and it is safe — `search_semantic` is per-user and default-off, the banner says *"Reading that as a feeling, not a title"* rather than pretending, and *"Search titles instead"* is one tap away. But flipping the flag turns on both paths at once, and this measurement says the preset path is ready and the free-text path is not. It is also the first hard evidence for the query-understanding step in §8.2: the gap that step closes is exactly the distance between those two tables.
+
+**A corollary nobody had to argue for.** *Free to watch* was given `phrase: null` on design grounds — cost is a fact, not a feeling. Its sentence duly scored nothing and could not have scored anything. The card contributes a filter instead, and migration 080 (`subscription_included_titles`) is what makes that filter real on the semantic path, closing IN-SL-002.
+
+**Also closed here:** the last surviving copy of the §0.2 documentary bug, in `semanticRetrieval`'s post-filter — it restricted Docs to the movie table and subtracted genre-99 titles from Movies, the opposite of `documentary.ts` on both counts, so a documentary series was unreachable from either segment on the semantic path. Session 2 fixed the other two paths; this was the third.
+
+**Device testing then found two more, both in the controls above a described result.** Joe exercised the OTA on 2026-09-09; the deep link from the title-hit card works. The instrumentation caught what the screen did not.
+
+The **category pills rendered on the described route**. They filter Mode A's list, and a described grid comes from the engine, which never sees `category` — so tapping Movies changed nothing visible while quietly re-running Mode A and writing a log row. Three rows landed for one query ("epic fantasy"), one per pill tapped, same session, seven seconds apart. A control that looks like it works and does not is worse than no control; media type on that route is `filters.contentType`, which *is* applied server-side.
+
+**`result_count` described the wrong list.** Those three rows all read 0 while a full semantic grid was on screen, because Mode A finds no title called "epic fantasy" — which is exactly why the query routed to the engine. Left alone, every described query would have been recorded as a failed search, and the zero-result rate §8.2 makes a first-class metric would have been measuring the opposite of what it claims. The logger now takes the rendered list.
+
+The pattern is worth naming, because it is the third session in a row to hit it: **the defects that survive CI are the ones where a control is attached to the wrong data source.** Session 1 and Session 2 each found three this way; neither type checking nor tests can see them, because every individual piece is correct. Querying `user_interactions` after the fact is what makes them visible — the screen looked fine.
+

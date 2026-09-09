@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -90,6 +90,57 @@ export type Database = {
           },
         ]
       }
+      backfill_skips: {
+        Row: {
+          media_type: string
+          reason: string
+          skipped_at: string
+          tmdb_id: number
+        }
+        Insert: {
+          media_type: string
+          reason?: string
+          skipped_at?: string
+          tmdb_id: number
+        }
+        Update: {
+          media_type?: string
+          reason?: string
+          skipped_at?: string
+          tmdb_id?: number
+        }
+        Relationships: []
+      }
+      cache_warm_status: {
+        Row: {
+          available_ids: number | null
+          duration_ms: number | null
+          error: string | null
+          id: number
+          matched: number | null
+          ok: boolean
+          ran_at: string
+        }
+        Insert: {
+          available_ids?: number | null
+          duration_ms?: number | null
+          error?: string | null
+          id?: number
+          matched?: number | null
+          ok?: boolean
+          ran_at?: string
+        }
+        Update: {
+          available_ids?: number | null
+          duration_ms?: number | null
+          error?: string | null
+          id?: number
+          matched?: number | null
+          ok?: boolean
+          ran_at?: string
+        }
+        Relationships: []
+      }
       card_impression_daily_totals: {
         Row: {
           content_id: number
@@ -164,72 +215,6 @@ export type Database = {
         ]
       }
       card_impressions_default: {
-        Row: {
-          content_id: number
-          id: number
-          metadata: Json | null
-          position: number
-          session_id: string
-          shown_at: string
-          source_surface: string
-          user_id: string
-        }
-        Insert: {
-          content_id: number
-          id?: never
-          metadata?: Json | null
-          position: number
-          session_id: string
-          shown_at: string
-          source_surface: string
-          user_id: string
-        }
-        Update: {
-          content_id?: number
-          id?: never
-          metadata?: Json | null
-          position?: number
-          session_id?: string
-          shown_at?: string
-          source_surface?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      card_impressions_p20260401: {
-        Row: {
-          content_id: number
-          id: number
-          metadata: Json | null
-          position: number
-          session_id: string
-          shown_at: string
-          source_surface: string
-          user_id: string
-        }
-        Insert: {
-          content_id: number
-          id?: never
-          metadata?: Json | null
-          position: number
-          session_id: string
-          shown_at: string
-          source_surface: string
-          user_id: string
-        }
-        Update: {
-          content_id?: number
-          id?: never
-          metadata?: Json | null
-          position?: number
-          session_id?: string
-          shown_at?: string
-          source_surface?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      card_impressions_p20260501: {
         Row: {
           content_id: number
           id: number
@@ -362,6 +347,72 @@ export type Database = {
         Relationships: []
       }
       card_impressions_p20260901: {
+        Row: {
+          content_id: number
+          id: number
+          metadata: Json | null
+          position: number
+          session_id: string
+          shown_at: string
+          source_surface: string
+          user_id: string
+        }
+        Insert: {
+          content_id: number
+          id?: never
+          metadata?: Json | null
+          position: number
+          session_id: string
+          shown_at: string
+          source_surface: string
+          user_id: string
+        }
+        Update: {
+          content_id?: number
+          id?: never
+          metadata?: Json | null
+          position?: number
+          session_id?: string
+          shown_at?: string
+          source_surface?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      card_impressions_p20261001: {
+        Row: {
+          content_id: number
+          id: number
+          metadata: Json | null
+          position: number
+          session_id: string
+          shown_at: string
+          source_surface: string
+          user_id: string
+        }
+        Insert: {
+          content_id: number
+          id?: never
+          metadata?: Json | null
+          position: number
+          session_id: string
+          shown_at: string
+          source_surface: string
+          user_id: string
+        }
+        Update: {
+          content_id?: number
+          id?: never
+          metadata?: Json | null
+          position?: number
+          session_id?: string
+          shown_at?: string
+          source_surface?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      card_impressions_p20261101: {
         Row: {
           content_id: number
           id: number
@@ -903,6 +954,33 @@ export type Database = {
           },
         ]
       }
+      pipeline_health: {
+        Row: {
+          detail: Json | null
+          failures: string[]
+          id: number
+          ok: boolean
+          ran_at: string
+          source: string
+        }
+        Insert: {
+          detail?: Json | null
+          failures?: string[]
+          id?: number
+          ok: boolean
+          ran_at?: string
+          source?: string
+        }
+        Update: {
+          detail?: Json | null
+          failures?: string[]
+          id?: number
+          ok?: boolean
+          ran_at?: string
+          source?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           age_range: string | null
@@ -939,6 +1017,30 @@ export type Database = {
           updated_at?: string | null
           username?: string
           viewing_context?: string | null
+        }
+        Relationships: []
+      }
+      search_terms_daily: {
+        Row: {
+          count: number
+          day: string
+          median_result_count: number | null
+          mode: string
+          term_normalised: string
+        }
+        Insert: {
+          count: number
+          day: string
+          median_result_count?: number | null
+          mode: string
+          term_normalised: string
+        }
+        Update: {
+          count?: number
+          day?: string
+          median_result_count?: number | null
+          mode?: string
+          term_normalised?: string
         }
         Relationships: []
       }
@@ -1094,10 +1196,16 @@ export type Database = {
       }
       sync_log: {
         Row: {
+          availability_added: number | null
+          availability_removed: number | null
+          availability_updated: number | null
+          chain_state: Json | null
           completed_at: string | null
           error_details: Json | null
           errors: number | null
+          heartbeat_at: string | null
           id: string
+          sa_requests: number
           source: string
           started_at: string | null
           status: string | null
@@ -1108,10 +1216,16 @@ export type Database = {
           titles_updated: number | null
         }
         Insert: {
+          availability_added?: number | null
+          availability_removed?: number | null
+          availability_updated?: number | null
+          chain_state?: Json | null
           completed_at?: string | null
           error_details?: Json | null
           errors?: number | null
+          heartbeat_at?: string | null
           id?: string
+          sa_requests?: number
           source: string
           started_at?: string | null
           status?: string | null
@@ -1122,10 +1236,16 @@ export type Database = {
           titles_updated?: number | null
         }
         Update: {
+          availability_added?: number | null
+          availability_removed?: number | null
+          availability_updated?: number | null
+          chain_state?: Json | null
           completed_at?: string | null
           error_details?: Json | null
           errors?: number | null
+          heartbeat_at?: string | null
           id?: string
+          sa_requests?: number
           source?: string
           started_at?: string | null
           status?: string | null
@@ -1149,6 +1269,7 @@ export type Database = {
           slider_variety: number | null
           taste_vector_bootstrapped_from: string | null
           taste_vector_interaction_count: number
+          taste_vector_recomputed_at: string | null
           taste_vector_updated_at: string | null
           taste_vector_v2: string | null
           user_id: string
@@ -1164,6 +1285,7 @@ export type Database = {
           slider_variety?: number | null
           taste_vector_bootstrapped_from?: string | null
           taste_vector_interaction_count?: number
+          taste_vector_recomputed_at?: string | null
           taste_vector_updated_at?: string | null
           taste_vector_v2?: string | null
           user_id: string
@@ -1179,6 +1301,7 @@ export type Database = {
           slider_variety?: number | null
           taste_vector_bootstrapped_from?: string | null
           taste_vector_interaction_count?: number
+          taste_vector_recomputed_at?: string | null
           taste_vector_updated_at?: string | null
           taste_vector_v2?: string | null
           user_id?: string
@@ -1225,12 +1348,14 @@ export type Database = {
       }
       titles: {
         Row: {
+          available_services: string[]
           backdrop_path: string | null
           cast_top_5: string[] | null
           content_rating: string | null
           created_at: string | null
           director: string | null
           embedding: string | null
+          enrich_skipped_at: string | null
           genre_ids: number[] | null
           id: number
           imdb_id: string | null
@@ -1256,12 +1381,14 @@ export type Database = {
           vote_count: number | null
         }
         Insert: {
+          available_services?: string[]
           backdrop_path?: string | null
           cast_top_5?: string[] | null
           content_rating?: string | null
           created_at?: string | null
           director?: string | null
           embedding?: string | null
+          enrich_skipped_at?: string | null
           genre_ids?: number[] | null
           id?: number
           imdb_id?: string | null
@@ -1287,12 +1414,14 @@ export type Database = {
           vote_count?: number | null
         }
         Update: {
+          available_services?: string[]
           backdrop_path?: string | null
           cast_top_5?: string[] | null
           content_rating?: string | null
           created_at?: string | null
           director?: string | null
           embedding?: string | null
+          enrich_skipped_at?: string | null
           genre_ids?: number[] | null
           id?: number
           imdb_id?: string | null
@@ -1616,6 +1745,18 @@ export type Database = {
         }
         Relationships: []
       }
+      pipeline_health_recent: {
+        Row: {
+          age: string | null
+          delta: number | null
+          failures: string[] | null
+          gap: number | null
+          ok: boolean | null
+          ran_at: string | null
+          source: string | null
+        }
+        Relationships: []
+      }
       ratings_coverage: {
         Row: {
           missing_rt_with_imdb: number | null
@@ -1652,17 +1793,22 @@ export type Database = {
       }
       sync_history: {
         Row: {
+          availability_added: number | null
+          availability_removed: number | null
+          availability_updated: number | null
           completed_at: string | null
           duration_seconds: number | null
+          error_details: Json | null
           errors: number | null
+          sa_requests: number | null
+          sa_requests_per_change: number | null
           source: string | null
+          stalled_for: string | null
           started_at: string | null
           status: string | null
           sync_type: string | null
           titles_added: number | null
           titles_processed: number | null
-          titles_removed: number | null
-          titles_updated: number | null
         }
         Relationships: []
       }
@@ -1747,6 +1893,10 @@ export type Database = {
           p_source_tablename?: string
         }
         Returns: boolean
+      }
+      bulk_set_title_embeddings: {
+        Args: { p_embeddings: string[]; p_ids: number[] }
+        Returns: number
       }
       calculate_time_partition_info: {
         Args: {
@@ -1858,6 +2008,8 @@ export type Database = {
         }
         Returns: undefined
       }
+      count_available_services_drift: { Args: never; Returns: number }
+      count_missing_title_ids: { Args: never; Returns: number }
       create_parent: {
         Args: {
           p_automatic_maintenance?: string
@@ -1949,6 +2101,10 @@ export type Database = {
       dump_partitioned_table_definition: {
         Args: { p_ignore_template_table?: boolean; p_parent_table: string }
         Returns: string
+      }
+      enqueue_function_call: {
+        Args: { p_body?: Json; p_function: string }
+        Returns: number
       }
       export_user_data: { Args: never; Returns: Json }
       get_available_tmdb_ids: { Args: { service_ids: string[] }; Returns: Json }
@@ -2063,6 +2219,13 @@ export type Database = {
           tmdb_id: number
         }[]
       }
+      paid_only_titles: {
+        Args: { p_limit?: number; p_services: string[] }
+        Returns: {
+          media_type: string
+          tmdb_id: number
+        }[]
+      }
       partition_data_id: {
         Args: {
           p_analyze?: boolean
@@ -2092,9 +2255,22 @@ export type Database = {
         Returns: number
       }
       partition_gap_fill: { Args: { p_parent_table: string }; Returns: number }
+      reap_stale_sync_runs: {
+        Args: { p_stale_after?: string }
+        Returns: number
+      }
       reapply_privileges: {
         Args: { p_parent_table: string }
         Returns: undefined
+      }
+      recompute_title_available_services: {
+        Args: { p_media_type: string; p_tmdb_id: number }
+        Returns: undefined
+      }
+      refresh_title_available_services: { Args: never; Returns: number }
+      resume_stalled_chains: {
+        Args: { p_max_resumes?: number; p_stale_after?: string }
+        Returns: number
       }
       run_data_quality_check: {
         Args: never
@@ -2140,6 +2316,13 @@ export type Database = {
         Args: { p_jobmon?: boolean; p_parent_table: string }
         Returns: boolean
       }
+      subscription_included_titles: {
+        Args: { p_services?: string[]; p_tmdb_ids: number[] }
+        Returns: {
+          media_type: string
+          tmdb_id: number
+        }[]
+      }
       undo_partition: {
         Args: {
           p_batch_interval?: string
@@ -2156,6 +2339,7 @@ export type Database = {
       username_available: { Args: { check_username: string }; Returns: boolean }
       uuid7_time_decoder: { Args: { uuidv7: string }; Returns: string }
       uuid7_time_encoder: { Args: { ts: string }; Returns: string }
+      warm_recommendation_caches: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
@@ -2177,12 +2361,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2206,11 +2390,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2231,11 +2415,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2256,11 +2440,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2273,11 +2457,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

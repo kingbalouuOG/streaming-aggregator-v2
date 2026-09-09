@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BrowsePresearch, type Mood } from '@/components/BrowsePresearch';
+import { BrowsePresearch } from '@/components/BrowsePresearch';
 import {
   applyBrowseFilters,
   countActiveFilters,
@@ -19,6 +19,7 @@ import {
 import { FilterSheet } from '@/components/FilterSheet';
 import { PosterGridCard } from '@/components/PosterGridCard';
 import { PosterGridSkeleton } from '@/components/Skeleton';
+import { TitleHitCard } from '@/components/TitleHitCard';
 import { useBrowseDiscover } from '@/hooks/useBrowseDiscover';
 import { useSearch, type SearchCategory } from '@/hooks/useSearch';
 import {
@@ -30,16 +31,81 @@ import { useSemanticFlag, useSemanticSearch } from '@/hooks/useSemanticSearch';
 import { useUserServices } from '@/hooks/useUserServices';
 import { useWatchlist } from '@/hooks/useWatchlist';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
+import {
+  PRESET_SENTENCES,
+  presetByKey,
+  selectPresets,
+  weekBucketFor,
+  type SelectedPreset,
+} from '@/lib/content/presets';
+import { selectTitleHit } from '@/lib/search/titleHit';
+import { getV2TasteProfile } from '@/lib/taste-v2/tasteProfileV2';
 import type { ContentItem } from '@/lib/types/content';
+import { useQuery } from '@tanstack/react-query';
+
+// Browse — one intent, refined in place (recommendation 2026-09-08-002 §9).
+//
+// This screen used to hold three MUTUALLY EXCLUSIVE modes: typed search, a
+// semantic mood, and filter-only discover. Tapping a mood cleared the filters
+// and the query; typing cleared the mood. So the one sentence the whole brief
+// is about — "a new film I don't have to pay for that isn't cheesy crap" —
+// could not be expressed, because its halves lived in different modes.
+//
+// Now there is ONE state, `intent`, and nothing clears anything else:
+//
+//   text     what is in the box
+//   phrase   what goes to vector search — a preset's phrase, or the typed
+//            text when it does not read as a title
+//   moodKey  which preset is lit
+//   filters  the accumulated constraints
+//
+// A preset tap MERGES its filters and sets its phrase. A typed query sets
+// text and routes by shape. "Clear all" resets the lot. The refine chip row
+// that makes the composition tappable is Session 4; the composition itself is
+// here, and already works through the FilterSheet.
 
 const CATEGORIES: SearchCategory[] = ['All', 'Movies', 'TV', 'Docs'];
 const SORT_MODES: SortMode[] = ['best', 'popularity', 'rating', 'a_z', 'z_a'];
 
+interface Intent {
+  text: string;
+  /** Sent to vector search when the flag is on. Null = nothing to embed. */
+  phrase: string | null;
+  /** The lit preset, or null. Drives the banner and the log metadata. */
+  moodKey: string | null;
+  filters: BrowseFilters;
+}
+
+const EMPTY_INTENT: Intent = {
+  text: '',
+  phrase: null,
+  moodKey: null,
+  filters: DEFAULT_FILTERS,
+};
+
 export default function BrowseScreen() {
   const router = useRouter();
-  const [query, setQuery] = useState('');
+  const [intent, setIntent] = useState<Intent>(EMPTY_INTENT);
   const [debounced, setDebounced] = useState('');
   const [category, setCategory] = useState<SearchCategory>('All');
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sortMode, setSortMode] = useState<SortMode>('best');
+  const [sortOpen, setSortOpen] = useState(false);
+  // Set by "Search titles instead" — the user has told us this text is a
+  // title, so stop reading it as a feeling until they type something else.
+  const [forceTitles, setForceTitles] = useState(false);
+  // Which of the eight sentences the placeholder is showing. Advances on
+  // blur, never per keystroke: a placeholder that changes while you are
+  // reading it is a distraction, and it is invisible while you type anyway.
+  const [placeholderIndex, setPlaceholderIndex] = useState(() =>
+    Math.floor(Math.random() * PRESET_SENTENCES.length),
+  );
+  // Search-term logging (§5). Typed queries log themselves once settled; the
+  // two discrete intents — a preset tap and a FilterSheet apply — each stage a
+  // SearchIntent that fires as soon as its result count is known.
+  const [semanticIntent, setSemanticIntent] = useState<SearchIntent | null>(null);
+  const [filterIntent, setFilterIntent] = useState<SearchIntent | null>(null);
+
   // Applied from the route so the quick-filter empty state's "Browse all
   // documentaries" button lands on documentaries rather than dropping the
   // user into an unfiltered grid (recommendation 2026-09-08-002 §1.2). This
@@ -59,48 +125,102 @@ export default function BrowseScreen() {
     contentType?: string;
     seed?: string;
   }>();
-  const [filters, setFilters] = useState<BrowseFilters>(DEFAULT_FILTERS);
   const appliedSeedRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!filterSeed || appliedSeedRef.current === filterSeed) return;
     if (!isContentType(contentTypeParam) || contentTypeParam === 'all') return;
     appliedSeedRef.current = filterSeed;
-    setFilters((prev) => ({ ...prev, contentType: contentTypeParam }));
+    setIntent((prev) => ({
+      ...prev,
+      filters: { ...prev.filters, contentType: contentTypeParam },
+    }));
   }, [contentTypeParam, filterSeed]);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [sortMode, setSortMode] = useState<SortMode>('best');
-  const [sortOpen, setSortOpen] = useState(false);
-  // Active mood when semantic search is on — { key, label, phrase }, else null.
-  const [mood, setMood] = useState<{ key: string; label: string; phrase: string } | null>(null);
-  // Search-term logging (§5). Typed queries log themselves once settled; the
-  // two discrete intents — a mood tap and a FilterSheet apply — each stage a
-  // SearchIntent that fires as soon as its result count is known.
-  const [semanticIntent, setSemanticIntent] = useState<SearchIntent | null>(null);
-  const [filterIntent, setFilterIntent] = useState<SearchIntent | null>(null);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(query), 300);
+    const t = setTimeout(() => setDebounced(intent.text), 300);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [intent.text]);
 
   const { data: results, isFetching } = useSearch(debounced, category);
   const { data: watchlist } = useWatchlist();
   const { data: userServices } = useUserServices();
   const { data: semanticOn } = useSemanticFlag();
 
+  const filters = intent.filters;
   const searching = debounced.trim().length >= 2;
   const activeCount = countActiveFilters(filters);
-  // Semantic mood mode — a mood is active and the user isn't typing. Only
-  // ever set when the `search_semantic` flag is on (see handleMood).
-  const semanticMode = !!mood && !searching;
-  const semantic = useSemanticSearch(mood?.phrase ?? null, semanticMode);
-  // Filter-only browse — filters applied without a text query or a mood.
+
+  // — Routing (§9.2) ————————————————————————————————————————————————
+  // 1. Mode A always runs on a settled query — retrieval must never wait on
+  //    an embedding round trip.
+  // 2. A confident title hit is a lookup: the card, and no refine affordance.
+  // 3. Otherwise, with the flag on, the text IS the phrase.
+  // 4. Flag off: today's Mode A grid, honestly thin.
+  const titleHit = useMemo(
+    () => (searching ? selectTitleHit(results, debounced) : null),
+    [searching, results, debounced],
+  );
+  const describedRoute = searching && !titleHit && !!semanticOn && !forceTitles;
+
+  // The phrase actually sent to vector search: the typed text when it reads
+  // as a description, otherwise the active preset's phrase. A preset whose
+  // phrase is null ("Free to watch" — a fact, not a feeling) contributes only
+  // its filters and leaves whatever phrase is already running (§2.3).
+  const semanticQuery = describedRoute ? debounced.trim() : searching ? null : intent.phrase;
+  const semanticMode = !!semanticOn && !!semanticQuery;
+  const semantic = useSemanticSearch(
+    semanticQuery,
+    semanticMode,
+    filters,
+    userServices ?? [],
+  );
+
+  // Filter-only browse — constraints with no text and nothing to embed.
   const filterOnlyMode = !searching && !semanticMode && activeCount > 0;
   const presearch = !searching && !semanticMode && activeCount === 0;
-  const showControls = searching || filterOnlyMode;
+  // Hidden on a confident title hit: there is nothing to refine about a title
+  // the user has already named, and the prototype's state 2 shows the card with
+  // no controls above it. This is "refine only where it helps" (§9.2) in
+  // today's vocabulary; Session 4 applies the same rule to the refine row.
+  const showControls = (searching && !titleHit) || filterOnlyMode || semanticMode;
+  // The category pills filter MODE A's result list, so they only belong on a
+  // Mode A grid. On the described route the grid comes from the engine, which
+  // never sees `category` — device testing 2026-09-09 caught them rendering
+  // there, where tapping Movies changed nothing on screen while quietly
+  // re-running Mode A and writing a log row. A control that looks like it
+  // works and does not is worse than no control. Media type on the described
+  // route is `filters.contentType`, which IS applied server-side. Session 4
+  // removes the pills outright.
+  const showCategories = searching && !titleHit && !describedRoute;
 
   const browse = useBrowseDiscover(filters, sortMode, filterOnlyMode, userServices ?? []);
+
+  // Which four cards the empty state offers. Recomputed on mount and
+  // whenever the profile lands; the hour is read once per render of the
+  // empty state, which is as often as the answer can change.
+  const { data: tasteProfile } = useQuery({
+    queryKey: ['native', 'tasteProfile', 'clusters'],
+    queryFn: () => getV2TasteProfile().catch(() => null),
+    staleTime: 30 * 60 * 1000,
+  });
+  // Browse is a tab, so the screen stays mounted for the life of the process
+  // and reading the clock once would freeze the cards at whatever hour the
+  // app was opened. Re-read it each time the user comes back to the empty
+  // state — the only moment the answer is about to be looked at.
+  const [presetClock, setPresetClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (presearch) setPresetClock(Date.now());
+  }, [presearch]);
+  const presets = useMemo(() => {
+    const now = new Date(presetClock);
+    return selectPresets({
+      hour: now.getHours(),
+      dow: now.getDay(),
+      selectedClusters: tasteProfile?.selectedClusters ?? [],
+      weekBucket: weekBucketFor(presetClock),
+    });
+  }, [tasteProfile, presetClock]);
 
   const watchedIds = useMemo(() => {
     const set = new Set<string>();
@@ -116,49 +236,63 @@ export default function BrowseScreen() {
     [watchedIds],
   );
 
-  // Mood tap: semantic (vector) search when the flag is on, deterministic
-  // filter preset as the fallback when it's off. The two intents are mutually
-  // exclusive with typed search, so each clears the other.
-  const handleMood = useCallback(
-    (m: Mood) => {
+  // Preset tap: compose, don't replace (§2.3). The preset's filters merge
+  // onto what is already there and its phrase becomes the query — so a vibe
+  // card and a constraint card stack, which is the single change that turns
+  // the motivating sentence into two taps.
+  const handlePreset = useCallback(
+    (preset: SelectedPreset) => {
       // One row per tap, so the nonce is the tap time — tapping A, then B,
       // then A again is three intents. `mood_key` rather than the phrase
       // keeps rows small and lets the copy be reworded without breaking
-      // history (§5.2).
+      // history (§5.2). `slot` and `selection_reason` are what let §6 judge
+      // whether the four-slot selection earns its keep.
       const nonce = Date.now();
-      if (semanticOn) {
-        setQuery('');
-        setDebounced('');
-        setFilters(DEFAULT_FILTERS);
+      const meta = {
+        mood_key: preset.key,
+        slot: preset.slot,
+        selection_reason: preset.selectionReason,
+      };
+      setForceTitles(false);
+      setIntent((prev) => ({
+        ...prev,
+        // A tap is not a typed query; leaving stale text in the box would
+        // route straight back to Mode A on the next render.
+        text: '',
+        phrase: preset.phrase ?? prev.phrase,
+        moodKey: preset.key,
+        filters: { ...prev.filters, ...preset.filters },
+      }));
+      setDebounced('');
+
+      if (semanticOn && (preset.phrase ?? intent.phrase)) {
         setFilterIntent(null);
-        setMood({ key: m.key, label: m.label, phrase: m.phrase });
         setSemanticIntent({
           nonce,
           mode: 'semantic',
-          query: m.phrase,
-          metadata: { mood_key: m.key, semantic: true },
+          query: preset.phrase ?? intent.phrase,
+          metadata: { ...meta, semantic: true },
         });
       } else {
-        setMood(null);
         setSemanticIntent(null);
-        setFilters(m.preset);
-        // Flag off: the same tap resolves to a deterministic filter preset,
-        // so it logs as `filter` with no free text.
+        // Flag off (or a phrase-less card with nothing running): the tap
+        // resolves to a deterministic filter preset, so it logs as `filter`
+        // with no free text.
         setFilterIntent({
           nonce,
           mode: 'filter',
           query: null,
-          metadata: { mood_key: m.key, semantic: false },
+          metadata: { ...meta, semantic: false },
         });
       }
     },
-    [semanticOn],
+    [semanticOn, intent.phrase],
   );
 
   // FilterSheet apply. Clearing every filter is not a search, so it stages
   // nothing.
   const handleApplyFilters = useCallback((next: BrowseFilters) => {
-    setFilters(next);
+    setIntent((prev) => ({ ...prev, filters: next }));
     setFilterIntent(
       countActiveFilters(next) > 0
         ? { nonce: Date.now(), mode: 'filter', query: null, metadata: { filters: next } }
@@ -166,15 +300,40 @@ export default function BrowseScreen() {
     );
   }, []);
 
+  /** The one control that resets everything — text excepted, which has its own ×. */
+  const clearAll = useCallback(() => {
+    setIntent((prev) => ({ ...prev, phrase: null, moodKey: null, filters: DEFAULT_FILTERS }));
+    setSemanticIntent(null);
+    setFilterIntent(null);
+  }, []);
+
   const shown = useMemo(() => {
-    if (semanticMode) return semantic.data ?? [];
+    if (semanticMode) {
+      // Everything except `showWatched` was applied server-side, so the grid
+      // is the real result set rather than a thinned one. The watchlist is
+      // local, so that one axis stays here.
+      const base = semantic.data ?? [];
+      const watchApplied =
+        filters.showWatched === 'all'
+          ? base
+          : base.filter((it) => (filters.showWatched === 'hide' ? !isWatched(it.id) : isWatched(it.id)));
+      // Sorted like every other grid. The control is visible in this mode now
+      // that filters reach the engine, and a visible Sort that does nothing is
+      // the same defect as the category pills above. 'best' is identity, which
+      // is exactly right here — the engine already returned relevance order.
+      return sortItems(watchApplied, sortMode);
+    }
     if (searching) {
       if (!results) return [];
-      return sortItems(applyBrowseFilters(results, filters, isWatched), sortMode);
+      // The hit is rendered as its own card, so the grid below it is
+      // "other matches" (prototype state 2).
+      const rest = titleHit ? results.slice(1) : results;
+      return sortItems(applyBrowseFilters(rest, filters, isWatched), sortMode);
     }
     if (filterOnlyMode) {
-      // /discover already applied service/genre/rating/runtime/type. Only the
-      // watched filter is client-side (it needs the local watchlist).
+      // /discover already applied service/genre/rating/runtime/type/released/
+      // cost. Only the watched filter is client-side (it needs the local
+      // watchlist).
       const base = browse.data ?? [];
       const watchApplied =
         filters.showWatched === 'all'
@@ -183,7 +342,18 @@ export default function BrowseScreen() {
       return sortItems(watchApplied, sortMode);
     }
     return [];
-  }, [semanticMode, semantic.data, searching, filterOnlyMode, results, browse.data, filters, sortMode, isWatched]);
+  }, [
+    semanticMode,
+    semantic.data,
+    searching,
+    titleHit,
+    filterOnlyMode,
+    results,
+    browse.data,
+    filters,
+    sortMode,
+    isWatched,
+  ]);
 
   const loading = semanticMode
     ? semantic.isFetching && !semantic.data
@@ -191,22 +361,33 @@ export default function BrowseScreen() {
       ? isFetching && !results
       : filterOnlyMode && browse.isFetching && !browse.data;
 
+  const activePreset = intent.moodKey ? presetByKey(intent.moodKey) : undefined;
+
   // — Search-term logging (§5) —————————————————————————————————————
   // Typed queries: settled only, once each. `markSettled` is the
   // short-circuit for the keyboard's search key and the first result tap.
+  // `result_count` must describe what the user SAW, which on the described
+  // route is the engine's grid, not Mode A's. Device testing 2026-09-09 caught
+  // this: "epic fantasy" logged result_count 0 three times while the semantic
+  // grid was on screen, because Mode A legitimately finds no title called that
+  // — which is why the query routed to the engine in the first place. Left
+  // alone, every described query would have been recorded as a failed search,
+  // poisoning the zero-result rate §8.2 makes a first-class metric.
+  //
+  // `shown` is what is rendered and `loading` covers the semantic fetch, so
+  // the settle can no longer fire against a list the user never saw. Staleness
+  // is still guarded by `resultsFor`, which stays the Mode A key both queries
+  // are keyed on.
   const markQuerySettled = useTypedSearchLog({
-    query,
+    query: intent.text,
     resultsFor: debounced,
     category,
-    results,
-    isFetching,
+    results: describedRoute ? shown : results,
+    isFetching: describedRoute ? loading : isFetching,
+    metadata: { route: titleHit ? 'title' : describedRoute ? 'described' : 'lookup' },
   });
-  // Mood taps on the semantic path log against the semantic result set.
-  useSearchIntentLog(
-    semanticMode ? semanticIntent : null,
-    semantic.data,
-    semantic.isFetching,
-  );
+  // Preset taps on the semantic path log against the semantic result set.
+  useSearchIntentLog(semanticMode ? semanticIntent : null, semantic.data, semantic.isFetching);
   // Preset taps (flag off) and FilterSheet applies log against what is
   // actually on screen, whichever list that came from.
   useSearchIntentLog(semanticMode ? null : filterIntent, shown, loading);
@@ -227,30 +408,42 @@ export default function BrowseScreen() {
         <View className="flex-row items-center gap-3 rounded-card border border-border bg-card px-4 py-3">
           <Search size={18} color="rgba(245,241,232,0.62)" />
           <TextInput
-            value={query}
+            value={intent.text}
             onChangeText={(t) => {
-              setQuery(t);
-              if (t.length > 0) {
-                setMood(null);
-                setSemanticIntent(null);
-                setFilterIntent(null);
-              }
+              // Typing no longer clears the preset: its filters stay merged
+              // and only the phrase is taken over by the text. That is the
+              // whole point of one intent.
+              setIntent((prev) => ({ ...prev, text: t }));
+              setForceTitles(false);
+              setSemanticIntent(null);
+              setFilterIntent(null);
             }}
-            placeholder="Search films & shows"
+            onBlur={() => setPlaceholderIndex((i) => (i + 1) % PRESET_SENTENCES.length)}
+            placeholder={`Try: “${PRESET_SENTENCES[placeholderIndex]}”`}
             placeholderTextColor="rgba(245,241,232,0.4)"
             autoCapitalize="none"
             returnKeyType="search"
             onSubmitEditing={markQuerySettled}
             className="flex-1 font-sans text-body text-foreground"
           />
-          {query.length > 0 ? (
-            <Pressable onPress={() => setQuery('')} hitSlop={8}>
+          {intent.text.length > 0 ? (
+            <Pressable
+              onPress={() => setIntent((prev) => ({ ...prev, text: '' }))}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search text">
               <X size={18} color="rgba(245,241,232,0.62)" />
             </Pressable>
           ) : null}
         </View>
 
-        {searching ? (
+        {presearch ? (
+          <Text className="ml-1 mt-1.5 font-sans-medium text-kicker text-faint-foreground">
+            Type a title, or describe what you feel like.
+          </Text>
+        ) : null}
+
+        {showCategories ? (
           <View className="mt-3 flex-row gap-2">
             {CATEGORIES.map((cat) => {
               const active = cat === category;
@@ -272,21 +465,45 @@ export default function BrowseScreen() {
           </View>
         ) : null}
 
-        {/* Semantic mood banner — italic "feels like" + Clear */}
-        {semanticMode ? (
+        {/* Described-text banner — says what we did with the text, and offers
+            the way back. Shown only for typed text routed to the engine; a
+            preset tap gets the mood banner below instead. */}
+        {describedRoute ? (
+          <View className="mt-3 flex-row items-center gap-2.5">
+            <Sparkles size={14} color="#e85d25" />
+            <Text
+              numberOfLines={1}
+              className="flex-1 font-body-serif italic text-body text-foreground">
+              Reading that as a feeling, not a title.
+            </Text>
+            <Pressable
+              onPress={() => setForceTitles(true)}
+              hitSlop={8}
+              accessibilityRole="button"
+              className="rounded-pill px-2 py-1.5 active:opacity-70">
+              <Text className="font-sans-medium text-meta text-faint-foreground">
+                Search titles instead
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* Preset banner — italic "feels like" + Clear */}
+        {semanticMode && !describedRoute && activePreset ? (
           <View className="mt-3 flex-row items-center justify-between gap-3">
             <View className="flex-1 flex-row items-center gap-2">
               <Sparkles size={14} color="#e85d25" />
               <Text numberOfLines={1} className="flex-1 font-body-serif italic text-body text-foreground">
-                Titles that feel like “{mood?.label}”
+                Titles that feel like “{activePreset.label}”
               </Text>
             </View>
             <Pressable
               onPress={() => {
-                setMood(null);
+                setIntent((prev) => ({ ...prev, phrase: null, moodKey: null }));
                 setSemanticIntent(null);
               }}
               hitSlop={8}
+              accessibilityRole="button"
               className="flex-row items-center gap-1 rounded-pill px-2 py-1.5 active:opacity-70">
               <X size={12} color="rgba(245,241,232,0.5)" />
               <Text className="font-sans-medium text-meta text-faint-foreground">Clear</Text>
@@ -309,13 +526,14 @@ export default function BrowseScreen() {
                   {activeCount > 0 ? `Filters · ${activeCount}` : 'Filters'}
                 </Text>
               </Pressable>
-              {activeCount > 0 ? (
+              {activeCount > 0 || intent.moodKey ? (
                 <Pressable
-                  onPress={() => handleApplyFilters(DEFAULT_FILTERS)}
+                  onPress={clearAll}
                   hitSlop={6}
+                  accessibilityRole="button"
                   className="flex-row items-center gap-1 rounded-pill px-2 py-1.5 active:opacity-70">
                   <X size={12} color="rgba(245,241,232,0.5)" />
-                  <Text className="font-sans-medium text-meta text-faint-foreground">Clear</Text>
+                  <Text className="font-sans-medium text-meta text-faint-foreground">Clear all</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -351,8 +569,20 @@ export default function BrowseScreen() {
         ) : null}
       </View>
 
+      {titleHit ? (
+        <TitleHitCard
+          item={titleHit.item}
+          userServices={userServices ?? []}
+          onOpenDetail={openDetail}
+        />
+      ) : null}
+
       {presearch ? (
-        <BrowsePresearch onBuild={() => setSheetOpen(true)} onMood={handleMood} />
+        <BrowsePresearch
+          presets={presets}
+          onBuild={() => setSheetOpen(true)}
+          onPreset={handlePreset}
+        />
       ) : loading ? (
         <PosterGridSkeleton />
       ) : shown.length > 0 ? (
@@ -362,15 +592,23 @@ export default function BrowseScreen() {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <PosterGridCard item={item} onPress={openDetail} />}
           contentContainerStyle={{ padding: 14 }}
+          ListHeaderComponent={
+            titleHit ? (
+              <Text className="mb-2 ml-1 font-sans-bold text-kicker uppercase tracking-[1.6px] text-muted-foreground">
+                Other matches
+              </Text>
+            ) : null
+          }
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         />
-      ) : (
+      ) : titleHit ? null : (
         <NoResults
           query={debounced}
           filterOnly={filterOnlyMode}
           semantic={semanticMode}
-          moodLabel={mood?.label}
+          described={describedRoute}
+          moodLabel={activePreset?.label}
           tightened={Boolean(activeCount > 0 && searching && (results?.length ?? 0) > 0)}
         />
       )}
@@ -389,15 +627,30 @@ function NoResults({
   query,
   filterOnly,
   semantic,
+  described,
   moodLabel,
   tightened,
 }: {
   query: string;
   filterOnly: boolean;
   semantic: boolean;
+  described: boolean;
   moodLabel?: string;
   tightened: boolean;
 }) {
+  if (described) {
+    return (
+      <View className="flex-1 items-center justify-center px-10">
+        <Text className="text-center font-standfirst text-section text-foreground">
+          Nothing quite like that
+        </Text>
+        <Text className="mt-2 text-center font-sans text-body text-muted-foreground">
+          We read “{query.trim()}” as a description and found nothing matching it and your
+          filters. Try loosening the filters, or search for a title instead.
+        </Text>
+      </View>
+    );
+  }
   if (semantic) {
     return (
       <View className="flex-1 items-center justify-center px-10">
