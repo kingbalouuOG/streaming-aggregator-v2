@@ -991,6 +991,19 @@ Session 2 of the quick-filters plan. New pages: `src/lib/content/documentary.ts`
 
 **Not yet verified on a device.** Session 1's record here is three defects across four rounds of on-device testing, none of which reading found, so the same budget applies before this merges. Typecheck, lint (0 errors), 328 unit tests, `eval:eng1` and `eval:novelty` all pass — but every one of those is blind to the thing that matters, which is what the page looks like when a chip is tapped.
 
+## [2026-09-09] ingest | The consent gap has a real subject
+Updated: `wiki/registers/parking-lot.md` (IN-SL-003 escalated, IN-SL-004 filed), `wiki/concepts/product/privacy-and-gdpr.md`.
+
+**Found by asking before flipping a flag.** The request was to turn `search_logging` on for "the other testers". Enumerating them first showed the population is not what that phrase implies: six of Joe's own accounts, six empty `@example.com` shells, the store-review account — and `macky_01@hotmail.com`, a real person who signed up on 21 Jun 2026, completed onboarding, picked 8 services and came back across four sessions to 23 Aug. Joe does not know who they are; most likely a TestFlight or Play closed-test tester.
+
+**Why this matters more than one flag.** IN-SL-003 — §10 promises signed-in users 30 days' in-app notice before a material change, and nothing implements it — was deferred to H1 on the tacit assumption that the user base was Joe. It is not. There is now someone the promise is owed to, and no channel to reach them except knowing their email address.
+
+**Why nothing is wrong today, which is worth stating precisely because it inverts easily.** That user's flag is off, so no search text is captured for them, so no material change has occurred *for them*. §10 falls due when the flag is turned on, not when the policy text changed. The per-user flip **is** the consent point — this is the ships-dark design working exactly as intended rather than failing.
+
+**Amended later the same day — the provenance guess was wrong, and the flag went on anyway.** Checking the Play closed-test tester list ruled that cohort out, and the iOS build history (14 builds, oldest finished 29 Jun) ruled out iOS eight days over. No web deploy has ever existed. So "TestFlight or Play closed-test tester" was falsified; the account is simply **unidentified**, with the Play *internal* testing track and a directly shared APK still unchecked. The behavioural evidence points at a real person rather than a self-created test account: three active days spread over two months where every deliberate test account has one, an address and username matching neither test convention, and four deep-link click-outs to three services in the first session. Joe then decided to enable `search_logging` for them regardless — a public user judged extremely unlikely given the distribution channels, most plausibly a contact on a separate address. The §10 notice was **not** given, because there is no channel to give it. Recorded plainly rather than smoothed, with the condition that would reopen it: identification as a member of the public.
+
+**Recorded as a standing position (IN-SL-004), not a task.** ON for Joe's six accounts (he is the data subject). OFF for the unidentified user pending IN-SL-003. OFF *permanently* for `reviewer@videxstreaming.com` — capturing an app reviewer's search text yields no product signal and belongs in nobody's database. The last one is written down specifically so a future "turn it on for everyone" pass does not sweep it up.
+
 ## [2026-09-09] ingest | Quick filters verified on device — and Movies, not Documentaries, is the thin case
 Follow-up on the same PR (#134), after OTA to the iOS preview build. Updated: `wiki/concepts/architecture/home-surface.md`.
 
