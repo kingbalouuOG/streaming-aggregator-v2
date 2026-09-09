@@ -162,7 +162,7 @@ The test from the brief: if it cannot be said, it is a filter, not an intent. Ev
 | 7 | **Finish it tonight** | "A film I can actually finish tonight." | `contentType: movie`, `runtime: 60_120` | "a tight, satisfying, self-contained film under two hours" | nothing |
 | 8 | **Whole family** | "Something we can all watch." | Family, Animation, Adventure | "a warm, funny family film or series that adults enjoy as much as children — nothing frightening or adult" | nothing |
 
-Why these four: they are the four constraint classes the mood rooms and the motivating example surface — **recency + quality**, **cost**, **commitment/length**, **audience**. Each is orthogonal to the vibe set, so a vibe and a constraint compose ("Comfort" + "Free to watch" is a real Sunday intent, and is *precisely* Joe's example once the cheesy-crap half is read as minRating).
+Why these four: they are the four constraint classes the mood rooms and the motivating example surface — **recency + quality**, **cost**, **commitment/length**, **audience**. Each is orthogonal to the vibe set, so a vibe and a constraint compose ("Comfort" + "Free to watch" is a real Sunday intent, and is *precisely* Joe's example once the cheesy-crap half is read as minRating) — though see the correction at the end of this section for how that composition is actually performed.)
 
 Two candidates considered and held back:
 - *Made in Britain* ("something British") — clearly a real intent (five of the 68 rooms are explicitly British), but `original_language`/origin is the deferred axis, and semantic-only presets would behave differently with the flag off. Add when the axis lands.
@@ -173,7 +173,19 @@ Two candidates considered and held back:
 
 **Numbers:** pool of 8, **4 shown** (2 vibe + 2 constraint, always). Four is right for the 2×2 grid the screen already has and matches the "one tap, no scanning" goal. Eight is the smallest pool that gives every slot at least two alternatives to rotate through. Revisit both once §5's data exists.
 
-**Compose, don't replace:** a preset tap sets the preset onto the existing `BrowseFilters` state rather than replacing it, so a constraint card and a vibe card stack. This is the single change that turns the motivating sentence into two taps. The `FilterSheet` pill row already shows active axes, so the user can see and clear the stack.
+**Compose, don't replace:** a preset tap merges its `preset` onto the existing `BrowseFilters` rather than replacing them, so a constraint card and a vibe card stack. The `FilterSheet` pill row already shows active axes, so the user can see and clear the stack.
+
+> ⚠ **Corrected 2026-09-09, after device testing.** The merge is real and shipped. The *second tap* this section describes is not, and was never possible.
+>
+> **The layout does not allow it.** The four cards render only in the pre-search state (`presearch` in `browse.tsx`), which requires no text, no running phrase and no active filters. Every card sets at least one of those, so the first tap removes the other three and the only way back is *Clear all* — which resets exactly what the second tap was meant to build on.
+>
+> **Nor does the state.** `intent.phrase` is a single string, so a second phrase-bearing card replaces the first rather than stacking. Two vibe cards could never have composed as a query whatever the layout did.
+>
+> **What that leaves is one real pairing:** a vibe card plus a phrase-less constraint card (#5, #6), where the vibe's phrase survives and the constraint's filters merge. **It is reachable today, through the refine chips rather than a second card.** #5 is *Newer* + *Higher rated*, #6 is *Free to watch*, and #7's filters are *Just films* + *Under 2h*. The motivating sentence — "a new film I don't have to pay for that isn't cheesy crap" — is three chips and needs no card at all. The chips cannot carry #7's and #8's phrases or #8's genres, so those two work as an opening move and not as a second one.
+>
+> **Decision (Joe, 2026-09-09): the refine row is the composition surface. The layout is not rebuilt.** Putting a card row back above the results restores a second control cluster over the grid, which is what §9.2's refine row was built to remove, on device evidence that a control which looks like it works and does not is the worst outcome available. The capability is intact; what is lost is the card-shaped route to it and the plain words on those cards, which are what teach a new user that anything composes at all.
+>
+> Revisit on data, not on instinct — the trigger is in §6. Recorded as IN-SL-010.
 
 ### 2.4 Choosing the four per user
 
@@ -291,6 +303,7 @@ Precedents reused: `card_impressions.metadata` (the `exploration: true` pattern)
 
 **Presets**
 - Preset tap share of Browse sessions; per-`mood_key` tap counts (this ranks the pool); tap → `detail_view` within the 60 s window (needs §4's impression fix for CTR proper); `result_count` distribution per preset (a preset that routinely returns < 10 is a bad preset or a thin catalogue).
+- **Compose demand**, and the one number that reopens the §2.3 layout decision: count a *Clear all* followed by a preset tap within about ten seconds. Every preset tap already carries its `mood_key` and `slot`, and a clear writes no row, so the sequence reads as two preset rows in one session with nothing between them and the filters reset in the second. That is what "I wanted to stack two cards" looks like from the outside. If it is rare after two weeks of real use, the cards are an opening move and the chips are the refinement, which is what the screen already says. If it is common, build the card affordance back into the refine block rather than above the grid.
 - The specific hypothesis to test: **constraint-led cards out-tap vibe-led cards.** If they do, the brief's thesis holds and the next pool should lean further that way. If they do not, revert to four vibe cards and put the constraints in FilterSheet.
 - **Zero-result rate**, weekly: share of settled typed queries with `result_count = 0`, split by `route` (see §5.2 — the field is `route`, not the `category` this originally said). Failed search is the documented abandonment point (§8.1: 19% leave, 29% of 18–24s). Anything above ~10% is a retrieval bug to chase (title spelling, year parsing, catalogue gap), not a presets problem.
 - **Retrieval vs discovery split**: classify the 30-day raw terms as title-shaped (matches a `titles.title` or a TMDb top hit) vs descriptive. §8.1 predicts retrieval dominates; the actual ratio decides how much of the search surface should optimise for "where is X" versus "what should I watch".
@@ -386,7 +399,7 @@ Joe asked whether "search, then adjust filters in a sheet" still holds. It does 
 
 **Presearch grid.** Unchanged 2×2, four cards chosen per §2.4. Kicker copy becomes *"Or just say what you want"*.
 
-> ⚠ **The presearch grid is the only place the cards render, which makes the two-tap composition above unreachable.** `presearch` requires no text, no running phrase and no active filters, and every card sets at least one of those — so the first tap removes the other three cards, and the only way back is *Clear all*, which resets what the second tap was meant to build on. Found on device 2026-09-09. Composition still works through the refine chips, which carry cost, recency, runtime, media type and rating; the two-card path does not. Filed as IN-SL-010 for a layout decision.
+> ⚠ **The presearch grid is the only place the cards render, which makes the two-tap composition in §2.3 unreachable.** `presearch` requires no text, no running phrase and no active filters, and every card sets at least one of those — so the first tap removes the other three cards, and the only way back is *Clear all*, which resets what the second tap was meant to build on. Found on device 2026-09-09. **Settled, not outstanding:** the refine chips are the composition surface and this grid stays an opening move (see the correction at the end of §2.3, and the revisit trigger in §6). IN-SL-010.
 
 ### 9.3 What this is not
 

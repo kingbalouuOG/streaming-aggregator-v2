@@ -418,6 +418,28 @@ against this module directly. `titleHit.ts` had always said its thresholds were
 calibrated against them; nothing had held that true.
 
 
+### The two-card compose, and why it stays as it is (2026-09-09)
+
+The four preset cards render only in the pre-search state, and every card sets
+a phrase or a filter, so the first tap makes the other three disappear. The
+two-tap composition §2.3 describes cannot be performed.
+
+It also could not have worked in the state: `intent.phrase` is one string, so
+a second phrase-bearing card replaces the first. And three of the four
+constraint cards duplicate chips the refine row already has — *New &
+actually good* is *Newer* plus *Higher rated*, *Free to watch* is its own
+chip, *Finish it tonight* is *Just films* plus *Under 2h*. Only *Whole family*
+carries filters no chip does.
+
+So one pairing was ever real, a vibe plus a phrase-less constraint, and the
+chips perform it. The brief's motivating sentence is three chips and no card.
+
+Decided 2026-09-09: the refine row is the composition surface. Rebuilding a
+card row above the results would restore the second control cluster this phase
+removed. The reopening condition is a §6 metric — a *Clear all* followed
+within ten seconds by a preset tap — not a standing intention to revisit.
+
+
 ## Decisions resolved (locked during plan-mode)
 
 1. **Salmon `#ff8d5a` token bump** app-wide. Minor visual drift on Calendar / Detail / Watchlist accepted.
