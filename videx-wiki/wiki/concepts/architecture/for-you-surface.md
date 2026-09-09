@@ -3,12 +3,13 @@ title: For You surface
 type: concept
 tags: [for-you, surface, personalised, sliders, mood-rooms, anchored-rooms, edge-function, paid-titles, quick-filters]
 created: 2026-04-26
-updated: 2026-09-08
+updated: 2026-09-09
 sources:
   - raw/v2-strategy/Videx_v2_Home_and_ForYou_Composition_Hypothesis_v0.4.md
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.7.md
   - raw/phase-summaries/phase-4-summary.md
   - raw/plans/2026-09-08-002-recommendation-quick-filters-and-search-presets.md
+  - raw/plans/2026-09-09-001-review-quick-filters-search-presets.md
 related:
   - wiki/concepts/architecture/two-surface-architecture.md
   - wiki/concepts/architecture/home-surface.md
@@ -202,9 +203,36 @@ The same four-chip strip as [Home](home-surface.md#quick-filters-native-2026-09-
 
 **Instead: longer rendered rows.** `RENDERED_ROW_LENGTH = 36` in `foryouRender.ts` renders `recommendedForYou` and `hiddenGems` to 36 items each (from 20 and 15). The client shows the first 20 / 15 unfiltered — so an unfiltered For You is unchanged — and up to 20 survivors when filtered. This is the answer to "a filtered For You always shows the same 20": the filter draws on a tail that has already been scored, fatigue-adjusted, avoid-penalised, MMR'd and C3-rotated, because it is the same ranked list.
 
-`buildRowFromPool` passes `limit` straight to MMR's `k`, so the tail is diversified rather than an undiversified remainder stapled onto a diversified head. The exploration slots (`EXPLORATION_SLOT_POSITIONS = [2,5,13]`) and the hero band (`HERO_CANDIDATE_BAND = 4`) all sit inside the first 20, so neither moves.
+The exploration slots (`EXPLORATION_SLOT_POSITIONS = [2,5,13]`) and the hero band (`HERO_CANDIDATE_BAND = 4`) all sit inside the first 20, so neither moves.
 
-Measured cost, sampling 400 real `titles` rows through `titleRowToContentItem`: a `ContentItem` serialises to 295 B mean / 320 B p95, so the two rows go 10.1 KB → 20.7 KB — a payload delta of ~10.6 KB. Bytes, not compute: one `buildRowFromPool` call with a larger `k` over candidates already scored and already holding embeddings.
+Measured cost, sampling 400 real `titles` rows through `titleRowToContentItem`: a `ContentItem` serialises to 295 B mean / 320 B p95, so the two rows go 10.1 KB → 20.7 KB — a payload delta of ~10.6 KB.
+
+### The reserve is not something the user has seen
+
+Two rules follow from that sentence, and the first release of the 36-row render broke both of them. Both were found by [review 2026-09-09-001](../../../raw/plans/2026-09-09-001-review-quick-filters-search-presets.md) and fixed in the engine follow-up.
+
+**`usedIds` splits in two.** Cross-row dedup exists so one screen never shows a title twice. The reserve tail is not on the screen, so it cannot make a title "used".
+
+| set | holds | given to |
+|---|---|---|
+| `usedIds` | all 36 of both long rows | the Hidden Gems build only |
+| `visibleIds` | first 20 of `recommendedForYou` + first 15 of `hiddenGems` | `buildOutsideYourUsual`, `fetchPaidTitlesScoped` |
+
+The two long rows still dedup across their full reserves, because they draw from the same ranked pool and a filter can pull any of the 36 into view. Everything built afterwards sees only the visible head. Passing all 36 downstream excluded up to ~37 unseen titles from Outside Your Usual and New to rent or buy — a change to the UNFILTERED feed, which is the one thing the longer render was not allowed to make.
+
+The trade this accepts: a title can sit in the reserve tail AND in Outside Your Usual. It is never visible twice unfiltered, and duplication under a filter is the lesser fault against silently thinning two unfiltered rows. `src/lib/server/__tests__/foryouRender.usedIds.test.ts` fails in both directions.
+
+**MMR is capped at `k = 20`.** "Bytes, not compute" was wrong. MMR is quadratic in `k` over 1536-d vectors: each of the `k` picks scores every remaining candidate against every already-selected embedding. Measured on the real shape — 800 post-filter candidates, the top 200 holding embeddings, λ 0.7, `scripts/evaluation/mmr-cost-bench.ts`:
+
+| k | 15 | 20 | 36 |
+|---|---:|---:|---:|
+| p50 | 31 ms | 54 ms | 170 ms |
+
+The three MMR passes in a cold render went from ~93 ms (20 + 15 + 8) to ~318 ms (36 + 36 + 8). `MMR_MAX_K = 20` brings that to ~108 ms, 1.16× the pre-change figure rather than 3.43×. Beyond the cap the reserve is filled by score with `applyGenreSpread` applied, topped up by score if the per-genre cap leaves it short.
+
+The visible row is unchanged by the cap, and this is a property rather than a coincidence: greedy MMR is prefix-stable, so its first 20 picks do not depend on how many more it was asked for. Only the reserve changes character — score-and-genre-spread order rather than MMR order, which is what a filter keeping a handful of the tail actually needs.
+
+**Why a benchmark and not production logs.** The review asked for a week of `renderMs` either side of the change. There is none to read: `ForYouPayload.renderMs` is returned in the payload and logged only by the web client's console (`useForYouContent.ts`). The Worker never writes it to a log line, so Workers Logs and the Cloudflare dashboard have nothing to compare. If cold-render latency is ever to be watched, that `console.log` has to move into `workers/api/src/index.ts` first.
 
 **Mood rooms hide while a chip is active.** An `AnchorRoomPreview` is a navigation card into an UNFILTERED collection — four thumbnails over a `titleCount` for the whole room. There is no honest way to render one under a filter: trimming the thumbnails leaves the count lying about what is behind the card, and leaving them alone puts TV on a page that says Movies. The section hides and is named in the hidden-rails note.
 

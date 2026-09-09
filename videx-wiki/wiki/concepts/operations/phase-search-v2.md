@@ -165,6 +165,25 @@ No new persistence and no server round trip: it runs off the clock and the onboa
 
 `released` is exact server-side (`primary_release_date.gte` / `first_air_date.gte`, and a `release_year` predicate on the semantic post-filter) and deliberately coarser client-side, where only `ContentItem.year` exists.
 
+#### `released` moved inside the vector scan (migration 082, 2026-09-09)
+
+As a post-filter alone, *Newer* was applied to a pool chosen without knowing about it. Measured across the eval fixture's sixteen queries with `scripts/search/eval-released-pushdown.ts`:
+
+| | survivors of 150 retrieved |
+|---|---:|
+| mean | **7.4** |
+| queries under 20 survivors | **16 of 16** |
+
+That is the same arithmetic recorded in the device-testing entry — of 150 candidates *Newer* left 7 — now measured across the whole fixture rather than one probe vector. The chip emptied the grid rather than narrowing it.
+
+Migration 082 drops the two-argument `match_titles_by_vector` and creates a three-argument form taking `min_release_year integer DEFAULT NULL`, applied inside the candidates CTE. The two-argument form has to go rather than sit beside it: two overloads both accepting `(vector, integer)` make every existing two-argument call ambiguous (42725). `warm_recommendation_caches` calls it positionally and still resolves, and with `min_release_year` NULL the body is migration 076's unchanged.
+
+**This widens the funnel; it does not close it.** pgvector applies a `WHERE` clause AFTER the HNSW traversal unless `hnsw.iterative_scan` is on, and it is not set anywhere in this database. A predicate keeping ~5% of the catalogue still under-returns: 150 rows behind a 5% filter needs roughly 3,000 candidates, and `ef_search` caps at 1,000 (migration 076). What the function does with a floor present is traverse to that ceiling instead of to 2× `match_limit`. Making the filter exact needs `hnsw.iterative_scan = 'relaxed_order'`, which is a separate change with its own latency profile.
+
+This is **not** the same as raising `candidateLimit` to 1,000, which the device-testing entry costed and rejected. `match_limit` stays at 150, so the client still fetches metadata for at most 150 rows; only the internal graph traversal widens. The objection recorded there — a thousand rows of metadata per chip tap on a phone — does not apply.
+
+The post-filter in `semanticCore` stays behind the push-down. It is a no-op when the RPC honoured the floor, and it is the only thing enforcing the floor when the call falls back to the two-argument form — which it does on any database predating 082, since PostgREST resolves an RPC by argument NAMES and would otherwise return an empty grid for a Worker deployed ahead of its migration.
+
 ### Free text routes by shape
 
 `src/lib/search/titleHit.ts` decides. A confident title hit renders the retrieval layout — `TitleHitCard`, with where-to-watch and the deep-link button first, other matches in the grid below, and no controls above it. Everything else, with `search_semantic` on, sends the text to the engine with the banner *"Reading that as a feeling, not a title"* and a one-tap *"Search titles instead"*.
