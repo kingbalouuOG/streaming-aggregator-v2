@@ -92,7 +92,13 @@ Required:
 
 ## Known gap: the §10 change-notification promise
 
-Privacy policy §10 promises to "notify signed-in users via the app at least 30 days before the change takes effect". **Nothing in the app implements this.** Verified 2026-09-08: the policy is a static string (`native/src/legal/policyContent.ts`) rendered on demand from onboarding and Profile → Privacy. There is no stored policy version (no column on `profiles`, no consent table), no changelog surface, and no in-app notice. The push transport from [notifications-v1](../architecture/notifications-v1.md) exists but is blocked on FCM/APNs credentials and carries recommendations, not legal notices. Filed in the parking lot.
+Privacy policy §10 promises to "notify signed-in users via the app at least 30 days before the change takes effect". **Nothing in the app implements this.** Verified 2026-09-08: the policy is a static string (`native/src/legal/policyContent.ts`) rendered on demand from onboarding and Profile → Privacy. There is no stored policy version (no column on `profiles`, no consent table), no changelog surface, and no in-app notice. The push transport from [notifications-v1](../architecture/notifications-v1.md) exists but is blocked on FCM/APNs credentials and carries recommendations, not legal notices. Filed in the parking lot as IN-SL-003.
+
+**This is not hypothetical (2026-09-09).** Production has at least one real user who is not Joe and whom he cannot identify — most likely an early TestFlight or Play closed-test tester. The gap was originally deferred to H1 on the tacit assumption that the user base was the developer.
+
+Why nothing is wrong today, stated precisely because it is easy to get backwards: that user's `search_logging` flag is off, so no search text is captured for them, so **no material change has occurred for them**. The per-user flag flip *is* the consent point — §10 is owed at the moment the flag is turned on, not at the moment the policy text changed. That is the mechanism working as designed. What is missing is any channel to give that notice, other than knowing the person's email address.
+
+**Rollout position:** ON for Joe's own six accounts (he is the data subject). OFF for the unidentified user, pending the above. OFF permanently for the store-review account `reviewer@videxstreaming.com` — reviewers' search text is no product signal and should not be collected. See IN-SL-004.
 
 ## Cookies and trackers
 
