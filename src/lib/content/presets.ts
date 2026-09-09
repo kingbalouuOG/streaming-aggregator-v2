@@ -279,16 +279,16 @@ export function selectPresets(input: SelectPresetsInput): SelectedPreset[] {
   const { hour, dow, selectedClusters, weekBucket } = input;
 
   const slotA = pickContextualVibe(hour, dow);
-  const thisWeek = pickTasteVibe(selectedClusters, slotA, weekBucket);
-  // "Not the same as last week" without storing anything: ask the same
-  // question of the previous week's seed. Rotation already guarantees a
-  // different answer whenever there is more than one candidate, but running
-  // it explicitly is what makes the property testable rather than incidental.
-  const lastWeek = pickTasteVibe(selectedClusters, slotA, weekBucket - 1);
-  const slotB =
-    thisWeek.key === lastWeek.key
-      ? pickTasteVibe(selectedClusters, slotA, weekBucket + 1)
-      : thisWeek;
+  // "Not the same as last week" needs no comparison against last week and
+  // stores nothing: `pickTasteVibe` indexes its band by `weekBucket % length`,
+  // so consecutive buckets land on different cards whenever the band holds
+  // more than one — and when it holds exactly one there is nowhere else to
+  // go, which is the case the comparison could never have fixed either. A
+  // guard that re-asked the question of `weekBucket - 1` and fell back to
+  // `weekBucket + 1` lived here until 2026-09-09; it could not fire, and the
+  // tests that looked like they covered it passed on the rotation alone. The
+  // property is asserted directly in `presets.test.ts` instead.
+  const slotB = pickTasteVibe(selectedClusters, slotA, weekBucket);
 
   const slotD = pickContextualConstraint(hour, dow);
 

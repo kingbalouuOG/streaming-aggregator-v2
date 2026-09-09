@@ -3,7 +3,7 @@ title: Signal architecture
 type: concept
 tags: [signals, instrumentation, lifecycle, dwell, deep-link]
 created: 2026-04-26
-updated: 2026-09-08
+updated: 2026-09-09
 sources:
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
   - raw/v2-strategy/Videx_v2_Detail_Page_Signal_Capture_Spec_v0.3.2.md
@@ -49,10 +49,15 @@ It started as a check in the native hooks and moved down on 2026-09-08, before S
 
 | Trigger | `mode` | `metadata` |
 |---|---|---|
-| Typed query, settled | `lookup` | `query`, `result_count`, `category` |
-| Mood card tap, `search_semantic` ON | `semantic` | `query` (the app-authored mood phrase), `result_count`, `mood_key`, `semantic: true` |
-| Mood card tap, flag OFF (filter preset) | `filter` | `query: null`, `result_count`, `mood_key`, `semantic: false` |
+| Typed query, settled | `lookup` | `query`, `result_count`, `route` |
+| Mood card tap, `search_semantic` ON | `semantic` | `query` (the app-authored mood phrase), `result_count`, `mood_key`, `slot`, `selection_reason`, `semantic: true` |
+| Mood card tap, flag OFF (filter preset) | `filter` | `query: null`, `result_count`, `mood_key`, `slot`, `selection_reason`, `semantic: false` |
 | FilterSheet apply | `filter` | `query: null`, `result_count`, `filters` |
+| Refine-chip toggle | `filter` | `query: null`, `result_count`, `refine`, `on`, `filters` — **and nothing else**, see below |
+
+`route` (`title` / `described` / `lookup`) replaced the `category` this table used to name: the category pills that set it went with the refine row, and route is the field §6 actually wants — the same text routes differently depending on the `search_semantic` flag and on what Mode A returned that day.
+
+**The flag read is local and expires.** `getFlag` reads `supabase.auth.getSession()` (storage) rather than `getUser()` (a network round trip), and memoises for ten minutes. Until 2026-09-09 it did the opposite: `getUser()` ran *ahead of* the memo, so a user with `search_logging` off paid one auth request per settled query — the "no network at all" claim in the hook's own header was false — and a memo with no expiry meant a flag turned OFF mid-session, which is how consent is withdrawn, kept logging until the app restarted. `native/src/hooks/useSearchLogging.ts` also asks the flag **before** recording a query in its once-per-search dedupe set: marking a query written when nothing was written made it unrecoverable for the life of that mount, so turning the flag on reached the next app launch rather than the next search.
 
 **Settled, never per keystroke — and never per pause.** A typed query settles when its results have arrived AND the text has been unchanged for ≥ 1.5 s, short-circuited by the keyboard's search key or the first result tap.
 
@@ -79,19 +84,26 @@ The held query is written when an unrelated query settles, on a terminal signal,
 
 `emitSearch` marks the session "recently searched" so the next positive interaction inside the 60 s window gets the search-attribution taste boost (IN-PX-43). **That is gated on content intent**, because a `search` row is not always a search for something:
 
-| `mode` | `mood_key` | Boost |
+| `mode` | metadata | Boost |
 |---|---|---|
 | `lookup` | — | yes — the user typed what they wanted |
-| `semantic` | present | yes — the user picked a described vibe |
-| `filter` | present | yes — a mood preset with the flag off: same intent, different retrieval |
-| `filter` | absent | **no** — a bare FilterSheet apply or a quick-filter chip |
+| `semantic` | `mood_key` | yes — the user picked a described vibe |
+| `filter` | `mood_key` | yes — a mood preset with the flag off: same intent, different retrieval |
+| `filter` | has `refine` | **no** — a refine chip, whatever else the row carries |
+| `filter` | no `mood_key` | **no** — a bare FilterSheet apply or a quick-filter chip |
 | absent (legacy) | — | yes — keeping real history beats dropping it |
 
-Why it matters: Session 2's quick-filter chips will emit a `mode: 'filter'` row on **every chip change** on New and For You. Ungated, tapping "Movies" would hand a 1.3x boost to every interaction on that page for the next minute, turning an idle browse into a taste event.
+Why it matters: Session 2's quick-filter chips emit a `mode: 'filter'` row on **every chip change** on New and For You. Ungated, tapping "Movies" would hand a 1.3x boost to every interaction on that page for the next minute, turning an idle browse into a taste event.
+
+**The `refine` line was added on 2026-09-09, and it is the interesting one.** Session 4's refine row stamped `mood_key: intent.moodKey` on every chip toggle, which satisfies the mood-preset line two rows above — so every chip tapped while a preset was lit re-armed the boost on a re-slice of the page already on screen, and typing kept `moodKey`, so a chip on a typed grid boosted off a stale preset. Nothing failed; the rows looked reasonable. This is the failure mode to remember: **a later session wrote metadata that an earlier session's rule interpreted as intent**, three sessions and one merge apart, with the two definitions in files neither session had reason to open together.
+
+Both ends are fixed, deliberately. The call site builds its metadata through `refineLogMetadata` (`src/lib/content/refineChips.ts`) — a function rather than an object literal, because what makes the row safe is the fields it does *not* have, and absence is not something a call site can be trusted to keep getting right. And the predicate excludes any `filter` row carrying a `refine` key outright, because the batch recompute still has to judge the rows already written to production, and a rule that holds only while every caller remembers is not a rule.
 
 `isContentIntentSearch` (`src/lib/taste-v2/searchAttribution.ts`) is the **single definition**. Both paths route through it — `emitSearch` before `recordSearchTimestamp` (incremental), and `recomputeFromInteractionsScoped` when it builds `searchesBySession` (batch, which is why that query now selects `metadata`). The rule is deliberately *not* duplicated as a PostgREST filter: two copies silently disagreeing is the bug class it exists to prevent. Covered by `src/lib/taste-v2/__tests__/searchAttribution.test.ts`.
 
-One more thing worth knowing: the taste recompute reads these rows for `created_at` + `session_id` only — never the query text. That is what lets migration 079 null the text without breaking attribution.
+A refine row also carries `query: null` rather than the text being refined. That is the other half of the same fix: the nightly rollup aggregates on `metadata->>'query' IS NOT NULL`, so a chip toggle that repeated the typed text had one term counted twice — once as its `lookup` row and again under `mode='filter'`.
+
+One more thing worth knowing: the taste recompute reads these rows for `created_at` + `session_id` only — never the query text. That is what lets migration 079 null the text without breaking attribution. Migration **081** (2026-09-09) tightened that job's 30-day cutoff to `(now() AT TIME ZONE 'UTC')::date`, which was session-timezone before and agreed with the UTC `day` column only because pg_cron happens to run UTC; the same migration made its `ON CONFLICT` add rather than overwrite, so a re-run over a partially stripped day no longer replaces the day's total with the remainder.
 
 See [privacy-and-gdpr](../product/privacy-and-gdpr.md) for the 30-day retention on the text.
 

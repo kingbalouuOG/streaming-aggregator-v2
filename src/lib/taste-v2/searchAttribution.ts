@@ -63,12 +63,23 @@ export function resetSearchAttributionCache(): void {
  *
  * The rule, and the ONLY definition of it:
  *
- * | `mode`     | `mood_key` | Boost |
- * |------------|------------|-------|
- * | `lookup`   | —          | yes — the user typed what they wanted |
- * | `semantic` | present    | yes — the user picked a described vibe |
- * | `filter`   | present    | yes — a mood preset with the flag off; same intent, different retrieval |
- * | `filter`   | absent     | **no** — a filter apply or a quick-filter chip |
+ * | `mode`     | metadata          | Boost |
+ * |------------|-------------------|-------|
+ * | `lookup`   | —                 | yes — the user typed what they wanted |
+ * | `semantic` | `mood_key`        | yes — the user picked a described vibe |
+ * | `filter`   | `mood_key`        | yes — a mood preset with the flag off; same intent, different retrieval |
+ * | `filter`   | has `refine`      | **no** — a refine chip, whatever else the row carries |
+ * | `filter`   | no `mood_key`     | **no** — a filter apply or a quick-filter chip |
+ *
+ * The `refine` row wins over the `mood_key` row, and that ORDER is the whole
+ * point of it. Browse's refine chips shipped on 2026-09-09 stamping
+ * `mood_key: intent.moodKey` on every toggle, so a chip tapped while a preset
+ * was lit satisfied the mood-preset line above and re-armed the boost on what
+ * is a re-slice of the page the user is already looking at — three sessions
+ * apart, a later one writing metadata an earlier one's rule read as intent.
+ * The call site no longer sends `mood_key`; this excludes the row anyway,
+ * because a rule that only holds while every caller remembers is not a rule,
+ * and because the batch recompute still has to judge the rows already written.
  *
  * A row with no `mode` at all is treated as intent-bearing: the only way
  * to produce one is a caller predating the field, and dropping real
@@ -84,6 +95,9 @@ export function isContentIntentSearch(
 ): boolean {
   if (!metadata) return true;
   if (metadata.mode !== 'filter') return true;
+  // A refine chip is a constraint on the current page, never a statement of
+  // what the user wants — no matter what else the row carries.
+  if (metadata.refine !== null && metadata.refine !== undefined) return false;
   const moodKey = metadata.mood_key;
   return moodKey !== null && moodKey !== undefined && moodKey !== '';
 }

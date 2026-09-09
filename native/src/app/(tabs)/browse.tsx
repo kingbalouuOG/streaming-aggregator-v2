@@ -41,6 +41,7 @@ import {
 import {
   activeRefineFields,
   describeRefineEmptyState,
+  refineLogMetadata,
   toggleRefineChip,
   type RefineChip,
   type RefineField,
@@ -60,11 +61,12 @@ import { useQuery } from '@tanstack/react-query';
 //
 // Now there is ONE state, `intent`, and nothing clears anything else:
 //
-//   text     what is in the box
-//   phrase   what goes to vector search — a preset's phrase, or the typed
-//            text when it does not read as a title
-//   moodKey  which preset is lit
-//   filters  the accumulated constraints
+//   text      what is in the box
+//   phrase    what goes to vector search — a preset's phrase, or the typed
+//             text when it does not read as a title
+//   phraseKey which preset that phrase came from
+//   moodKey   which preset is lit
+//   filters   the accumulated constraints
 //
 // A preset tap MERGES its filters and sets its phrase. A typed query sets
 // text and routes by shape. "Clear all" resets the lot. `RefineRow` is what
@@ -83,7 +85,19 @@ interface Intent {
   text: string;
   /** Sent to vector search when the flag is on. Null = nothing to embed. */
   phrase: string | null;
-  /** The lit preset, or null. Drives the banner and the log metadata. */
+  /**
+   * The preset `phrase` came from, or null.
+   *
+   * Separate from `moodKey` because a phrase-less card — *Free to watch* is a
+   * fact, not a feeling — contributes only its filters and leaves whatever
+   * phrase is already running. `moodKey` is then the last card tapped while
+   * `phraseKey` is the card whose words are actually being searched, and the
+   * banner has to name the second: tapping Comfort then Free to watch runs
+   * Comfort's phrase, so "Titles that feel like Free to watch" would describe
+   * a query that is not running.
+   */
+  phraseKey: string | null;
+  /** The lit preset, or null. Drives the log metadata and the Clear control. */
   moodKey: string | null;
   filters: BrowseFilters;
 }
@@ -91,6 +105,7 @@ interface Intent {
 const EMPTY_INTENT: Intent = {
   text: '',
   phrase: null,
+  phraseKey: null,
   moodKey: null,
   filters: DEFAULT_FILTERS,
 };
@@ -174,7 +189,16 @@ export default function BrowseScreen() {
     () => (searching ? selectTitleHit(results, debounced) : null),
     [searching, results, debounced],
   );
-  const describedRoute = searching && !titleHit && !!semanticOn && !forceTitles;
+  // `results !== undefined` is the wait for Mode A, and it is load-bearing
+  // twice over. Without it `titleHit` is null for as long as the lookup is in
+  // flight, so EVERY settled query — "severance" included — routed here for a
+  // moment: the embed round trip fired and was paid for, and the "Reading that
+  // as a feeling" banner and the refine row flashed on screen before the title
+  // card replaced them. Retrieval still does not wait on the embedding (rule 1
+  // above); it is the routing DECISION that now waits for the cheaper of the
+  // two answers before committing.
+  const describedRoute =
+    searching && results !== undefined && !titleHit && !!semanticOn && !forceTitles;
 
   // The phrase actually sent to vector search: the typed text when it reads
   // as a description, otherwise the active preset's phrase. A preset whose
@@ -263,6 +287,10 @@ export default function BrowseScreen() {
         // route straight back to Mode A on the next render.
         text: '',
         phrase: preset.phrase ?? prev.phrase,
+        // Only a card that brought a phrase renames the banner. A phrase-less
+        // card leaves the running phrase alone, so it must leave the name of
+        // that phrase alone too.
+        phraseKey: preset.phrase ? preset.key : prev.phraseKey,
         moodKey: preset.key,
         filters: { ...prev.filters, ...preset.filters },
       }));
@@ -340,6 +368,18 @@ export default function BrowseScreen() {
       // for and how often a refinement is immediately undone; the full filter
       // set goes with it because a chip only means something in the context
       // of what else was already active.
+      //
+      // What the row must NOT carry is `mood_key` or the typed text, and it
+      // carried both until 2026-09-09. `isContentIntentSearch` reads a
+      // `filter` row with a `mood_key` as a mood preset tapped with the flag
+      // off — real content intent — so every chip tap while a preset was lit
+      // re-armed the 60 s 1.3x taste boost a re-slice may never earn. The
+      // typed text was the same defect on the other side: it made the 079
+      // rollup count one term twice, once as the lookup and again under
+      // `mode='filter'`. A chip is a constraint on the page already in front
+      // of the user, not a statement of what they want, and its row now says
+      // only that. `searchAttribution.ts` excludes `refine` rows outright as
+      // well, so this cannot regress silently from the call site again.
       setSemanticIntent(null);
       // Same rule the sheet applies: removing the last constraint when there
       // is no text and no preset lands back on the empty state, and an empty
@@ -353,8 +393,8 @@ export default function BrowseScreen() {
           ? {
               nonce: Date.now(),
               mode: 'filter',
-              query: intent.text.trim() || null,
-              metadata: { refine: chip.field, on, filters: next, mood_key: intent.moodKey },
+              query: null,
+              metadata: refineLogMetadata(chip.field, on, next),
             }
           : null,
       );
@@ -364,7 +404,13 @@ export default function BrowseScreen() {
 
   /** The one control that resets everything — text excepted, which has its own ×. */
   const clearAll = useCallback(() => {
-    setIntent((prev) => ({ ...prev, phrase: null, moodKey: null, filters: DEFAULT_FILTERS }));
+    setIntent((prev) => ({
+      ...prev,
+      phrase: null,
+      phraseKey: null,
+      moodKey: null,
+      filters: DEFAULT_FILTERS,
+    }));
     setLastRefine(null);
     setSemanticIntent(null);
     setFilterIntent(null);
@@ -388,10 +434,19 @@ export default function BrowseScreen() {
     }
     if (searching) {
       if (!results) return [];
-      // The hit is rendered as its own card, so the grid below it is
-      // "other matches" (prototype state 2).
-      const rest = titleHit ? results.slice(1) : results;
-      return sortItems(applyBrowseFilters(rest, filters, isWatched), sortMode);
+      if (titleHit) {
+        // The hit is rendered as its own card, so the grid below it is
+        // "other matches" (prototype state 2) — and deliberately UNFILTERED.
+        // The refine row and *More filters* both live inside the block this
+        // layout hides, so a constraint carried in from a preset would thin
+        // this grid with no control anywhere on screen to undo it: the same
+        // defect that got the category pills deleted, one layout along. No
+        // visible control, no filtering. Sort stays applied — reordering
+        // hides nothing, and 'best', the default a user who never opened the
+        // control still has, is identity.
+        return sortItems(results.slice(1), sortMode);
+      }
+      return sortItems(applyBrowseFilters(results, filters, isWatched), sortMode);
     }
     if (filterOnlyMode) {
       // /discover already applied service/genre/rating/runtime/type/released/
@@ -423,8 +478,19 @@ export default function BrowseScreen() {
     : searching
       ? isFetching && !results
       : filterOnlyMode && browse.isFetching && !browse.data;
+  // A failed embed or RPC leaves `semantic.data` undefined, `shown` an empty
+  // array and `loading` false — which to the loggers is indistinguishable
+  // from a query the engine answered with nothing. It wrote a `result_count:
+  // 0` row for what is an outage, into the one metric §6 reads as a retrieval
+  // failure. `undefined` is what the hooks hold on, so an error logs nothing
+  // at all and the tripwire keeps meaning what it says.
+  const semanticFailed = semanticMode && semantic.isError && !semantic.data;
+  const loggableResults = semanticFailed ? undefined : shown;
 
-  const activePreset = intent.moodKey ? presetByKey(intent.moodKey) : undefined;
+  // The card whose PHRASE is running, which is not always the last card
+  // tapped — see `Intent.phraseKey`. The banner and the "nothing in that
+  // mood" copy both name the query, so both read this rather than `moodKey`.
+  const phrasePreset = intent.phraseKey ? presetByKey(intent.phraseKey) : undefined;
   /** Which layout answered the typed text. Both logged and stamped on impressions. */
   const route = titleHit ? 'title' : describedRoute ? 'described' : 'lookup';
   // Mode A with the flag off is the one grid that is post-filtered rather
@@ -436,6 +502,10 @@ export default function BrowseScreen() {
   // is browsing. Closes the §4 gap (IN-SL-001): Browse rendered every result
   // set and recorded no impressions, so search CTR had no denominator.
   const gridSurface = searching ? ('search' as const) : ('browse' as const);
+  // "There WAS something here before the filters" — the precondition for
+  // blaming a chip. Mode A's unfiltered hit list answers it directly, which is
+  // why this is the only place it can be asked.
+  const tightened = Boolean(activeCount > 0 && searching && (results?.length ?? 0) > 0);
   // Serialised rather than the array itself: a fresh array every render would
   // re-record every impression on the grid on every render.
   const activeRefineKey = activeRefineFields(filters).join(',');
@@ -466,7 +536,7 @@ export default function BrowseScreen() {
     query: intent.text,
     resultsFor: debounced,
     route,
-    results: describedRoute ? shown : results,
+    results: describedRoute ? loggableResults : results,
     isFetching: describedRoute ? loading : isFetching,
   });
   // Preset taps on the semantic path log against the semantic result set.
@@ -481,7 +551,7 @@ export default function BrowseScreen() {
   // that a preset tap could not log twice; but `handlePreset` already sets
   // exactly one of the two intents, and the gate meant a sheet apply on the
   // semantic path — and now every refine toggle there — wrote nothing at all.
-  useSearchIntentLog(filterIntent, shown, loading);
+  useSearchIntentLog(filterIntent, loggableResults, loading);
 
   const openDetail = (item: ContentItem) => {
     // First result tap settles the query immediately — the strongest signal
@@ -558,17 +628,22 @@ export default function BrowseScreen() {
         ) : null}
 
         {/* Preset banner — italic "feels like" + Clear */}
-        {semanticMode && !describedRoute && activePreset ? (
+        {semanticMode && !describedRoute && phrasePreset ? (
           <View className="mt-3 flex-row items-center justify-between gap-3">
             <View className="flex-1 flex-row items-center gap-2">
               <Sparkles size={14} color="#e85d25" />
               <Text numberOfLines={1} className="flex-1 font-body-serif italic text-body text-foreground">
-                Titles that feel like “{activePreset.label}”
+                Titles that feel like “{phrasePreset.label}”
               </Text>
             </View>
             <Pressable
               onPress={() => {
-                setIntent((prev) => ({ ...prev, phrase: null, moodKey: null }));
+                setIntent((prev) => ({
+                  ...prev,
+                  phrase: null,
+                  phraseKey: null,
+                  moodKey: null,
+                }));
                 setSemanticIntent(null);
               }}
               hitSlop={8}
@@ -646,9 +721,25 @@ export default function BrowseScreen() {
           filterOnly={filterOnlyMode}
           semantic={semanticMode}
           described={describedRoute}
-          moodLabel={activePreset?.label}
-          tightened={Boolean(activeCount > 0 && searching && (results?.length ?? 0) > 0)}
-          refine={describeRefineEmptyState(filters, lastRefine)}
+          moodLabel={phrasePreset?.label}
+          tightened={tightened}
+          // A lit chip only earns "try removing Newer" when a chip could
+          // plausibly be what emptied the grid. Typing gibberish with a chip
+          // lit found nothing because the words match nothing, and telling
+          // that user to remove Newer sends them one tap further from an
+          // answer. `tightened` is the evidence that filtering did it;
+          // `!searching` is the browse case, where filters are the only
+          // input there is. Everything else falls through to the plain copy.
+          //
+          // `modeAGrid` withholds *Free to watch* from the sentence for the
+          // same reason `orderedRefineChips` withholds the chip: on the one
+          // grid that post-filters, `applyBrowseFilters` ignores `cost`, so
+          // it is provably not the chip that emptied anything.
+          refine={
+            tightened || !searching
+              ? describeRefineEmptyState(filters, lastRefine, modeAGrid)
+              : null
+          }
         />
       )}
 

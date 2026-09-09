@@ -184,7 +184,8 @@
     {
       "query": "something recent that isn't rubbish",
       "presetKey": "new-good",
-      "kind": "preset-sentence",
+      "kind": "preset-sentence-unreachable",
+      "_unreachable": "The app never embeds this. `new-good` carries phrase: null and its sentence is placeholder copy, not a query, so nothing sends this text to the engine. Kept as the archived measurement behind that decision - see _note - and marked so nobody reads a score here as something a user experiences.",
       "expected": [
         {
           "tmdbId": 693134,
@@ -234,7 +235,8 @@
     {
       "query": "something I don't have to pay for",
       "presetKey": "free",
-      "kind": "preset-sentence",
+      "kind": "preset-sentence-unreachable",
+      "_unreachable": "The app never embeds this. `free` carries phrase: null and its sentence is placeholder copy, not a query, so nothing sends this text to the engine. Kept as the archived measurement behind that decision - see _note - and marked so nobody reads a score here as something a user experiences.",
       "expected": [
         {
           "tmdbId": 155,

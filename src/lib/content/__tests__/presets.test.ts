@@ -181,10 +181,27 @@ describe('selectPresets — slot B follows taste', () => {
 });
 
 describe('selectPresets — slot B does not repeat last week', () => {
+  // The property comes from the rotation itself: `pickTasteVibe` indexes its
+  // band by `weekBucket % length`, so consecutive buckets differ whenever the
+  // band holds more than one card. A guard that re-asked the question of the
+  // previous week and fell back to the next one sat in `selectPresets` until
+  // 2026-09-09; it could not fire, and these tests passed without it. It is
+  // gone, and the property is asserted here directly instead.
   it('changes for a cold user week to week', () => {
     const a = select({ weekBucket: 41 })[1].key;
     const b = select({ weekBucket: 42 })[1].key;
     expect(a).not.toBe(b);
+  });
+
+  it('changes on every consecutive pair across a full rotation', () => {
+    // One pair could pass by luck. A whole cycle cannot.
+    const keys = Array.from({ length: 12 }, (_, i) => select({ weekBucket: i })[1].key);
+    for (let i = 1; i < keys.length; i += 1) {
+      expect(keys[i]).not.toBe(keys[i - 1]);
+    }
+    // And it really is a rotation, not a random walk: more than one card is
+    // reached, so the pairwise check above is testing something.
+    expect(new Set(keys).size).toBeGreaterThan(1);
   });
 
   it('changes for a user with two competing affinities', () => {

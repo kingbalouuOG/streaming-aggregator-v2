@@ -47,6 +47,16 @@ interface FixtureEntry {
    * for being correct. They are reported instead, and read by eye.
    */
   gate?: boolean;
+  /**
+   * 'known-title' | 'preset-sentence' | 'preset-sentence-unreachable'.
+   *
+   * The last of those is an entry no code path can produce any more: the two
+   * phrase-less cards, whose sentences are placeholder copy rather than
+   * queries. They are kept as the archived evidence for making those cards
+   * filter-only, and a future session proposing a phrase for either has to
+   * beat these numbers. Reported like any other diagnostic; never gated, and
+   * never to be read as something a user experienced.
+   */
   kind?: string;
 }
 

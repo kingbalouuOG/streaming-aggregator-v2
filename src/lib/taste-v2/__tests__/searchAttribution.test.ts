@@ -13,6 +13,8 @@ import {
   isWithinAttributionWindow,
 } from "../searchAttribution.ts";
 import { SEARCH_ATTRIBUTION_WINDOW_SECONDS } from "../types.ts";
+import { DEFAULT_FILTERS } from "../../content/browseFilters.ts";
+import { refineLogMetadata } from "../../content/refineChips.ts";
 
 describe("recordSearchTimestamp + getMostRecentSearchAt", () => {
   beforeEach(() => {
@@ -184,3 +186,92 @@ describe("isContentIntentSearch", () => {
     expect(isContentIntentSearch(undefined)).toBe(true);
   });
 });
+
+describe("isContentIntentSearch — refine chips are never intent", () => {
+  // The defect this closes: Browse's refine row shipped stamping
+  // `mood_key: intent.moodKey` on every toggle, so a chip tapped while a
+  // preset was lit satisfied the "mood preset with the flag off" line above
+  // and re-armed the 60 s 1.3x taste boost on what is a re-slice of the page
+  // already on screen. Three sessions apart — a later one writing metadata an
+  // earlier one's rule read as intent.
+  //
+  // The call site no longer sends `mood_key` (see `refineLogMetadata`), and
+  // this predicate excludes the row anyway. Both, deliberately: the batch
+  // recompute still has to judge every row already written to production, and
+  // a rule that holds only while each caller remembers is not a rule.
+
+  const FILTERS = { contentType: "movie", released: "last_12_months" };
+
+  it("does NOT boost a refine row that still carries a mood_key", () => {
+    expect(
+      isContentIntentSearch({
+        query: null,
+        result_count: 12,
+        mode: "filter",
+        refine: "released",
+        on: true,
+        filters: FILTERS,
+        // The rows already in production, written before 2026-09-09.
+        mood_key: "comfort",
+      }),
+    ).toBe(false);
+  });
+
+  it("does NOT boost a refine row that carries the typed text", () => {
+    expect(
+      isContentIntentSearch({
+        query: "severance",
+        result_count: 4,
+        mode: "filter",
+        refine: "runtime",
+        on: true,
+        filters: FILTERS,
+      }),
+    ).toBe(false);
+  });
+
+  it("does NOT boost a refine row switching a chip OFF", () => {
+    expect(
+      isContentIntentSearch({
+        query: null,
+        mode: "filter",
+        refine: "cost",
+        on: false,
+        filters: FILTERS,
+      }),
+    ).toBe(false);
+  });
+
+  it("still boosts a preset tap with a mood_key and no refine key", () => {
+    // The line the exclusion must not swallow: same `mode`, same shape, and
+    // a real statement of what the user wants.
+    expect(
+      isContentIntentSearch({
+        query: null,
+        result_count: 26,
+        mode: "filter",
+        mood_key: "comfort",
+        semantic: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("what the call site actually emits is not intent, and carries no term", () => {
+    // Bound to the real builder rather than a copy of its output, because
+    // what makes this row safe is the fields it does NOT have.
+    const metadata = refineLogMetadata("released", true, {
+      ...DEFAULT_FILTERS,
+      released: "last_12_months",
+    });
+    const row = { query: null, result_count: 12, mode: "filter", ...metadata };
+
+    expect(isContentIntentSearch(row)).toBe(false);
+    expect("mood_key" in metadata).toBe(false);
+    // The 079 nightly rollup aggregates on `metadata->>'query' IS NOT NULL`,
+    // so a null term is what keeps a refine toggle out of the search-term
+    // counts entirely — no double-counting the text of the typed query the
+    // user was refining.
+    expect(row.query).toBe(null);
+  });
+});
+

@@ -5,10 +5,18 @@
 // schema work.
 //
 // Reading semantics: one round-trip per (userId, flagName) pair, then
-// memoised in module-scope for the lifetime of the page. The caller
-// pattern is "read once on mount" — flags don't change mid-session,
-// and a stale value across a sign-out / sign-in is handled by
-// resetFlagCache() in clearAllData.
+// memoised in module-scope for FLAG_TTL_MS. The caller pattern is "read
+// once on mount", and a stale value across a sign-out / sign-in is
+// handled by resetFlagCache() in clearAllData.
+//
+// The identity read is `getSession()`, deliberately. It reads the session
+// already in storage; `getUser()`, which this used until 2026-09-09, calls
+// /auth/v1/user over the network EVERY time and did so before the memo was
+// consulted — so `search_logging`, whose whole promise is that a user with
+// the flag off costs nothing, made one auth request per settled query. A
+// stale local session cannot cause a wrong answer here: the row is fetched
+// under RLS, so a session the server would reject returns nothing and the
+// caller gets the fallback.
 
 import { supabase } from './supabase';
 
@@ -25,10 +33,23 @@ export type FlagName =
   // per-user consent is the interim mechanism.
   | 'search_logging';
 
+/**
+ * How long a flag value is trusted before it is read again.
+ *
+ * The memo had no expiry, which is fine for a flag that only gates a
+ * feature's shape and wrong for one that gates data capture: turning
+ * `search_logging` off for a user who has withdrawn consent did nothing
+ * until they restarted the app, and on a phone that can be days. Ten
+ * minutes bounds that without putting a read back on the hot path — the
+ * same staleness the native `useSemanticFlag` query already accepts.
+ */
+export const FLAG_TTL_MS = 10 * 60 * 1000;
+
 // Module-scope cache. Key = `${userId}:${flagName}`. Promise valued so
 // concurrent callers during the initial fetch share the round-trip
-// instead of racing it.
-const cache = new Map<string, Promise<boolean>>();
+// instead of racing it; `at` is when the entry was created, not when it
+// resolved, so a slow read cannot extend its own lifetime.
+const cache = new Map<string, { at: number; value: Promise<boolean> }>();
 
 /**
  * Look up a feature flag for the current user. Falls back to
@@ -41,13 +62,13 @@ export async function getFlag(
   flagName: FlagName,
   fallback: boolean = false,
 ): Promise<boolean> {
-  const { data: authData } = await supabase.auth.getUser();
-  const userId = authData?.user?.id;
+  const { data: authData } = await supabase.auth.getSession();
+  const userId = authData?.session?.user?.id;
   if (!userId) return fallback;
 
   const key = `${userId}:${flagName}`;
   const cached = cache.get(key);
-  if (cached) return cached;
+  if (cached && Date.now() - cached.at < FLAG_TTL_MS) return cached.value;
 
   const promise = (async () => {
     try {
@@ -64,7 +85,7 @@ export async function getFlag(
     }
   })();
 
-  cache.set(key, promise);
+  cache.set(key, { at: Date.now(), value: promise });
   return promise;
 }
 
