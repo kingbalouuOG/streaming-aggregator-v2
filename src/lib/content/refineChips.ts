@@ -68,12 +68,11 @@ export const HIGHER_RATED_MIN = 7;
  * The five chips, in the order §9.2 fixes them.
  *
  * `Free to watch` is server-side only: `applyBrowseFilters` ignores `cost`
- * because nothing on `ContentItem` carries a stream type. That is fine here
- * because the only path where filters are applied client-side is the title-hit
- * grid, and the row is hidden there. On the two paths where the row renders
- * with a fetch behind it — `/discover` (`with_watch_monetization_types`) and
- * the semantic RPC (`subscription_included_titles`, migration 080) — the axis
- * is real.
+ * because nothing on `ContentItem` carries a stream type. It is real on both
+ * paths that fetch — `/discover` (`with_watch_monetization_types`) and the
+ * semantic RPC (`subscription_included_titles`, migration 080) — and
+ * `orderedRefineChips` withholds it on the one path that does not. See
+ * `CLIENT_UNSUPPORTED`.
  */
 export const REFINE_CHIPS: readonly RefineChip[] = [
   {
@@ -150,16 +149,46 @@ export function toggleRefineChip(f: BrowseFilters, chip: RefineChip): BrowseFilt
 }
 
 /**
+ * Fields the CLIENT-SIDE post-filter can actually honour.
+ *
+ * `applyBrowseFilters` ignores `cost` — nothing on `ContentItem` carries a
+ * stream type — so on the one route that post-filters (Mode A with the
+ * `search_semantic` flag off) a *Free to watch* chip would light up and
+ * change nothing. That is precisely the defect that got the category pills
+ * deleted, and shipping it back in a new pill would be a poor joke.
+ *
+ * `runtime` is NOT in the exception list. It is honoured, just partially:
+ * only the Supabase-sourced hits carry a runtime, so the axis thins those and
+ * leaves the TMDb ones alone. A weaker filter is not an inert control.
+ */
+const CLIENT_UNSUPPORTED: readonly RefineField[] = ['cost'];
+
+/**
  * Chips in render order: active first, canonical order within each group.
  *
  * The prototype's state 4 shows this — a horizontal scroller whose lit chips
  * have drifted left. It matters on a 390pt screen, where five chips do not
  * fit: without it, switching on the fifth chip leaves the thing you just did
  * off the right-hand edge.
+ *
+ * `clientSideOnly` marks the Mode A grid. An unsupported chip is hidden
+ * there — UNLESS it is already lit, in which case it still renders so it can
+ * be switched off. A constraint set on the discover or semantic path and then
+ * carried into a typed search stays real (it applies again the moment the
+ * text goes), and a lit filter with no visible control is worse than a
+ * temporarily unenforceable one. Same rule, and the same reasoning, as
+ * `BrowseChips` keeping the active category when the payload stops clearing
+ * its threshold.
  */
-export function orderedRefineChips(f: BrowseFilters): RefineChip[] {
-  const active = REFINE_CHIPS.filter((c) => c.isOn(f));
-  const inactive = REFINE_CHIPS.filter((c) => !c.isOn(f));
+export function orderedRefineChips(
+  f: BrowseFilters,
+  clientSideOnly = false,
+): RefineChip[] {
+  const offered = REFINE_CHIPS.filter(
+    (c) => !clientSideOnly || !CLIENT_UNSUPPORTED.includes(c.field) || c.isOn(f),
+  );
+  const active = offered.filter((c) => c.isOn(f));
+  const inactive = offered.filter((c) => !c.isOn(f));
   return [...active, ...inactive];
 }
 

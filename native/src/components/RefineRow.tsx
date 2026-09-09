@@ -54,6 +54,12 @@ interface RefineRowProps {
   resultCount: number;
   /** Suppresses the count while a refetch is in flight, rather than lying. */
   loading?: boolean;
+  /**
+   * True when the grid is post-filtered client-side (Mode A with the
+   * `search_semantic` flag off) rather than refetched. Withholds the chips
+   * `applyBrowseFilters` cannot honour — see `orderedRefineChips`.
+   */
+  clientSideOnly?: boolean;
 }
 
 export function RefineRow({
@@ -66,9 +72,10 @@ export function RefineRow({
   onSortChange,
   resultCount,
   loading = false,
+  clientSideOnly = false,
 }: RefineRowProps) {
   const [sortOpen, setSortOpen] = useState(false);
-  const chips = orderedRefineChips(filters);
+  const chips = orderedRefineChips(filters, clientSideOnly);
 
   return (
     <View className="mt-3">

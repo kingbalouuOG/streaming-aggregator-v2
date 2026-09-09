@@ -427,6 +427,10 @@ export default function BrowseScreen() {
   const activePreset = intent.moodKey ? presetByKey(intent.moodKey) : undefined;
   /** Which layout answered the typed text. Both logged and stamped on impressions. */
   const route = titleHit ? 'title' : describedRoute ? 'described' : 'lookup';
+  // Mode A with the flag off is the one grid that is post-filtered rather
+  // than refetched, so it is the one grid `cost` cannot reach — see
+  // `orderedRefineChips`.
+  const modeAGrid = Boolean(searching && !describedRoute);
   // Search vs browse: text on screen means the user asked for something by
   // name or by description, and everything else — a preset, filters alone —
   // is browsing. Closes the §4 gap (IN-SL-001): Browse rendered every result
@@ -587,6 +591,7 @@ export default function BrowseScreen() {
             onSortChange={setSortMode}
             resultCount={shown.length}
             loading={loading}
+            clientSideOnly={modeAGrid}
           />
         ) : null}
       </View>

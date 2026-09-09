@@ -113,6 +113,31 @@ describe('render order', () => {
   });
 });
 
+describe('withholding what the grid cannot honour', () => {
+  // The category pills were deleted for looking like they worked and not
+  // working. A `cost` chip on the client-side Mode A grid would be the same
+  // defect wearing a new label: `applyBrowseFilters` ignores `cost`, because
+  // nothing on ContentItem carries a stream type.
+  it('drops Free to watch on a client-side grid', () => {
+    expect(orderedRefineChips(DEFAULT_FILTERS, true).map((c) => c.field)).not.toContain('cost');
+  });
+
+  it('offers every chip on a grid that refetches', () => {
+    expect(orderedRefineChips(DEFAULT_FILTERS, false)).toHaveLength(REFINE_CHIPS.length);
+  });
+
+  it('keeps an already-lit Free to watch so it can be switched off', () => {
+    // Set on the discover or semantic path, then carried into a typed
+    // search. Hiding it would leave a live filter with no control.
+    const f = withChips('cost');
+    expect(orderedRefineChips(f, true).map((c) => c.field)).toContain('cost');
+  });
+
+  it('keeps Under 2h, which is honoured partially rather than not at all', () => {
+    expect(orderedRefineChips(DEFAULT_FILTERS, true).map((c) => c.field)).toContain('runtime');
+  });
+});
+
 describe('zero-result copy', () => {
   it('is the §10 sentence for free + under 2h', () => {
     const f = withChips('cost', 'runtime');
