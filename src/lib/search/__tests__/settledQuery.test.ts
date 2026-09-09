@@ -11,9 +11,9 @@ import {
   type SettledQuery,
 } from "../settledQuery.ts";
 
-const q = (query: string, resultCount: number, category = "All"): SettledQuery => ({
+const q = (query: string, resultCount: number, route = "lookup"): SettledQuery => ({
   query,
-  category,
+  route,
   resultCount,
 });
 
@@ -70,12 +70,16 @@ describe("reconcileSettled", () => {
     expect(r.pending.query).toBe("the bear");
   });
 
-  it("flushes rather than collapses when only the category changed", () => {
-    // Same text re-sliced through the chips is a distinct intent with a
-    // distinct result count.
-    const r = reconcileSettled(q("severance", 13, "All"), q("severance", 4, "TV"));
-    expect(r.emit?.category).toBe("All");
-    expect(r.pending.category).toBe("TV");
+  it("flushes rather than collapses when only the route changed", () => {
+    // "Search titles instead" re-answers the same text through a different
+    // retrieval path, with a different result count. That is a second
+    // search, not the first one still being typed.
+    const r = reconcileSettled(
+      q("severance", 60, "described"),
+      q("severance", 13, "title"),
+    );
+    expect(r.emit?.route).toBe("described");
+    expect(r.pending.route).toBe("title");
   });
 
   it("collapses the real 2026-09-08 capture to the one query meant", () => {

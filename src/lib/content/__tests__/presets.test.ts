@@ -74,12 +74,35 @@ describe('PRESET_POOL', () => {
     }
   });
 
-  it('leaves "Free to watch" phrase-less — it is a fact, not a feeling', () => {
-    expect(presetByKey('free')?.phrase).toBeNull();
-    // Every other card must carry a phrase, or the semantic path has nothing
-    // to send when the flag is on.
+  // Cards whose whole content is metadata predicates carry no phrase: there
+  // is nothing for an embedding to find, and asking anyway retrieves titles
+  // that merely TALK about the property.
+  //
+  // `free` was phrase-less from the start — cost is a fact about availability.
+  // `new-good` joined it on 2026-09-09 after measurement: its phrase, "a
+  // recent, well-reviewed film or series … that both critics and audiences
+  // rated highly", is a statement ABOUT a title rather than a description OF
+  // one, and its top five were *Voir* (a series in which film lovers examine
+  // cinematic moments), *The Favourite*, *The Great*, *Blockbuster* and
+  // *Nightcrawler*. On a device the card returned 2 titles out of 363 in the
+  // catalogue meeting its own criteria; filter-only via /discover returns 205.
+  const FACT_CARDS = new Set(['free', 'new-good']);
+
+  it('leaves the fact cards phrase-less — a fact is not a feeling', () => {
+    for (const key of FACT_CARDS) expect(presetByKey(key)?.phrase).toBeNull();
+  });
+
+  it('gives every other card a phrase, or the semantic path has nothing to send', () => {
     for (const preset of PRESET_POOL) {
-      if (preset.key !== 'free') expect(preset.phrase).toBeTruthy();
+      if (!FACT_CARDS.has(preset.key)) expect(preset.phrase).toBeTruthy();
+    }
+  });
+
+  it('gives every fact card filters that fully express it', () => {
+    // A phrase-less card contributes ONLY filters, so an empty patch would
+    // make it a no-op button.
+    for (const key of FACT_CARDS) {
+      expect(Object.keys(presetByKey(key)?.filters ?? {}).length).toBeGreaterThan(0);
     }
   });
 });

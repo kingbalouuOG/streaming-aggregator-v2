@@ -62,19 +62,23 @@ export function useTypedSearchLog(args: {
   query: string;
   /** The text `results` were fetched for (the debounced value). */
   resultsFor: string;
-  category: string;
+  /**
+   * The layout the query resolved to — 'title' | 'described' | 'lookup'.
+   *
+   * Both a logged field and part of the dedupe/collapse identity, which is
+   * the job `category` held until the refine-row session removed the pills
+   * that set it (§9.2). It is the measurement §6 wants and cannot
+   * reconstruct afterwards — the same text routes differently depending on
+   * the `search_semantic` flag and on what Mode A returned that day — and it
+   * is the one thing that legitimately makes the same text two searches.
+   */
+  route: string;
   results: readonly unknown[] | undefined;
   isFetching: boolean;
-  /**
-   * Extra fields for the row — currently the layout the query resolved to
-   * (`route`: 'title' | 'described' | 'lookup'), which is the measurement
-   * §6 wants and cannot reconstruct afterwards: the same text routes
-   * differently depending on the `search_semantic` flag and on what Mode A
-   * returned that day. Captured at write time, once, like the count.
-   */
+  /** Any further fields for the row. Merged after `route`. */
   metadata?: Record<string, unknown>;
 }): () => void {
-  const { query, resultsFor, category, results, isFetching, metadata } = args;
+  const { query, resultsFor, route, results, isFetching, metadata } = args;
   const q = query.trim();
   // Mirror, so `write` can read the latest without being re-created (and
   // re-running the effects keyed on it) every time the route flips.
@@ -91,12 +95,12 @@ export function useTypedSearchLog(args: {
   pendingRef.current = pending;
 
   const write = useCallback((row: SettledQuery) => {
-    const key = JSON.stringify([row.query, row.category]);
+    const key = JSON.stringify([row.query, row.route]);
     if (loggedRef.current.has(key)) return;
     loggedRef.current.add(key);
     emitSearch(row.query, row.resultCount, {
       mode: 'lookup',
-      metadata: { category: row.category, ...metadataRef.current },
+      metadata: { route: row.route, ...metadataRef.current },
     });
   }, []);
 
@@ -126,7 +130,7 @@ export function useTypedSearchLog(args: {
 
     const candidate: SettledQuery = {
       query: settled.text,
-      category,
+      route,
       resultCount: results.length,
     };
     const next = reconcileSettled(pendingRef.current, candidate);
@@ -139,7 +143,7 @@ export function useTypedSearchLog(args: {
     } else {
       setPending(next.pending);
     }
-  }, [settled, q, resultsFor, category, results, isFetching, write]);
+  }, [settled, q, resultsFor, route, results, isFetching, write]);
 
   // Idle flush — a search abandoned in place still gets recorded.
   useEffect(() => {
@@ -163,7 +167,7 @@ export function useTypedSearchLog(args: {
   // it lost two real searches ("The Bear", "Lord of The..."): both were
   // held, and neither a following query, a tap, a clear nor the 8 s idle
   // ever came. Holding is only safe if every way of leaving writes first.
-  // `write` dedupes on (query, category), so overlapping flushes are free.
+  // `write` dedupes on (query, route), so overlapping flushes are free.
 
   // App backgrounded — same terminal signal, and the same subscriber, the
   // impression batcher already uses for its own buffer.

@@ -141,9 +141,21 @@ export function applyBrowseFilters(
     }
     if (f.genres.length && (!it.genre || !f.genres.includes(it.genre))) return false;
     if (f.minRating > 0 && (it.rating ?? 0) < f.minRating) return false;
-    if (f.runtime !== 'any') {
-      const r = it.runtime ?? 0;
-      if (f.runtime === 'under_60' && !(r > 0 && r < 60)) return false;
+    // Runtime, when the item HAS one. Same rule as `services` above and for
+    // the same reason: `ContentItem.runtime` is populated by the Supabase
+    // adapter and left undefined by both TMDb adapters, so search results are
+    // mostly runtime-less. Treating that as `0` — which this did until the
+    // refine row put runtime one tap from the search grid — meant every
+    // TMDb-sourced hit failed `>= 60`, and a single tap on *Under 2h* emptied
+    // the grid down to the handful of Postgres hits that happened to carry
+    // one. An unknown runtime is unknown, not zero minutes.
+    //
+    // The consequence is honest rather than hidden: on the Mode A grid the
+    // axis only bites on items that carry a runtime. On /discover and the
+    // semantic path it is applied server-side against real data.
+    if (f.runtime !== 'any' && it.runtime !== undefined && it.runtime > 0) {
+      const r = it.runtime;
+      if (f.runtime === 'under_60' && !(r < 60)) return false;
       if (f.runtime === '60_120' && !(r >= 60 && r <= 120)) return false;
       if (f.runtime === 'over_120' && !(r > 120)) return false;
     }

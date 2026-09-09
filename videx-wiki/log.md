@@ -1098,3 +1098,96 @@ The sheet also now records the follow-up answers both forms ask for and that are
 **The generalisable bit.** A policy change and a store-form change are two obligations with two owners, and satisfying the first is exactly what makes the second overdue. The sheet's own "re-submit triggers" note listed push notifications and crash reporting. Search logging was a third trigger that nobody had written down, so nothing pointed at it when it shipped. The note now names it, and the compliance checklist carries it as an open item.
 
 **Not re-submitted.** Both forms are due with v2.3.1, after Session 4.
+
+
+## [2026-09-09] ingest | Five chips replaced two rows, and Browse started counting what it shows
+Updated: `wiki/concepts/operations/phase-search-v2.md`, `wiki/registers/parking-lot.md` (IN-SL-001 closed).
+
+**Session 4 of the quick-filters recommendation, and the last of the four.** `RefineRow` is five one-tap chips over five existing `BrowseFilters` fields — *Just films*, *Newer*, *Under 2h*, *Free to watch*, *Higher rated* — with the count line, *More filters* and *Sort* folded into the same block. It replaces both the category pill row and the separate Filters/Sort row, so a screen that carried two rows of controls above the grid now carries one.
+
+**The pills were removed rather than moved, on their own merits.** Session 3's device testing caught them rendering on the described route, where the grid comes from the engine and `category` is never sent: tapping *Movies* changed nothing on screen while quietly re-running Mode A and writing a log row. `useSearch` lost its `SearchCategory` parameter with them, and with it the last copy of the §0.2 documentary bug's mechanism — post-filtering on `item.type`, which the TMDb adapters overwrite with `'doc'`, so a *Docs* segment hid every documentary series while *TV* hid documentary films.
+
+**The substantive difference is that a chip refetches.** Both `useBrowseDiscover` and `useSemanticSearch` key their queries on every filter axis, so writing one field re-runs the query rather than thinning the ~40 hits already on screen. The pills could only ever subtract. The row is hidden on a confident title hit, where there is nothing to refine about a title the user has already named.
+
+**Zero results now name what to undo.** "Try loosening the filters" does not say which of five taps emptied the grid, so the only recovery was to clear everything. Each chip declares its part of speech — "Nothing free films" reads as a bug — and a noun chip switches the opener: *"No recent films under two hours"*, *"Nothing free under two hours — try removing Under 2h."*
+
+**IN-SL-001 closed: Browse had never recorded a single impression.** Every result set went through `PosterGridCard`, which did not call `recordImpression`. A `search` row gave `result_count` and a later `detail_view` gave the click, but nothing said *which* results were seen — so search CTR, the headline number of the measurement plan, had no denominator and could not be computed at all. The grid and the title-hit card now record on `'search'` or `'browse'`, stamped with the route and the active chips.
+
+**Two logging changes fell out of the removal.** The typed-search log deduped on `(query, category)`; rather than drop the field, `route` took the slot, because it answers the same question — is this a second search over the same text? — and genuinely varies, since *"Search titles instead"* re-answers one query two ways with two result counts. And the filter-intent log stopped being gated on `!semanticMode`: that gate existed so a preset tap could not log twice, but the tap handler already sets exactly one intent, and the gate meant a FilterSheet apply on the semantic path wrote nothing at all. Every refine toggle would have inherited the same silence.
+
+**One thing deliberately not logged.** Removing the last chip with no text and no preset lands on the empty state, and an empty state is not a search. Logging it would enter a zero-result row for a user who had just cleared their filters — which reads in the measurement plan as exactly the retrieval failure the zero-result rate exists to catch. The FilterSheet already applied that rule; the chips now do too.
+
+
+## [2026-09-09] ingest | Device testing the refine row found the pool, not the row
+Updated: `wiki/concepts/evaluations/semantic-search-quality.md` (Finding 3), `wiki/registers/parking-lot.md` (IN-SL-005 filed).
+
+**The instrumentation worked on the first try, which is itself the news.** `card_impressions` had never held a single Browse row in its history — 8,134 `home` and 1,154 `for_you` and nothing else. One device session produced `search` rows on both the title and described routes and `browse` rows on the preset and filter routes, positioned 0–11, stamped with the route and the active chips. Search CTR has a denominator for the first time.
+
+**The route-as-identity change is visible in the log and behaves as designed.** Joe typed one sentence and it wrote two rows: `route: described` with 29 results, then `route: lookup` with 0 after tapping *Search titles instead*. Under the old `(query, category)` dedupe those would have collapsed into one row, losing the fact that the user rejected the described answer — which is the single most interesting thing a described search can tell us.
+
+**What device testing did NOT cover.** No refine chip was tapped. The one `mode: 'filter'` row from the session carries `runtime: 'over_120'`, which is not a chip value, so it came from the FilterSheet. The chips remain unverified on a device; the row rendered, and that is all that is established.
+
+**Two observations that turned out to be one number.** The described route returned 2019 and 2023 titles for *"something recent that isn't rubbish"*, and the *New & actually good* preset returned exactly 2 titles. Neither is a bug in the refine row and both have the same cause.
+
+The typed sentence is embedded, not parsed: "recent" and "rubbish" are matched as *words*, never as a release-date floor or a rating floor. That is Finding 2 restated, and the refine chips are the manual bridge until the §8.2 query-understanding step exists.
+
+The preset is arithmetically doomed. `match_titles_by_vector` takes no filter arguments, so `semanticRetrieval` fetches 150 nearest neighbours and post-filters. Only 1.82% of the 34,563 embedded titles were released in the last 12 months, and 0.42% are both recent and rated 7+. Measured against a real probe vector, of 150 candidates *Just films* leaves 123, *Under 2h* 91, *Higher rated* 32 — and *Newer* leaves **7**, with *Newer* + *Higher rated* leaving **2**. The logged `result_count` for that preset tap is 2. The measurement predicts the screen exactly.
+
+**Deepening the pool is not available.** Migration 076 caps the RPC at 1,000 and its error text says why: past the HNSW `ef_search` ceiling the index returns roughly a thousand rows *while reporting success*, so a deeper query silently lies. At the cap *Newer* reaches 34 and the preset 10 — five times better, still thin, and paid for with 1,000 rows of metadata per chip tap on a phone.
+
+**Nothing was changed on the strength of it.** `candidateLimit` stays at 150: raising a retrieval parameter on one probe vector and no eval run is exactly what the fixture rig exists to prevent. *Newer* stays on the row, because unlike the `cost` chip withheld from the Mode A grid it is not inert — it does what it says over a genuinely thin slice, and the zero-result copy names it as the thing to remove. A true but disappointing answer with a labelled exit is a different object from a control that does nothing.
+
+**The generalisable bit.** Three sessions in a row found controls attached to the wrong data source. This one found a control attached to the *right* source with the wrong cardinality behind it — which type checking, tests and a working UI all pass cleanly, and which only arithmetic over the live catalogue exposes. The question "does this control reach its data?" now has a sibling: "and is there enough of it once it gets there?"
+
+
+## [2026-09-09] ingest | The refine chips work; the preset asks for the wrong neighbourhood
+Updated: `wiki/concepts/evaluations/semantic-search-quality.md` (Finding 3 rewritten), `wiki/registers/parking-lot.md` (IN-SL-005 corrected).
+
+**Correcting the previous entry before anything else.** It reported *Newer* leaving 7 of 150 candidates, measured with `release_date >= current_date - 365 days`. The code does not do that — `buildPostFilter` compares `release_year >= currentYear - 1`, a year floor. Re-measured with the right predicate: **21 of 150**, and Newer + Higher rated leaves 6 rather than 2. The catalogue slice is 4.9% and 1.05%, not 1.82% and 0.42%. The finding's direction survives; its magnitude was overstated by roughly a factor of three.
+
+**The chips are verified on a device, and the count line is a bad witness.** Tapping *Under 2h* on a described "epic fantasy" grid logged `refine: runtime, on: true` and refetched — but `result_count` stayed 56 both sides, so on the screen nothing appeared to happen. The impressions show it plainly: *Bāhubali: The Epic* (224 min) and *The Green Knight* (130 min) left the grid and everything below them closed up. The count did not move because the engine truncates to `resultLimit: 60` from a 150-candidate pool, so removing twenty long films still leaves enough to fill the cap. The control works; the number chosen to prove it works cannot, whenever the pool exceeds the cap. Claiming the count line as the refetch indicator was wrong.
+
+**The preset's real problem is not selectivity, it is the query.** *New & actually good* returns 2 titles where 363 in the catalogue meet its criteria. Its phrase — *"a recent, well-reviewed film or series … that both critics and audiences rated highly"* — is a statement **about** a title, not a description **of** one, so nearest-neighbour retrieval lands on titles whose overviews use that vocabulary. It returned **Mr. Scorsese**, a documentary series about a director and his critical reception. The query asked for well-reviewed things and got a programme about reviewing.
+
+The rule needed here already exists in the codebase. *Free to watch* carries `phrase: null` because cost is a fact, not a feeling. "New and actually good" is also a fact — two metadata predicates and nothing else — so the card should carry no phrase and resolve down `/discover`, where recency and rating are applied server-side across the whole catalogue rather than across 150 embedding neighbours. Not changed here: it is a Session 3 artefact and the change belongs beside an eval run.
+
+**A third cause, and a new one.** *Mousetrap* (2026) and *Mayday* (2026), both visible on the New tab, have **no row in `titles` at all** — the only Mayday rows are unrelated series from 2003 and 2013. New reads TMDb `/discover` live; vector search can only return what has been ingested and embedded. So part of "why isn't this recent thing here" is not ranking, retrieval or filtering, but ingest. Scope unestablished; wants its own pass.
+
+**What "Newer" means, since three paths spell it differently.** Semantic and client-side use `release_year >= currentYear - 1`; `/discover` uses an exact `today - 365 days`. In September 2026 the first admits 2025 and 2026 — up to about 21 months. The looseness is deliberate and documented: `ContentItem` carries a year, not a date, and tightening it would empty the grid every January. Worth knowing that a chip labelled *Newer* can honestly return something 20 months old.
+
+**The generalisable bit, updated.** The previous entry said the sibling question to "does this control reach its data?" is "and is there enough of it once it gets there?". There is a third: **"is it asking for the right thing?"** Cardinality was the visible symptom and the query was the cause, and only reading the two returned titles by name — rather than counting them — showed which.
+
+
+## [2026-09-09] ingest | The card asked for well-reviewed things and got a programme about reviewing
+Updated: `wiki/concepts/evaluations/semantic-search-quality.md` (Finding 3 outcome), `wiki/registers/parking-lot.md` (IN-SL-005 cause 1 closed).
+
+**Joe asked for it done properly with an eval run, so here is the run.** `new-good` now carries `phrase: null`, joining `free` as a **fact card**. A tap composes filters only and resolves down `/discover`, where recency and rating are applied server-side across the whole catalogue rather than across 150 embedding neighbours.
+
+**The evidence that settled it was five titles, not a metric.** The retired phrase — *"a recent, well-reviewed film or series from the last year that both critics and audiences rated highly"* — scored p@10 0.00, but so does every diagnostic entry in the fixture, so the number alone said nothing new. Reading the top five did:
+
+| rank | title | why it matched |
+|---:|---|---|
+| 1 | **Voir** (2021) | a series in which *"film lovers examine the cinematic moments that thrilled"* them |
+| 2 | The Favourite (2018) | the word *favourite* |
+| 3 | The Great (2020) | the word *great* |
+| 4 | Blockbuster (2022) | the word *blockbuster* |
+| 5 | Nightcrawler (2014) | crime **journalism** |
+
+Not one is recent. Not one was chosen for being well-reviewed. A statement **about** a title is not a description **of** one, and no synopsis reads like a review blurb — so the nearest neighbours were programmes about acclaim and titles named with praise words.
+
+**The outcome, measured against Joe's real seven-service stack.**
+
+| path | qualifying | on screen |
+|---|---:|---:|
+| semantic (phrase + post-filter) | — | **2** |
+| `/discover` (filter-only) | 99 films + 106 series = **205** | **40** |
+
+The first card in the new grid is *Mayday* (2026, 8.0) — one of the two titles Joe named from the New tab as obviously missing. Script kept at `scripts/test/newgood-path-compare.mjs`.
+
+**Gated eval metrics are identical either side** — p@10 1.000, MRR 0.900, against thresholds 0.9 and 0.75. That is the expected and correct result: nothing about retrieval moved, one card simply stopped calling it. An eval that had *changed* here would have meant the change did something it was not supposed to.
+
+**The fixture keeps the evidence rather than the phrase.** The entry now queries the card's sentence, matching how `free` is held, and its `_note` preserves the retired phrase's measurement verbatim so a future session that re-adds a phrase has to justify it against that number. The sentence scores 0.00 as well, which is the point: neither text has a semantic answer, because the card is not a feeling. The test that guarded this became a rule about **fact cards** rather than a hardcoded exception for `free`, plus a new assertion that a phrase-less card must carry a non-empty filter patch — otherwise it is a no-op button.
+
+**Two of the three causes are still open**, and this fix does not touch them: filter-after-retrieval still thins *Newer* on the described route and still needs a filtered RPC variant, and *Mousetrap* (2026) still has no `titles` row at all. What changed is that the card no longer depends on either.
+
+**The generalisable bit.** Three entries ago the lesson was "does this control reach its data?", then "is there enough of it?", then "is it asking for the right thing?". This one adds the method rather than the question: **the metric was 0.00 before and after and told us nothing; the five titles told us everything.** A score compresses an answer to a number, and the number is the same whether retrieval is slightly wrong or asking a category error. Read the rows.

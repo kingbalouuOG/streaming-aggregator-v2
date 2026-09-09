@@ -182,7 +182,7 @@
       "sentence": "something easy and warm I can half-watch"
     },
     {
-      "query": "a recent, well-reviewed film or series from the last year that both critics and audiences rated highly",
+      "query": "something recent that isn't rubbish",
       "presetKey": "new-good",
       "kind": "preset-sentence",
       "expected": [
@@ -227,7 +227,7 @@
           "title": "Furiosa: A Mad Max Saga"
         }
       ],
-      "_note": "2024–2025, vote_average >= 7.2, vote_count >= 2500. In the product this preset also carries a hard `released` + `minRating` filter, so the engine is not asked to infer recency on its own; this entry measures how much of the intent the phrasing alone recovers.",
+      "_note": "The QUERY here is the card's sentence, not its phrase, because the phrase was retired on 2026-09-09 and the card now carries `phrase: null` — the sentence is the only text from this card an embedding can still see, via free-text routing on the described route. Same shape as the `free` entry below, and kept for the same reason: as the measured evidence for a filter-only card. THE RETIRED PHRASE WAS \"a recent, well-reviewed film or series from the last year that both critics and audiences rated highly\", and it scored p@10 0.00 / rr 0.00 with a top five of Voir (a documentary series in which film lovers examine cinematic moments), The Favourite, The Great, Blockbuster and Nightcrawler — surface matches on the vocabulary of acclaim, none recent, none chosen for being well-reviewed. A statement ABOUT a title is not a description OF one, and no synopsis reads like it. On a device that neighbourhood, post-filtered by recency and rating, left TWO titles out of 363 in the catalogue meeting the card's own criteria. Expected set is 2024–2025, vote_average >= 7.2, vote_count >= 2500. A future session that gives this card a phrase should have to justify it against these numbers.",
       "gate": false,
       "sentence": "something recent that isn't rubbish"
     },

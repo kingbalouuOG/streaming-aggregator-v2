@@ -1,6 +1,6 @@
 import { FlashList } from '@shopify/flash-list';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronDown, Search, Sparkles, SlidersHorizontal, X } from 'lucide-react-native';
+import { Search, Sparkles, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,17 +11,17 @@ import {
   countActiveFilters,
   DEFAULT_FILTERS,
   type ContentType,
-  SORT_LABELS,
   sortItems,
   type BrowseFilters,
   type SortMode,
 } from '@/components/browseFilters';
 import { FilterSheet } from '@/components/FilterSheet';
 import { PosterGridCard } from '@/components/PosterGridCard';
+import { RefineRow } from '@/components/RefineRow';
 import { PosterGridSkeleton } from '@/components/Skeleton';
 import { TitleHitCard } from '@/components/TitleHitCard';
 import { useBrowseDiscover } from '@/hooks/useBrowseDiscover';
-import { useSearch, type SearchCategory } from '@/hooks/useSearch';
+import { useSearch } from '@/hooks/useSearch';
 import {
   useSearchIntentLog,
   useTypedSearchLog,
@@ -38,6 +38,13 @@ import {
   weekBucketFor,
   type SelectedPreset,
 } from '@/lib/content/presets';
+import {
+  activeRefineFields,
+  describeRefineEmptyState,
+  toggleRefineChip,
+  type RefineChip,
+  type RefineField,
+} from '@/lib/content/refineChips';
 import { selectTitleHit } from '@/lib/search/titleHit';
 import { getV2TasteProfile } from '@/lib/taste-v2/tasteProfileV2';
 import type { ContentItem } from '@/lib/types/content';
@@ -60,12 +67,17 @@ import { useQuery } from '@tanstack/react-query';
 //   filters  the accumulated constraints
 //
 // A preset tap MERGES its filters and sets its phrase. A typed query sets
-// text and routes by shape. "Clear all" resets the lot. The refine chip row
-// that makes the composition tappable is Session 4; the composition itself is
-// here, and already works through the FilterSheet.
-
-const CATEGORIES: SearchCategory[] = ['All', 'Movies', 'TV', 'Docs'];
-const SORT_MODES: SortMode[] = ['best', 'popularity', 'rating', 'a_z', 'z_a'];
+// text and routes by shape. "Clear all" resets the lot. `RefineRow` is what
+// makes the composition tappable: five chips over five existing filter
+// fields, plus the sheet and the sort control folded into the same block.
+//
+// Two control clusters left with it. The category pills (All / Movies / TV /
+// Docs) filtered Mode A's list client-side and so did nothing on the
+// described route, where the grid comes from the engine — a control that
+// looks like it works and does not, caught by device testing 2026-09-09.
+// The separate Filters/Sort row is now the second line of the refine block
+// rather than a row of its own. Media type is `filters.contentType` on every
+// path, which is the one spelling all three retrieval paths honour.
 
 interface Intent {
   text: string;
@@ -87,10 +99,11 @@ export default function BrowseScreen() {
   const router = useRouter();
   const [intent, setIntent] = useState<Intent>(EMPTY_INTENT);
   const [debounced, setDebounced] = useState('');
-  const [category, setCategory] = useState<SearchCategory>('All');
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('best');
-  const [sortOpen, setSortOpen] = useState(false);
+  // The chip added most recently, so the zero-result copy can name the one
+  // thing to undo instead of telling the user to loosen "the filters".
+  const [lastRefine, setLastRefine] = useState<RefineField | null>(null);
   // Set by "Search titles instead" — the user has told us this text is a
   // title, so stop reading it as a feeling until they type something else.
   const [forceTitles, setForceTitles] = useState(false);
@@ -142,7 +155,7 @@ export default function BrowseScreen() {
     return () => clearTimeout(t);
   }, [intent.text]);
 
-  const { data: results, isFetching } = useSearch(debounced, category);
+  const { data: results, isFetching } = useSearch(debounced);
   const { data: watchlist } = useWatchlist();
   const { data: userServices } = useUserServices();
   const { data: semanticOn } = useSemanticFlag();
@@ -179,20 +192,10 @@ export default function BrowseScreen() {
   // Filter-only browse — constraints with no text and nothing to embed.
   const filterOnlyMode = !searching && !semanticMode && activeCount > 0;
   const presearch = !searching && !semanticMode && activeCount === 0;
-  // Hidden on a confident title hit: there is nothing to refine about a title
-  // the user has already named, and the prototype's state 2 shows the card with
-  // no controls above it. This is "refine only where it helps" (§9.2) in
-  // today's vocabulary; Session 4 applies the same rule to the refine row.
-  const showControls = (searching && !titleHit) || filterOnlyMode || semanticMode;
-  // The category pills filter MODE A's result list, so they only belong on a
-  // Mode A grid. On the described route the grid comes from the engine, which
-  // never sees `category` — device testing 2026-09-09 caught them rendering
-  // there, where tapping Movies changed nothing on screen while quietly
-  // re-running Mode A and writing a log row. A control that looks like it
-  // works and does not is worse than no control. Media type on the described
-  // route is `filters.contentType`, which IS applied server-side. Session 4
-  // removes the pills outright.
-  const showCategories = searching && !titleHit && !describedRoute;
+  // "Refine only where it helps" (§9.2). Hidden on a confident title hit:
+  // there is nothing to refine about a title the user has already named, and
+  // the prototype's state 2 shows the card with no controls above it.
+  const showRefine = (searching && !titleHit) || filterOnlyMode || semanticMode;
 
   const browse = useBrowseDiscover(filters, sortMode, filterOnlyMode, userServices ?? []);
 
@@ -291,8 +294,17 @@ export default function BrowseScreen() {
 
   // FilterSheet apply. Clearing every filter is not a search, so it stages
   // nothing.
+  //
+  // The sheet writes the WHOLE filter object, including `released` and `cost`,
+  // which it has no controls for. That is what keeps the two in sync in the
+  // direction the sheet owns: a `Newer` chip survives a sheet apply, and shows
+  // in the sheet's own Apply count, even though the sheet cannot edit it.
   const handleApplyFilters = useCallback((next: BrowseFilters) => {
     setIntent((prev) => ({ ...prev, filters: next }));
+    // A sheet apply is not a chip, so it does not own the "try removing X"
+    // suggestion — clearing it stops the empty state pointing at a chip the
+    // user has not touched since.
+    setLastRefine(null);
     setFilterIntent(
       countActiveFilters(next) > 0
         ? { nonce: Date.now(), mode: 'filter', query: null, metadata: { filters: next } }
@@ -300,9 +312,60 @@ export default function BrowseScreen() {
     );
   }, []);
 
+  /**
+   * One refine chip.
+   *
+   * The whole mechanism is `intent.filters`: both `useBrowseDiscover` and
+   * `useSemanticSearch` key their queries on every filter axis, so writing
+   * one field REFETCHES rather than thinning the grid that is already there.
+   * That is the difference from the category pills this row replaced, which
+   * post-filtered a fixed list of ~40 TMDb hits and got quietly thinner with
+   * each tap.
+   *
+   * The one path where it does post-filter is Mode A with the semantic flag
+   * off, where `applyBrowseFilters` runs over the search results — honest,
+   * and the row is hidden on the title-hit layout where post-filtering would
+   * be misleading.
+   */
+  const handleRefineToggle = useCallback(
+    (chip: RefineChip) => {
+      const next = toggleRefineChip(filters, chip);
+      const on = chip.isOn(next);
+      setIntent((prev) => ({ ...prev, filters: next }));
+      // Only an ADDED chip becomes the suggestion. Naming a chip the user
+      // just removed would tell them to undo the thing they did to recover.
+      setLastRefine(on ? chip.field : null);
+      // Logged as `filter` alongside preset taps and sheet applies (§5.2).
+      // `refine` + `on` are what let §6 ask which axis people actually reach
+      // for and how often a refinement is immediately undone; the full filter
+      // set goes with it because a chip only means something in the context
+      // of what else was already active.
+      setSemanticIntent(null);
+      // Same rule the sheet applies: removing the last constraint when there
+      // is no text and no preset lands back on the empty state, and an empty
+      // state is not a search. Logging it would enter a zero-result row for
+      // a user who had just cleared their last filter, which reads in §6 as
+      // exactly the retrieval failure the zero-result rate exists to catch.
+      const stillASearch =
+        countActiveFilters(next) > 0 || intent.text.trim().length > 0 || !!intent.moodKey;
+      setFilterIntent(
+        stillASearch
+          ? {
+              nonce: Date.now(),
+              mode: 'filter',
+              query: intent.text.trim() || null,
+              metadata: { refine: chip.field, on, filters: next, mood_key: intent.moodKey },
+            }
+          : null,
+      );
+    },
+    [filters, intent.text, intent.moodKey],
+  );
+
   /** The one control that resets everything — text excepted, which has its own ×. */
   const clearAll = useCallback(() => {
     setIntent((prev) => ({ ...prev, phrase: null, moodKey: null, filters: DEFAULT_FILTERS }));
+    setLastRefine(null);
     setSemanticIntent(null);
     setFilterIntent(null);
   }, []);
@@ -362,6 +425,27 @@ export default function BrowseScreen() {
       : filterOnlyMode && browse.isFetching && !browse.data;
 
   const activePreset = intent.moodKey ? presetByKey(intent.moodKey) : undefined;
+  /** Which layout answered the typed text. Both logged and stamped on impressions. */
+  const route = titleHit ? 'title' : describedRoute ? 'described' : 'lookup';
+  // Mode A with the flag off is the one grid that is post-filtered rather
+  // than refetched, so it is the one grid `cost` cannot reach — see
+  // `orderedRefineChips`.
+  const modeAGrid = Boolean(searching && !describedRoute);
+  // Search vs browse: text on screen means the user asked for something by
+  // name or by description, and everything else — a preset, filters alone —
+  // is browsing. Closes the §4 gap (IN-SL-001): Browse rendered every result
+  // set and recorded no impressions, so search CTR had no denominator.
+  const gridSurface = searching ? ('search' as const) : ('browse' as const);
+  // Serialised rather than the array itself: a fresh array every render would
+  // re-record every impression on the grid on every render.
+  const activeRefineKey = activeRefineFields(filters).join(',');
+  const impressionMetadata = useMemo(
+    () => ({
+      route: searching ? route : semanticMode ? 'preset' : 'filter',
+      refine: activeRefineKey || null,
+    }),
+    [searching, route, semanticMode, activeRefineKey],
+  );
 
   // — Search-term logging (§5) —————————————————————————————————————
   // Typed queries: settled only, once each. `markSettled` is the
@@ -381,16 +465,23 @@ export default function BrowseScreen() {
   const markQuerySettled = useTypedSearchLog({
     query: intent.text,
     resultsFor: debounced,
-    category,
+    route,
     results: describedRoute ? shown : results,
     isFetching: describedRoute ? loading : isFetching,
-    metadata: { route: titleHit ? 'title' : describedRoute ? 'described' : 'lookup' },
   });
   // Preset taps on the semantic path log against the semantic result set.
   useSearchIntentLog(semanticMode ? semanticIntent : null, semantic.data, semantic.isFetching);
-  // Preset taps (flag off) and FilterSheet applies log against what is
-  // actually on screen, whichever list that came from.
-  useSearchIntentLog(semanticMode ? null : filterIntent, shown, loading);
+  // Preset taps (flag off), FilterSheet applies and refine-chip toggles log
+  // against what is actually on screen, whichever list that came from —
+  // `shown` is the semantic grid in semanticMode and `loading` covers its
+  // fetch, so a chip tapped on the described route reports the count the
+  // engine returned rather than Mode A's.
+  //
+  // This deliberately is NOT gated on `!semanticMode` any more. It was, so
+  // that a preset tap could not log twice; but `handlePreset` already sets
+  // exactly one of the two intents, and the gate meant a sheet apply on the
+  // semantic path — and now every refine toggle there — wrote nothing at all.
+  useSearchIntentLog(filterIntent, shown, loading);
 
   const openDetail = (item: ContentItem) => {
     // First result tap settles the query immediately — the strongest signal
@@ -443,28 +534,6 @@ export default function BrowseScreen() {
           </Text>
         ) : null}
 
-        {showCategories ? (
-          <View className="mt-3 flex-row gap-2">
-            {CATEGORIES.map((cat) => {
-              const active = cat === category;
-              return (
-                <Pressable
-                  key={cat}
-                  onPress={() => setCategory(cat)}
-                  className={
-                    active
-                      ? 'rounded-pill border border-primary-edge bg-primary-soft px-3.5 py-1.5'
-                      : 'rounded-pill border border-border bg-card px-3.5 py-1.5 active:bg-secondary'
-                  }>
-                  <Text className={active ? 'font-sans-bold text-meta text-primary' : 'font-sans-medium text-meta text-muted-foreground'}>
-                    {cat}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
-
         {/* Described-text banner — says what we did with the text, and offers
             the way back. Shown only for typed text routed to the engine; a
             preset tap gets the mood banner below instead. */}
@@ -511,61 +580,19 @@ export default function BrowseScreen() {
           </View>
         ) : null}
 
-        {showControls ? (
-          <View className="mt-3 flex-row items-center justify-between">
-            <View className="flex-row items-center gap-2">
-              <Pressable
-                onPress={() => setSheetOpen(true)}
-                className={
-                  activeCount > 0
-                    ? 'flex-row items-center gap-1.5 rounded-pill border border-primary-edge bg-primary-soft px-3 py-1.5'
-                    : 'flex-row items-center gap-1.5 rounded-pill border border-border bg-card px-3 py-1.5 active:bg-secondary'
-                }>
-                <SlidersHorizontal size={14} color={activeCount > 0 ? '#e85d25' : 'rgba(245,241,232,0.62)'} />
-                <Text className={activeCount > 0 ? 'font-sans-bold text-meta text-primary' : 'font-sans-medium text-meta text-muted-foreground'}>
-                  {activeCount > 0 ? `Filters · ${activeCount}` : 'Filters'}
-                </Text>
-              </Pressable>
-              {activeCount > 0 || intent.moodKey ? (
-                <Pressable
-                  onPress={clearAll}
-                  hitSlop={6}
-                  accessibilityRole="button"
-                  className="flex-row items-center gap-1 rounded-pill px-2 py-1.5 active:opacity-70">
-                  <X size={12} color="rgba(245,241,232,0.5)" />
-                  <Text className="font-sans-medium text-meta text-faint-foreground">Clear all</Text>
-                </Pressable>
-              ) : null}
-            </View>
-
-            <View>
-              <Pressable
-                onPress={() => setSortOpen((v) => !v)}
-                className="flex-row items-center gap-1 rounded-pill border border-border bg-card px-3 py-1.5 active:bg-secondary">
-                <Text className="font-sans-medium text-meta text-muted-foreground">{SORT_LABELS[sortMode]}</Text>
-                <ChevronDown size={13} color="rgba(245,241,232,0.62)" />
-              </Pressable>
-              {sortOpen ? (
-                <View
-                  className="absolute right-0 top-9 z-10 w-36 rounded-card border border-border bg-card py-1"
-                  style={{ elevation: 8 }}>
-                  {SORT_MODES.map((m) => (
-                    <Pressable
-                      key={m}
-                      onPress={() => {
-                        setSortMode(m);
-                        setSortOpen(false);
-                      }}
-                      className="px-3 py-2 active:bg-secondary">
-                      <Text className={m === sortMode ? 'font-sans-bold text-meta text-primary' : 'font-sans-medium text-meta text-muted-foreground'}>
-                        {SORT_LABELS[m]}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : null}
-            </View>
-          </View>
+        {showRefine ? (
+          <RefineRow
+            filters={filters}
+            onToggle={handleRefineToggle}
+            activeCount={activeCount}
+            onOpenSheet={() => setSheetOpen(true)}
+            onClearAll={activeCount > 0 || intent.moodKey ? clearAll : undefined}
+            sortMode={sortMode}
+            onSortChange={setSortMode}
+            resultCount={shown.length}
+            loading={loading}
+            clientSideOnly={modeAGrid}
+          />
         ) : null}
       </View>
 
@@ -574,6 +601,7 @@ export default function BrowseScreen() {
           item={titleHit.item}
           userServices={userServices ?? []}
           onOpenDetail={openDetail}
+          impressionMetadata={impressionMetadata}
         />
       ) : null}
 
@@ -590,7 +618,17 @@ export default function BrowseScreen() {
           data={shown}
           numColumns={2}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <PosterGridCard item={item} onPress={openDetail} />}
+          renderItem={({ item, index }) => (
+            <PosterGridCard
+              item={item}
+              onPress={openDetail}
+              surface={gridSurface}
+              // The title-hit card is position 0 and records its own
+              // impression, so "other matches" start at 1.
+              position={titleHit ? index + 1 : index}
+              impressionMetadata={impressionMetadata}
+            />
+          )}
           contentContainerStyle={{ padding: 14 }}
           ListHeaderComponent={
             titleHit ? (
@@ -610,6 +648,7 @@ export default function BrowseScreen() {
           described={describedRoute}
           moodLabel={activePreset?.label}
           tightened={Boolean(activeCount > 0 && searching && (results?.length ?? 0) > 0)}
+          refine={describeRefineEmptyState(filters, lastRefine)}
         />
       )}
 
@@ -630,6 +669,7 @@ function NoResults({
   described,
   moodLabel,
   tightened,
+  refine,
 }: {
   query: string;
   filterOnly: boolean;
@@ -637,7 +677,26 @@ function NoResults({
   described: boolean;
   moodLabel?: string;
   tightened: boolean;
+  /** Set when a refine chip is active — see `describeRefineEmptyState`. */
+  refine: { summary: string; removeLabel: string } | null;
 }) {
+  // A refined grid that came back empty gets the refine copy on EVERY route,
+  // ahead of the route-specific text. "Nothing quite like that" is true and
+  // useless when the user has just tapped two chips: it does not say which
+  // tap emptied the grid, so the only recovery is to clear everything and
+  // start over. Naming the last chip added is one tap back to results.
+  if (refine) {
+    return (
+      <View className="flex-1 items-center justify-center px-10">
+        <Text className="text-center font-standfirst text-section text-foreground">
+          {refine.summary}
+        </Text>
+        <Text className="mt-2 text-center font-sans text-body text-muted-foreground">
+          Try removing {refine.removeLabel}.
+        </Text>
+      </View>
+    );
+  }
   if (described) {
     return (
       <View className="flex-1 items-center justify-center px-10">

@@ -185,6 +185,100 @@ The free-text route ships as specified and stays safe: `search_semantic` is per-
 The web "Refine by feeling" mood refiner (`MOOD_CHIPS` / `MOOD_GLYPHS` / `MOOD_REFINER_ENABLED` in `ForYouPage.tsx`, plus the orphaned `MOOD_GLYPH_NAMES` map) — a fourth overlapping mood taxonomy that duplicated the Browse presets by label but not by definition, and had never been wired to anything. Closes IN-V3-003.
 
 
+## Addendum — The refine row (2026-09-09)
+
+Session 4 of the same recommendation. The last of the four sessions, and the
+one that makes the composed intent tappable.
+
+### One block of controls, not three
+
+Browse used to stack a category pill row (All / Movies / TV / Docs) and a
+Filters/Sort row above the grid. Both are gone. `RefineRow` renders five
+one-tap chips — *Just films*, *Newer*, *Under 2h*, *Free to watch*, *Higher
+rated* — then a count line, *More filters* and *Sort*.
+
+Every chip is one existing `BrowseFilters` field set to one value. No axis was
+added, and the shape of `src/lib/content/refineChips.ts` makes adding one
+awkward on purpose: a chip is `{ field, on, off, isOn }` over the existing
+vocabulary.
+
+### Why the pills had to go rather than move
+
+They filtered Mode A's result list client-side. On the described route the
+grid comes from the engine, which never sees `category`, so tapping *Movies*
+changed nothing on screen while quietly re-running Mode A and writing a log
+row (device testing, 2026-09-09 — three rows for one query, seven seconds
+apart). Media type is `filters.contentType` now, which all three retrieval
+paths honour where their results actually come from: client-side over Mode A,
+endpoint-and-genre choice on `/discover`, and server-side on the semantic RPC.
+
+`useSearch` lost its `SearchCategory` parameter with them. Post-filtering on
+`item.type` was also the [§0.2 documentary bug](../architecture/home-surface.md)
+in its original habitat: the TMDb adapters overwrite `type` with `'doc'`, so a
+*Docs* segment hid every documentary series while *TV* hid documentary films.
+
+### A chip refetches; it does not thin
+
+`useBrowseDiscover` and `useSemanticSearch` both key their queries on every
+filter axis, so writing one field re-runs the query. That is the difference
+from the pills, which thinned a fixed list of ~40 hits and got quieter with
+each tap. The one path where a chip still post-filters is Mode A with the
+semantic flag off, which is honest — and the row is hidden on the confident
+title-hit layout, where post-filtering *would* mislead.
+
+### Sync with the sheet, in both directions
+
+The sheet edits `contentType`, `runtime` and `minRating`, so a sheet change
+lights the matching chip. It does not edit `released` or `cost`, but it writes
+the whole filter object, so a chip set on those axes survives an apply and
+counts in the sheet's own Apply badge. `isOn` is a predicate rather than an
+equality test for the same reason: a minimum rating of 8.5 chosen in the sheet
+satisfies *Higher rated* and must light it. Switching that chip off then
+clears the constraint outright rather than weakening it to 7.
+
+### The empty state names what to undo
+
+"Nothing matches this filter combination. Try loosening the filters" is true
+and useless once five chips exist — it does not say which tap emptied the
+grid, so the only recovery is to clear everything. `describeRefineEmptyState`
+composes the active chips into a sentence and names the one added last:
+*"Nothing free under two hours — try removing Under 2h."* Each chip declares
+its part of speech, because "Nothing free films" reads as a bug; a noun chip
+switches the opener to *No*.
+
+### Browse finally records impressions (IN-SL-001 closed)
+
+Browse rendered every result set through `PosterGridCard` and never called
+`recordImpression`. A `search` row gave `result_count` and a later
+`detail_view` gave the click, but there was no denominator for *which* results
+were seen — so search CTR, the headline number of the measurement plan, could
+not be computed at all. The grid and `TitleHitCard` now record on `'search'`
+(text on screen) or `'browse'` (a preset or filters alone), stamped with the
+route and the active chips so a refined result set is not silently mixed with
+an unrefined one. The title-hit card is position 0 and the grid below it
+starts at 1. Watchlist passes no surface and records nothing — a saved list is
+not a ranked surface.
+
+### Two logging changes worth knowing about
+
+- **`route` replaced `category` in the settled-query identity.** The typed
+  search log deduped on `(query, category)`; the field did not become dead,
+  it changed occupant. Route answers the same question — *is this a second
+  search over the same text?* — and genuinely varies, because *"Search titles
+  instead"* re-answers one query two ways with two result counts over two
+  retrieval paths.
+- **The filter-intent log is no longer gated on `!semanticMode`.** That gate
+  existed so a preset tap could not log twice, but `handlePreset` already sets
+  exactly one intent. The gate meant a FilterSheet apply on the semantic path
+  — and would have meant every refine toggle there — wrote nothing at all.
+
+A chip that removes the last constraint with no text and no preset stages no
+row: that lands on the empty state, and an empty state is not a search. Logging
+it would enter a zero-result row for a user who had just cleared their filters,
+which reads in the measurement plan as exactly the retrieval failure the
+zero-result rate exists to catch.
+
+
 ## Decisions resolved (locked during plan-mode)
 
 1. **Salmon `#ff8d5a` token bump** app-wide. Minor visual drift on Calendar / Detail / Watchlist accepted.

@@ -15,10 +15,20 @@ import { extractYearFromQuery, reRankSearchResults } from '@/lib/utils/searchUti
 // through the SAME shared lib the web useSearch uses. Semantic ("Mode C")
 // mood search ships separately via useSemanticSearch (Browse moods, behind
 // the search_semantic flag); this hook stays keyword-only.
+//
+// It also stays CATEGORY-FREE. The hook used to take an All / Movies / TV /
+// Docs segment and post-filter its own results by `item.type`, which the
+// category pills above the grid drove. Both are gone (recommendation
+// 2026-09-08-002 §9.2, Session 4): media type is `BrowseFilters.contentType`
+// now, applied where the results actually come from — client-side over Mode
+// A's list, `with_genres`/endpoint choice on /discover, and server-side on
+// the semantic RPC. The pills only ever reached the first of those, so on the
+// described route they were a control that did nothing (device testing
+// 2026-09-09). Filtering by `item.type` was also the §0.2 documentary bug in
+// its original habitat: the adapters overwrite `type` with 'doc', so a Docs
+// segment hid every documentary series while "TV" hid documentary films.
 
-export type SearchCategory = 'All' | 'Movies' | 'TV' | 'Docs';
-
-async function runSearch(query: string, category: SearchCategory): Promise<ContentItem[]> {
+async function runSearch(query: string): Promise<ContentItem[]> {
   const { cleanQuery, year } = extractYearFromQuery(query);
 
   const [moviesRes, tvRes, postgres] = await Promise.all([
@@ -38,20 +48,14 @@ async function runSearch(query: string, category: SearchCategory): Promise<Conte
   for (const item of [...postgres, ...movieItems, ...tvItems]) {
     if (!merged.has(item.id)) merged.set(item.id, item);
   }
-  let items = reRankSearchResults([...merged.values()], cleanQuery);
-
-  if (category === 'Movies') items = items.filter((i) => i.type === 'movie');
-  else if (category === 'TV') items = items.filter((i) => i.type === 'tv');
-  else if (category === 'Docs') items = items.filter((i) => i.type === 'doc');
-
-  return items;
+  return reRankSearchResults([...merged.values()], cleanQuery);
 }
 
-export function useSearch(query: string, category: SearchCategory) {
+export function useSearch(query: string) {
   const q = query.trim();
   return useQuery({
-    queryKey: ['native', 'search', q, category],
-    queryFn: () => runSearch(q, category),
+    queryKey: ['native', 'search', q],
+    queryFn: () => runSearch(q),
     enabled: q.length >= 2,
     staleTime: 5 * 60 * 1000,
   });
