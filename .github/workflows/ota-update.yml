@@ -21,6 +21,16 @@ name: OTA Update (EAS Update)
 #
 # Triggers: manual only. A JS change still has to be merged to main first.
 #
+# WHY `all` IS A MATRIX AND NOT AN ARGUMENT.
+#
+# `eas update --platform all` means "every platform this project
+# CONFIGURES", and app.json configures web (`web.output: "static"`). So
+# `all` made expo export bundle web too — where `src/lib/lifecycle/appState.ts`
+# imports @capacitor/core, which is not in native/node_modules and never
+# will be. iOS and Android bundled fine; web failed and took the run with
+# it (run 34327841238). `all` therefore fans out to one job per real
+# platform here, and eas-cli only ever sees `ios` or `android`.
+#
 # Required repository secret: EXPO_TOKEN
 
 on:
@@ -44,6 +54,16 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
+    strategy:
+      # One platform per job. fail-fast off so a broken iOS publish does not
+      # cancel an Android one that would have succeeded — they are
+      # independent artefacts and a partial publish is worth knowing about.
+      fail-fast: false
+      matrix:
+        platform: ${{ inputs.platform == 'all'
+          && fromJSON('["ios","android"]')
+          || fromJSON(format('["{0}"]', inputs.platform)) }}
+    name: update (${{ matrix.platform }})
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       # Pinned to a major, not `latest`: this workflow PARSES eas-cli's JSON,
@@ -71,7 +91,7 @@ jobs:
           # is where the EXPO_PUBLIC_* values live.
           npx eas-cli@$EAS_CLI_MAJOR update \
             --channel "${{ inputs.channel }}" \
-            --platform "${{ inputs.platform }}" \
+            --platform "${{ matrix.platform }}" \
             --message "${{ inputs.message }}" \
             --environment production \
             --non-interactive \
@@ -98,7 +118,14 @@ jobs:
           # before expo-updates has a fingerprint but a null runtime, and can
           # receive no update at all. Treating it as comparable would let a
           # mismatch look like a match.
-          BUILDS="$(npx eas-cli@$EAS_CLI_MAJOR build:list --platform ios --limit 20 --json --non-interactive)"
+          # MUST be the platform just published. This was hardcoded to `ios`,
+          # so an Android publish compared its Android fingerprint against
+          # the newest iOS build — and fingerprints are per-platform, so the
+          # comparison could only ever fail. It reported "no device will
+          # receive it" for a perfectly good update (run 34328313179). The
+          # bug stayed latent because every earlier run used the default
+          # platform, which is ios.
+          BUILDS="$(npx eas-cli@$EAS_CLI_MAJOR build:list --platform ${{ matrix.platform }} --limit 20 --json --non-interactive)"
           BUILD_RT="$(printf '%s' "$BUILDS" | jq -r --arg ch '${{ inputs.channel }}' '
             [ .[]
               | { ch: (.updateChannel.name // .channel)
@@ -115,7 +142,7 @@ jobs:
             echo "| | |"
             echo "|---|---|"
             echo "| channel | \`${{ inputs.channel }}\` |"
-            echo "| platform | \`${{ inputs.platform }}\` |"
+            echo "| platform | \`${{ matrix.platform }}\` |"
             echo "| update runtimeVersion | \`${UPDATE_RT:-none}\` |"
             echo "| newest build runtimeVersion | \`${BUILD_RT:-none}\` |"
             echo
