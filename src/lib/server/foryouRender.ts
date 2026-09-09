@@ -109,6 +109,32 @@ export interface RenderForYouInput {
   profile?: TasteProfileV2 | null;
 }
 
+/**
+ * How many items `recommendedForYou` and `hiddenGems` are rendered to.
+ *
+ * Longer than either row displays. The surplus is the reserve the client's
+ * quick filter draws on (recommendation 2026-09-08-002 §1.4): filtering a
+ * 20-item row to Documentaries leaves a handful, and the row would show the
+ * same handful on every open. Filtering a 36-item row gives it a tail —
+ * and, crucially, an ALREADY-ROTATED one.
+ *
+ * That last point is why the length is raised here rather than backfilled on
+ * the client from `payload.pool`. This list has been through the fatigue
+ * penalty, the avoid set, the C3 ordering shuffle and MMR; the pool has been
+ * through none of them, so a client-side backfill would resurrect exactly
+ * the fatigued and parked titles Workstream C exists to suppress.
+ *
+ * The cost is bytes, not compute — one buildRowFromPool call with a larger
+ * `k`, over candidates already scored and already holding embeddings. MMR
+ * therefore runs to the full length (`k: limit`), so the tail is diversified
+ * rather than being an undiversified remainder stapled to a diversified head.
+ * The KV key is unchanged; a cached payload is simply a little larger.
+ *
+ * Unfiltered row lengths on the client are unchanged (20 and 15) — see
+ * native/src/app/(tabs)/foryou.tsx.
+ */
+const RENDERED_ROW_LENGTH = 36;
+
 export interface BecauseYouWatchedRow {
   anchor: ContentItem;
   items: ContentItem[];
@@ -272,7 +298,7 @@ export async function renderForYou(
   );
 
   const recBase = buildRowFromPool(varied, profile.sliders, {
-    config: { limit: 20 - explorationPicks.length, excludeIds: usedIds },
+    config: { limit: RENDERED_ROW_LENGTH - explorationPicks.length, excludeIds: usedIds },
     embeddingMap,
   });
   recBase.forEach((item) => usedIds.add(item.id));
@@ -314,7 +340,7 @@ export async function renderForYou(
     );
   });
   const hiddenGems = buildRowFromPool(gemCandidates, profile.sliders, {
-    config: { limit: 15, excludeIds: usedIds },
+    config: { limit: RENDERED_ROW_LENGTH, excludeIds: usedIds },
     embeddingMap,
   });
   hiddenGems.forEach((item) => usedIds.add(item.id));

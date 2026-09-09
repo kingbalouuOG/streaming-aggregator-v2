@@ -974,6 +974,23 @@ Post-merge follow-up, before Session 2 starts. Updated: `src/lib/storage/interac
 
 **The test is the point, and it was checked by breaking it.** This suite is otherwise pure-function only; `emitSearchGate.test.ts` uses `vi.mock` deliberately, because a gate is exactly what a later refactor removes without anything else failing. Deleting the gate line makes two of the five fail — verified, rather than assumed from a green run.
 
+## [2026-09-08] ingest | Session 2: quick filters, and the documentary that was three different things
+Session 2 of the quick-filters plan. New pages: `src/lib/content/documentary.ts`, `src/lib/content/quickFilter.ts` (+ tests), `native/src/state/quickFilter.ts`, `native/src/hooks/useQuickFilterLog.ts`, `native/src/hooks/useDocumentariesBackfill.ts`, `native/src/components/QuickFilterNotices.tsx`. Updated: `wiki/concepts/architecture/home-surface.md`, `wiki/concepts/architecture/for-you-surface.md`.
+
+**The chip strip was decorative, and the bug underneath it was that "documentary" meant three incompatible things.** `contentAdapter` sets `type: 'doc'` for genre 99 on both media types — which also erases whether the title is a film or a series. `titleAdapter` sets `type: row.media_type` and never `'doc'`, even with 99 present. `useBrowseDiscover`'s "Docs" segment asked TMDb for genre-99 MOVIES only. So the same title was a `doc` arriving via search and a `movie` arriving via the engine, and a chip written against `item.type === 'doc'` would have scored zero on For You — which is entirely engine-sourced. §1.1 settles it as a genre predicate, and Browse's discover call gained the TV half it never had.
+
+**`contentMediaType` is the half of the fix that is easy to miss.** "Movies and TV mean media type alone and INCLUDE documentaries" cannot be implemented against `item.type`, because `'doc'` has already overwritten it on the TMDb path — a documentary film and a documentary series are indistinguishable by that field. The `id` prefix (`movie-` / `tv-`) still carries it, so that is the source and `type` is the fallback. Without this, a documentary film would have failed the Movies chip.
+
+**Tests were placed where they could actually run, which meant moving code.** There is no native test runner, and the root vitest suite covers `src/`, `scripts/` and `workers/` only — so the chip threshold, the thin-rail rule and the category predicate were all initially sitting in `native/` where nothing could reach them. The pure half moved to `src/lib/content/quickFilter.ts`; `native/src/state/quickFilter.ts` keeps only the `useSyncExternalStore` store and re-exports the rest, so no call site changed. The cases that earn their keep are the ones reading would not have caught: a documentary film surviving the *Movies* chip, a documentary counting toward BOTH its media type and Documentaries when deciding chip visibility, and one match short of 8 hiding the chip.
+
+**Two things the plan said that turned out to be traps.** §10 names `native/src/lib/quickFilter.ts` as the home for the store — but `native/src/lib` is the junction to the shared tree, so that path would have put a native-only React store into the web and Worker bundles. It went to `native/src/state/` instead. And §10's `emitSearch` call from the store would have bypassed the `search_logging` gate; that was fixed ahead of this session by moving the gate into the emitter (PR #133), so the store's call is safe as written.
+
+**§1.2's empty-state button needed Browse to read a route param**, which the session brief said not to touch. Joe's call: add the param read (six lines, seeding the initial filter value only), because "Browse all documentaries" landing on an unfiltered grid is the dead end the empty state exists to avoid.
+
+**The measurement that decides the thresholds is in the event.** A chip change emits `mode: 'filter'` with `rails_visible` and `items_visible` captured as of the tap — deliberately excluding the Documentaries backfill, which lands a moment later, because the question §6 asks is "was filtering in place enough?". Whether 4 and 8 were the right numbers is answerable from those two fields alone.
+
+**Not yet verified on a device.** Session 1's record here is three defects across four rounds of on-device testing, none of which reading found, so the same budget applies before this merges. Typecheck, lint (0 errors), 328 unit tests, `eval:eng1` and `eval:novelty` all pass — but every one of those is blind to the thing that matters, which is what the page looks like when a chip is tapped.
+
 ## [2026-09-09] ingest | The consent gap has a real subject
 Updated: `wiki/registers/parking-lot.md` (IN-SL-003 escalated, IN-SL-004 filed), `wiki/concepts/product/privacy-and-gdpr.md`.
 
@@ -986,3 +1003,34 @@ Updated: `wiki/registers/parking-lot.md` (IN-SL-003 escalated, IN-SL-004 filed),
 **Amended later the same day — the provenance guess was wrong, and the flag went on anyway.** Checking the Play closed-test tester list ruled that cohort out, and the iOS build history (14 builds, oldest finished 29 Jun) ruled out iOS eight days over. No web deploy has ever existed. So "TestFlight or Play closed-test tester" was falsified; the account is simply **unidentified**, with the Play *internal* testing track and a directly shared APK still unchecked. The behavioural evidence points at a real person rather than a self-created test account: three active days spread over two months where every deliberate test account has one, an address and username matching neither test convention, and four deep-link click-outs to three services in the first session. Joe then decided to enable `search_logging` for them regardless — a public user judged extremely unlikely given the distribution channels, most plausibly a contact on a separate address. The §10 notice was **not** given, because there is no channel to give it. Recorded plainly rather than smoothed, with the condition that would reopen it: identification as a member of the public.
 
 **Recorded as a standing position (IN-SL-004), not a task.** ON for Joe's six accounts (he is the data subject). OFF for the unidentified user pending IN-SL-003. OFF *permanently* for `reviewer@videxstreaming.com` — capturing an app reviewer's search text yields no product signal and belongs in nobody's database. The last one is written down specifically so a future "turn it on for everyone" pass does not sweep it up.
+
+## [2026-09-09] ingest | Quick filters verified on device — and Movies, not Documentaries, is the thin case
+Follow-up on the same PR (#134), after OTA to the iOS preview build. Updated: `wiki/concepts/architecture/home-surface.md`.
+
+**It works, and the instrumentation proves it rather than the screenshot.** `card_impressions.metadata.filter` stamps correctly on cards and heroes for all three categories (Movies 80+2, TV 71+1, Documentaries 13+1), and five `mode: 'filter'` rows landed with their rail counts. The point of putting `rails_visible` / `items_visible` in the event was that a filter row otherwise says a chip was tapped and nothing about whether the result was worth looking at. First use of them, first surprise.
+
+**§1.3's arithmetic was right in shape and wrong in direction.** It reasoned that "the Home payload is interleaved movie/TV roughly 1:1, so Movies or TV leaves about half of every rail, comfortably above the thin threshold" — and that Documentaries alone would need a backfill. The measured split: **All 14 rails / 206 items · TV 13 / 141 · Movies 7 / 62 · Documentaries 1 / 15**. TV barely loses a rail. Movies loses half of them. This payload is TV-heavy, so the thin case is *Movies*, which is the one category the plan assumed was safe.
+
+One session is not "routinely thin" and `THIN_RAIL_MIN` has not been touched on the strength of it. But §1.3 explicitly said to "log rail-visibility on every filter application and revisit only if the data shows Movies/TV routinely thin" — this is that signal appearing on day one, pointing at a rail nobody expected. If it holds across users, the answer is probably a second backfill rather than a lower threshold: dropping the threshold to keep a two-item row is how you get a page of stubs.
+
+**Documentaries came through at 1 rail / 15 items at tap time**, which is precisely the case the lazy backfill exists for — and the page never reached the empty state, so the extra rail arrived in time.
+
+**The For You strip is still unverified.** Every filter event and every stamped impression carries `surface: 'new'`. Nothing exercised the chips on For You, so the longer-row slicing (36 rendered, 20/15 shown, up to 20 filtered), the mood-rooms hiding rule and the For You hero re-pick have device evidence of exactly none. Worth being precise about that rather than reading "it works" across both surfaces from a test that only touched one.
+
+## [2026-09-09] ingest | For You verified too — and the thin category flips between surfaces
+Same PR (#134). Updated: `wiki/concepts/architecture/for-you-surface.md`, `wiki/concepts/architecture/home-surface.md`.
+
+**For You now has device evidence.** Filter events landed with `surface: 'forYou'`, and impressions stamped on cards and heroes for both categories tried (Movies 37+2, TV 9+1). The hero rows are the useful ones: a filtered hero impression can only exist if the re-pick fired, so `recommendedForYou[0]` is demonstrably being taken from the filtered row rather than the raw payload.
+
+**The finding: the thin category is not a property of the app, it is a property of the surface and the user.** Yesterday's New numbers said Movies was thin (7 of 14 rails) and TV was fine (13). For You, same account, same minute, says the opposite:
+
+| surface | All | Movies | TV |
+|---|---|---|---|
+| New | 14 rails / 206 | **7 / 62** | 13 / 141 |
+| For You | 6 rails / 69 | 5 / 55 | **2 / 10** |
+
+Which is coherent rather than contradictory. New is built from recency and per-service charts — a TV-heavy pool. For You is built from a taste vector that happens to be film-leaning. So each surface goes thin on whatever the *other* one is made of.
+
+**This undercuts §1.3's framing, not its decision.** §1.3 reasoned that only Documentaries would need help and authorised one backfill for it. The measurement says any category can be the thin one, depending on whose feed it is — so "which category needs a backfill" has no fixed answer, and a second hardcoded backfill would just be guessing at a different constant. If this holds across more users, the shape worth considering is a backfill triggered by the measured `rails_visible`, not by the category name. Not built; recorded so the next session has the number rather than the assumption.
+
+**Two thresholds are now doing visible work.** TV on For You survives at 10 items across 2 rails — just above the `CHIP_MIN_MATCHES = 8` bar, so the chip renders. A slightly more film-leaning profile would drop it below 8 and the TV chip would correctly not appear at all, which is §1.5 behaving exactly as designed. No Documentaries events were recorded on For You; the likeliest reason is that the chip was never rendered, for the same reason.

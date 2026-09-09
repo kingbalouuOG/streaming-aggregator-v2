@@ -1,18 +1,20 @@
 ---
 title: Home surface
 type: concept
-tags: [home, surface, recency, hero-carousel, paid-titles]
+tags: [home, surface, recency, hero-carousel, paid-titles, quick-filters]
 created: 2026-04-26
-updated: 2026-07-10
+updated: 2026-09-08
 sources:
   - raw/v2-strategy/Videx_v2_Home_and_ForYou_Composition_Hypothesis_v0.3.md
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
   - raw/phase-summaries/phase-4-summary.md
+  - raw/plans/2026-09-08-002-recommendation-quick-filters-and-search-presets.md
 related:
   - wiki/concepts/architecture/two-surface-architecture.md
   - wiki/concepts/architecture/for-you-surface.md
   - wiki/concepts/architecture/recommendation-pipeline.md
   - wiki/concepts/operations/phase-4.md
+  - wiki/concepts/architecture/signal-architecture.md
 ---
 
 # Home surface
@@ -72,3 +74,25 @@ Founder beta feedback (2026-07-09): a title showed in e.g. the "Popular on Apple
 - **New "New to rent or buy" row** (`paidRow.ts`, shared lib): newest rent/buy titles on ANY of the user's services, `release_date DESC` (rent/buy inventory skews to new releases; `available_since` is only sparsely populated). Deduped against the recency/trending/free rows above it. Relocates the rent/buy content honestly rather than hiding it — the label warns it costs money.
 
 **Native Home order is now exactly:** Recently added → Free tonight → Trending → Spotlight (editorial) → **New to rent or buy** → Genre spotlights → Calendar strip → Per-service rows. (The numbered brief list above is the Phase-4 web spec and predates the native render order; this note + `content-freshness` above are authoritative for native.) The hero, editor note and browse chips still lead. Row name chosen per [tone-and-voice](../product/tone-and-voice-guide.md): un-salesy, British English, tells the user the tap-in cost up front.
+
+## Quick filters (native, 2026-09-08)
+
+The "Browse by" chip strip above Recently Added was decorative until now — five pills (`All · Movies · TV Shows · Docs · Anime`), every one of which pushed to `/browse`. It is now a filter over this page, per [recommendation 2026-09-08-002](../../../raw/plans/2026-09-08-002-recommendation-quick-filters-and-search-presets.md) §1.
+
+**Four categories: `All · Movies · TV · Documentaries`.** Anime was dropped — it is a taste cluster and a mood room, not a content type, and defining it needs `original_language = 'ja'` + genre 16, which only the Supabase path populates. It is expressible again under the visibility rule below once that field lands on both paths.
+
+**The page filters in place. Nothing refetches.** Every rail applies the predicate; a rail left with fewer than 4 survivors hides. This is a pure view over the already-cached `/v1/home` payload, so a chip tap costs no round trip and the KV key `home:v1:{user}:{services}:{clusters}` is untouched. A server-side filter would have multiplied KV entries by the number of chip states and defeated B2 pre-warming — and the whole point of the chip is that there is no spinner.
+
+**Hero re-pick.** If the day's pick fails the predicate, the first passing item from the first per-service row is promoted, falling back to anything still on the page. The kicker names the filter (`Today's pick · Film`). Leaving a documentary in the largest card while the strip reads "Movies" would look like a bug.
+
+**Hidden rails are named, not silent.** A rule divider lists them — *"Upcoming · Free tonight hidden — fewer than 4 films"*. Only rails that had enough items BEFORE filtering are listed; blaming the filter for a row the payload never carried would be a lie in the other direction.
+
+**Empty state.** When every rail hides, one card: *"Not many documentaries on your services this week"* over a single button to Browse, seeded with the category via a `contentType` route param (`browse.tsx` reads it once, as the initial filter value). This is the only navigation a chip may cause, and only as an explicit second tap.
+
+**One lazy backfill, Documentaries only.** Movies or TV leaves roughly half of every rail — comfortably above the threshold. Documentaries is a genre at ~5–8% of a general pool, so it goes thin nearly everywhere. On first tap only, `useDocumentariesBackfill` fetches one extra rail (TMDb discover, movie + TV, `with_genres=99`, scoped to the user's providers) under `['native','home','docsBackfill',services]` with `staleTime: Infinity`. It never runs on page open, so Workstream B's cold-open number is untouched.
+
+**Chip visibility is data-driven (§1.5).** A chip renders only when the payload holds ≥ 8 matching items, counted across every rail rather than per rail. "All" always renders, and a strip left offering only "All" does not render at all. This resolves "same categories on both surfaces?" without a per-surface config.
+
+**Measured on device, 2026-09-09** (first real filter events): `All` 14 rails / 206 items · `TV` 13 / 141 · `Movies` 7 / 62 · `Documentaries` 1 / 15. §1.3 assumed Movies and TV would both stay comfortably above the threshold and only Documentaries would need help; on a TV-heavy payload it is **Movies** that loses half its rails. Not acted on yet — one session is not a trend — but it is the signal §1.3 said to watch, pointing at the rail nobody expected.
+
+See [for-you-surface](for-you-surface.md#quick-filters-native-2026-09-08) for the same strip over the taste rows, and [signal-architecture](signal-architecture.md) for what a chip change logs.

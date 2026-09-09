@@ -1,3 +1,4 @@
+import { contentMediaType, isDocumentary } from '@/lib/content/documentary';
 import type { ContentItem, ServiceId } from '@/lib/types/content';
 
 // Browse filter model + client-side apply/sort (native v1). The web supports
@@ -5,6 +6,11 @@ import type { ContentItem, ServiceId } from '@/lib/types/content';
 // type, genre, rating, runtime, watched. (cost / language need per-item
 // availability the native search doesn't fetch yet — deferred.)
 
+// `'doc'` is unchanged as a VALUE — only its meaning is fixed. It used to
+// mean `item.type === 'doc'`, which the engine path never sets; it now means
+// TMDb genre 99 on either media type (recommendation 2026-09-08-002 §1.1).
+// 'movie' / 'tv' mean media type alone and INCLUDE documentaries: a
+// documentary film is still a film.
 export type ContentType = 'all' | 'movie' | 'tv' | 'doc';
 export type RuntimeBand = 'any' | 'under_60' | '60_120' | 'over_120';
 export type WatchedFilter = 'all' | 'hide' | 'only';
@@ -69,9 +75,12 @@ export function applyBrowseFilters(
     // /discover (useBrowseDiscover) instead.
     if (f.services.length && it.services.length > 0 && !it.services.some((s) => f.services.includes(s)))
       return false;
-    if (f.contentType !== 'all') {
-      const t = it.type === 'tv' ? 'tv' : it.type === 'doc' ? 'doc' : 'movie';
-      if (t !== f.contentType) return false;
+    if (f.contentType === 'doc') {
+      if (!isDocumentary(it)) return false;
+    } else if (f.contentType !== 'all') {
+      // Media type only — deliberately NOT `it.type`, which the TMDb
+      // adapters overwrite with 'doc' and so cannot answer this.
+      if (contentMediaType(it) !== f.contentType) return false;
     }
     if (f.genres.length && (!it.genre || !f.genres.includes(it.genre))) return false;
     if (f.minRating > 0 && (it.rating ?? 0) < f.minRating) return false;
@@ -114,3 +123,9 @@ export const SORT_LABELS: Record<SortMode, string> = {
   a_z: 'A–Z',
   z_a: 'Z–A',
 };
+
+// Re-exported so native code has one import site for the filter vocabulary.
+// The definitions live in the shared tree because both content adapters do,
+// and because the root vitest suite only covers `src/` — see
+// `src/lib/content/__tests__/documentary.test.ts`.
+export { contentMediaType, isDocumentary, DOCUMENTARY_GENRE_ID } from '@/lib/content/documentary';

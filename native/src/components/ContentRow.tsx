@@ -1,7 +1,10 @@
 import { Text, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 
-import type { ImpressionSurface } from '@/lib/instrumentation/impressionBatcher';
+import type {
+  ImpressionSurface,
+  RecordImpressionInput,
+} from '@/lib/instrumentation/impressionBatcher';
 import type { ContentItem } from '@/lib/types/content';
 import { PosterCard } from './PosterCard';
 
@@ -16,9 +19,18 @@ interface ContentRowProps {
   items: ContentItem[];
   onItemPress?: (item: ContentItem) => void;
   surface?: ImpressionSurface;
+  /** Stamped onto every card's impression — see PosterCard. */
+  impressionMetadata?: RecordImpressionInput['metadata'];
 }
 
-export function ContentRow({ title, kicker, items, onItemPress, surface }: ContentRowProps) {
+export function ContentRow({
+  title,
+  kicker,
+  items,
+  onItemPress,
+  surface,
+  impressionMetadata,
+}: ContentRowProps) {
   if (items.length === 0) return null;
 
   return (
@@ -34,7 +46,13 @@ export function ContentRow({ title, kicker, items, onItemPress, surface }: Conte
         data={items}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => (
-          <PosterCard item={item} onPress={onItemPress} surface={surface} position={index} />
+          <PosterCard
+            item={item}
+            onPress={onItemPress}
+            surface={surface}
+            position={index}
+            impressionMetadata={impressionMetadata}
+          />
         )}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12 }}

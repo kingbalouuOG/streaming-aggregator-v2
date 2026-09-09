@@ -1,7 +1,7 @@
 import { FlashList } from '@shopify/flash-list';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronDown, Search, Sparkles, SlidersHorizontal, X } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -10,6 +10,7 @@ import {
   applyBrowseFilters,
   countActiveFilters,
   DEFAULT_FILTERS,
+  type ContentType,
   SORT_LABELS,
   sortItems,
   type BrowseFilters,
@@ -39,7 +40,34 @@ export default function BrowseScreen() {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [category, setCategory] = useState<SearchCategory>('All');
+  // Applied from the route so the quick-filter empty state's "Browse all
+  // documentaries" button lands on documentaries rather than dropping the
+  // user into an unfiltered grid (recommendation 2026-09-08-002 §1.2). This
+  // is the ONLY thing a quick-filter chip may navigate to, and only as an
+  // explicit second tap.
+  //
+  // An effect, NOT a useState initializer: Browse is a tab, so the screen is
+  // already mounted by the time anything navigates here and an initializer
+  // would never run again — the param would be silently ignored.
+  //
+  // `seed` is what makes it apply once per navigation rather than once per
+  // param value: tapping the same button twice sends the same contentType,
+  // and without a fresh token the second tap would do nothing. The ref then
+  // stops the effect re-applying on unrelated re-renders, so this can never
+  // yank filters out from under someone mid-browse.
+  const { contentType: contentTypeParam, seed: filterSeed } = useLocalSearchParams<{
+    contentType?: string;
+    seed?: string;
+  }>();
   const [filters, setFilters] = useState<BrowseFilters>(DEFAULT_FILTERS);
+  const appliedSeedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!filterSeed || appliedSeedRef.current === filterSeed) return;
+    if (!isContentType(contentTypeParam) || contentTypeParam === 'all') return;
+    appliedSeedRef.current = filterSeed;
+    setFilters((prev) => ({ ...prev, contentType: contentTypeParam }));
+  }, [contentTypeParam, filterSeed]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('best');
   const [sortOpen, setSortOpen] = useState(false);
@@ -391,4 +419,9 @@ function NoResults({
       <Text className="mt-2 text-center font-sans text-body text-muted-foreground">{body}</Text>
     </View>
   );
+}
+
+/** Narrows an untrusted route param to the filter vocabulary. */
+function isContentType(value: string | undefined): value is ContentType {
+  return value === 'all' || value === 'movie' || value === 'tv' || value === 'doc';
 }

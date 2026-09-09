@@ -74,19 +74,22 @@ async function fetchDiscover(
   sort: SortMode,
 ): Promise<ContentItem[]> {
   const params = buildParams(f, providers, sort);
+  // Documentaries is a GENRE, not a media type (§1.1), so it asks for both
+  // halves. Asking only for movies is what hid every documentary series
+  // behind the "Docs" segment — the larger half of the UK catalogue.
   const wantMovies = f.contentType === 'all' || f.contentType === 'movie' || f.contentType === 'doc';
-  const wantTV = f.contentType === 'all' || f.contentType === 'tv';
+  const wantTV = f.contentType === 'all' || f.contentType === 'tv' || f.contentType === 'doc';
+
+  // Constrain BOTH discover calls to genre 99 for 'doc'. The id is the same
+  // on TMDb's movie and TV genre lists, so one constant serves both.
+  const docParams =
+    f.contentType === 'doc'
+      ? { ...params, with_genres: String(GENRE_NAME_TO_ID['Documentary']) }
+      : params;
 
   const calls: Promise<DiscoverResponse>[] = [];
-  if (wantMovies) {
-    // "Docs" is a documentary-genre movie browse — constrain to genre 99.
-    const movieParams =
-      f.contentType === 'doc'
-        ? { ...params, with_genres: String(GENRE_NAME_TO_ID['Documentary']) }
-        : params;
-    calls.push(discoverMovies(movieParams) as Promise<DiscoverResponse>);
-  }
-  if (wantTV) calls.push(discoverTV(sanitiseTVGenreParams(params)) as Promise<DiscoverResponse>);
+  if (wantMovies) calls.push(discoverMovies(docParams) as Promise<DiscoverResponse>);
+  if (wantTV) calls.push(discoverTV(sanitiseTVGenreParams(docParams)) as Promise<DiscoverResponse>);
 
   const res = await Promise.all(calls);
   const items: ContentItem[] = [];

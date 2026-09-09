@@ -8,6 +8,7 @@ import { setCardClickContext } from '@/lib/instrumentation/clickContext';
 import {
   recordImpression,
   type ImpressionSurface,
+  type RecordImpressionInput,
 } from '@/lib/instrumentation/impressionBatcher';
 import type { ContentItem } from '@/lib/types/content';
 import { cardMeta, PosterOverlays } from './PosterOverlays';
@@ -24,17 +25,40 @@ interface PosterCardProps {
   onPress?: (item: ContentItem) => void;
   surface?: ImpressionSurface;
   position?: number;
+  /**
+   * Extra context for `card_impressions.metadata`. New and For You pass
+   * `{ filter: category }` while a quick-filter chip is active, so a
+   * filtered view's impressions can be told apart from an unfiltered one —
+   * without which the novelty eval would silently mix the two populations
+   * (recommendation 2026-09-08-002 §6).
+   */
+  impressionMetadata?: RecordImpressionInput['metadata'];
 }
 
-export function PosterCard({ item, onPress, surface, position }: PosterCardProps) {
+export function PosterCard({
+  item,
+  onPress,
+  surface,
+  position,
+  impressionMetadata,
+}: PosterCardProps) {
   const bookmarked = useIsBookmarked(item.id);
   const { toggle } = useWatchlistMutations();
 
+  // Serialised for the dep array: `metadata` is a fresh object literal on
+  // every render at the call sites, so depending on it directly would
+  // re-record an impression for every card on every render.
+  const metadataKey = impressionMetadata ? JSON.stringify(impressionMetadata) : '';
   useEffect(() => {
     if (!surface) return;
     const { tmdbId } = parseContentItemId(item.id);
-    recordImpression({ contentId: tmdbId, sourceSurface: surface, position: position ?? 0 });
-  }, [item.id, surface, position]);
+    recordImpression({
+      contentId: tmdbId,
+      sourceSurface: surface,
+      position: position ?? 0,
+      metadata: metadataKey ? (JSON.parse(metadataKey) as RecordImpressionInput['metadata']) : null,
+    });
+  }, [item.id, surface, position, metadataKey]);
 
   const press = () => {
     if (surface) {
