@@ -1098,3 +1098,21 @@ The sheet also now records the follow-up answers both forms ask for and that are
 **The generalisable bit.** A policy change and a store-form change are two obligations with two owners, and satisfying the first is exactly what makes the second overdue. The sheet's own "re-submit triggers" note listed push notifications and crash reporting. Search logging was a third trigger that nobody had written down, so nothing pointed at it when it shipped. The note now names it, and the compliance checklist carries it as an open item.
 
 **Not re-submitted.** Both forms are due with v2.3.1, after Session 4.
+
+
+## [2026-09-09] ingest | Five chips replaced two rows, and Browse started counting what it shows
+Updated: `wiki/concepts/operations/phase-search-v2.md`, `wiki/registers/parking-lot.md` (IN-SL-001 closed).
+
+**Session 4 of the quick-filters recommendation, and the last of the four.** `RefineRow` is five one-tap chips over five existing `BrowseFilters` fields — *Just films*, *Newer*, *Under 2h*, *Free to watch*, *Higher rated* — with the count line, *More filters* and *Sort* folded into the same block. It replaces both the category pill row and the separate Filters/Sort row, so a screen that carried two rows of controls above the grid now carries one.
+
+**The pills were removed rather than moved, on their own merits.** Session 3's device testing caught them rendering on the described route, where the grid comes from the engine and `category` is never sent: tapping *Movies* changed nothing on screen while quietly re-running Mode A and writing a log row. `useSearch` lost its `SearchCategory` parameter with them, and with it the last copy of the §0.2 documentary bug's mechanism — post-filtering on `item.type`, which the TMDb adapters overwrite with `'doc'`, so a *Docs* segment hid every documentary series while *TV* hid documentary films.
+
+**The substantive difference is that a chip refetches.** Both `useBrowseDiscover` and `useSemanticSearch` key their queries on every filter axis, so writing one field re-runs the query rather than thinning the ~40 hits already on screen. The pills could only ever subtract. The row is hidden on a confident title hit, where there is nothing to refine about a title the user has already named.
+
+**Zero results now name what to undo.** "Try loosening the filters" does not say which of five taps emptied the grid, so the only recovery was to clear everything. Each chip declares its part of speech — "Nothing free films" reads as a bug — and a noun chip switches the opener: *"No recent films under two hours"*, *"Nothing free under two hours — try removing Under 2h."*
+
+**IN-SL-001 closed: Browse had never recorded a single impression.** Every result set went through `PosterGridCard`, which did not call `recordImpression`. A `search` row gave `result_count` and a later `detail_view` gave the click, but nothing said *which* results were seen — so search CTR, the headline number of the measurement plan, had no denominator and could not be computed at all. The grid and the title-hit card now record on `'search'` or `'browse'`, stamped with the route and the active chips.
+
+**Two logging changes fell out of the removal.** The typed-search log deduped on `(query, category)`; rather than drop the field, `route` took the slot, because it answers the same question — is this a second search over the same text? — and genuinely varies, since *"Search titles instead"* re-answers one query two ways with two result counts. And the filter-intent log stopped being gated on `!semanticMode`: that gate existed so a preset tap could not log twice, but the tap handler already sets exactly one intent, and the gate meant a FilterSheet apply on the semantic path wrote nothing at all. Every refine toggle would have inherited the same silence.
+
+**One thing deliberately not logged.** Removing the last chip with no text and no preset lands on the empty state, and an empty state is not a search. Logging it would enter a zero-result row for a user who had just cleared their filters — which reads in the measurement plan as exactly the retrieval failure the zero-result rate exists to catch. The FilterSheet already applied that rule; the chips now do too.
