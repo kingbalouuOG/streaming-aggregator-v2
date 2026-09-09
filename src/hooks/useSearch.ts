@@ -10,6 +10,7 @@ import { emitSearch } from '@/lib/storage/interactions';
 import { searchTitlesByText } from '@/lib/api/supabaseContent';
 import { semanticSearch } from '@/lib/recommendations-v2/search/semanticRetrieval';
 import type { FilterState } from '@/lib/search/filterState';
+import { contentMediaType, isDocumentary } from '@/lib/content/documentary';
 
 export type SearchMode = 'lookup' | 'semantic';
 
@@ -104,12 +105,19 @@ async function performLookupSearch(
 
   const movieItems = (movieRes?.data?.results || []).map(tmdbMovieToContentItem);
   const tvItems = (tvRes?.data?.results || []).map(tmdbTVToContentItem);
-  // Partition by category. Movies/Docs/TV are mutually exclusive
-  // buckets; All accepts everything.
+  // Partition by category. Not mutually exclusive: Docs is a genre test,
+  // Movies and TV are media-type tests that INCLUDE documentaries,
+  // because a documentary film is still a film (recommendation
+  // 2026-09-08-002 §1.1). All accepts everything.
+  //
+  // Neither test reads `item.type`. The TMDb adapters overwrite it with
+  // 'doc' for genre 99 on BOTH media types, so `type === 'movie'` used to
+  // drop every documentary film from Movies, and `type === 'doc'` found
+  // nothing at all on the Postgres cache path, which never writes it.
   const passesCategory = (item: ContentItem): boolean => {
-    if (category === 'Movies') return item.type === 'movie';
-    if (category === 'Docs') return item.type === 'doc';
-    if (category === 'TV') return item.type === 'tv';
+    if (category === 'Movies') return contentMediaType(item) === 'movie';
+    if (category === 'Docs') return isDocumentary(item);
+    if (category === 'TV') return contentMediaType(item) === 'tv';
     return true;
   };
   const filteredMovies = movieItems.filter(passesCategory);

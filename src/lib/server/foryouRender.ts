@@ -135,6 +135,28 @@ export interface RenderForYouInput {
  */
 const RENDERED_ROW_LENGTH = 36;
 
+/**
+ * What the client actually shows when no quick filter is active — the
+ * head of each long row (native/src/app/(tabs)/foryou.tsx).
+ *
+ * These two numbers, not RENDERED_ROW_LENGTH, are what may be excluded
+ * from the rows built after these ones. Downstream rows exist to avoid
+ * showing the user the same title twice on one screen, and a title
+ * sitting in the reserve tail is not on the screen: excluding it would
+ * shrink the candidate set for Outside Your Usual and New to rent or buy
+ * by up to ~37 titles the user never saw, which is a change to the
+ * UNFILTERED feed that the longer render was explicitly not allowed to
+ * make.
+ *
+ * The trade this accepts: a title can now sit in the reserve tail of
+ * Recommended For You AND in Outside Your Usual. It is never visible
+ * twice unfiltered, but a quick filter that pulls that title up out of
+ * the tail can show it in both rows. Duplication under a filter is the
+ * lesser fault against silently thinning two unfiltered rows.
+ */
+const RECOMMENDED_VISIBLE_LENGTH = 20;
+const HIDDEN_GEMS_VISIBLE_LENGTH = 15;
+
 export interface BecauseYouWatchedRow {
   anchor: ContentItem;
   items: ContentItem[];
@@ -261,8 +283,13 @@ export async function renderForYou(
     decayDays: FATIGUE_DECAY_DAYS,
   });
 
-  // Taste-vector rows. usedIds is shared across rec/gems/outside for
-  // cross-row dedup — same contract as src/hooks/useForYouContent.ts.
+  // Taste-vector rows. usedIds spans the FULL rendered length of both
+  // long rows: Recommended For You and Hidden Gems draw from the same
+  // ranked pool, and a filtered view can pull any of the 36 into view,
+  // so the two rows must not overlap anywhere along their reserves.
+  //
+  // Rows built AFTER these two are deduped against `visibleIds` instead
+  // (see RECOMMENDED_VISIBLE_LENGTH).
   const usedIds = new Set<string>();
 
   // ENG-1 Workstream C: exploration picks reserved ahead of the base
@@ -345,20 +372,29 @@ export async function renderForYou(
   });
   hiddenGems.forEach((item) => usedIds.add(item.id));
 
-  const outsideYourUsual = buildOutsideYourUsual(ranked, profile.sliders, usedIds, embeddingMap);
+  // What the user can actually see with no filter on. Exploration picks
+  // are spliced at positions 2, 5 and 13, so slicing the finished row
+  // covers them without a separate pass.
+  const visibleIds = new Set<string>([
+    ...recommendedForYou.slice(0, RECOMMENDED_VISIBLE_LENGTH).map((item) => item.id),
+    ...hiddenGems.slice(0, HIDDEN_GEMS_VISIBLE_LENGTH).map((item) => item.id),
+  ]);
+
+  const outsideYourUsual = buildOutsideYourUsual(ranked, profile.sliders, visibleIds, embeddingMap);
 
   // Conditional rows + anchor rooms run in parallel — they share the
   // pool + filter sets but otherwise touch different RPC paths, so
   // network parallelism here is the main latency win vs the client.
   // "New to rent or buy" — reads the public content-cache tables (not
   // user-scoped), so it takes the raw client + the Videx service ids.
-  // Deduped against the taste-vector rows already built above so a paid
-  // new release doesn't also headline Recommended For You.
+  // Deduped against the VISIBLE head of the taste-vector rows above so a
+  // paid new release doesn't also headline Recommended For You — not
+  // against their filter reserves, which the user has not seen.
   const [becauseYouWatched, moreFromPerson, fromYourWatchlist, paidTitles, anchorRoomsResult] = await Promise.all([
     fetchBecauseYouWatched(client, scope, filterSets, pool),
     fetchMoreFromPerson(client, scope, filterSets),
     fetchFromWatchlist(scope),
-    fetchPaidTitlesScoped(client, input.services, 18, usedIds),
+    fetchPaidTitlesScoped(client, input.services, 18, visibleIds),
     buildAnchorRooms(
       client, scope, profile.tasteVector, profile.sliders,
       profile.selectedClusters, profile.interactionCount, filterSets, pool,
@@ -436,7 +472,8 @@ export function promoteFreshestHero(row: ContentItem[], heroViews: Map<number, n
 function buildOutsideYourUsual(
   scored: ScoredCandidate[],
   sliders: SliderState,
-  usedIds: Set<string>,
+  /** Titles already ON SCREEN — not the long rows' filter reserves. */
+  excludeIds: Set<string>,
   embeddingMap: EmbeddingMap,
 ): ContentItem[] {
   const outsideCount = getComfortZoneRowCount(sliders.comfortZone);
@@ -457,7 +494,7 @@ function buildOutsideYourUsual(
   return buildRowFromPool(outsideCandidates, sliders, {
     config: {
       limit: outsideCount,
-      excludeIds: usedIds,
+      excludeIds,
       maxPerGenre: 4,
     },
     embeddingMap,

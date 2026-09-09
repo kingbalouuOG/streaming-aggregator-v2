@@ -1324,3 +1324,54 @@ Worth noting how both were found. The first came from a user forgetting a
 title, which no fixture contains. The second came from trying to reproduce a
 finding a code review had made with confidence — the reviewer read the state
 machine correctly and never asked whether the UI could reach that state.
+## [2026-09-09] ingest | The reserve was treated as seen, and the diversity bill came due
+Updated: `wiki/concepts/architecture/for-you-surface.md` (the reserve is not something the user has seen), `wiki/concepts/operations/phase-search-v2.md` (`released` moved inside the vector scan), `wiki/registers/parking-lot.md` (IN-SL-005 cause 2).
+
+**One sentence caused two bugs: "render the rows longer so a filter has something to draw on."**
+
+The first is a definition problem. Cross-row dedup exists so one screen never shows a title twice, and `usedIds` was the set of everything already placed. Lengthening both long rows to 36 quietly redefined "already placed" to include a reserve nobody sees, and that set was handed to Outside Your Usual and to New to rent or buy. Up to ~37 unseen titles were excluded from two rows that render unfiltered — so the change that was allowed to alter only the filtered view altered the unfiltered one. `usedIds` now splits: the full 36 still dedups the two long rows against each other, because a filter can pull any of them into view; everything built afterwards is given the visible head only, 20 + 15.
+
+**The trade is explicit rather than avoided.** A title can now sit in the reserve tail AND in Outside Your Usual. It is never visible twice unfiltered, and a duplicate under a filter is a smaller fault than silently thinning two rows that are always on screen. The test fails in both directions — one case for the tail staying eligible, one for the visible head staying excluded — because a dedup rule that only gets tested in one direction is how this happened in the first place.
+
+**The second is a claim that was never measured.** The PR said the cost of the longer render was "bytes, not compute", and costed the bytes carefully: 295 B mean per `ContentItem`, ~10.6 KB more payload. Nobody costed the compute. MMR is quadratic in `k` over 1536-d vectors, and `buildRowFromPool` passed `limit` straight to `k`, so `k` went 20 → 36 on one row and 15 → 36 on the other.
+
+| k | 15 | 20 | 36 |
+|---|---:|---:|---:|
+| p50 | 31 ms | 54 ms | 170 ms |
+
+The three MMR passes in a cold render went from ~93 ms to ~318 ms. `MMR_MAX_K = 20` brings it back to ~108 ms.
+
+**The measurement is a benchmark because production has nothing to read.** The review asked for a week of `renderMs` either side of the change. `ForYouPayload.renderMs` exists, and it is returned in the payload and logged by the web client's browser console — the Worker never writes it to a log line. So Workers Logs and the dashboard hold no history of it, and no amount of dashboard access would have produced the comparison. What answers the question instead is `scripts/evaluation/mmr-cost-bench.ts` over the real shape: 800 post-filter candidates, the top 200 holding embeddings, λ 0.7. Deterministic arithmetic beats absent telemetry, and the honest version of "we could not measure it in production" is to say so and measure it somewhere the number means something.
+
+**The cap costs nothing visible, and that is a property rather than luck.** Greedy MMR is prefix-stable: each pick depends only on what was already selected, so its first 20 are the same whether it was asked for 20 or 36. Only the reserve changes character — score order with `applyGenreSpread` applied instead of MMR order — which is what a filter that keeps a handful of the tail actually needs.
+
+**Separately, *Newer* stopped being applied to a pool chosen without it.** The device-testing entry above measured one probe vector: of 150 candidates, *Newer* left 7. Across the eval fixture's sixteen queries the mean is **7.4**, and all sixteen come back under 20. The chip emptied the grid rather than narrowing it, and the cause was never the catalogue — 363 titles qualify — but the order of operations.
+
+Migration 082 gives `match_titles_by_vector` a `min_release_year` argument applied inside the candidates CTE. The two-argument form is dropped rather than left beside the new one, because two overloads both accepting `(vector, integer)` make every existing two-argument call ambiguous.
+
+**It is not the same lever as `candidateLimit`, which was costed and rejected here three entries ago.** That objection was a thousand rows of metadata per chip tap on a phone. `match_limit` stays at 150, so the client still fetches at most 150 rows; only the internal graph traversal widens to the `ef_search` ceiling.
+
+**I predicted it would not close the gap, and I was wrong.** The reasoning was sound and the conclusion was not: pgvector applies a `WHERE` clause after the HNSW traversal unless `hnsw.iterative_scan` is on, it is not set anywhere here, and a predicate keeping ~5% of the catalogue needs roughly 3,000 candidates to fill 150 rows against an `ef_search` ceiling of 1,000. So the migration comment was written to say the funnel was wider and still open. Applied and measured, it returns **150.0 of 150 on all sixteen queries**, for +25 ms at p50.
+
+**The plan explains it, and nothing else would have.** Only 1,690 of 34,563 embedded titles clear the floor — 4.89% — and at that selectivity Postgres judges a sequential scan cheaper than the index:
+
+```
+Seq Scan on titles  (rows=1690, Rows Removed by Filter: 32881)
+  -> Sort  (quicksort, 250kB)                    67 ms
+```
+
+No index scan at all, so every qualifying row is distance-computed and the answer is brute-force exact. The caveat is still true — it just attaches to the *other* branch. At a 2010 floor (51% of the catalogue) the planner keeps the index and post-filters, and there a selective predicate would return short. Which means `v_ef := c_max_ef` is doing nothing on the path *Newer* actually takes, and is the right setting for the path it does not.
+
+**Exactness here is a property of catalogue size, not a contract.** The sequential path is O(embedded rows). An order of magnitude more titles and it stops being the cheap plan, the planner returns to the index, and recall degrades to the behaviour predicted above. `iterative_scan = 'relaxed_order'` is the fix at that point, with its own latency profile and its own measurement. All of this is now in the migration comment, replacing the confident wrong version.
+
+**The post-filter stays behind the push-down on purpose.** It is a no-op when the RPC honoured the floor. It is the only thing enforcing the floor when the RPC call falls back to the two-argument form — which it does on any database predating 082, because PostgREST resolves an RPC by argument NAMES, so a Worker deployed ahead of its migration would otherwise return an empty grid for every semantic search with a chip lit.
+
+**The documentary predicate finally reaches every surface.** §1.1 settled what a documentary is a fortnight ago and the native surfaces adopted it; five web branches still read `item.type === 'doc'`, which only the TMDb adapters ever write and which they write for genre 99 on BOTH media types. So each one was wrong in both directions at once: Movies dropped documentary films, Docs found nothing that arrived from the engine, and `buildTasteMeta` collapsed 'doc' to 'movie' — routing every documentary SERIES to the film detail page and logging a movie interaction against a series id.
+
+The worst two were not in the review's list at all. Both the web Browse *Docs* segment and Home's *Docs* category fetched movies only and constrained neither call to genre 99 — so each returned every film on the user's services, and no documentary series could appear on either. The review asked for a grep and a list; reading what the grep returned, rather than only the three lines it cited, is what found them. `useContentService.ts` carries the same branch and has no callers, so it was left for whoever deletes the hook.
+
+**The generalisable bit, twice over.** Two entries back the lesson was to read the rows rather than the score. This one is the same instinct pointed at two different documents.
+
+**A PR that names the cost it measured has told you which cost it did not.** "Bytes, not compute" was a true sentence, carefully evidenced, and a complete answer to the wrong half of the question.
+
+**And a caveat is a prediction, so it has to be measured like one.** The HNSW post-filter caveat was written into the migration before the migration ran, from correct facts about pgvector, and it described the wrong branch of the planner. It survived only because the after-measurement came back at 150 of 150 — a number good enough to be suspicious of, which is the only reason `EXPLAIN` got run at all. A result that beats the prediction is evidence the prediction was wrong, not evidence of a win.

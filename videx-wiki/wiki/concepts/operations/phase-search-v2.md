@@ -165,6 +165,47 @@ No new persistence and no server round trip: it runs off the clock and the onboa
 
 `released` is exact server-side (`primary_release_date.gte` / `first_air_date.gte`, and a `release_year` predicate on the semantic post-filter) and deliberately coarser client-side, where only `ContentItem.year` exists.
 
+#### `released` moved inside the vector scan (migration 082, 2026-09-09)
+
+As a post-filter alone, *Newer* was applied to a pool chosen without knowing about it. Measured across the eval fixture's sixteen queries with `scripts/search/eval-released-pushdown.ts`:
+
+| | survivors of 150 retrieved |
+|---|---:|
+| mean | **7.4** |
+| queries under 20 survivors | **16 of 16** |
+
+That is the same arithmetic recorded in the device-testing entry — of 150 candidates *Newer* left 7 — now measured across the whole fixture rather than one probe vector. The chip emptied the grid rather than narrowing it.
+
+Migration 082 drops the two-argument `match_titles_by_vector` and creates a three-argument form taking `min_release_year integer DEFAULT NULL`, applied inside the candidates CTE. The two-argument form has to go rather than sit beside it: two overloads both accepting `(vector, integer)` make every existing two-argument call ambiguous (42725). `warm_recommendation_caches` calls it positionally and still resolves, and with `min_release_year` NULL the body is migration 076's unchanged.
+
+Measured again after apply, same rig, same sixteen queries:
+
+| | survivors of 150 | queries under 20 | rpc p50 | rpc p95 |
+|---|---:|---:|---:|---:|
+| before | 7.4 mean | 16 of 16 | 70 ms | 231 ms |
+| after | **150.0 mean** | **0 of 16** | 95 ms | 193 ms |
+
+**The filter is exact — and the reason is not the one this page first gave.** The expectation going in was that it would not be: pgvector applies a `WHERE` clause AFTER the HNSW traversal unless `hnsw.iterative_scan` is on, and it is not set anywhere in this database, so a selective predicate should under-return.
+
+The planner does something else. Only 1,690 of 34,563 embedded titles clear the floor — **4.89%** — and at that selectivity Postgres judges a sequential scan cheaper than the index. `EXPLAIN ANALYZE` at `ef_search` 1000, floor 2025:
+
+```
+Seq Scan on titles  (rows=1690, Rows Removed by Filter: 32881)
+  -> Sort  (quicksort, 250kB)                    67 ms
+```
+
+No index scan at all. Every qualifying row is distance-computed and sorted, so the answer is brute-force correct. That 67 ms is where the extra ~25 ms of p50 went.
+
+**The caveat is real; it attaches to the other branch.** With a less selective floor the planner keeps the index and post-filters — measured at floor 2010 (17,730 rows, 51%): `Index Scan using idx_titles_embedding_hnsw_half`, 35 ms, 22 rows removed by filter. In *that* regime a selective predicate would return short, and that is what the `v_ef := c_max_ef` branch exists for. It does nothing on the sequential path, which is the path *Newer* actually takes.
+
+**Today's exactness is a property of catalogue size, not a guarantee.** The sequential path is O(embedded rows). Grow the catalogue an order of magnitude and it stops being the cheap plan, the planner returns to the index, and recall degrades to the post-filter behaviour. The fix at that point is `hnsw.iterative_scan = 'relaxed_order'`, deliberately not bundled here.
+
+The unfiltered path is untouched and still uses the index: 16 ms, `Index Scan using idx_titles_embedding_hnsw_half`.
+
+This is **not** the same as raising `candidateLimit` to 1,000, which the device-testing entry costed and rejected. `match_limit` stays at 150, so the client still fetches metadata for at most 150 rows. The objection recorded there — a thousand rows of metadata per chip tap on a phone — does not apply.
+
+The post-filter in `semanticCore` stays behind the push-down. It is a no-op when the RPC honoured the floor, and it is the only thing enforcing the floor when the call falls back to the two-argument form — which it does on any database predating 082, since PostgREST resolves an RPC by argument NAMES and would otherwise return an empty grid for a Worker deployed ahead of its migration.
+
 ### Free text routes by shape
 
 `src/lib/search/titleHit.ts` decides. A confident title hit renders the retrieval layout — `TitleHitCard`, with where-to-watch and the deep-link button first, other matches in the grid below, and no controls above it. Everything else, with `search_semantic` on, sends the text to the engine with the banner *"Reading that as a feeling, not a title"* and a one-tap *"Search titles instead"*.

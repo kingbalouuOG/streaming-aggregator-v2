@@ -2,6 +2,7 @@ import { ChevronRight } from "lucide-react";
 import { ServiceStack } from "../ServiceBadge";
 import { ImageSkeleton } from "../ImageSkeleton";
 import type { ContentItem } from "../ContentCard";
+import { contentMediaType, isDocumentary } from "@/lib/content/documentary";
 
 interface SearchSuggestionsProps {
   query: string;
@@ -107,7 +108,10 @@ export function SearchSuggestions({ items, loading, tooShort, onSelect }: Search
       <span className="t-kicker mb-2" style={{ paddingLeft: 0 }}>SUGGESTIONS</span>
       <ul className="flex flex-col">
         {items.slice(0, 5).map((item) => {
-          const typeLabel = item.type === "tv" ? "TV" : item.type === "doc" ? "Doc" : "Movie";
+          // Genre 99 and the id prefix, not `item.type` — only the TMDb
+          // adapters write 'doc', so a documentary arriving from the
+          // Postgres cache path was labelled "Movie".
+          const typeLabel = isDocumentary(item) ? "Doc" : contentMediaType(item) === "tv" ? "TV" : "Movie";
           return (
             <li key={item.id}>
               <button

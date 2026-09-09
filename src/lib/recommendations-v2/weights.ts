@@ -378,6 +378,31 @@ export const FATIGUE_DECAY_DAYS = 21;
 // ── ENG-1 Workstream C: exploration slot ──
 
 /** Exploration candidates reserved per Recommended For You render */
+/**
+ * Cap on how deep MMR diversifies a row.
+ *
+ * MMR is O(k^2) in cosine comparisons over 1536-d vectors: each of the k
+ * picks scores every remaining candidate against every already-selected
+ * embedding. Measured on the real shape (800 post-filter candidates, the
+ * top 200 holding embeddings, lambda 0.7) by scripts/evaluation/
+ * mmr-cost-bench.ts:
+ *
+ *   k=15  ~31ms      k=20  ~54ms      k=36  ~170ms
+ *
+ * The 36-item render (recommendation 2026-09-08-002) ran MMR to the full
+ * length on BOTH long rows, taking the three MMR passes in a cold For You
+ * render from ~93ms to ~318ms — 3.4x, for a tail nobody sees unless they
+ * tap a quick filter. The PR that raised the length called the cost
+ * "bytes, not compute"; it was compute.
+ *
+ * So MMR runs to 20 and the reserve tail beyond it is filled by score
+ * with the genre spread applied. The visible row is diversified exactly
+ * as it was before the length change, and the reserve is ordered and
+ * genre-spread rather than MMR-diversified — which is what a filter that
+ * keeps a handful of the tail actually needs.
+ */
+export const MMR_MAX_K = 20;
+
 export const EXPLORATION_COUNT = 3;
 
 /** 0-indexed splice positions (1-indexed: 3, 6 and 14). The lead position

@@ -6,6 +6,7 @@ import type { ContentItem } from '@/components/ContentCard';
 import type { FilterState } from '@/lib/search/filterState';
 import { serviceIdsToProviderIds, providerIdsToServiceIds } from '@/lib/adapters/platformAdapter';
 import { GENRE_NAME_TO_ID } from '@/lib/constants/genres';
+import { DOCUMENTARY_GENRE_ID } from '@/lib/content/documentary';
 import { getServiceProviders } from '@/lib/utils/serviceCache';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import type { ServiceId } from '@/components/platformLogos';
@@ -114,9 +115,31 @@ async function fetchBrowsePage(
   sortBy: BrowseSortBy,
   pageNum: number,
 ): Promise<BrowsePageData> {
-  const params = { ...buildDiscoverParams(filters, providerStr, sortBy), page: pageNum };
-  const shouldFetchMovies = filters.contentType === 'all' || filters.contentType === 'movie' || filters.contentType === 'doc';
-  const shouldFetchTV = filters.contentType === 'all' || filters.contentType === 'tv';
+  const base: Record<string, unknown> = {
+    ...buildDiscoverParams(filters, providerStr, sortBy),
+    page: pageNum,
+  };
+
+  // Documentaries is a GENRE, not a media type (recommendation
+  // 2026-09-08-002 §1.1), so the segment asks for both halves and
+  // constrains both to genre 99. This used to fetch movies only and
+  // constrain neither, so "Docs" returned every film in the catalogue
+  // and no documentary series could appear at all. Same shape as the
+  // native path in native/src/hooks/useBrowseDiscover.ts.
+  const wantDocs = filters.contentType === 'doc';
+  const shouldFetchMovies = filters.contentType === 'all' || filters.contentType === 'movie' || wantDocs;
+  const shouldFetchTV = filters.contentType === 'all' || filters.contentType === 'tv' || wantDocs;
+
+  // Comma is AND on TMDb, so a genre picked alongside Docs narrows to
+  // documentaries IN that genre rather than replacing the request.
+  const params = wantDocs
+    ? {
+      ...base,
+      with_genres: base.with_genres
+        ? `${String(base.with_genres)},${DOCUMENTARY_GENRE_ID}`
+        : String(DOCUMENTARY_GENRE_ID),
+    }
+    : base;
 
   const promises: Promise<DiscoverResponse>[] = [];
   if (shouldFetchMovies) promises.push(discoverMovies(params));

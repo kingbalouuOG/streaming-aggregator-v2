@@ -31,6 +31,7 @@ import {
   DEFAULT_CANDIDATE_LIMIT,
   PER_CENTROID_CANDIDATE_LIMIT,
   DEFAULT_MAX_PER_GENRE,
+  MMR_MAX_K,
 } from './weights';
 import { mergeInterestPools } from './interestPools';
 import type {
@@ -280,12 +281,44 @@ export function buildRowFromPool(
   // diversity signal (IN-PX-23).
   if (embeddingMap && embeddingMap.size > 0) {
     const lambda = getMMRLambda(sliders.variety);
-    const mmr = applyMMR(candidates, embeddingMap, { lambda, k: limit });
+    const genreWindow = getVarietyGenreWindow(sliders.variety);
+
+    // MMR is capped at MMR_MAX_K — it is quadratic in k over 1536-d
+    // vectors, and a row rendered to 36 for the quick-filter reserve was
+    // paying 3.4x the cold-render diversity cost to diversify a tail
+    // nobody sees unfiltered. See MMR_MAX_K for the measurement.
+    const mmrK = Math.min(limit, MMR_MAX_K);
+    const mmr = applyMMR(candidates, embeddingMap, { lambda, k: mmrK });
+
     if (mmr.bailedOut) {
-      const genreWindow = getVarietyGenreWindow(sliders.variety);
       candidates = applyGenreSpread(candidates, genreWindow, maxPerGenre, limit);
-    } else {
+    } else if (mmr.selected.length >= limit) {
       candidates = mmr.selected;
+    } else {
+      // Reserve tail: everything MMR did not pick, in score order, with
+      // the genre spread applied so the tail is not a run of one genre.
+      //
+      // The spread starts fresh rather than continuing the head's sliding
+      // window — the two sections are never read as one list (the head is
+      // the row, the tail only ever surfaces a few items at a time
+      // through a filter), so seeding it would buy nothing.
+      const picked = new Set(mmr.selected.map((c) => c.contentKey));
+      const rest = candidates.filter((c) => !picked.has(c.contentKey));
+      const tailWanted = limit - mmr.selected.length;
+      const tail = applyGenreSpread(rest, genreWindow, maxPerGenre, tailWanted);
+
+      // The per-genre cap can leave the tail short of the reserve length.
+      // Top it up in score order: a reserve that runs out is worse for a
+      // filtered row than a reserve with four Comedies in it.
+      if (tail.length < tailWanted) {
+        const inTail = new Set(tail.map((c) => c.contentKey));
+        for (const c of rest) {
+          if (tail.length >= tailWanted) break;
+          if (!inTail.has(c.contentKey)) tail.push(c);
+        }
+      }
+
+      candidates = [...mmr.selected, ...tail];
     }
   } else {
     const genreWindow = getVarietyGenreWindow(sliders.variety);

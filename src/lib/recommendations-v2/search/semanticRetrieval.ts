@@ -52,7 +52,12 @@ export interface SemanticSearchInput {
    * (recommendation 2026-09-08-002 §2.2), which `FilterState` does not
    * carry — it is a native Browse axis, and adding it to FilterState would
    * mean a new URL key on the web for a filter the web has no control for.
-   * Applied as a metadata post-filter, so it costs nothing extra.
+   *
+   * Pushed into `match_titles_by_vector` since migration 082, and kept as
+   * a metadata post-filter behind it. As a post-filter ALONE it left a
+   * mean of 7.4 survivors from a 150-candidate pool across the eval
+   * fixture — *Newer* emptied the grid rather than narrowing it. Pushed
+   * down it returns a full 150 on all sixteen fixture queries.
    */
   minReleaseYear?: number | null;
   /**
@@ -124,7 +129,16 @@ export async function semanticSearch(input: SemanticSearchInput): Promise<Semant
     embedding,
     userTasteVector ?? null,
     postFilter,
-    { candidateLimit, resultLimit: needsAvailability ? (candidateLimit ?? 100) : resultLimit },
+    {
+      candidateLimit,
+      resultLimit: needsAvailability ? (candidateLimit ?? 100) : resultLimit,
+      // Pushed into the RPC (migration 082) so the candidate pool is
+      // chosen knowing about the floor. `postFilter` still carries the
+      // same rule and is now a no-op for it — deliberately: the push-down
+      // falls back to the two-argument RPC on a database that predates
+      // 082, and the post-filter is what enforces the floor when it does.
+      minReleaseYear: minReleaseYear ?? null,
+    },
   );
 
   const included = needsAvailability
