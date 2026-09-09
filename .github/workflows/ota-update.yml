@@ -142,9 +142,15 @@ jobs:
               echo "::error::Android builds carry the production channel only — a ${{ inputs.channel }} update reaches no Android device."
               exit 1
             fi
-            ART_ID="$(gh api \
-              "repos/$GITHUB_REPOSITORY/actions/artifacts?name=videx-android-runtime-version&per_page=1" \
-              --jq '.artifacts[] | select(.expired == false) | .id')"
+            # Restricted to runs of android-release.yml on `main` or on a
+            # version tag — i.e. the builds that can actually be on Play. A
+            # branch build publishes the same artifact name, and comparing a
+            # published update against an AAB nobody installed would be a
+            # confident answer to the wrong question.
+            # jq on one line on purpose: a backslash continuation inside a YAML
+            # block scalar is easy to break silently on edit.
+            ART_FILTER='[ .artifacts[] | select(.expired == false) | select(.workflow_run.head_branch == "main" or (.workflow_run.head_branch | test("^v[0-9]"))) ] | .[0].id // empty'
+            ART_ID="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=videx-android-runtime-version&per_page=50" --jq "$ART_FILTER")"
             if [ -n "$ART_ID" ]; then
               gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ART_ID/zip" > /tmp/android-rt.zip
               BUILD_RT="$(unzip -p /tmp/android-rt.zip fingerprint | tr -d '[:space:]')"
