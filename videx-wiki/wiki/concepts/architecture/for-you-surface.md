@@ -210,4 +210,6 @@ Measured cost, sampling 400 real `titles` rows through `titleRowToContentItem`: 
 
 **The hero re-picks for free**, because it is `recommendedForYou[0]` and the row is filtered before the hero is shifted off it.
 
+**Measured on device, 2026-09-09:** `All` 6 rails / 69 items · `Movies` 5 / 55 · `TV` 2 / 10. The mirror image of [Home](home-surface.md#quick-filters-native-2026-09-08), where Movies is the thin one — New is built from recency and per-service charts (TV-heavy) while For You is built from a film-leaning taste vector, so each surface goes thin on whatever the other is made of. `CHIP_MIN_MATCHES = 8` is load-bearing here: TV clears it at 10 items, and a slightly more film-leaning profile would correctly hide the chip.
+
 **Chips are logged, not learned from (§1.7).** A chip says "tonight", not "me". Changes emit a `mode: 'filter'` search row carrying `surface`, `category`, `rails_visible` and `items_visible` — and, carrying no `mood_key`, they are excluded from the search-attribution boost by `isContentIntentSearch`. That is the rule working as designed, not a gap: the explicit, visible, reversible control for a movie/TV preference is the `contentMix` slider. If the logging shows someone filtering to Movies on most opens, the move is to SUGGEST that slider, not to nudge the vector silently.

@@ -1003,3 +1003,21 @@ One session is not "routinely thin" and `THIN_RAIL_MIN` has not been touched on 
 **Documentaries came through at 1 rail / 15 items at tap time**, which is precisely the case the lazy backfill exists for — and the page never reached the empty state, so the extra rail arrived in time.
 
 **The For You strip is still unverified.** Every filter event and every stamped impression carries `surface: 'new'`. Nothing exercised the chips on For You, so the longer-row slicing (36 rendered, 20/15 shown, up to 20 filtered), the mood-rooms hiding rule and the For You hero re-pick have device evidence of exactly none. Worth being precise about that rather than reading "it works" across both surfaces from a test that only touched one.
+
+## [2026-09-09] ingest | For You verified too — and the thin category flips between surfaces
+Same PR (#134). Updated: `wiki/concepts/architecture/for-you-surface.md`, `wiki/concepts/architecture/home-surface.md`.
+
+**For You now has device evidence.** Filter events landed with `surface: 'forYou'`, and impressions stamped on cards and heroes for both categories tried (Movies 37+2, TV 9+1). The hero rows are the useful ones: a filtered hero impression can only exist if the re-pick fired, so `recommendedForYou[0]` is demonstrably being taken from the filtered row rather than the raw payload.
+
+**The finding: the thin category is not a property of the app, it is a property of the surface and the user.** Yesterday's New numbers said Movies was thin (7 of 14 rails) and TV was fine (13). For You, same account, same minute, says the opposite:
+
+| surface | All | Movies | TV |
+|---|---|---|---|
+| New | 14 rails / 206 | **7 / 62** | 13 / 141 |
+| For You | 6 rails / 69 | 5 / 55 | **2 / 10** |
+
+Which is coherent rather than contradictory. New is built from recency and per-service charts — a TV-heavy pool. For You is built from a taste vector that happens to be film-leaning. So each surface goes thin on whatever the *other* one is made of.
+
+**This undercuts §1.3's framing, not its decision.** §1.3 reasoned that only Documentaries would need help and authorised one backfill for it. The measurement says any category can be the thin one, depending on whose feed it is — so "which category needs a backfill" has no fixed answer, and a second hardcoded backfill would just be guessing at a different constant. If this holds across more users, the shape worth considering is a backfill triggered by the measured `rails_visible`, not by the category name. Not built; recorded so the next session has the number rather than the assumption.
+
+**Two thresholds are now doing visible work.** TV on For You survives at 10 items across 2 rails — just above the `CHIP_MIN_MATCHES = 8` bar, so the chip renders. A slightly more film-leaning profile would drop it below 8 and the TV chip would correctly not appear at all, which is §1.5 behaving exactly as designed. No Documentaries events were recorded on For You; the likeliest reason is that the chip was never rendered, for the same reason.
