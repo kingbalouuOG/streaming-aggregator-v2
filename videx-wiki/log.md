@@ -1034,3 +1034,29 @@ Which is coherent rather than contradictory. New is built from recency and per-s
 **This undercuts §1.3's framing, not its decision.** §1.3 reasoned that only Documentaries would need help and authorised one backfill for it. The measurement says any category can be the thin one, depending on whose feed it is — so "which category needs a backfill" has no fixed answer, and a second hardcoded backfill would just be guessing at a different constant. If this holds across more users, the shape worth considering is a backfill triggered by the measured `rails_visible`, not by the category name. Not built; recorded so the next session has the number rather than the assumption.
 
 **Two thresholds are now doing visible work.** TV on For You survives at 10 items across 2 rails — just above the `CHIP_MIN_MATCHES = 8` bar, so the chip renders. A slightly more film-leaning profile would drop it below 8 and the TV chip would correctly not appear at all, which is §1.5 behaving exactly as designed. No Documentaries events were recorded on For You; the likeliest reason is that the chip was never rendered, for the same reason.
+
+## [2026-09-09] ingest | Presets, one-intent Browse, and the first real semantic eval
+PR #139 (branch `feat/native-presets-and-routing`), Session 3 of the quick-filters/presets recommendation. Updated: `wiki/concepts/operations/phase-search-v2.md`, `wiki/registers/parking-lot.md` (IN-SL-002 closed, IN-V3-003 code removal recorded). New: `wiki/concepts/evaluations/semantic-search-quality.md`.
+
+**Browse stopped being three modes.** The screen held typed search, semantic mood and filter-only discover as mutually exclusive states, each clearing the others. That is why the brief's motivating sentence was inexpressible — not because any axis was missing, but because a mood tap called `setFilters(DEFAULT_FILTERS)`. One `intent` object now, and nothing clears anything else.
+
+**The eval fixture was run for the first time, and it found two things the code could not tell us.**
+
+The first is a rig defect. `search-semantic-eval.ts` scored the raw `match_titles_by_vector` output, with none of the quality floor the app applies afterwards. So it was grading rows no user can ever see — "something easy and warm I can half-watch" was being scored against *Snug And Cozi* and *Home Made Easy*, both zero votes. Applying the app's own floor before scoring took the known-title half from 7/8 to 8/8 on its own.
+
+The second is a product finding, and it is the one worth carrying forward. The long preset **phrases** retrieve the right register: `slow` returns *Small Things Like These*, *The Quiet Girl*, *I'm Thinking of Ending Things*; `late` returns *The Haunting of Hill House* and *Marrowbone*. The short **sentences** a person would actually type do not — they match surface words:
+
+| Typed sentence | What came back |
+|---|---|
+| "something fast and fun where I don't have to think" | the *Fast & Furious* franchise |
+| "something easy and warm I can half-watch" | *Hot Frosty*, *Melting Me Softly*, *Country Comfort* |
+| "something long and absorbing I can sink into" | *The Abyss*, *Deep*, *Deep Sea*, *Deeply* |
+| "something we can all watch together" | *As We See It*, *Here We Go* |
+
+"fast", "warm", "deep"/"sink", "we". Every one is a word match.
+
+**What that means for the flag.** The free-text route shipped as specified and it is safe — `search_semantic` is per-user and default-off, the banner says *"Reading that as a feeling, not a title"* rather than pretending, and *"Search titles instead"* is one tap away. But flipping the flag turns on both paths at once, and this measurement says the preset path is ready and the free-text path is not. It is also the first hard evidence for the query-understanding step in §8.2: the gap that step closes is exactly the distance between those two tables.
+
+**A corollary nobody had to argue for.** *Free to watch* was given `phrase: null` on design grounds — cost is a fact, not a feeling. Its sentence duly scored nothing and could not have scored anything. The card contributes a filter instead, and migration 080 (`subscription_included_titles`) is what makes that filter real on the semantic path, closing IN-SL-002.
+
+**Also closed here:** the last surviving copy of the §0.2 documentary bug, in `semanticRetrieval`'s post-filter — it restricted Docs to the movie table and subtracted genre-99 titles from Movies, the opposite of `documentary.ts` on both counts, so a documentary series was unreachable from either segment on the semantic path. Session 2 fixed the other two paths; this was the third.

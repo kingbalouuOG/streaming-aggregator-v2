@@ -140,6 +140,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Phase 2 / 2.5 — Service discrimination evaluation](wiki/concepts/evaluations/phase-2-service-discrimination-eval.md)
 - [Phase 2.6 — Fingerprint variant decision](wiki/concepts/evaluations/phase-2-6-decision.md)
 - [Phase 2.6 — Bottom-half variance eval](wiki/concepts/evaluations/phase-2-6-variance-eval.md)
+- [Semantic search quality — first real measurement (2026-09-09)](wiki/concepts/evaluations/semantic-search-quality.md)
 
 ### Product
 
