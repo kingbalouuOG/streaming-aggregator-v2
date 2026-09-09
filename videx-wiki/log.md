@@ -1035,6 +1035,18 @@ Which is coherent rather than contradictory. New is built from recency and per-s
 
 **Two thresholds are now doing visible work.** TV on For You survives at 10 items across 2 rails — just above the `CHIP_MIN_MATCHES = 8` bar, so the chip renders. A slightly more film-leaning profile would drop it below 8 and the TV chip would correctly not appear at all, which is §1.5 behaving exactly as designed. No Documentaries events were recorded on For You; the likeliest reason is that the chip was never rendered, for the same reason.
 
+## [2026-09-09] ingest | Android carried no update channel, so it received no OTA at all
+
+**Confirmed, then fixed.** Issue #137 suspected that the Gradle-built AAB had no EAS Update channel baked in. It does not. The 2.2.0 AAB's manifest carries six `expo.modules.updates` keys and not `UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY`, which is the one holding `expo-channel-name`; `expo-updates` reads the absent key as `{}`. Probing `u.expo.dev` exactly as that binary does returns `400 Bad Request` with `"channel-name": Required`, so the app never got as far as a fingerprint comparison. Every JS-only publish since Android reached Play was iOS-only, silently.
+
+**Two failures, not one.** The channel is the delivery bug. The CI error that surfaced it is separate: a Gradle-built AAB never appears in `eas build:list`, so the OTA workflow's reachability check had nothing to compare against and failed every Android publish on "no build found" — an error that read like a fingerprint mismatch but only ever meant "unverifiable".
+
+**A third fact worth keeping.** The shipped AAB's baked fingerprint is `c4eaa115…` and the production channel serves nothing for it, while today's Android publish sits at `e9f62ccc…` and is served. So the channel fix alone would have changed nothing for the installed build. A new AAB was always required. Why the Android fingerprint drifted between the 27 August build and now is not established; nothing fingerprint-relevant was committed in between and the build-time computation correctly ignored the generated `android/` tree, which leaves dependency resolution under `npm install` with the known-stale native lockfile as the open candidate.
+
+- New page: wiki/concepts/operations/ota-updates.md
+- Fix: native/plugins/withUpdatesChannel.js writes the channel at prebuild; expo-updates' own plugin is registered later by prebuild-config and so runs first, including the branch that deletes that key, which is why writing it from app.json's plugin list wins
+- Guards: android-release.yml now asserts the channel is in the AAB and publishes its baked fingerprint as an artifact; ota-update.yml compares Android against that artifact instead of `eas build:list`
+
 ## [2026-09-09] ingest | Presets, one-intent Browse, and the first real semantic eval
 PR #139 (branch `feat/native-presets-and-routing`), Session 3 of the quick-filters/presets recommendation. Updated: `wiki/concepts/operations/phase-search-v2.md`, `wiki/registers/parking-lot.md` (IN-SL-002 closed, IN-V3-003 code removal recorded). New: `wiki/concepts/evaluations/semantic-search-quality.md`.
 
@@ -1060,3 +1072,12 @@ The second is a product finding, and it is the one worth carrying forward. The l
 **A corollary nobody had to argue for.** *Free to watch* was given `phrase: null` on design grounds — cost is a fact, not a feeling. Its sentence duly scored nothing and could not have scored anything. The card contributes a filter instead, and migration 080 (`subscription_included_titles`) is what makes that filter real on the semantic path, closing IN-SL-002.
 
 **Also closed here:** the last surviving copy of the §0.2 documentary bug, in `semanticRetrieval`'s post-filter — it restricted Docs to the movie table and subtracted genre-99 titles from Movies, the opposite of `documentary.ts` on both counts, so a documentary series was unreachable from either segment on the semantic path. Session 2 fixed the other two paths; this was the third.
+
+**Device testing then found two more, both in the controls above a described result.** Joe exercised the OTA on 2026-09-09; the deep link from the title-hit card works. The instrumentation caught what the screen did not.
+
+The **category pills rendered on the described route**. They filter Mode A's list, and a described grid comes from the engine, which never sees `category` — so tapping Movies changed nothing visible while quietly re-running Mode A and writing a log row. Three rows landed for one query ("epic fantasy"), one per pill tapped, same session, seven seconds apart. A control that looks like it works and does not is worse than no control; media type on that route is `filters.contentType`, which *is* applied server-side.
+
+**`result_count` described the wrong list.** Those three rows all read 0 while a full semantic grid was on screen, because Mode A finds no title called "epic fantasy" — which is exactly why the query routed to the engine. Left alone, every described query would have been recorded as a failed search, and the zero-result rate §8.2 makes a first-class metric would have been measuring the opposite of what it claims. The logger now takes the rendered list.
+
+The pattern is worth naming, because it is the third session in a row to hit it: **the defects that survive CI are the ones where a control is attached to the wrong data source.** Session 1 and Session 2 each found three this way; neither type checking nor tests can see them, because every individual piece is correct. Querying `user_interactions` after the fact is what makes them visible — the screen looked fine.
+

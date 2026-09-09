@@ -133,6 +133,66 @@ jobs:
           path: native/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
 
+      # THE OTA CHANNEL. `eas build` bakes the channel from eas.json into the
+      # binary; a bare prebuild + Gradle build does not, and for the whole life
+      # of expo-updates on Android it did not — so the shipped app asked
+      # u.expo.dev for updates with no `expo-channel-name` header, the server
+      # answered 400, and Android received no OTA updates at all (issue #137).
+      # plugins/withUpdatesChannel.js now writes it at prebuild. Asserted here
+      # because the failure mode is invisible: the build succeeds, Play accepts
+      # it, and updates simply never arrive.
+      #
+      # The manifest inside an .aab is protobuf, not XML — but meta-data values
+      # live in its string pool verbatim, so a literal match on the printable
+      # strings is enough. `tr` isolates them; grep -F takes the JSON literally.
+      - name: Verify the OTA channel is baked into the AAB
+        run: |
+          set -euo pipefail
+          unzip -p native/android/app/build/outputs/bundle/release/app-release.aab \
+            base/manifest/AndroidManifest.xml \
+            | tr -c '[:print:]' '\n' > /tmp/manifest-strings.txt
+          grep -qF '{"expo-channel-name":"production"}' /tmp/manifest-strings.txt || {
+            echo "::error::No production update channel in the AAB manifest — this build would receive no OTA updates. Check native/plugins/withUpdatesChannel.js ran during prebuild."
+            exit 1
+          }
+          echo "channel: production"
+
+      # THE RUNTIME VERSION THIS BINARY WILL ASK FOR. `runtimeVersion` uses the
+      # fingerprint policy, so the manifest holds the sentinel `file:fingerprint`
+      # and the real value is this asset, computed by Gradle's
+      # :app:createReleaseUpdatesResources task. An update is served only to a
+      # build whose fingerprint matches it exactly.
+      #
+      # Published as its own artifact because ota-update.yml has no other way to
+      # learn it: a Gradle-built AAB never appears in `eas build:list`, so the
+      # OTA workflow's reachability check had nothing to compare against and
+      # failed every Android publish on "no build found".
+      - name: Publish the AAB's runtime version (for the OTA reachability check)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/rt
+          unzip -p native/android/app/build/outputs/bundle/release/app-release.aab \
+            base/assets/fingerprint > /tmp/rt/fingerprint
+          test -s /tmp/rt/fingerprint || { echo "::error::no fingerprint asset in the AAB"; exit 1; }
+          echo "runtime version: $(cat /tmp/rt/fingerprint)"
+          {
+            echo "## Android release"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| update channel | \`production\` |"
+            echo "| runtime version | \`$(cat /tmp/rt/fingerprint)\` |"
+            echo
+            echo "An OTA update reaches this build only if it publishes with the same runtime version."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the runtime version artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: videx-android-runtime-version
+          path: /tmp/rt/fingerprint
+          if-no-files-found: error
+
       # An .aab cannot be installed on a device — it is a publishing format
       # that Play unpacks into per-device split APKs. Getting a build onto a
       # handset otherwise means tagging a release, which publishes. So also
