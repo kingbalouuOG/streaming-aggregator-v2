@@ -192,6 +192,34 @@ export function orderedRefineChips(
   return [...active, ...inactive];
 }
 
+/**
+ * The metadata a refine-chip row carries — all of it, and nothing else.
+ *
+ * A function rather than an object literal at the call site because what is
+ * ABSENT here is the load-bearing part, and absence is not something a call
+ * site can be trusted to keep getting right. The row shipped on 2026-09-09
+ * with `mood_key` and the typed text on it, and each cost something in a
+ * different system: `mood_key` made `isContentIntentSearch` read a re-slice
+ * of the current page as a mood preset and re-arm the 60 s taste boost, and
+ * the text made the 079 nightly rollup count one typed term twice, once as
+ * the lookup row and again under `mode: 'filter'`. Neither showed up as a
+ * failure anywhere — the rows looked fine.
+ *
+ * So: three fields. `refine` and `on` are the measurement §6 wants — which
+ * axis people reach for, and how often a refinement is undone straight away.
+ * `filters` goes with them because a chip only means something against what
+ * was already active. The emit's `query` argument is the empty string and
+ * `metadata.query` is null, which is what keeps the row out of the rollup's
+ * `metadata->>'query' IS NOT NULL` predicate entirely.
+ */
+export function refineLogMetadata(
+  field: RefineField,
+  on: boolean,
+  filters: BrowseFilters,
+): { refine: RefineField; on: boolean; filters: BrowseFilters } {
+  return { refine: field, on, filters };
+}
+
 /** Field names of the lit chips — the compact form the log rows carry. */
 export function activeRefineFields(f: BrowseFilters): RefineField[] {
   return REFINE_CHIPS.filter((c) => c.isOn(f)).map((c) => c.field);
@@ -209,14 +237,25 @@ export function activeRefineFields(f: BrowseFilters): RefineField[] {
  * removed it themselves since — and the last chip in canonical order is named
  * instead, so the sentence never points at a control that is already off.
  *
- * Returns null when no chip is active, because then the refine row is not
- * what emptied the grid and the caller should say something else.
+ * `clientSideOnly` is the Mode A grid, and it drops the chips that grid
+ * cannot honour from the sentence entirely. `applyBrowseFilters` ignores
+ * `cost`, so a lit *Free to watch* provably did not empty that grid, and
+ * "No free films — try removing Free to watch" would send the user to undo
+ * the one chip that changed nothing. Same list, and the same reason, as the
+ * chip `orderedRefineChips` withholds there.
+ *
+ * Returns null when no chip that could have acted is active, because then the
+ * refine row is not what emptied the grid and the caller should say something
+ * else.
  */
 export function describeRefineEmptyState(
   f: BrowseFilters,
   lastAdded?: RefineField | null,
+  clientSideOnly = false,
 ): { summary: string; removeLabel: string } | null {
-  const active = REFINE_CHIPS.filter((c) => c.isOn(f));
+  const active = REFINE_CHIPS.filter(
+    (c) => c.isOn(f) && !(clientSideOnly && CLIENT_UNSUPPORTED.includes(c.field)),
+  );
   if (active.length === 0) return null;
 
   const adjectives = active.filter((c) => c.slot === 'adjective').map((c) => c.phrase);

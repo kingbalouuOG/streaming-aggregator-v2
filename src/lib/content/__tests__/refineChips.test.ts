@@ -7,6 +7,7 @@ import {
   describeRefineEmptyState,
   orderedRefineChips,
   refineChipFor,
+  refineLogMetadata,
   toggleRefineChip,
   type RefineField,
 } from '../refineChips';
@@ -174,5 +175,42 @@ describe('zero-result copy', () => {
     // A sheet-only constraint is not a refine chip, so the row is not what
     // emptied the grid and the caller keeps its own copy.
     expect(describeRefineEmptyState({ ...DEFAULT_FILTERS, genres: ['Horror'] }, null)).toBeNull();
+  });
+
+  it('never blames Free to watch on the grid that cannot apply it', () => {
+    // Mode A post-filters, and `applyBrowseFilters` ignores `cost`. A lit
+    // *Free to watch* there provably emptied nothing, so it may neither be
+    // named as the thing to remove nor appear in the sentence.
+    const f = withChips('cost', 'released');
+    expect(describeRefineEmptyState(f, 'cost')?.removeLabel).toBe('Free to watch');
+    expect(describeRefineEmptyState(f, 'cost', true)).toEqual({
+      summary: 'Nothing recent',
+      removeLabel: 'Newer',
+    });
+  });
+
+  it('says nothing when the only lit chip is one that grid ignores', () => {
+    // Cost alone on Mode A: there is no chip to blame, so the caller falls
+    // through to its own "nothing found" copy rather than inventing one.
+    expect(describeRefineEmptyState(withChips('cost'), 'cost', true)).toBeNull();
+  });
+});
+
+describe('refineLogMetadata', () => {
+  // The row that re-armed the taste boost. What matters is what is ABSENT.
+  it('carries the axis, the direction and the filters — and nothing else', () => {
+    const filters = withChips('released');
+    expect(refineLogMetadata('released', true, filters)).toEqual({
+      refine: 'released',
+      on: true,
+      filters,
+    });
+  });
+
+  it('carries no mood_key and no query', () => {
+    const metadata = refineLogMetadata('cost', false, DEFAULT_FILTERS) as Record<string, unknown>;
+    expect(Object.keys(metadata).sort()).toEqual(['filters', 'on', 'refine']);
+    expect('mood_key' in metadata).toBe(false);
+    expect('query' in metadata).toBe(false);
   });
 });

@@ -73,12 +73,28 @@ Worth having to hand, because both forms ask follow-up questions and the honest 
 
 | Question | Answer |
 |---|---|
-| What is stored | One `user_interactions` row per **settled** search — never per keystroke. `metadata` holds the query text, the result count, the mode (`lookup` / `semantic` / `filter`) and, since 2026-09-09, which layout it resolved to and which preset slot was tapped. |
+| What is stored | One `user_interactions` row per **settled** search — never per keystroke — plus one per discrete browse intent (a preset card tap, a filter apply, a refine-chip toggle). The full `metadata` vocabulary is listed below. |
 | Is it linked to the user | **Yes.** The row carries `user_id` and `session_id`. Declare as Linked to You on Apple; do not claim anonymity. |
 | Is the text kept indefinitely | **No.** A nightly job (migration 079) strips `metadata.query` from rows older than 30 days after folding the term into `search_terms_daily`, a per-day count with **no user column**. The rest of the row survives. |
 | Can the user turn it off | **Not in the app.** It is gated on a per-user `search_logging` flag, default off, set by the operator — there is no in-app control, so Play's "users can choose" does **not** apply. Answer *collection is required*. |
 | Is it deleted and exported | **Yes**, both. `user_interactions` is covered by *Delete my account* (migration 042) and by the data export (043 / 061). Verified against the test account on 2026-09-08. |
 | Does it leave Videx | The typed text goes to **TMDb** as a search query (no PII attached) and, on the semantic path, to **OpenAI** for embedding. Both are disclosed in Privacy Policy §4. Neither receives a user identifier, so this stays *collected*, not *shared*, under both stores' definitions. |
+
+**Every field a search row can carry.** Listed in full because both forms ask, and because "the query text and the result count" — what this sheet used to say — is narrower than the truth. None of it is free text apart from `query` itself.
+
+| Key | On which rows | What it is |
+|---|---|---|
+| `query` | typed searches; a preset tap on the semantic path | The words typed, or the app-authored mood phrase behind a preset card. **The only free text**, and the only field the 30-day retention strips. Null on filter applies, refine toggles and quick-filter chips. |
+| `result_count` | all | How many titles the surface showed. |
+| `mode` | all | `lookup` (typed) / `semantic` (vector) / `filter` (a tap, not text). |
+| `route` | typed searches | Which layout answered: `title` / `described` / `lookup`. Replaced `category` on 2026-09-09. |
+| `mood_key`, `slot`, `selection_reason` | preset card taps | Which of the eight cards was tapped, which of the four slots it sat in, and why the app chose to offer it (time of day / taste affinity / weekly rotation / fixed). A card identifier, not its words. |
+| `semantic` | preset card taps | Whether the tap ran vector search or the deterministic filter fallback. |
+| `filters` | filter applies, refine toggles | The whole `BrowseFilters` object as applied — content type, genres, minimum rating, runtime band, release window, cost, watched-state, **and the streaming services selected**. Services are a user's own subscription list, which is already stored in the profile; this records which of them a given search was scoped to. |
+| `refine`, `on` | refine-chip toggles | Which of the five one-tap axes was touched and in which direction. |
+| `surface`, `rails_visible`, `items_visible` | quick-filter chips on New and For You | Which screen, and how much of it survived the chip. Counts, not content. |
+
+**Impression rows** (`event_type = 'card_impression'`, a different row type, same table and the same deletion/export coverage) additionally carry `route` and `refine` for anything rendered on Browse, so a search can be joined to whether its results were actually looked at. No title-level personal data beyond the content id already recorded for every impression.
 
 **Why the purpose is Analytics + Personalisation and not App Functionality.** Search works with logging off — the flag defaults to off and most accounts have never had it on. The rows exist to measure the funnel (§6 of the presets recommendation, particularly the zero-result rate) and to feed the search-attribution boost in the taste vector. Claiming App Functionality would overstate the need.
 
@@ -86,4 +102,5 @@ Worth having to hand, because both forms ask follow-up questions and the honest 
 
 ## Changelog
 
+- **2026-09-09 (second pass)** — Widened *What the search rows actually contain* into a full per-key table. The sheet had listed four fields where the rows carry a dozen, and omitted two that a reviewer would reasonably ask about: the `filters` blob includes the user's selected **streaming services**, and refine-chip and quick-filter rows carry their own axes and visibility counts. Nothing new is collected and nothing changes on either form — every key still falls under "in-app search history" — but the sheet now matches the rows.
 - **2026-09-09** — Added **Play: App activity → In-app search history** and **Apple: Search History**. Removed Search History from Apple's "explicitly NOT collected" list, where it had sat with the justification *"app-internal genre/taste selection is Product Interaction, not web/app search history"*. That was true when written and became false on 2026-09-08, when search-term logging shipped and began storing the text users type. Caught on 2026-09-09 while reviewing v2.3.0, the first native binary carrying the feature. Neither form has been re-submitted; both are due with v2.3.1.

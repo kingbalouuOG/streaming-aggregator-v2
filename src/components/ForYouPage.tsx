@@ -1,17 +1,16 @@
 /**
  * ForYouPage — the For You surface, restyled per design-system.md §5.
  *
- * Section order (10):
+ * Section order (9):
  *   1. Greeting + top pick (MagazineHero)
  *   2. Taste fingerprint (4 chips visualising the user's profile)
- *   3. Mood chip refiner (above "In your mood")
- *   4. In your mood
- *   5. Cover-story mood room (1 featured + 3 supporting)
- *   6. Continue exploring (Hidden Gems)
- *   7. Watchlist preview (3 items)
- *   8. Outside your usual
- *   9. Quick watch (under 30 min)
- *  10. Calendar strip
+ *   3. In your mood
+ *   4. Cover-story mood room (1 featured + 3 supporting)
+ *   5. Continue exploring (Hidden Gems)
+ *   6. Watchlist preview (3 items)
+ *   7. Outside your usual
+ *   8. Quick watch (under 30 min)
+ *   9. Calendar strip
  *
  * Taste fingerprint sliders are wired to live engine state
  * (content.sliders → rerank on commit). Still stubbed: the

@@ -224,7 +224,8 @@ filter axis, so writing one field re-runs the query. That is the difference
 from the pills, which thinned a fixed list of ~40 hits and got quieter with
 each tap. The one path where a chip still post-filters is Mode A with the
 semantic flag off, which is honest — and the row is hidden on the confident
-title-hit layout, where post-filtering *would* mislead.
+title-hit layout, where post-filtering *would* mislead. It shipped still
+post-filtering there anyway; see the review addendum below.
 
 ### Sync with the sheet, in both directions
 
@@ -244,7 +245,10 @@ grid, so the only recovery is to clear everything. `describeRefineEmptyState`
 composes the active chips into a sentence and names the one added last:
 *"Nothing free under two hours — try removing Under 2h."* Each chip declares
 its part of speech, because "Nothing free films" reads as a bug; a noun chip
-switches the opener to *No*.
+switches the opener to *No*. Two conditions on it were missing at ship and
+added by the review follow-up: the copy needs evidence that filtering is what
+emptied the grid, and it may not name a chip the grid in question cannot
+apply.
 
 ### Browse finally records impressions (IN-SL-001 closed)
 
@@ -277,6 +281,77 @@ row: that lands on the empty state, and an empty state is not a search. Logging
 it would enter a zero-result row for a user who had just cleared their filters,
 which reads in the measurement plan as exactly the retrieval failure the
 zero-result rate exists to catch.
+
+
+## Addendum — What the review sent back (2026-09-09)
+
+Four independent reviews of the four sessions' PRs (#131–#142), written up in
+`docs/plans/2026-09-09-001-review-quick-filters-search-presets.md`. Nine
+should-fix findings; the six that live on Browse and in the logging path were
+fixed the same day on `fix/browse-logging-correctness`. The engine and web
+findings are a separate follow-up.
+
+**Three of the nine were one defect wearing different clothes: a later session
+wrote metadata that an earlier session's rule read as intent.** That is worth
+more than the individual fixes — see
+[signal-architecture](../architecture/signal-architecture.md#not-every-search-row-earns-the-attribution-boost)
+for the attribution rule as it now stands, including the `refine` exclusion.
+
+### The routing decision now waits for Mode A
+
+`describedRoute` was computed while the lookup was still in flight, and
+`titleHit` is null for as long as that lasts. So every settled query took the
+described branch for a moment: the embed round trip fired and was paid for
+even on a confident title hit, and the *"Reading that as a feeling"* banner
+and the refine row flashed on screen before the title card replaced them.
+Gating on `results !== undefined` costs nothing — retrieval still never waits
+on an embedding, it is the routing *decision* that waits — and typing
+"severance" now makes zero embed calls.
+
+### The title-hit grid is not filtered
+
+"Other matches" sat below the title card with `applyBrowseFilters` running
+over it, while the refine row and *More filters* were both hidden by that same
+layout. Filters carried in from a preset thinned the grid with no control
+anywhere on screen to undo them — the category-pill defect one layout along.
+The grid is now unfiltered there. Sort stays applied: reordering hides
+nothing, and `'best'`, the value a user who never opened the control still
+has, is identity.
+
+### The empty state stopped blaming chips that were not at fault
+
+Two ways it did. It named a chip to remove whenever one was lit, before
+checking whether Mode A had returned anything — so gibberish with *Newer* lit
+read *"try removing Newer"*, one tap further from an answer. It now needs
+`tightened` (results existed before filtering) or `!searching`. And on the
+Mode A grid it could name *Free to watch*, which `applyBrowseFilters` ignores;
+`describeRefineEmptyState` now takes the same `clientSideOnly` flag
+`orderedRefineChips` does and drops those chips from the sentence entirely.
+
+### The banner names the query, not the last tap
+
+`moodKey` is the lit card and was overwritten by every tap, including
+phrase-less ones. Tapping Comfort then *Free to watch* runs Comfort's phrase
+under the banner *"Titles that feel like Free to watch"*. `intent.phraseKey`
+now tracks the card the running phrase came from; only a card that brings a
+phrase renames the banner.
+
+### The semantic error path logs nothing
+
+A failed embed or RPC left `semantic.data` undefined, `shown` empty and
+`loading` false — indistinguishable to the loggers from a query the engine
+answered with nothing, so an outage wrote `result_count: 0` into the one
+metric the plan reads as a retrieval failure. Both loggers now receive
+`undefined` on error and hold.
+
+### One deletion
+
+`selectPresets` carried a "not the same as last week" guard that re-asked
+`pickTasteVibe` of the previous week's seed. It could not fire: the rotation
+indexes its band by `weekBucket % length`, so consecutive weeks differ
+whenever the band holds more than one card, and when it holds exactly one
+there is nowhere else to go. The tests that looked like they covered it passed
+on the rotation alone. Branch gone, property asserted directly.
 
 
 ## Decisions resolved (locked during plan-mode)

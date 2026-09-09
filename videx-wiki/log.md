@@ -1191,3 +1191,72 @@ The first card in the new grid is *Mayday* (2026, 8.0) — one of the two titles
 **Two of the three causes are still open**, and this fix does not touch them: filter-after-retrieval still thins *Newer* on the described route and still needs a filtered RPC variant, and *Mousetrap* (2026) still has no `titles` row at all. What changed is that the card no longer depends on either.
 
 **The generalisable bit.** Three entries ago the lesson was "does this control reach its data?", then "is there enough of it?", then "is it asking for the right thing?". This one adds the method rather than the question: **the metric was 0.00 before and after and told us nothing; the five titles told us everything.** A score compresses an answer to a number, and the number is the same whether retrieval is slightly wrong or asking a category error. Read the rows.
+
+
+## [2026-09-09] ingest | A chip is not a wish: the refine row was re-arming the taste boost
+
+- Updated: wiki/concepts/architecture/signal-architecture.md (the `refine` exclusion, the local-and-expiring flag read, the full metadata table, migration 081)
+- Updated: wiki/concepts/operations/phase-search-v2.md (new addendum — what the review sent back)
+- Updated: wiki/registers/parking-lot.md (IN-SL-006, IN-SL-007, IN-SL-008 closed; IN-SL-009 filed for follow-up B)
+- Source: docs/plans/2026-09-09-001-review-quick-filters-search-presets.md, findings 1–5 and 8 plus the nits
+
+Follow-up A of the review of PRs #131–#142. Six should-fix findings and nine
+nits, all on Browse and in the logging path. Three of the six were the same
+defect, and it is the one worth remembering.
+
+**A later session wrote metadata that an earlier session's rule read as
+intent.** Session 1 wrote `isContentIntentSearch`: a `search` row with
+`mode: 'filter'` earns the 60-second 1.3× taste boost only if it carries a
+`mood_key`, because a mood preset tapped with the semantic flag off is a real
+statement of what the user wants while a bare filter apply is a re-slice of
+the page already on screen. Session 4, three PRs later, wrote a refine row
+that stamped `mood_key: intent.moodKey` on every chip toggle — a reasonable
+thing to log, and it satisfied Session 1's rule exactly. So every chip tapped
+while a preset was lit re-armed the boost, and because typing no longer clears
+the preset, a chip on a typed grid boosted off a stale one.
+
+Nothing failed. No test broke, no row looked wrong, and the two definitions
+sat in files neither session had reason to open together. The only thing that
+found it was somebody reading both.
+
+Fixed at both ends deliberately. The call site now builds its row through
+`refineLogMetadata` — a function rather than an object literal, because what
+makes the row safe is the fields it does *not* have and absence is not
+something a call site can be trusted to keep getting right. The predicate also
+excludes any `filter` row carrying a `refine` key outright: the batch
+recompute still has to judge the rows already written to production, and a
+rule that holds only while every caller remembers is not a rule.
+
+The same row carried the typed text, which the migration 079 rollup counted a
+second time under `mode='filter'`. It is null now.
+
+**The other finding with teeth was the flag read.** `getFlag` called
+`supabase.auth.getUser()` — a network request — *before* consulting its own
+memo, so the "a flag-off user costs no network at all" promise written in the
+hook's own header was false by one auth round trip per settled query. And the
+memo never expired, so a flag turned **off** mid-session, which is the only
+mechanism we have for withdrawing consent (IN-SL-003), kept logging until the
+app restarted. `getSession()` reads storage; the memo now expires in ten
+minutes. The hook also recorded a query in its once-per-search dedupe set
+before the gate ran, so a query settled while the flag was off could never be
+logged again for that mount — turning consent ON reached the next app launch
+rather than the next search.
+
+**Three Browse fixes that are all the same shape: a control acting where it
+cannot be seen.** Filters thinned "other matches" on the title-hit route while
+the refine row and *More filters* were both hidden by that layout. The
+zero-result copy named *Free to watch* as the chip to remove on the one grid
+that ignores `cost`. And it named a chip at all before checking whether Mode A
+had returned anything, so gibberish plus a lit chip read "try removing Newer"
+— one tap further from an answer. The category pills were deleted for exactly
+this; it came back three times in the layouts around them.
+
+**One deletion.** `selectPresets` carried a "not the same as last week" guard
+that could not fire — the rotation already differs week to week whenever there
+is more than one candidate, and when there is one there is nowhere to go. The
+tests that appeared to cover it passed on the rotation alone. Gone, with the
+property asserted directly.
+
+Migration 081 applied live and verified: job 24 unchanged in name and
+schedule, cutoff now `(now() AT TIME ZONE 'UTC')::date`, `ON CONFLICT` adding
+rather than overwriting.

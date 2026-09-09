@@ -1,6 +1,7 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { getFlag } from '@/lib/featureFlags';
 import { subscribe as appStateSubscribe } from '@/lib/lifecycle/appState';
 import { reconcileSettled, type SettledQuery } from '@/lib/search/settledQuery';
 import { emitSearch, type SearchMode } from '@/lib/storage/interactions';
@@ -19,12 +20,19 @@ import { emitSearch, type SearchMode } from '@/lib/storage/interactions';
 // each. Never one row per keystroke — and, since the first real capture,
 // never one row per pause either (see `settledQuery.ts`).
 //
-// SHIPS DARK — but the gate is no longer here. `emitSearch` itself checks
-// the per-user `search_logging` flag (default false), so no caller can
-// bypass it by forgetting. This module therefore buffers and reconciles
-// unconditionally and lets the emitter decide; the wasted work for a
-// user with logging off is a couple of timers and no network at all.
-// See `src/lib/storage/interactions.ts` for the reasoning and the
+// SHIPS DARK — and `emitSearch` itself checks the per-user `search_logging`
+// flag (default false), so no caller can bypass the gate by forgetting. This
+// module buffers and reconciles unconditionally and lets the emitter decide;
+// the wasted work for a user with logging off is a couple of timers and, once
+// the flag read is memoised, no network at all.
+//
+// It reads the flag in ONE place of its own: `write` asks before it records a
+// query in its dedupe set. That set exists so a query is never written twice,
+// and marking a query written when the flag was off (so nothing was written)
+// meant the row could never be recovered — the flag going on mid-session left
+// every query already settled permanently invisible, for the life of the
+// mount. Consent turning on has to reach the next settle, not the next app
+// launch. See `src/lib/storage/interactions.ts` for the reasoning and the
 // consent position (IN-SL-003).
 
 /** How long the typed text must hold still before a query counts as settled. */
@@ -94,14 +102,27 @@ export function useTypedSearchLog(args: {
   const pendingRef = useRef<SettledQuery | null>(null);
   pendingRef.current = pending;
 
+  // Keys currently awaiting the flag read. Every terminal signal calls
+  // `write` for the same held row, so without this a query could clear the
+  // `loggedRef` check twice before either call had come back and been
+  // recorded — and be written twice.
+  const writingRef = useRef<Set<string>>(new Set());
+
   const write = useCallback((row: SettledQuery) => {
     const key = JSON.stringify([row.query, row.route]);
-    if (loggedRef.current.has(key)) return;
-    loggedRef.current.add(key);
-    emitSearch(row.query, row.resultCount, {
-      mode: 'lookup',
-      metadata: { route: row.route, ...metadataRef.current },
-    });
+    if (loggedRef.current.has(key) || writingRef.current.has(key)) return;
+    writingRef.current.add(key);
+    const metadata = { route: row.route, ...metadataRef.current };
+    void (async () => {
+      // The gate, ahead of the dedupe record rather than behind it. A `false`
+      // here leaves the key unrecorded, so the same query settling again
+      // after the flag is turned on still logs.
+      const on = await getFlag('search_logging', false).catch(() => false);
+      writingRef.current.delete(key);
+      if (!on) return;
+      loggedRef.current.add(key);
+      emitSearch(row.query, row.resultCount, { mode: 'lookup', metadata });
+    })();
   }, []);
 
   useEffect(() => {

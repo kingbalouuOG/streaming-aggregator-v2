@@ -231,12 +231,17 @@ The brief's instinct that free text is "a different class of data" is right, and
 
 | Event | `mode` | `metadata` |
 |---|---|---|
-| Typed search settled | `lookup` | `{ query, result_count, category }` |
+| Typed search settled | `lookup` | `{ query, result_count, route }` |
 | Preset card tap | `semantic` (flag on) or `filter` (flag off) | `{ query: <phrase or null>, mood_key, result_count, semantic: bool }` |
 | Filter-only browse (FilterSheet apply) | `filter` | `{ query: null, filters: <BrowseFilters>, result_count }` |
+| Refine chip toggle | `filter` | `{ query: null, refine: <field>, on: bool, filters: <BrowseFilters>, result_count }` |
 | Quick-filter chip (Part 1) | `filter` | `{ query: null, surface: 'new' \| 'for_you', category, rails_visible, items_visible }` |
 
+`route` — `'title' | 'described' | 'lookup'` — replaces the `category` this table originally specified. The category pills that set it were deleted with the refine row (§9.2), and route is the better field anyway: the same text routes differently depending on the `search_semantic` flag and on what Mode A returned that day, and nothing downstream can reconstruct it afterwards.
+
 Preset taps are the most valuable rows: they are intents we already put words to, so their tap share directly ranks the pool. Log `mood_key`, not the phrase, so rows stay small and the phrase can be edited in code without breaking history.
+
+A refine-chip row carries **no `mood_key` and no query text**, and that is a correctness rule rather than an economy. `mood_key` on a `filter` row is how §5's own attribution gate recognises a mood preset tapped with the flag off, so a chip carrying one re-arms the taste boost that §1.7 says a re-slice may never earn; and the typed text on it would be counted a second time by the §5.4 rollup under `mode='filter'`. Both shipped on 2026-09-09 and were fixed the same day (see the review, finding 1).
 
 "Did they then tap something" needs no new field: the 60-second search-attribution window (IN-PX-43) already links the next positive interaction to the search by `session_id`. Confirm `getCurrentSessionId()` is live on native before relying on it (the impression batcher uses sessions, so it should be).
 
@@ -287,7 +292,7 @@ Precedents reused: `card_impressions.metadata` (the `exploration: true` pattern)
 **Presets**
 - Preset tap share of Browse sessions; per-`mood_key` tap counts (this ranks the pool); tap → `detail_view` within the 60 s window (needs §4's impression fix for CTR proper); `result_count` distribution per preset (a preset that routinely returns < 10 is a bad preset or a thin catalogue).
 - The specific hypothesis to test: **constraint-led cards out-tap vibe-led cards.** If they do, the brief's thesis holds and the next pool should lean further that way. If they do not, revert to four vibe cards and put the constraints in FilterSheet.
-- **Zero-result rate**, weekly: share of settled typed queries with `result_count = 0`, split by `category`. Failed search is the documented abandonment point (§8.1: 19% leave, 29% of 18–24s). Anything above ~10% is a retrieval bug to chase (title spelling, year parsing, catalogue gap), not a presets problem.
+- **Zero-result rate**, weekly: share of settled typed queries with `result_count = 0`, split by `route` (see §5.2 — the field is `route`, not the `category` this originally said). Failed search is the documented abandonment point (§8.1: 19% leave, 29% of 18–24s). Anything above ~10% is a retrieval bug to chase (title spelling, year parsing, catalogue gap), not a presets problem.
 - **Retrieval vs discovery split**: classify the 30-day raw terms as title-shaped (matches a `titles.title` or a TMDb top hit) vs descriptive. §8.1 predicts retrieval dominates; the actual ratio decides how much of the search surface should optimise for "where is X" versus "what should I watch".
 - Typed-query drift: monthly, compare the 30-day raw terms against the eight sentences. Queries that read like the sentences validate the conversational path; queries that are all title lookups say people use search for retrieval, not discovery, and the presets carry the discovery load alone.
 
@@ -361,7 +366,11 @@ Joe asked whether "search, then adjust filters in a sheet" still holds. It does 
 
 ### 9.2 The model
 
-**One state.** `intent = { text: string; phrase: string | null; moodKey: string | null; filters: BrowseFilters }`. Nothing clears anything else. A preset tap sets `phrase`/`moodKey` and *merges* its `preset` into `filters`. A chip toggles one `filters` field. Typing sets `text`. "Clear all" resets the lot.
+**One state.** `intent = { text: string; phrase: string | null; phraseKey: string | null; moodKey: string | null; filters: BrowseFilters }`. Nothing clears anything else. A preset tap sets `phrase`/`moodKey` and *merges* its `preset` into `filters`. A chip toggles one `filters` field. Typing sets `text`. "Clear all" resets the lot.
+
+`phraseKey` is the card the running `phrase` came from, which is not always `moodKey`: a phrase-less card (*Free to watch*) contributes only filters and leaves the running phrase alone, so the last card tapped and the card being searched come apart. The banner names `phraseKey` — naming the last tap made it read *"Titles that feel like Free to watch"* over Comfort's results (review finding 5).
+
+**Two exceptions to "nothing clears anything else", both deliberate.** A preset tap sets `text: ''`, because a tap is not a typed query and stale text in the box routes straight back to Mode A on the next render. *Clear all* resets the phrase, the preset and every filter but leaves `text` alone, because the box has its own × and clearing someone's typing from under a "clear filters" control is a surprise. Neither is a deviation worth removing; both are worth writing down.
 
 **Route typed text by shape.** On a settled query:
 1. Run Mode A (TMDb + Postgres ILIKE) as today.
@@ -369,7 +378,7 @@ Joe asked whether "search, then adjust filters in a sheet" still holds. It does 
 3. Else, if the `search_semantic` flag is on → set `phrase = text` and run `useSemanticSearch` with `filters` applied server-side → **described layout** with the refine row. Show a one-line banner *"Reading that as a feeling, not a title"* with *"Search titles instead"* to force Mode A.
 4. Flag off → today's Mode A grid with the refine row (client-side filters, honestly thin).
 
-**Refine row.** Five one-tap toggles, each a single existing or newly-added `BrowseFilters` field, in this order: *Just films* (`contentType: movie`), *Newer* (`released: last_12_months`), *Under 2h* (`runtime: 60_120`), *Free to watch* (`cost: free`), *Higher rated* (`minRating: 7`). Then *More filters* (opens `FilterSheet`) and *Sort*. The category pills are absorbed (Just films / a *Just TV* variant when the user has toggled films off is not needed in v1; TV lives in the sheet). Toggling a chip **refetches** on the discover and semantic paths; it only post-filters on the title-hit path, where it is hidden anyway.
+**Refine row.** Five one-tap toggles, each a single existing or newly-added `BrowseFilters` field, in this order: *Just films* (`contentType: movie`), *Newer* (`released: last_12_months`), *Under 2h* (`runtime: 60_120`), *Free to watch* (`cost: free`), *Higher rated* (`minRating: 7`). Then *More filters* (opens `FilterSheet`) and *Sort*. The category pills are absorbed (Just films / a *Just TV* variant when the user has toggled films off is not needed in v1; TV lives in the sheet). Toggling a chip **refetches** on the discover and semantic paths. It post-filters on exactly one: Mode A with the semantic flag off. On the title-hit path it does neither — the row and *More filters* are both hidden there, so filters carried in from a preset are NOT applied to "other matches"; a constraint the user cannot see and cannot undo may not thin a grid (review finding 3, 2026-09-09).
 
 **Refine only where it helps.** The row renders for described, mood, and filter-only results. It is hidden on a confident title hit.
 
