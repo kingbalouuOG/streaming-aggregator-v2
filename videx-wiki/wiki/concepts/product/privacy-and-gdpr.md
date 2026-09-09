@@ -92,7 +92,15 @@ Required:
 
 ## Known gap: the §10 change-notification promise
 
-Privacy policy §10 promises to "notify signed-in users via the app at least 30 days before the change takes effect". **Nothing in the app implements this.** Verified 2026-09-08: the policy is a static string (`native/src/legal/policyContent.ts`) rendered on demand from onboarding and Profile → Privacy. There is no stored policy version (no column on `profiles`, no consent table), no changelog surface, and no in-app notice. The push transport from [notifications-v1](../architecture/notifications-v1.md) exists but is blocked on FCM/APNs credentials and carries recommendations, not legal notices. Filed in the parking lot.
+Privacy policy §10 promises to "notify signed-in users via the app at least 30 days before the change takes effect". **Nothing in the app implements this.** Verified 2026-09-08: the policy is a static string (`native/src/legal/policyContent.ts`) rendered on demand from onboarding and Profile → Privacy. There is no stored policy version (no column on `profiles`, no consent table), no changelog surface, and no in-app notice. The push transport from [notifications-v1](../architecture/notifications-v1.md) exists but is blocked on FCM/APNs credentials and carries recommendations, not legal notices. Filed in the parking lot as IN-SL-003.
+
+**This is not hypothetical, and the promise has now been tested (2026-09-09).** Production has one real user who is not Joe and who **remains unidentified** — iOS, the Play closed-test cohort and the web app are all ruled out (see IN-SL-003 for the eliminations); the Play internal-testing track and a directly shared APK are not. The gap was originally deferred to H1 on the tacit assumption that the user base was the developer.
+
+The mechanism itself is sound and worth stating precisely, because it inverts easily: the per-user flag flip *is* the consent point. §10 is owed at the moment the flag is turned on, not at the moment the policy text changed. What is missing is any channel to give that notice, other than knowing the person's email address.
+
+**On 2026-09-09 Joe decided to enable `search_logging` for that user without giving the notice**, judging a public user extremely unlikely given the distribution channels and the account most plausibly a contact testing on a separate address. That decision is recorded rather than smoothed over: the notice §10 promises was not given. Limiting the exposure: raw query text is nulled after 30 days, the aggregate carries no user link, and export and erasure both cover search rows (verified against a live account 2026-09-08). If the account is ever identified as a member of the public, the basis of the decision changes and it should be revisited.
+
+**Rollout position:** ON for Joe's own six accounts (he is the data subject) and for the unidentified user (above). OFF permanently for the store-review account `reviewer@videxstreaming.com` — reviewers' search text is no product signal and should not be collected. See IN-SL-004.
 
 ## Cookies and trackers
 
