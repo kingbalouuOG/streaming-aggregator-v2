@@ -4,6 +4,7 @@ import { useSectionData } from './useSectionData';
 import { clearSectionCache } from '@/lib/sectionSessionCache';
 import { prefetchServices } from '@/lib/utils/serviceCache';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
+import { DOCUMENTARY_GENRE_ID } from '@/lib/content/documentary';
 import { providerIdToServiceId } from '@/lib/adapters/platformAdapter';
 import { buildFilterSets, type FilterSets } from '@/lib/recommendations-v2/hardFilters';
 import { dailyShuffleTopN } from '@/lib/utils/dailyShuffle';
@@ -93,9 +94,24 @@ export function useHomeContent(providerIds: number[], filters?: FilterState) {
       if (paidOnly) delete params.with_watch_providers;
     }
 
+    // Documentaries is a GENRE, not a media type (recommendation
+    // 2026-09-08-002 §1.1), so the Docs category asks for both halves and
+    // constrains both to genre 99. This used to fetch movies only and
+    // constrain neither, so Home's Docs tab showed every film on the
+    // user's services. Same shape as `useBrowse` and the native
+    // `useBrowseDiscover`.
     const contentType = filters?.contentType || 'all';
-    const fm = contentType === 'all' || contentType === 'movie' || contentType === 'doc';
-    const ft = contentType === 'all' || contentType === 'tv';
+    const wantDocs = contentType === 'doc';
+    const fm = contentType === 'all' || contentType === 'movie' || wantDocs;
+    const ft = contentType === 'all' || contentType === 'tv' || wantDocs;
+
+    // Comma is AND on TMDb, so a genre picked alongside Docs narrows to
+    // documentaries IN that genre rather than replacing the request.
+    if (wantDocs) {
+      params.with_genres = params.with_genres
+        ? `${String(params.with_genres)},${DOCUMENTARY_GENRE_ID}`
+        : String(DOCUMENTARY_GENRE_ID);
+    }
 
     const costKey = [...(filters?.costs || [])].sort().join(',');
     const key = `${providerStr}|${filters?.contentType || 'all'}|${costKey}|${filters?.services?.join(',') || ''}|${filters?.genres?.join(',') || ''}|${filters?.minRating || 0}`;
