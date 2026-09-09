@@ -88,13 +88,17 @@ export interface SemanticRetrievalOptions {
    *
    * As a post-filter over 150 candidates this kept a mean of 7.4 titles
    * across the eval fixture's sixteen queries — *Newer* thinned the grid
-   * to single figures. Inside the scan the function traverses to the
-   * ef_search ceiling instead of 2x the request, so far more survive.
+   * to single figures. Inside the scan it returns a full 150 on all
+   * sixteen, for about 25 ms more at p50.
    *
-   * It is NOT exact. pgvector applies the predicate after the HNSW
-   * traversal unless `hnsw.iterative_scan` is on, and it is not set
-   * anywhere, so a selective floor still returns fewer than
-   * `candidateLimit` rows. Callers must not assume a full pool.
+   * It is exact TODAY, and for a reason worth knowing: only 4.9% of
+   * embedded titles clear the *Newer* floor, and at that selectivity the
+   * planner drops the HNSW index and sequential-scans, so every
+   * qualifying row is distance-computed. It is not exact by contract. A
+   * less selective floor keeps the index, and since `hnsw.iterative_scan`
+   * is not enabled pgvector then filters AFTER the traversal and returns
+   * short. A much larger catalogue would push the selective case back
+   * onto the index too. Callers must not assume a full pool.
    *
    * The caller's own post-filter stays in place behind this — see
    * `postFilter`. It is a no-op when the push-down worked, and the only

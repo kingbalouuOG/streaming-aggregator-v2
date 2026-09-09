@@ -1351,7 +1351,18 @@ Migration 082 gives `match_titles_by_vector` a `min_release_year` argument appli
 
 **It is not the same lever as `candidateLimit`, which was costed and rejected here three entries ago.** That objection was a thousand rows of metadata per chip tap on a phone. `match_limit` stays at 150, so the client still fetches at most 150 rows; only the internal graph traversal widens to the `ef_search` ceiling.
 
-**And it does not close the gap.** pgvector applies a `WHERE` clause after the HNSW traversal unless `hnsw.iterative_scan` is on, and it is not set anywhere in this database. A predicate keeping ~5% of the catalogue needs roughly 3,000 candidates to fill 150 rows, and `ef_search` caps at 1,000. So the funnel is wider and still not closed, which is written into the migration comment and the option's doc comment — a number that looks like an exact filter and is not is worse than no filter at all. Exactness needs `iterative_scan = 'relaxed_order'`, with its own latency profile and its own measurement.
+**I predicted it would not close the gap, and I was wrong.** The reasoning was sound and the conclusion was not: pgvector applies a `WHERE` clause after the HNSW traversal unless `hnsw.iterative_scan` is on, it is not set anywhere here, and a predicate keeping ~5% of the catalogue needs roughly 3,000 candidates to fill 150 rows against an `ef_search` ceiling of 1,000. So the migration comment was written to say the funnel was wider and still open. Applied and measured, it returns **150.0 of 150 on all sixteen queries**, for +25 ms at p50.
+
+**The plan explains it, and nothing else would have.** Only 1,690 of 34,563 embedded titles clear the floor — 4.89% — and at that selectivity Postgres judges a sequential scan cheaper than the index:
+
+```
+Seq Scan on titles  (rows=1690, Rows Removed by Filter: 32881)
+  -> Sort  (quicksort, 250kB)                    67 ms
+```
+
+No index scan at all, so every qualifying row is distance-computed and the answer is brute-force exact. The caveat is still true — it just attaches to the *other* branch. At a 2010 floor (51% of the catalogue) the planner keeps the index and post-filters, and there a selective predicate would return short. Which means `v_ef := c_max_ef` is doing nothing on the path *Newer* actually takes, and is the right setting for the path it does not.
+
+**Exactness here is a property of catalogue size, not a contract.** The sequential path is O(embedded rows). An order of magnitude more titles and it stops being the cheap plan, the planner returns to the index, and recall degrades to the behaviour predicted above. `iterative_scan = 'relaxed_order'` is the fix at that point, with its own latency profile and its own measurement. All of this is now in the migration comment, replacing the confident wrong version.
 
 **The post-filter stays behind the push-down on purpose.** It is a no-op when the RPC honoured the floor. It is the only thing enforcing the floor when the RPC call falls back to the two-argument form — which it does on any database predating 082, because PostgREST resolves an RPC by argument NAMES, so a Worker deployed ahead of its migration would otherwise return an empty grid for every semantic search with a chip lit.
 
@@ -1359,4 +1370,8 @@ Migration 082 gives `match_titles_by_vector` a `min_release_year` argument appli
 
 The worst two were not in the review's list at all. Both the web Browse *Docs* segment and Home's *Docs* category fetched movies only and constrained neither call to genre 99 — so each returned every film on the user's services, and no documentary series could appear on either. The review asked for a grep and a list; reading what the grep returned, rather than only the three lines it cited, is what found them. `useContentService.ts` carries the same branch and has no callers, so it was left for whoever deletes the hook.
 
-**The generalisable bit.** The previous entry's lesson was to read the rows rather than the score. This one is narrower and about the same instinct: **a PR that names the cost it measured has told you which cost it did not.** "Bytes, not compute" was a true sentence and a complete answer to the wrong half of the question.
+**The generalisable bit, twice over.** The previous entry's lesson was to read the rows rather than the score. This one is the same instinct pointed at two different documents.
+
+**A PR that names the cost it measured has told you which cost it did not.** "Bytes, not compute" was a true sentence, carefully evidenced, and a complete answer to the wrong half of the question.
+
+**And a caveat is a prediction, so it has to be measured like one.** The HNSW post-filter caveat was written into the migration before the migration ran, from correct facts about pgvector, and it described the wrong branch of the planner. It survived only because the after-measurement came back at 150 of 150 — a number good enough to be suspicious of, which is the only reason `EXPLAIN` got run at all. A result that beats the prediction is evidence the prediction was wrong, not evidence of a win.

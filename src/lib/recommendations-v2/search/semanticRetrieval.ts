@@ -56,7 +56,8 @@ export interface SemanticSearchInput {
    * Pushed into `match_titles_by_vector` since migration 082, and kept as
    * a metadata post-filter behind it. As a post-filter ALONE it left a
    * mean of 7.4 survivors from a 150-candidate pool across the eval
-   * fixture — *Newer* emptied the grid rather than narrowing it.
+   * fixture — *Newer* emptied the grid rather than narrowing it. Pushed
+   * down it returns a full 150 on all sixteen fixture queries.
    */
   minReleaseYear?: number | null;
   /**

@@ -14,34 +14,61 @@
 --   mean survivors 7.4 of 150 retrieved   every query under 20
 --
 -- So a semantic query with *Newer* lit thinned the grid to single
--- figures. Not because the catalogue lacks recent titles — because the
--- filter was applied to a pool chosen without knowing about it.
+-- figures. Not because the catalogue lacks recent titles (1,690 are
+-- embedded and recent) — because the filter was applied to a pool
+-- chosen without knowing about it.
 --
--- ── THE HNSW POST-FILTER CAVEAT ────────────────────────────────────
+-- -- MEASURED AFTER APPLY (2026-09-09) --------------------------------
 --
--- This does NOT make the filter exact, and the reason matters more than
--- the fix does.
+--   mean survivors 150.0 of 150   0 of 16 queries short   p50 95ms p95 193ms
+--
+-- The filter is EXACT, and not for the reason this comment first gave.
+--
+-- ── THE HNSW POST-FILTER CAVEAT, AND WHY IT DOES NOT BITE HERE ─────
 --
 -- pgvector applies a WHERE clause AFTER the HNSW graph traversal, not
 -- during it, unless `hnsw.iterative_scan` is enabled. It is not set
--- anywhere in this database — not in postgresql.conf, not per-session,
--- not in this function. So the index returns its ef_search nearest
--- neighbours and the predicate then removes most of them. A predicate
--- that keeps ~5% of the catalogue still under-returns: asking for 150
--- rows behind a 5% filter needs roughly 3,000 candidates, and
--- ef_search's hard ceiling is 1,000 (migration 076).
+-- anywhere in this database. So the usual expectation is that a
+-- selective predicate under-returns: the index hands back its ef_search
+-- nearest neighbours and the predicate then removes most of them.
 --
--- What this migration actually buys is breadth. When a release floor is
--- present the function traverses to the ceiling instead of to
--- 2x match_limit, so the filter runs over ~1,000 candidates rather than
--- ~300. Survivors go up several-fold. They do not reach match_limit,
--- and a caller must not assume they will.
+-- That is not what the planner does with this predicate. Only 1,690 of
+-- 34,563 embedded titles are release_year >= 2025 — 4.89% — and at that
+-- selectivity Postgres judges a sequential scan cheaper than the index.
+-- EXPLAIN ANALYZE, ef_search 1000, floor 2025:
 --
--- Making the filter exact needs `hnsw.iterative_scan = 'relaxed_order'`
--- (pgvector 0.8+, per-session GUC), which re-enters the graph until the
--- LIMIT is satisfied. That is a separate change with its own latency
--- profile and its own measurement, and it is deliberately not bundled
--- here.
+--   Seq Scan on titles  (rows=1690, Rows Removed by Filter: 32881)
+--     -> Sort (quicksort, 250kB)                    67 ms
+--
+-- No index scan at all. Every qualifying row is distance-computed and
+-- sorted exactly, so the answer is brute-force correct and a full 150
+-- comes back every time. That is where the ~25 ms of extra p50 went.
+--
+-- The caveat is still true; it just attaches to the OTHER branch. With
+-- a less selective floor the planner keeps the index and post-filters —
+-- measured at floor 2010 (17,730 rows, 51%):
+--
+--   Index Scan using idx_titles_embedding_hnsw_half   35 ms
+--     Filter: release_year >= 2010   (Rows Removed by Filter: 22)
+--
+-- In that regime a selective predicate WOULD return short, and that is
+-- what `v_ef := c_max_ef` below exists for. It does nothing on the
+-- sequential path, which is the path *Newer* actually takes today.
+--
+-- ── WHAT WOULD CHANGE THIS ─────────────────────────────────────────
+--
+-- Today's exactness is a property of catalogue size, not a guarantee.
+-- The sequential path is O(embedded rows): 67 ms over 34,563 of them.
+-- Grow the catalogue an order of magnitude and that path stops being
+-- the cheap one, the planner returns to the index, and recall degrades
+-- to the post-filter behaviour described above. The fix at that point
+-- is `hnsw.iterative_scan = 'relaxed_order'` (pgvector 0.8+, a
+-- per-session GUC), which re-enters the graph until the LIMIT is
+-- satisfied. It has its own latency profile and its own measurement,
+-- and it is deliberately not bundled here.
+--
+-- The unfiltered path is untouched and still uses the index: 16 ms,
+-- Index Scan using idx_titles_embedding_hnsw_half.
 --
 -- ── Signature change ───────────────────────────────────────────────
 --
@@ -89,9 +116,10 @@ BEGIN
     v_ef := LEAST(GREATEST(match_limit * 2, 100), c_max_ef);
     v_candidates := LEAST(match_limit * 2, v_ef);
   ELSE
-    -- Filtered: the predicate runs after the scan, so the only lever is
-    -- how much graph to traverse. Take all of it. See the caveat above —
-    -- this widens the funnel, it does not close it.
+    -- Filtered: IF the planner picks the index, the predicate runs after
+    -- the traversal, so the only lever is how much graph to cover. Take
+    -- all of it. At *Newer*'s selectivity the planner picks a sequential
+    -- scan instead and this does nothing — see the caveat above.
     v_ef := c_max_ef;
     v_candidates := c_max_ef;
   END IF;
@@ -123,10 +151,11 @@ COMMENT ON FUNCTION public.match_titles_by_vector(vector, integer, integer) IS
   'full precision so returned distances stay exact. match_limit is capped '
   'at 1000 by pgvector hnsw.ef_search and RAISES above that rather than '
   'silently returning short. min_release_year is an OPTIONAL floor '
-  'applied inside the scan; because hnsw.iterative_scan is not enabled, '
-  'pgvector filters AFTER the graph traversal, so a selective floor still '
-  'returns fewer than match_limit rows even at maximum ef_search. '
-  'Migrations 074 + 076 + 082.';
+  'applied inside the scan. A highly selective floor makes the planner '
+  'choose a sequential scan over the HNSW index, which is exact; a less '
+  'selective one keeps the index, and because hnsw.iterative_scan is not '
+  'enabled pgvector then filters AFTER the traversal and can return fewer '
+  'than match_limit rows. Migrations 074 + 076 + 082.';
 
 -- ── Verification (run after apply) ─────────────────────────────────
 --   -- 1. Unfiltered behaviour is unchanged.
