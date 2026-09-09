@@ -15,8 +15,11 @@
 // What this module does NOT do:
 //   - Embed the query. Caller provides the 1536D vector.
 //   - Fetch user taste vector. Caller looks it up.
-//   - Apply filter WHERE clauses inside the SQL. match_titles_by_vector
-//     doesn't accept filter args; we post-filter on metadata.
+//   - Apply most filter WHERE clauses inside the SQL. The one exception
+//     is `minReleaseYear`, which migration 082 pushed into
+//     match_titles_by_vector so the candidate pool is chosen knowing
+//     about it; everything else is post-filtered on metadata, and the
+//     release floor is post-filtered as well as pushed down.
 //
 // Weights are exported as named constants so the eval rig can tune
 // them without code churn elsewhere.
@@ -79,6 +82,25 @@ export interface SemanticRetrievalOptions {
   /** Year now, used for the recency component. Caller can override
    *  for deterministic tests. */
   currentYear?: number;
+  /**
+   * Release-year floor, inclusive, pushed into `match_titles_by_vector`
+   * (migration 082) so the candidate pool is chosen knowing about it.
+   *
+   * As a post-filter over 150 candidates this kept a mean of 7.4 titles
+   * across the eval fixture's sixteen queries — *Newer* thinned the grid
+   * to single figures. Inside the scan the function traverses to the
+   * ef_search ceiling instead of 2x the request, so far more survive.
+   *
+   * It is NOT exact. pgvector applies the predicate after the HNSW
+   * traversal unless `hnsw.iterative_scan` is on, and it is not set
+   * anywhere, so a selective floor still returns fewer than
+   * `candidateLimit` rows. Callers must not assume a full pool.
+   *
+   * The caller's own post-filter stays in place behind this — see
+   * `postFilter`. It is a no-op when the push-down worked, and the only
+   * thing enforcing the floor when the fallback below runs.
+   */
+  minReleaseYear?: number | null;
 }
 
 /**
@@ -96,6 +118,7 @@ export async function semanticRetrieval(
     candidateLimit = 100,
     resultLimit = 40,
     currentYear = new Date().getFullYear(),
+    minReleaseYear = null,
   } = options;
 
   if (!Array.isArray(queryEmbedding) || queryEmbedding.length === 0) {
@@ -103,10 +126,26 @@ export async function semanticRetrieval(
   }
 
   const vectorStr = `[${queryEmbedding.join(',')}]`;
-  const { data: matched, error: rpcError } = await client.rpc('match_titles_by_vector', {
-    query_vector: vectorStr,
-    match_limit: candidateLimit,
-  });
+  const baseArgs = { query_vector: vectorStr, match_limit: candidateLimit };
+
+  let { data: matched, error: rpcError } = minReleaseYear != null
+    ? await client.rpc('match_titles_by_vector', {
+      ...baseArgs,
+      min_release_year: minReleaseYear,
+    })
+    : await client.rpc('match_titles_by_vector', baseArgs);
+
+  // Deploy-order safety. PostgREST resolves an RPC by its argument NAMES,
+  // so on a database where migration 082 has not been applied the call
+  // above fails outright rather than ignoring the extra argument — and a
+  // Worker deployed ahead of its migration would return an empty grid for
+  // every semantic search with a release floor. Retry without it: the
+  // caller's post-filter still enforces the floor, which is exactly the
+  // behaviour that shipped before this change.
+  if (rpcError && minReleaseYear != null) {
+    ({ data: matched, error: rpcError } = await client.rpc('match_titles_by_vector', baseArgs));
+  }
+
   if (rpcError || !matched || !Array.isArray(matched)) {
     return [];
   }
