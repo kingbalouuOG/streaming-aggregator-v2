@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { ExternalLink, Star } from 'lucide-react-native';
+import { useEffect } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 
 import { useItemServices } from '@/hooks/useItemServices';
@@ -8,7 +9,12 @@ import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import { getStreamingLinks, type StreamingLink } from '@/lib/api/supabaseContent';
 import { contentMediaType } from '@/lib/content/documentary';
 import { getDeepLink } from '@/lib/deepLinks';
+import { setCardClickContext } from '@/lib/instrumentation/clickContext';
 import { exitDwell, getCurrentDwellSeconds } from '@/lib/instrumentation/dwellTimer';
+import {
+  recordImpression,
+  type RecordImpressionInput,
+} from '@/lib/instrumentation/impressionBatcher';
 import { openDeepLink } from '@/lib/openDeepLink';
 import { SERVICE_DISPLAY_NAMES, type ContentItem, type ServiceId } from '@/lib/types/content';
 import { ServiceBadge } from './ServiceBadge';
@@ -27,6 +33,11 @@ import { ServiceBadge } from './ServiceBadge';
 // against the content cache, which is what carries both the exact deep link
 // and the stream type; the full `DetailData` the detail screen builds would
 // cost several more calls to render a card the user is about to leave.
+//
+// It records its own impression at position 0 on the `search` surface. It is
+// the most prominent result on the most retrieval-shaped route, so leaving it
+// out would have given search CTR a denominator missing exactly the result
+// most likely to be clicked (IN-SL-001). The grid below starts at position 1.
 
 /** Stream types that mean "no marginal cost", as everywhere else. */
 const INCLUDED = new Set<StreamingLink['streamType']>(['subscription', 'free']);
@@ -35,10 +46,13 @@ export function TitleHitCard({
   item,
   userServices,
   onOpenDetail,
+  impressionMetadata,
 }: {
   item: ContentItem;
   userServices: ServiceId[];
   onOpenDetail: (item: ContentItem) => void;
+  /** Route context for `card_impressions.metadata`, as the grid passes. */
+  impressionMetadata?: RecordImpressionInput['metadata'];
 }) {
   const { tmdbId, mediaType } = parseContentItemId(item.id);
   const { data: links } = useQuery({
@@ -57,8 +71,29 @@ export function TitleHitCard({
     ? [...new Set(links.map((l) => l.serviceId))].slice(0, 3)
     : fallbackServices;
 
+  // Serialised for the dep array — see the identical note in PosterGridCard.
+  const metadataKey = impressionMetadata ? JSON.stringify(impressionMetadata) : '';
+  useEffect(() => {
+    recordImpression({
+      contentId: tmdbId,
+      sourceSurface: 'search',
+      position: 0,
+      metadata: metadataKey
+        ? (JSON.parse(metadataKey) as RecordImpressionInput['metadata'])
+        : null,
+    });
+  }, [tmdbId, metadataKey]);
+
+  const openDetail = () => {
+    setCardClickContext({ contentId: tmdbId, position: 0, surface: 'search' });
+    onOpenDetail(item);
+  };
+
   const open = async () => {
     if (!best) return;
+    // The deep-link click is an outcome on this card, so it inherits the
+    // same origin as a tap through to the detail screen would.
+    setCardClickContext({ contentId: tmdbId, position: 0, surface: 'search' });
     const link = getDeepLink(
       best.serviceId,
       best.deepLinkUrl,
@@ -83,7 +118,7 @@ export function TitleHitCard({
   return (
     <View className="px-5 pt-3">
       <Pressable
-        onPress={() => onOpenDetail(item)}
+        onPress={openDetail}
         accessibilityRole="button"
         className="flex-row gap-3.5 rounded-card border border-border bg-card p-3 active:opacity-90">
         <View

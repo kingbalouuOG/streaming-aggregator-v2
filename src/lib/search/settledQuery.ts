@@ -29,7 +29,21 @@
 
 export interface SettledQuery {
   query: string;
-  category: string;
+  /**
+   * The layout the query resolved to — 'title', 'described' or 'lookup'.
+   *
+   * This slot used to hold the All / Movies / TV / Docs category, which the
+   * refine-row session removed along with the pills that set it (§9.2). Route
+   * inherits the job rather than the field being dropped, because it answers
+   * the same question the category answered: *is this the same search, or a
+   * different one over the same text?* The same text genuinely resolves two
+   * ways — "Search titles instead" flips a described query to a lookup, and
+   * the `search_semantic` flag decides the route for everyone else — and the
+   * two produce different result counts over different retrieval paths. A
+   * route change is therefore a second search, and must flush rather than
+   * collapse, exactly as a category change did.
+   */
+  route: string;
   resultCount: number;
 }
 
@@ -102,9 +116,11 @@ export function collapsesInto(previous: string, next: string): boolean {
  * query is emitted later by a terminal signal — submit, result tap, the
  * box being cleared, leaving the screen — or by the idle flush.
  *
- * Category is part of the identity: re-slicing the same text through the
- * All / Movies / TV / Docs chips is a distinct intent with a distinct
- * result count, so it flushes rather than collapses.
+ * Route is part of the identity: the same text answered by the title-hit
+ * layout and by the described grid is two searches with two result counts,
+ * so a route change flushes rather than collapses. (Refine-chip toggles are
+ * NOT part of it — they are their own `mode: 'filter'` rows, and folding
+ * them in here would split one typed search into one row per tap.)
  */
 export function reconcileSettled(
   pending: SettledQuery | null,
@@ -112,7 +128,7 @@ export function reconcileSettled(
 ): { emit: SettledQuery | null; pending: SettledQuery } {
   if (
     pending &&
-    pending.category === candidate.category &&
+    pending.route === candidate.route &&
     collapsesInto(pending.query, candidate.query)
   ) {
     // Same search, still being typed. The newer one supersedes it; the
