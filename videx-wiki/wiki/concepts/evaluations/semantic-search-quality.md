@@ -75,81 +75,114 @@ Every one of those is a word match, not an intent match: "fast", "warm", "deep"/
 3. **This is the concrete case for §8.2's missing fourth part** — a Worker-side query-understanding step that turns free text into a phrase plus filters. The gap it closes is now measured rather than hypothesised: it is the distance between the two tables above.
 4. **`Free to watch` staying phrase-less is vindicated.** Its sentence scored nothing and could not have; cost is not a property an embedding carries. That card contributes a filter, and the filter has migration 080 behind it.
 
-## Finding 3 — filtering after retrieval exhausts the pool, and *Newer* is the casualty (2026-09-09)
+## Finding 3 — the preset retrieves a documentary *about* acclaim (2026-09-09)
 
-Found by device-testing the refine row, and quantified afterwards. It is not
-a search-quality problem in the ranking sense; it is a funnel-shape problem,
-and it decides which refine chips are worth offering on the semantic path.
+Found by device-testing the refine row. The *New & actually good* preset
+returns **2 titles**. The catalogue holds **363** that meet its own criteria.
+Three independent causes, in order of size.
 
-`match_titles_by_vector` accepts a vector and a limit and **no filter
-arguments**. So `semanticRetrieval` retrieves the *N* nearest neighbours by
-embedding and then applies every `FilterState` axis — and `minReleaseYear` —
-as a post-filter (`buildPostFilter`). The shipped `candidateLimit` is 150.
+> **Correction, same day.** The first write-up of this finding measured
+> recency as `release_date >= current_date - 365 days`. The code does not do
+> that: `buildPostFilter` compares `meta.release_year >= currentYear - 1`, a
+> *year* floor. Every base rate below is re-measured with the predicate the
+> code actually uses. The direction of the finding is unchanged; the
+> magnitude was overstated.
 
-That is fine for a filter that matches half the catalogue and useless for one
-that matches 2% of it.
+### Cause 1 — the phrase describes reception, not content
 
-### Base rates over the embedded catalogue (34,563 titles)
+The preset's phrase is *"a recent, well-reviewed film or series from the last
+year that both critics and audiences rated highly"*. No film's synopsis reads
+like that, because it is a statement **about** a title rather than a
+description **of** one. Embedding it and asking for nearest neighbours
+therefore retrieves titles whose overviews contain that vocabulary.
+
+The two titles it returned say it outright:
+
+| title | type | released | rating |
+|---|---|---|---|
+| One Battle After Another | movie | 2025-09-23 | 7.3 |
+| **Mr. Scorsese** | tv | 2025-10-16 | 8.1 |
+
+*Mr. Scorsese* is a documentary series **about a director and his critical
+reception**. The query asked for well-reviewed things and retrieved a
+programme about reviewing. This is Finding 2 in its purest form, and it is the
+dominant term — no amount of pool-widening fixes a neighbourhood that is the
+wrong neighbourhood.
+
+The corollary is a design rule the codebase already applies elsewhere:
+*Free to watch* was given `phrase: null` because cost is a fact, not a
+feeling. **"New and actually good" is also a fact, not a feeling.** A card
+whose whole content is two metadata predicates should carry no phrase and
+resolve down the `/discover` path, where both predicates are applied
+server-side across the entire catalogue instead of across 150 embedding
+neighbours.
+
+### Cause 2 — filtering after retrieval, on a thin slice
+
+`match_titles_by_vector(vector, limit)` takes **no filter arguments**, so
+`semanticRetrieval` fetches the *N* nearest neighbours and applies every
+`FilterState` axis plus `minReleaseYear` as a post-filter. Shipped
+`candidateLimit` is 150.
+
+Base rates over the 34,563 embedded titles, by the year rule:
 
 | slice | titles | share |
 |---|---:|---:|
-| released in the last 12 months | 630 | 1.82% |
+| release year ≥ currentYear − 1 | 1,690 | 4.9% |
 | rated ≥ 7 with ≥ 20 votes | 6,516 | 18.9% |
-| both | 144 | **0.42%** |
+| both | 363 | **1.05%** |
 
-### Survivors of a real 150-candidate pool
+Survivors of a real 150-candidate pool (probe: the stored embedding for
+*Conclave*):
 
-Probe vector: the stored embedding for *Conclave*. Counts are how many of the
-*N* nearest neighbours pass each chip.
+| chip | of 150 | of 1000 |
+|---|---:|---:|
+| Just films | 123 | 846 |
+| Under 2h | 91 | 683 |
+| Higher rated | 37 | 249 |
+| **Newer** | **21** | 107 |
+| Newer + Higher rated | **6** | 29 |
 
-| chip | of 150 | of 500 | of 1000 |
-|---|---:|---:|---:|
-| Just films | 123 | 422 | 846 |
-| Under 2h | 91 | 332 | 683 |
-| Higher rated | 32 | 104 | 211 |
-| **Newer** | **7** | 17 | 34 |
-| Newer + Higher rated | **2** | 6 | 10 |
+Thin, and thinnest exactly where the preset lives. Deepening is capped anyway:
+migration 076 limits the RPC to 1,000 and says why in its own error text —
+past the HNSW `ef_search` ceiling the index returns roughly a thousand rows
+*while reporting success*, so a deeper query silently lies.
 
-### This reproduces the shipped behaviour exactly
+### Cause 3 — the recent titles are not all in the catalogue
 
-The *New & actually good* preset is `{ released: 'last_12_months', minRating: 7 }`
-on top of a phrase, which is the bottom row. Device testing returned **2
-titles**, and the logged `result_count` for that tap is **2**. The measurement
-predicts 2. The preset is not misbehaving; it is arithmetically doomed as
-built.
+Two titles named from the New tab as obvious candidates — *Mousetrap* (2026,
+rated 8) and *Mayday* (2026, rated 8) — **are not in `titles` at all**. The
+only rows for either are two unrelated `Mayday` series from 2003 and 2013.
+The New tab reads TMDb `/discover` live; the semantic path can only return
+what has been ingested and embedded. A title absent from the catalogue is
+unreachable by vector search at any pool size.
 
-Four of the five refine chips are unaffected — *Just films*, *Under 2h*,
-*Higher rated* and *Free to watch* all leave a usable grid. **Only *Newer*
-materially degrades the described route**, and it degrades the one preset that
-depends on it.
+Scope of that gap is not established here and is worth its own pass.
 
-### Deepening the pool is not the fix
+### What "Newer" actually means, since it differs by path
 
-Migration 076 caps `match_titles_by_vector` at 1,000 and says why in its own
-error text: beyond the HNSW `ef_search` ceiling the index returns roughly a
-thousand rows *while reporting success*, so a deeper query silently lies.
-Even at the cap, *Newer* reaches 34 and the preset reaches 10 — five times
-better and still thin, bought with 1,000 rows of metadata over the wire to a
-phone on every chip tap.
+| path | predicate |
+|---|---|
+| semantic (`buildPostFilter`) | `release_year >= currentYear - 1` — so in Sept 2026 it admits **2025 and 2026**, up to ~21 months |
+| `/discover` (`useBrowseDiscover`) | `primary_release_date.gte = today - 365 days` — an exact rolling year |
+| client-side (`applyBrowseFilters`) | `year >= currentYear - 1`, matching the semantic path |
 
-The real fix is to push the predicate into SQL: a `match_titles_by_vector`
-variant taking a `release_date` floor, so the ANN scan walks the recent slice
-instead of the whole catalogue and the 150 it returns are 150 usable ones.
-That is an RPC and a migration, i.e. engine work — filed rather than done in
-the refine-row session. See IN-SL-005.
+The looseness is deliberate and documented in `browseFilters.ts`: `ContentItem`
+carries a year, not a date, and tightening to `>= currentYear` would empty the
+grid every January. Worth knowing that a chip labelled *Newer* can legitimately
+return something 20 months old.
 
 ### What was NOT changed on the strength of this
 
-`candidateLimit` stays at 150. Raising it is a retrieval-parameter change
-justified here by a single probe vector and no eval run, and the rig
-(`npm run eval:search-semantic`) exists precisely so that such a change is
-made against the fixture rather than against one anecdote.
+`candidateLimit` stays at 150 — raising a retrieval parameter on one probe
+vector and no eval run is what this fixture rig exists to prevent. The preset's
+`phrase` was not nulled either, because that is a Session 3 artefact and the
+change belongs with an eval run beside it. Both filed as IN-SL-005.
 
-*Newer* also stays on the row. Unlike the `cost` chip withheld from the Mode A
-grid, it is not inert: it does exactly what it says over a genuinely thin
-slice, and the zero-result copy names it as the thing to remove. A true but
-disappointing answer with a labelled way out is a different thing from a
-control that does nothing.
+*Newer* stays on the refine row. Unlike the `cost` chip withheld from the Mode
+A grid it is not inert: it does exactly what it says over a genuinely thin
+slice, and the zero-result copy names it as the thing to remove.
+
 
 ## How to re-run
 
