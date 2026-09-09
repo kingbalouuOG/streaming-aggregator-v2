@@ -8,6 +8,7 @@ import { ServiceBadge } from "./ServiceBadge";
 import { ImageSkeleton } from "./ImageSkeleton";
 import { getCachedServices } from "@/lib/utils/serviceCache";
 import { parseContentItemId } from "@/lib/adapters/contentAdapter";
+import { contentMediaType, isDocumentary } from "@/lib/content/documentary";
 import { useAppStore } from "@/lib/store/appStore";
 import type { ServiceId } from "./platformLogos";
 
@@ -22,9 +23,33 @@ const SORT_OPTIONS: { value: SortOption; label: string; icon: typeof Clock }[] =
   { value: "shortest", label: "Shortest", icon: Timer },
 ];
 
+/**
+ * One predicate for both the pill filter and the pill counts, so the two
+ * cannot disagree about what a pill promises.
+ *
+ * Not `i.type === category`: the TMDb adapters overwrite `type` with
+ * 'doc' for genre 99 on both media types, while the engine path never
+ * writes 'doc' at all. A watchlist holds items from both, so Movies was
+ * dropping documentary films and Docs was finding only the ones saved
+ * from search. Docs is a genre test; Movies and TV are media-type tests
+ * that include documentaries (recommendation 2026-09-08-002 §1.1).
+ */
+function matchesWatchlistCategory(item: ContentItem, category: Category): boolean {
+  switch (category) {
+    case "tv":
+      return contentMediaType(item) === "tv";
+    case "movie":
+      return contentMediaType(item) === "movie";
+    case "doc":
+      return isDocumentary(item);
+    default:
+      return true;
+  }
+}
+
 function filterByCategory(items: ContentItem[], category: Category): ContentItem[] {
   if (category === "all") return items;
-  return items.filter((i) => i.type === category);
+  return items.filter((i) => matchesWatchlistCategory(i, category));
 }
 
 function sortItems(items: ContentItem[], sort: SortOption): ContentItem[] {
@@ -48,9 +73,9 @@ function sortItems(items: ContentItem[], sort: SortOption): ContentItem[] {
 function getCategoryCounts(items: ContentItem[]): Record<Category, number> {
   return {
     all: items.length,
-    tv: items.filter((i) => i.type === "tv").length,
-    movie: items.filter((i) => i.type === "movie").length,
-    doc: items.filter((i) => i.type === "doc").length,
+    tv: items.filter((i) => matchesWatchlistCategory(i, "tv")).length,
+    movie: items.filter((i) => matchesWatchlistCategory(i, "movie")).length,
+    doc: items.filter((i) => matchesWatchlistCategory(i, "doc")).length,
   };
 }
 

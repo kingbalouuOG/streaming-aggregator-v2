@@ -92,6 +92,7 @@ import { ONBOARDING_EVENTS } from "./lib/analytics/events";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { flushNow } from "./lib/instrumentation/impressionBatcher";
 import { parseContentItemId } from "./lib/adapters/contentAdapter";
+import { contentMediaType } from "./lib/content/documentary";
 import { emitContentInteraction } from "./lib/storage/interactions";
 import { useIntersectionObserver } from "./hooks/useIntersectionObserver";
 import { IconsDebug, SectionHeadDebug, ContentCardDebug, ServiceStackDebug, BottomNavDebug, MagazineHeroDebug, EditorsNoteDebug, WideCardDebug } from "./dev/DesignSystemDebug";
@@ -476,7 +477,11 @@ function AppContent() {
   // Helper: extract content metadata for taste tracking from a ContentItem
   const buildTasteMeta = useCallback((item: ContentItem) => {
     const numericId = parseInt(item.id.replace(/^(movie|tv)-/, ''), 10);
-    const contentType = item.type === 'doc' ? 'movie' as const : (item.type || 'movie') as 'movie' | 'tv';
+    // NOT `item.type`: the TMDb adapters overwrite it with 'doc' for
+    // genre 99 on both media types, so a documentary SERIES was recorded
+    // and routed as a film. contentMediaType reads the id prefix, which
+    // every adapter builds and none overwrites.
+    const contentType = contentMediaType(item);
     return {
       contentId: numericId,
       contentType,

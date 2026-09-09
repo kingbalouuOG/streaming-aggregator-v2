@@ -1,6 +1,7 @@
 import { Bookmark, Star } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 
+import { contentMediaType, isDocumentary } from '@/lib/content/documentary';
 import { useItemServices } from '@/hooks/useItemServices';
 import type { ContentItem } from '@/lib/types/content';
 import { ServiceStack } from './ServiceBadge';
@@ -62,11 +63,17 @@ export function PosterOverlays({
 }
 
 /** Card meta line — "GENRE · YEAR" (uppercase applied by the caller). Falls
- *  back to the media-type label when no genre string is present (e.g.
- *  watchlist items, which carry genreIds not a resolved genre). */
+ *  back to a kind label when no genre string is present (e.g. watchlist
+ *  items, which carry genreIds not a resolved genre).
+ *
+ *  The kind is derived from genre 99 and the id prefix, not from
+ *  `item.type`. Only the TMDb adapters write `type: 'doc'`; the engine
+ *  path (For You, spotlights, per-service charts, semantic search) writes
+ *  the media type and never 'doc', so the Doc label used to appear on
+ *  search results and vanish on the same title arriving from the engine. */
 export function cardMeta(item: ContentItem): string {
   const kind =
     item.genre ??
-    (item.type === 'tv' ? 'TV' : item.type === 'doc' ? 'Doc' : item.type === 'movie' ? 'Film' : undefined);
+    (isDocumentary(item) ? 'Doc' : contentMediaType(item) === 'tv' ? 'TV' : 'Film');
   return [kind, item.year].filter(Boolean).join(' · ');
 }
