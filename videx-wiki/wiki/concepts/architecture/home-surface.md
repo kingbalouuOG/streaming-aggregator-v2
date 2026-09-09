@@ -93,4 +93,6 @@ The "Browse by" chip strip above Recently Added was decorative until now — fiv
 
 **Chip visibility is data-driven (§1.5).** A chip renders only when the payload holds ≥ 8 matching items, counted across every rail rather than per rail. "All" always renders, and a strip left offering only "All" does not render at all. This resolves "same categories on both surfaces?" without a per-surface config.
 
+**Measured on device, 2026-09-09** (first real filter events): `All` 14 rails / 206 items · `TV` 13 / 141 · `Movies` 7 / 62 · `Documentaries` 1 / 15. §1.3 assumed Movies and TV would both stay comfortably above the threshold and only Documentaries would need help; on a TV-heavy payload it is **Movies** that loses half its rails. Not acted on yet — one session is not a trend — but it is the signal §1.3 said to watch, pointing at the rail nobody expected.
+
 See [for-you-surface](for-you-surface.md#quick-filters-native-2026-09-08) for the same strip over the taste rows, and [signal-architecture](signal-architecture.md) for what a chip change logs.

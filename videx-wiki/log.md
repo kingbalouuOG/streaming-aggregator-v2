@@ -990,3 +990,16 @@ Session 2 of the quick-filters plan. New pages: `src/lib/content/documentary.ts`
 **The measurement that decides the thresholds is in the event.** A chip change emits `mode: 'filter'` with `rails_visible` and `items_visible` captured as of the tap — deliberately excluding the Documentaries backfill, which lands a moment later, because the question §6 asks is "was filtering in place enough?". Whether 4 and 8 were the right numbers is answerable from those two fields alone.
 
 **Not yet verified on a device.** Session 1's record here is three defects across four rounds of on-device testing, none of which reading found, so the same budget applies before this merges. Typecheck, lint (0 errors), 328 unit tests, `eval:eng1` and `eval:novelty` all pass — but every one of those is blind to the thing that matters, which is what the page looks like when a chip is tapped.
+
+## [2026-09-09] ingest | Quick filters verified on device — and Movies, not Documentaries, is the thin case
+Follow-up on the same PR (#134), after OTA to the iOS preview build. Updated: `wiki/concepts/architecture/home-surface.md`.
+
+**It works, and the instrumentation proves it rather than the screenshot.** `card_impressions.metadata.filter` stamps correctly on cards and heroes for all three categories (Movies 80+2, TV 71+1, Documentaries 13+1), and five `mode: 'filter'` rows landed with their rail counts. The point of putting `rails_visible` / `items_visible` in the event was that a filter row otherwise says a chip was tapped and nothing about whether the result was worth looking at. First use of them, first surprise.
+
+**§1.3's arithmetic was right in shape and wrong in direction.** It reasoned that "the Home payload is interleaved movie/TV roughly 1:1, so Movies or TV leaves about half of every rail, comfortably above the thin threshold" — and that Documentaries alone would need a backfill. The measured split: **All 14 rails / 206 items · TV 13 / 141 · Movies 7 / 62 · Documentaries 1 / 15**. TV barely loses a rail. Movies loses half of them. This payload is TV-heavy, so the thin case is *Movies*, which is the one category the plan assumed was safe.
+
+One session is not "routinely thin" and `THIN_RAIL_MIN` has not been touched on the strength of it. But §1.3 explicitly said to "log rail-visibility on every filter application and revisit only if the data shows Movies/TV routinely thin" — this is that signal appearing on day one, pointing at a rail nobody expected. If it holds across users, the answer is probably a second backfill rather than a lower threshold: dropping the threshold to keep a two-item row is how you get a page of stubs.
+
+**Documentaries came through at 1 rail / 15 items at tap time**, which is precisely the case the lazy backfill exists for — and the page never reached the empty state, so the extra rail arrived in time.
+
+**The For You strip is still unverified.** Every filter event and every stamped impression carries `surface: 'new'`. Nothing exercised the chips on For You, so the longer-row slicing (36 rendered, 20/15 shown, up to 20 filtered), the mood-rooms hiding rule and the For You hero re-pick have device evidence of exactly none. Worth being precise about that rather than reading "it works" across both surfaces from a test that only touched one.
