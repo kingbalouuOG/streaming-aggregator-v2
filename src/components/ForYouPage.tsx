@@ -15,8 +15,13 @@
  *
  * Taste fingerprint sliders are wired to live engine state
  * (content.sliders → rerank on commit). Still stubbed: the
- * "ratings · updated" metadata line (hardcoded copy) and the mood
- * refiner (no-op, behind MOOD_REFINER_ENABLED — parking-lot IN-V3-003).
+ * "ratings · updated" metadata line (hardcoded copy).
+ *
+ * The "Refine by feeling" mood refiner was RETIRED on 2026-09-08
+ * (recommendation 2026-09-08-002 §2.1, closing parking-lot IN-V3-003).
+ * It was a fourth overlapping mood taxonomy that duplicated the Browse
+ * presets by label but not by definition, and it had never been wired to
+ * anything. The intent vocabulary lives in `src/lib/content/presets.ts`.
  */
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
@@ -29,7 +34,6 @@ import { NumberedChart } from './NumberedChart';
 import { SectionHead } from './SectionHead';
 import { Kicker } from './Kicker';
 import { SparkleIcon } from './icons';
-import { GenreIconTile, MOOD_GLYPH_NAMES } from './genreIcons';
 import { MagazineHero } from './MagazineHero';
 import { CalendarList } from './CalendarList';
 import { WideCard } from './WideCard';
@@ -56,24 +60,6 @@ interface ForYouPageProps {
   /** Callback when the user taps a calendar entry. */
   onSelectUpcoming?: (item: UpcomingRelease) => void;
 }
-
-const MOOD_CHIPS = ['Slow burn', 'Comfort', 'Edge of seat', 'Cerebral', 'Funny', 'Romance'] as const;
-
-/**
- * Hide the "Refine by feeling" UI until the real taste-v2 wiring lands
- * (parking-lot IN-V3-003). Flip to `true` once the data layer ships.
- */
-const MOOD_REFINER_ENABLED = false;
-
-/** Display name + subtitle per mood. Glyph comes from `MOOD_GLYPH_NAMES`. */
-const MOOD_GLYPHS: Record<(typeof MOOD_CHIPS)[number], { title: string; subtitle: string }> = {
-  'Slow burn':    { title: 'Wind down',   subtitle: 'Calm & slow' },
-  'Comfort':      { title: 'Cosy night',  subtitle: 'Soft & easy' },
-  'Edge of seat': { title: 'Pulse-up',    subtitle: 'High energy' },
-  'Cerebral':     { title: 'Cerebral',    subtitle: 'Brain teaser' },
-  'Funny':        { title: 'Funny',       subtitle: 'Belly laugh' },
-  'Romance':      { title: 'Romance',     subtitle: 'Heart swell' },
-};
 
 function getGreeting(now = new Date()): string {
   const h = now.getHours();
@@ -235,7 +221,6 @@ export function ForYouPage({
     content.sliders,
     content.prebuiltAnchorRooms,
   );
-  const [activeMood, setActiveMood] = useState<string | null>(null);
 
   // Inline taste-fingerprint editing. Locked by default — tap the lock
   // icon to unlock; sliders become draggable. Auto-relocks 5s after
@@ -579,127 +564,12 @@ export function ForYouPage({
         </div>
         </Reveal>
 
-        {/* §5.3 — Mood refiner. Hidden until the real taste-v2 wiring
-            lands (see parking-lot IN-V3-003); the UI is finished but the
-            buttons currently only re-title the row beneath, which reads
-            as broken. Re-enable by flipping `MOOD_REFINER_ENABLED`. */}
-        {MOOD_REFINER_ENABLED && (
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-3 px-5">
-            <Kicker>REFINE BY FEELING</Kicker>
-            <button
-              type="button"
-              onClick={() => setActiveMood(null)}
-              disabled={!activeMood}
-              style={{
-                fontFamily: 'var(--font-ui)',
-                fontSize: 12,
-                fontWeight: 500,
-                color: activeMood ? 'var(--fg-soft)' : 'var(--fg-faint)',
-                cursor: activeMood ? 'pointer' : 'default',
-              }}
-            >
-              {`Clear · ${activeMood ? '1' : '0'} active`}
-            </button>
-          </div>
-          <div
-            className="flex gap-2 overflow-x-auto no-scrollbar px-5 pb-1"
-            style={{ scrollbarWidth: 'none' }}
-          >
-            {MOOD_CHIPS.map((chip) => {
-              const glyph = MOOD_GLYPHS[chip];
-              const active = activeMood === chip;
-              return (
-                <button
-                  key={chip}
-                  type="button"
-                  onClick={() => setActiveMood(active ? null : chip)}
-                  className="shrink-0 flex items-center gap-3 px-3 py-3 text-left"
-                  style={{
-                    width: 200,
-                    background: active
-                      ? 'color-mix(in srgb, #10b981 14%, var(--surface-elev))'
-                      : 'var(--surface-elev)',
-                    border: active
-                      ? '1px solid #10b981'
-                      : '0.5px solid var(--hairline)',
-                    borderRadius: 'var(--r-md)',
-                    color: 'var(--fg)',
-                    transition:
-                      'background var(--d-fast) var(--ease-out), border-color var(--d-fast) var(--ease-out)',
-                  }}
-                  aria-pressed={active ? 'true' : 'false'}
-                  aria-label={glyph.title}
-                >
-                  <GenreIconTile glyph={MOOD_GLYPH_NAMES[chip]} size={36} />
-                  <span className="flex flex-col min-w-0">
-                    <span
-                      className="line-clamp-1"
-                      style={{
-                        fontFamily: 'var(--font-display)',
-                        fontSize: 16,
-                        fontWeight: 700,
-                        fontVariationSettings: '"opsz" 24',
-                        letterSpacing: '-0.01em',
-                        lineHeight: 1.2,
-                        color: 'var(--fg)',
-                      }}
-                    >
-                      {glyph.title}
-                    </span>
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-ui)',
-                        fontSize: 12,
-                        fontWeight: 500,
-                        color: 'var(--fg-soft)',
-                        marginTop: 2,
-                      }}
-                    >
-                      {glyph.subtitle}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          {activeMood ? <div className="mt-3 px-5">
-              <span
-                className="inline-flex items-center gap-2 px-3 py-1.5"
-                style={{
-                  background: 'color-mix(in srgb, var(--primary) 14%, transparent)',
-                  color: 'var(--primary)',
-                  border: '0.5px solid color-mix(in srgb, var(--primary) 45%, transparent)',
-                  borderRadius: 'var(--r-pill)',
-                  fontFamily: 'var(--font-ui)',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                {MOOD_GLYPHS[activeMood as (typeof MOOD_CHIPS)[number]].title}
-                <span style={{ color: 'var(--fg-soft)' }}>·</span>
-                {`${inYourMood.length} IN YOUR STACK`}
-              </span>
-            </div> : null}
-        </div>
-        )}
-
         {/* §5.4 — In your mood */}
         {inYourMood.length > 0 && (
           <ContentRow
             kicker="IN YOUR MOOD"
-            title={
-              activeMood
-                ? `Tuned to ${activeMood.toLowerCase()}.`
-                : 'Picked for you tonight.'
-            }
-            standfirst={
-              activeMood
-                ? undefined
-                : 'A first cut from your taste profile, with the chart pulled in.'
-            }
+            title="Picked for you tonight."
+            standfirst="A first cut from your taste profile, with the chart pulled in."
             sectionKey="foryou-in-mood"
             sourceSurface="for_you"
             items={inYourMood}

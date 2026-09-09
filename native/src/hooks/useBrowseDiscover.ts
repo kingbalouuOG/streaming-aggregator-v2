@@ -65,7 +65,50 @@ function buildParams(f: BrowseFilters, providers: ServiceId[], sort: SortMode): 
     params['with_runtime.lte'] = 120;
   } else if (f.runtime === 'over_120') params['with_runtime.gte'] = 121;
 
+  // Recency. Exact here — a date, not a year — unlike the client-side
+  // post-filter, which only has `ContentItem.year` to work with. The TV call
+  // renames the key (see `toTVParams`); TMDb's movie and TV endpoints spell
+  // the same constraint differently.
+  if (f.released === 'last_12_months') {
+    params[MOVIE_RELEASED_KEY] = isoDaysAgo(365);
+  }
+
+  // Cost. "Free" means no marginal cost at point of play — included in a
+  // subscription the user already has, genuinely free, or ad-funded — which
+  // is Joe's 2026-09-08 definition, and exactly the mapping the web has used
+  // since Phase Search V2 (`src/hooks/useBrowse.ts`). Native has no paid-only
+  // value, so there is no case here where the provider constraint has to be
+  // dropped: a free filter is always narrower than the user's own stack.
+  if (f.cost === 'free') {
+    params.with_watch_monetization_types = 'flatrate|free|ads';
+  }
+
   return params;
+}
+
+/** TMDb spells the release-date floor differently per endpoint. */
+const MOVIE_RELEASED_KEY = 'primary_release_date.gte';
+const TV_RELEASED_KEY = 'first_air_date.gte';
+
+/** `YYYY-MM-DD`, n days before today. */
+function isoDaysAgo(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/**
+ * Adapt a movie params object for the TV endpoint: genre ids converted and
+ * pruned, and the release-date floor renamed. Leaving the movie spelling on
+ * a TV call is silently ignored by TMDb, which would return *unfiltered* TV
+ * alongside correctly-filtered films — the same class of bug as the
+ * documentary segment asking only for movies.
+ */
+function toTVParams(params: Record<string, unknown>): Record<string, unknown> {
+  const tv = sanitiseTVGenreParams(params);
+  if (tv[MOVIE_RELEASED_KEY] !== undefined) {
+    tv[TV_RELEASED_KEY] = tv[MOVIE_RELEASED_KEY];
+    delete tv[MOVIE_RELEASED_KEY];
+  }
+  return tv;
 }
 
 async function fetchDiscover(
@@ -89,7 +132,7 @@ async function fetchDiscover(
 
   const calls: Promise<DiscoverResponse>[] = [];
   if (wantMovies) calls.push(discoverMovies(docParams) as Promise<DiscoverResponse>);
-  if (wantTV) calls.push(discoverTV(sanitiseTVGenreParams(docParams)) as Promise<DiscoverResponse>);
+  if (wantTV) calls.push(discoverTV(toTVParams(docParams)) as Promise<DiscoverResponse>);
 
   const res = await Promise.all(calls);
   const items: ContentItem[] = [];
@@ -119,6 +162,8 @@ export function useBrowseDiscover(
       filters.services.join(','),
       filters.minRating,
       filters.runtime,
+      filters.released,
+      filters.cost,
       sort,
       userServices.join(','),
     ],

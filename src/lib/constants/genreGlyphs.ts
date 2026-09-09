@@ -225,16 +225,6 @@ export const CLUSTER_GLYPHS: Record<string, GlyphName> = {
   'westerns-frontier': 'hat-cowboy',
 };
 
-/** Stable mood-chip label → glyph name (matches `MOOD_CHIPS` in ForYouPage). */
-export const MOOD_GLYPH_NAMES: Record<string, GlyphName> = {
-  'Slow burn': 'leaf',
-  Comfort: 'mug-hot',
-  'Edge of seat': 'fire',
-  Cerebral: 'brain',
-  Funny: 'face-laugh-squint',
-  Romance: 'heart',
-};
-
 /** Profile-page row id → glyph name. */
 export const PROFILE_GLYPHS = {
   account: 'user',

@@ -11,9 +11,10 @@
 //      so the BrowsePage grid can render uniformly across Mode A
 //      (text search) and Mode C (semantic).
 //
-// shared-tree-drift CI keeps this file's mirror at
-// `supabase/functions/_shared/recommendations-v2/search/
-// semanticRetrieval.ts` in lockstep.
+// There is no mirror to keep in lockstep any more: PLAT-3 / ADR-014
+// dissolved `supabase/functions/_shared/recommendations-v2/` and left this
+// tree as the single copy. (The comment claiming a shared-tree-drift check
+// on a `_shared/` twin outlived the twin; corrected 2026-09-09.)
 
 import { supabase } from '@/lib/supabase';
 import {
@@ -29,6 +30,7 @@ import {
   buildBackdropUrl,
 } from '@/lib/api/imageUrls';
 import { GENRE_NAMES } from '@/lib/constants/genres';
+import { DOCUMENTARY_GENRE_ID } from '@/lib/content/documentary';
 import { isoToLanguageName } from '@/lib/adapters/contentAdapter';
 import type { ContentItem } from '@/lib/types/content';
 import type { ServiceId } from '@/lib/types/content';
@@ -45,6 +47,26 @@ export interface SemanticSearchInput {
   userTasteVector?: number[] | null;
   candidateLimit?: number;
   resultLimit?: number;
+  /**
+   * Release-year floor, inclusive. Backs the `released` axis
+   * (recommendation 2026-09-08-002 §2.2), which `FilterState` does not
+   * carry — it is a native Browse axis, and adding it to FilterState would
+   * mean a new URL key on the web for a filter the web has no control for.
+   * Applied as a metadata post-filter, so it costs nothing extra.
+   */
+  minReleaseYear?: number | null;
+  /**
+   * The `cost: 'free'` axis: keep only titles included with one of these
+   * services (subscription or genuinely free — never rent, buy or addon).
+   * Empty array means "any service", matching the RPC.
+   *
+   * This one DOES cost an extra round trip. Availability is not in the
+   * vector metadata and `titles.available_services` aggregates every stream
+   * type, so the free/paid distinction can only come from
+   * `streaming_availability.stream_type` — see migration 080 and
+   * parking-lot IN-SL-002. Null/undefined skips it entirely.
+   */
+  subscriptionIncludedOn?: readonly ServiceId[] | null;
 }
 
 export interface SemanticSearchResult {
@@ -61,7 +83,15 @@ export interface SemanticSearchResult {
  * to Mode A.
  */
 export async function semanticSearch(input: SemanticSearchInput): Promise<SemanticSearchResult> {
-  const { query, filters, userTasteVector, candidateLimit, resultLimit } = input;
+  const {
+    query,
+    filters,
+    userTasteVector,
+    candidateLimit,
+    resultLimit,
+    minReleaseYear,
+    subscriptionIncludedOn,
+  } = input;
 
   // 1. Embed the query via the JWT-gated Edge function.
   const embedRes = await supabase.functions.invoke<{ embedding: number[]; cached: boolean }>(
@@ -77,28 +107,78 @@ export async function semanticSearch(input: SemanticSearchInput): Promise<Semant
   // 2. Build a post-retrieval filter from FilterState. match_titles_
   //    by_vector doesn't accept filter args, so we narrow client-side
   //    on the metadata returned by the shared module.
-  const postFilter = buildPostFilter(filters);
+  const postFilter = buildPostFilter(filters, minReleaseYear ?? null);
 
   // 3. Hand off to the shared ranker. The cast sidesteps TS2589: the
   //    typed singleton's postgrest generics explode when structurally
   //    checked against the core's minimal SupabaseLike interface.
+  //
+  //    When an availability filter is coming, DON'T truncate here: the
+  //    ranker's `resultLimit` would cut the list before we know which of
+  //    those titles are actually free, so a user whose top 60 happen to be
+  //    rentals would see an empty grid rather than the free titles ranked
+  //    61st onward. Rank the whole pool, filter, then truncate.
+  const needsAvailability = subscriptionIncludedOn != null;
   const candidates = await runSemanticRetrieval(
     supabase as unknown as Parameters<typeof runSemanticRetrieval>[0],
     embedding,
     userTasteVector ?? null,
     postFilter,
-    { candidateLimit, resultLimit },
+    { candidateLimit, resultLimit: needsAvailability ? (candidateLimit ?? 100) : resultLimit },
   );
 
-  // 4. Adapt to ContentItem.
-  const items = candidates.map(candidateToContentItem);
+  const included = needsAvailability
+    ? (await filterToSubscriptionIncluded(candidates, subscriptionIncludedOn)).slice(
+        0,
+        resultLimit ?? 40,
+      )
+    : candidates;
 
-  return { items, candidates, cached };
+  // 4. Adapt to ContentItem.
+  const items = included.map(candidateToContentItem);
+
+  return { items, candidates: included, cached };
+}
+
+/**
+ * Keep only candidates included with the given services (migration 080).
+ *
+ * Fails OPEN — on an RPC error the unfiltered list is returned rather than
+ * an empty grid. A cost filter that silently does nothing is a worse result
+ * than one that is briefly too generous, and the alternative is a blank
+ * screen with no explanation.
+ */
+async function filterToSubscriptionIncluded(
+  candidates: ScoredSemanticCandidate[],
+  services: readonly ServiceId[],
+): Promise<ScoredSemanticCandidate[]> {
+  if (candidates.length === 0) return candidates;
+  const { data, error } = await supabase.rpc('subscription_included_titles', {
+    p_tmdb_ids: candidates.map((c) => c.meta.tmdb_id),
+    // Omitted rather than null when the user has no stack: JSON.stringify
+    // drops undefined, so the argument falls to the function's own DEFAULT
+    // NULL, which the RPC reads as "any service".
+    p_services: services.length > 0 ? [...services] : undefined,
+  });
+  if (error || !Array.isArray(data)) return candidates;
+
+  // Key on (tmdb_id, media_type): titles.tmdb_id is not unique across media
+  // types, so matching on the id alone would admit a film because its
+  // same-id series is on Netflix.
+  const allowed = new Set(
+    (data as Array<{ tmdb_id: number; media_type: string }>).map(
+      (row) => `${row.tmdb_id}:${row.media_type}`,
+    ),
+  );
+  return candidates.filter((c) => allowed.has(`${c.meta.tmdb_id}:${c.meta.media_type}`));
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
 
-function buildPostFilter(filters: FilterState): ((meta: SemanticCandidateMeta) => boolean) | null {
+function buildPostFilter(
+  filters: FilterState,
+  minReleaseYear: number | null,
+): ((meta: SemanticCandidateMeta) => boolean) | null {
   // Build only when at least one axis would do work. Returning null
   // tells the ranker to skip the per-row filter check entirely.
   const hasGenre = filters.genres.length > 0;
@@ -106,7 +186,9 @@ function buildPostFilter(filters: FilterState): ((meta: SemanticCandidateMeta) =
   const hasMinRating = filters.minRating > 0;
   const hasContentType = filters.contentType !== 'all';
   const hasRuntime = filters.runtime !== 'any';
-  if (!hasGenre && !hasLang && !hasMinRating && !hasContentType && !hasRuntime) return null;
+  const hasReleased = minReleaseYear !== null;
+  if (!hasGenre && !hasLang && !hasMinRating && !hasContentType && !hasRuntime && !hasReleased)
+    return null;
 
   // Convert genre names → TMDb genre IDs once, outside the loop.
   const genreIdSet = hasGenre
@@ -124,16 +206,27 @@ function buildPostFilter(filters: FilterState): ((meta: SemanticCandidateMeta) =
 
   return (meta) => {
     if (hasContentType) {
-      // ContentType maps: 'movie' → 'movie', 'tv' → 'tv', 'doc' is
-      // genre-driven (Documentary genre id = 99) on the movie table.
+      // Documentary is a GENRE on either media type, and Movies / TV are
+      // media type alone and INCLUDE documentaries — a documentary film is
+      // still a film (recommendation 2026-09-08-002 §1.1, and
+      // `src/lib/content/documentary.ts`, which is the definition of record).
+      //
+      // This branch used to say the opposite on both counts: it subtracted
+      // genre-99 titles from Movies, and it restricted Docs to the movie
+      // table, so a documentary SERIES could not be reached from either
+      // segment. That was the §0.2 bug, in its last remaining copy.
       if (filters.contentType === 'movie') {
         if (meta.media_type !== 'movie') return false;
-        if (meta.genre_ids.includes(99)) return false; // exclude docs from movies
       } else if (filters.contentType === 'tv') {
         if (meta.media_type !== 'tv') return false;
       } else if (filters.contentType === 'doc') {
-        if (meta.media_type !== 'movie' || !meta.genre_ids.includes(99)) return false;
+        if (!meta.genre_ids.includes(DOCUMENTARY_GENRE_ID)) return false;
       }
+    }
+    if (hasReleased) {
+      // Unknown release year fails the filter. "Newer" promising a date is
+      // a claim; a null year cannot support it.
+      if ((meta.release_year ?? 0) < (minReleaseYear as number)) return false;
     }
     if (genreIdSet) {
       if (!meta.genre_ids.some((id) => genreIdSet.has(id))) return false;
@@ -159,7 +252,7 @@ function buildPostFilter(filters: FilterState): ((meta: SemanticCandidateMeta) =
 
 function candidateToContentItem(c: ScoredSemanticCandidate): ContentItem {
   const m = c.meta;
-  const isDoc = m.media_type === 'movie' && m.genre_ids.includes(99);
+  const isDoc = m.genre_ids.includes(DOCUMENTARY_GENRE_ID);
   return {
     id: `${m.media_type}-${m.tmdb_id}`,
     title: m.title || 'Untitled',
