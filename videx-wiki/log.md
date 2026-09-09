@@ -1116,3 +1116,25 @@ Updated: `wiki/concepts/operations/phase-search-v2.md`, `wiki/registers/parking-
 **Two logging changes fell out of the removal.** The typed-search log deduped on `(query, category)`; rather than drop the field, `route` took the slot, because it answers the same question — is this a second search over the same text? — and genuinely varies, since *"Search titles instead"* re-answers one query two ways with two result counts. And the filter-intent log stopped being gated on `!semanticMode`: that gate existed so a preset tap could not log twice, but the tap handler already sets exactly one intent, and the gate meant a FilterSheet apply on the semantic path wrote nothing at all. Every refine toggle would have inherited the same silence.
 
 **One thing deliberately not logged.** Removing the last chip with no text and no preset lands on the empty state, and an empty state is not a search. Logging it would enter a zero-result row for a user who had just cleared their filters — which reads in the measurement plan as exactly the retrieval failure the zero-result rate exists to catch. The FilterSheet already applied that rule; the chips now do too.
+
+
+## [2026-09-09] ingest | Device testing the refine row found the pool, not the row
+Updated: `wiki/concepts/evaluations/semantic-search-quality.md` (Finding 3), `wiki/registers/parking-lot.md` (IN-SL-005 filed).
+
+**The instrumentation worked on the first try, which is itself the news.** `card_impressions` had never held a single Browse row in its history — 8,134 `home` and 1,154 `for_you` and nothing else. One device session produced `search` rows on both the title and described routes and `browse` rows on the preset and filter routes, positioned 0–11, stamped with the route and the active chips. Search CTR has a denominator for the first time.
+
+**The route-as-identity change is visible in the log and behaves as designed.** Joe typed one sentence and it wrote two rows: `route: described` with 29 results, then `route: lookup` with 0 after tapping *Search titles instead*. Under the old `(query, category)` dedupe those would have collapsed into one row, losing the fact that the user rejected the described answer — which is the single most interesting thing a described search can tell us.
+
+**What device testing did NOT cover.** No refine chip was tapped. The one `mode: 'filter'` row from the session carries `runtime: 'over_120'`, which is not a chip value, so it came from the FilterSheet. The chips remain unverified on a device; the row rendered, and that is all that is established.
+
+**Two observations that turned out to be one number.** The described route returned 2019 and 2023 titles for *"something recent that isn't rubbish"*, and the *New & actually good* preset returned exactly 2 titles. Neither is a bug in the refine row and both have the same cause.
+
+The typed sentence is embedded, not parsed: "recent" and "rubbish" are matched as *words*, never as a release-date floor or a rating floor. That is Finding 2 restated, and the refine chips are the manual bridge until the §8.2 query-understanding step exists.
+
+The preset is arithmetically doomed. `match_titles_by_vector` takes no filter arguments, so `semanticRetrieval` fetches 150 nearest neighbours and post-filters. Only 1.82% of the 34,563 embedded titles were released in the last 12 months, and 0.42% are both recent and rated 7+. Measured against a real probe vector, of 150 candidates *Just films* leaves 123, *Under 2h* 91, *Higher rated* 32 — and *Newer* leaves **7**, with *Newer* + *Higher rated* leaving **2**. The logged `result_count` for that preset tap is 2. The measurement predicts the screen exactly.
+
+**Deepening the pool is not available.** Migration 076 caps the RPC at 1,000 and its error text says why: past the HNSW `ef_search` ceiling the index returns roughly a thousand rows *while reporting success*, so a deeper query silently lies. At the cap *Newer* reaches 34 and the preset 10 — five times better, still thin, and paid for with 1,000 rows of metadata per chip tap on a phone.
+
+**Nothing was changed on the strength of it.** `candidateLimit` stays at 150: raising a retrieval parameter on one probe vector and no eval run is exactly what the fixture rig exists to prevent. *Newer* stays on the row, because unlike the `cost` chip withheld from the Mode A grid it is not inert — it does what it says over a genuinely thin slice, and the zero-result copy names it as the thing to remove. A true but disappointing answer with a labelled exit is a different object from a control that does nothing.
+
+**The generalisable bit.** Three sessions in a row found controls attached to the wrong data source. This one found a control attached to the *right* source with the wrong cardinality behind it — which type checking, tests and a working UI all pass cleanly, and which only arithmetic over the live catalogue exposes. The question "does this control reach its data?" now has a sibling: "and is there enough of it once it gets there?"

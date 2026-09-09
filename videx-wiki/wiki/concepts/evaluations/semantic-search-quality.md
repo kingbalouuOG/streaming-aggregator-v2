@@ -75,6 +75,82 @@ Every one of those is a word match, not an intent match: "fast", "warm", "deep"/
 3. **This is the concrete case for §8.2's missing fourth part** — a Worker-side query-understanding step that turns free text into a phrase plus filters. The gap it closes is now measured rather than hypothesised: it is the distance between the two tables above.
 4. **`Free to watch` staying phrase-less is vindicated.** Its sentence scored nothing and could not have; cost is not a property an embedding carries. That card contributes a filter, and the filter has migration 080 behind it.
 
+## Finding 3 — filtering after retrieval exhausts the pool, and *Newer* is the casualty (2026-09-09)
+
+Found by device-testing the refine row, and quantified afterwards. It is not
+a search-quality problem in the ranking sense; it is a funnel-shape problem,
+and it decides which refine chips are worth offering on the semantic path.
+
+`match_titles_by_vector` accepts a vector and a limit and **no filter
+arguments**. So `semanticRetrieval` retrieves the *N* nearest neighbours by
+embedding and then applies every `FilterState` axis — and `minReleaseYear` —
+as a post-filter (`buildPostFilter`). The shipped `candidateLimit` is 150.
+
+That is fine for a filter that matches half the catalogue and useless for one
+that matches 2% of it.
+
+### Base rates over the embedded catalogue (34,563 titles)
+
+| slice | titles | share |
+|---|---:|---:|
+| released in the last 12 months | 630 | 1.82% |
+| rated ≥ 7 with ≥ 20 votes | 6,516 | 18.9% |
+| both | 144 | **0.42%** |
+
+### Survivors of a real 150-candidate pool
+
+Probe vector: the stored embedding for *Conclave*. Counts are how many of the
+*N* nearest neighbours pass each chip.
+
+| chip | of 150 | of 500 | of 1000 |
+|---|---:|---:|---:|
+| Just films | 123 | 422 | 846 |
+| Under 2h | 91 | 332 | 683 |
+| Higher rated | 32 | 104 | 211 |
+| **Newer** | **7** | 17 | 34 |
+| Newer + Higher rated | **2** | 6 | 10 |
+
+### This reproduces the shipped behaviour exactly
+
+The *New & actually good* preset is `{ released: 'last_12_months', minRating: 7 }`
+on top of a phrase, which is the bottom row. Device testing returned **2
+titles**, and the logged `result_count` for that tap is **2**. The measurement
+predicts 2. The preset is not misbehaving; it is arithmetically doomed as
+built.
+
+Four of the five refine chips are unaffected — *Just films*, *Under 2h*,
+*Higher rated* and *Free to watch* all leave a usable grid. **Only *Newer*
+materially degrades the described route**, and it degrades the one preset that
+depends on it.
+
+### Deepening the pool is not the fix
+
+Migration 076 caps `match_titles_by_vector` at 1,000 and says why in its own
+error text: beyond the HNSW `ef_search` ceiling the index returns roughly a
+thousand rows *while reporting success*, so a deeper query silently lies.
+Even at the cap, *Newer* reaches 34 and the preset reaches 10 — five times
+better and still thin, bought with 1,000 rows of metadata over the wire to a
+phone on every chip tap.
+
+The real fix is to push the predicate into SQL: a `match_titles_by_vector`
+variant taking a `release_date` floor, so the ANN scan walks the recent slice
+instead of the whole catalogue and the 150 it returns are 150 usable ones.
+That is an RPC and a migration, i.e. engine work — filed rather than done in
+the refine-row session. See IN-SL-005.
+
+### What was NOT changed on the strength of this
+
+`candidateLimit` stays at 150. Raising it is a retrieval-parameter change
+justified here by a single probe vector and no eval run, and the rig
+(`npm run eval:search-semantic`) exists precisely so that such a change is
+made against the fixture rather than against one anecdote.
+
+*Newer* also stays on the row. Unlike the `cost` chip withheld from the Mode A
+grid, it is not inert: it does exactly what it says over a genuinely thin
+slice, and the zero-result copy names it as the thing to remove. A true but
+disappointing answer with a labelled way out is a different thing from a
+control that does nothing.
+
 ## How to re-run
 
 ```bash
