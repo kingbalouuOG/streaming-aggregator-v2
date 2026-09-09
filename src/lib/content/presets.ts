@@ -157,12 +157,33 @@ export const PRESET_POOL: Preset[] = [
     hue: HUE.amber,
     kind: 'constraint',
     sentence: "something recent that isn't rubbish",
-    phrase:
-      'a recent, well-reviewed film or series from the last year that both critics and audiences rated highly',
+    // Filter-only, for the same reason `free` is (below): "new and actually
+    // good" is a pair of METADATA PREDICATES, not a feeling, and there is
+    // nothing here for an embedding to find.
+    //
+    // It shipped with a phrase — "a recent, well-reviewed film or series from
+    // the last year that both critics and audiences rated highly" — and that
+    // phrase is a statement ABOUT a title rather than a description OF one.
+    // No synopsis reads like it, so nearest-neighbour retrieval landed on
+    // titles whose overviews use the vocabulary of acclaim. Measured
+    // 2026-09-09, its top five were *Voir* (a documentary series in which
+    // "film lovers examine the cinematic moments that thrilled" them), *The
+    // Favourite*, *The Great*, *Blockbuster*, and *Nightcrawler* (crime
+    // journalism). Not one is recent; not one was chosen for being
+    // well-reviewed. The card asked for well-reviewed things and retrieved
+    // programmes about reviewing.
+    //
+    // Post-filtering that neighbourhood by recency and rating then left TWO
+    // titles on a device, out of 363 in the catalogue that meet the card's
+    // own criteria. With no phrase the tap composes filters only and resolves
+    // down /discover, where both predicates are applied server-side across
+    // the whole catalogue instead of across 150 embedding neighbours.
+    //
     // The vote floor §2.3 asks for is implicit and already correct: every
     // path that honours `minRating` pairs it with a vote_count floor (50 on
     // /discover, 20 on the semantic quality gate), so a 9.0 with twelve
     // votes cannot qualify. No new axis needed for it.
+    phrase: null,
     filters: { released: 'last_12_months', minRating: 7 },
     clusters: [],
   },

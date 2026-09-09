@@ -172,16 +172,47 @@ carries a year, not a date, and tightening to `>= currentYear` would empty the
 grid every January. Worth knowing that a chip labelled *Newer* can legitimately
 return something 20 months old.
 
+### The fix, and what it measured
+
+`new-good` now carries `phrase: null`, joining `free` as a **fact card**. A
+tap composes filters only, so it resolves down `/discover` where both
+predicates are applied server-side across the whole catalogue.
+
+Measured against Joe's real seven-service stack
+(`scripts/test/newgood-path-compare.mjs`):
+
+| path | qualifying titles | on screen |
+|---|---:|---:|
+| semantic (phrase + post-filter) | — | **2** |
+| `/discover` (filter-only) | 99 films + 106 series = **205** | **40** |
+
+The first card in the new grid is **Mayday** (2026, 8.0) — one of the two
+titles named from the New tab as obviously missing. The other, *Mousetrap*, is
+absent for cause 3 below rather than this one.
+
+Gated eval metrics are unchanged either side of the change (p@10 1.000, MRR
+0.900, threshold 0.9 / 0.75), which is the expected result: nothing about
+retrieval moved, one card simply stopped calling it.
+
+The fixture entry for this card now uses its **sentence** rather than its
+retired phrase, matching how `free` is held, and its `_note` preserves the
+phrase's measurement so a future session that re-adds a phrase has to justify
+it against that number. The sentence scores 0.00 as well — which is the point:
+neither text has a semantic answer, because the card is not a feeling.
+
 ### What was NOT changed on the strength of this
 
 `candidateLimit` stays at 150 — raising a retrieval parameter on one probe
-vector and no eval run is what this fixture rig exists to prevent. The preset's
-`phrase` was not nulled either, because that is a Session 3 artefact and the
-change belongs with an eval run beside it. Both filed as IN-SL-005.
+vector and no eval run is what this fixture rig exists to prevent. Cause 2
+(filter-after-retrieval) and cause 3 (ingest coverage) both remain open under
+IN-SL-005; this fix removes the card from the affected path rather than fixing
+the path.
 
 *Newer* stays on the refine row. Unlike the `cost` chip withheld from the Mode
 A grid it is not inert: it does exactly what it says over a genuinely thin
-slice, and the zero-result copy names it as the thing to remove.
+slice, and the zero-result copy names it as the thing to remove. On the
+`/discover` path — where the row renders for a filter-only browse — it is
+applied server-side and is not thin at all.
 
 
 ## How to re-run

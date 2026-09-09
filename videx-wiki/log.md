@@ -1156,3 +1156,38 @@ The rule needed here already exists in the codebase. *Free to watch* carries `ph
 **What "Newer" means, since three paths spell it differently.** Semantic and client-side use `release_year >= currentYear - 1`; `/discover` uses an exact `today - 365 days`. In September 2026 the first admits 2025 and 2026 — up to about 21 months. The looseness is deliberate and documented: `ContentItem` carries a year, not a date, and tightening it would empty the grid every January. Worth knowing that a chip labelled *Newer* can honestly return something 20 months old.
 
 **The generalisable bit, updated.** The previous entry said the sibling question to "does this control reach its data?" is "and is there enough of it once it gets there?". There is a third: **"is it asking for the right thing?"** Cardinality was the visible symptom and the query was the cause, and only reading the two returned titles by name — rather than counting them — showed which.
+
+
+## [2026-09-09] ingest | The card asked for well-reviewed things and got a programme about reviewing
+Updated: `wiki/concepts/evaluations/semantic-search-quality.md` (Finding 3 outcome), `wiki/registers/parking-lot.md` (IN-SL-005 cause 1 closed).
+
+**Joe asked for it done properly with an eval run, so here is the run.** `new-good` now carries `phrase: null`, joining `free` as a **fact card**. A tap composes filters only and resolves down `/discover`, where recency and rating are applied server-side across the whole catalogue rather than across 150 embedding neighbours.
+
+**The evidence that settled it was five titles, not a metric.** The retired phrase — *"a recent, well-reviewed film or series from the last year that both critics and audiences rated highly"* — scored p@10 0.00, but so does every diagnostic entry in the fixture, so the number alone said nothing new. Reading the top five did:
+
+| rank | title | why it matched |
+|---:|---|---|
+| 1 | **Voir** (2021) | a series in which *"film lovers examine the cinematic moments that thrilled"* them |
+| 2 | The Favourite (2018) | the word *favourite* |
+| 3 | The Great (2020) | the word *great* |
+| 4 | Blockbuster (2022) | the word *blockbuster* |
+| 5 | Nightcrawler (2014) | crime **journalism** |
+
+Not one is recent. Not one was chosen for being well-reviewed. A statement **about** a title is not a description **of** one, and no synopsis reads like a review blurb — so the nearest neighbours were programmes about acclaim and titles named with praise words.
+
+**The outcome, measured against Joe's real seven-service stack.**
+
+| path | qualifying | on screen |
+|---|---:|---:|
+| semantic (phrase + post-filter) | — | **2** |
+| `/discover` (filter-only) | 99 films + 106 series = **205** | **40** |
+
+The first card in the new grid is *Mayday* (2026, 8.0) — one of the two titles Joe named from the New tab as obviously missing. Script kept at `scripts/test/newgood-path-compare.mjs`.
+
+**Gated eval metrics are identical either side** — p@10 1.000, MRR 0.900, against thresholds 0.9 and 0.75. That is the expected and correct result: nothing about retrieval moved, one card simply stopped calling it. An eval that had *changed* here would have meant the change did something it was not supposed to.
+
+**The fixture keeps the evidence rather than the phrase.** The entry now queries the card's sentence, matching how `free` is held, and its `_note` preserves the retired phrase's measurement verbatim so a future session that re-adds a phrase has to justify it against that number. The sentence scores 0.00 as well, which is the point: neither text has a semantic answer, because the card is not a feeling. The test that guarded this became a rule about **fact cards** rather than a hardcoded exception for `free`, plus a new assertion that a phrase-less card must carry a non-empty filter patch — otherwise it is a no-op button.
+
+**Two of the three causes are still open**, and this fix does not touch them: filter-after-retrieval still thins *Newer* on the described route and still needs a filtered RPC variant, and *Mousetrap* (2026) still has no `titles` row at all. What changed is that the card no longer depends on either.
+
+**The generalisable bit.** Three entries ago the lesson was "does this control reach its data?", then "is there enough of it?", then "is it asking for the right thing?". This one adds the method rather than the question: **the metric was 0.00 before and after and told us nothing; the five titles told us everything.** A score compresses an answer to a number, and the number is the same whether retrieval is slightly wrong or asking a category error. Read the rows.
