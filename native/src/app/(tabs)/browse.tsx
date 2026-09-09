@@ -184,6 +184,15 @@ export default function BrowseScreen() {
   // no controls above it. This is "refine only where it helps" (§9.2) in
   // today's vocabulary; Session 4 applies the same rule to the refine row.
   const showControls = (searching && !titleHit) || filterOnlyMode || semanticMode;
+  // The category pills filter MODE A's result list, so they only belong on a
+  // Mode A grid. On the described route the grid comes from the engine, which
+  // never sees `category` — device testing 2026-09-09 caught them rendering
+  // there, where tapping Movies changed nothing on screen while quietly
+  // re-running Mode A and writing a log row. A control that looks like it
+  // works and does not is worse than no control. Media type on the described
+  // route is `filters.contentType`, which IS applied server-side. Session 4
+  // removes the pills outright.
+  const showCategories = searching && !titleHit && !describedRoute;
 
   const browse = useBrowseDiscover(filters, sortMode, filterOnlyMode, userServices ?? []);
 
@@ -304,9 +313,15 @@ export default function BrowseScreen() {
       // is the real result set rather than a thinned one. The watchlist is
       // local, so that one axis stays here.
       const base = semantic.data ?? [];
-      return filters.showWatched === 'all'
-        ? base
-        : base.filter((it) => (filters.showWatched === 'hide' ? !isWatched(it.id) : isWatched(it.id)));
+      const watchApplied =
+        filters.showWatched === 'all'
+          ? base
+          : base.filter((it) => (filters.showWatched === 'hide' ? !isWatched(it.id) : isWatched(it.id)));
+      // Sorted like every other grid. The control is visible in this mode now
+      // that filters reach the engine, and a visible Sort that does nothing is
+      // the same defect as the category pills above. 'best' is identity, which
+      // is exactly right here — the engine already returned relevance order.
+      return sortItems(watchApplied, sortMode);
     }
     if (searching) {
       if (!results) return [];
@@ -351,12 +366,24 @@ export default function BrowseScreen() {
   // — Search-term logging (§5) —————————————————————————————————————
   // Typed queries: settled only, once each. `markSettled` is the
   // short-circuit for the keyboard's search key and the first result tap.
+  // `result_count` must describe what the user SAW, which on the described
+  // route is the engine's grid, not Mode A's. Device testing 2026-09-09 caught
+  // this: "epic fantasy" logged result_count 0 three times while the semantic
+  // grid was on screen, because Mode A legitimately finds no title called that
+  // — which is why the query routed to the engine in the first place. Left
+  // alone, every described query would have been recorded as a failed search,
+  // poisoning the zero-result rate §8.2 makes a first-class metric.
+  //
+  // `shown` is what is rendered and `loading` covers the semantic fetch, so
+  // the settle can no longer fire against a list the user never saw. Staleness
+  // is still guarded by `resultsFor`, which stays the Mode A key both queries
+  // are keyed on.
   const markQuerySettled = useTypedSearchLog({
     query: intent.text,
     resultsFor: debounced,
     category,
-    results,
-    isFetching,
+    results: describedRoute ? shown : results,
+    isFetching: describedRoute ? loading : isFetching,
     metadata: { route: titleHit ? 'title' : describedRoute ? 'described' : 'lookup' },
   });
   // Preset taps on the semantic path log against the semantic result set.
@@ -416,7 +443,7 @@ export default function BrowseScreen() {
           </Text>
         ) : null}
 
-        {searching && !titleHit ? (
+        {showCategories ? (
           <View className="mt-3 flex-row gap-2">
             {CATEGORIES.map((cat) => {
               const active = cat === category;
