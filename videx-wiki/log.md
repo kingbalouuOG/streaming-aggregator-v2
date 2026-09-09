@@ -1370,7 +1370,7 @@ No index scan at all, so every qualifying row is distance-computed and the answe
 
 The worst two were not in the review's list at all. Both the web Browse *Docs* segment and Home's *Docs* category fetched movies only and constrained neither call to genre 99 — so each returned every film on the user's services, and no documentary series could appear on either. The review asked for a grep and a list; reading what the grep returned, rather than only the three lines it cited, is what found them. `useContentService.ts` carries the same branch and has no callers, so it was left for whoever deletes the hook.
 
-**The generalisable bit, twice over.** The previous entry's lesson was to read the rows rather than the score. This one is the same instinct pointed at two different documents.
+**The generalisable bit, twice over.** Two entries back the lesson was to read the rows rather than the score. This one is the same instinct pointed at two different documents.
 
 **A PR that names the cost it measured has told you which cost it did not.** "Bytes, not compute" was a true sentence, carefully evidenced, and a complete answer to the wrong half of the question.
 
