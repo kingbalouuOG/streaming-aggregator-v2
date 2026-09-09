@@ -45,6 +45,7 @@
     "plugins": [
       "expo-router",
       "./plugins/withReleaseSigning",
+      "./plugins/withUpdatesChannel",
       [
         "expo-notifications",
         {

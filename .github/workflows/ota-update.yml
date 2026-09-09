@@ -31,6 +31,16 @@ name: OTA Update (EAS Update)
 # it (run 34327841238). `all` therefore fans out to one job per real
 # platform here, and eas-cli only ever sees `ios` or `android`.
 #
+# HOW REACHABILITY IS CHECKED, PER PLATFORM.
+#
+# iOS builds come from EAS Build, so `eas build:list` can be asked what runtime
+# version the newest build on the channel wants. Android builds do not — the AAB
+# is built by android-release.yml with prebuild + Gradle, so EAS has never heard
+# of it. That workflow therefore publishes the fingerprint baked into the AAB as
+# the `videx-android-runtime-version` artifact, and the verify step below reads
+# it from there. An Android publish is only as verifiable as the last run of
+# android-release.yml.
+#
 # Required repository secret: EXPO_TOKEN
 
 on:
@@ -64,8 +74,14 @@ jobs:
           && fromJSON('["ios","android"]')
           || fromJSON(format('["{0}"]', inputs.platform)) }}
     name: update (${{ matrix.platform }})
+    # `actions: read` lets the verify step read the runtime-version artifact
+    # published by android-release.yml (see that step's comment).
+    permissions:
+      contents: read
+      actions: read
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Pinned to a major, not `latest`: this workflow PARSES eas-cli's JSON,
       # and the field names changed between 20.x and 22.x (see the verify
       # step). `latest` let that contract move without warning.
@@ -107,34 +123,62 @@ jobs:
           set -euo pipefail
           UPDATE_RT="$(jq -r '[.. | objects | (.runtimeVersion? // .runtime?.version?) | select(type == "string")] | first // empty' /tmp/update.json)"
 
-          # eas-cli RENAMED these JSON fields between majors — 20.3.0 emits
-          # `channel` / `runtimeVersion`, 22.6.0 emits `updateChannel.name` /
-          # `runtime.version`. Reading only the old names is why this step
-          # found no build twice (runs 33096069758, 33096981708). Both shapes
-          # are accepted, and eas-cli is pinned to a major below so the
-          # contract cannot shift underneath this again.
+          # WHERE THE COMPARISON VALUE COMES FROM DIFFERS BY PLATFORM.
           #
-          # Deliberately NOT falling back to `.fingerprint.hash`: a build made
-          # before expo-updates has a fingerprint but a null runtime, and can
-          # receive no update at all. Treating it as comparable would let a
-          # mismatch look like a match.
-          # MUST be the platform just published. This was hardcoded to `ios`,
-          # so an Android publish compared its Android fingerprint against
-          # the newest iOS build — and fingerprints are per-platform, so the
-          # comparison could only ever fail. It reported "no device will
-          # receive it" for a perfectly good update (run 34328313179). The
-          # bug stayed latent because every earlier run used the default
-          # platform, which is ios.
-          BUILDS="$(npx eas-cli@$EAS_CLI_MAJOR build:list --platform ${{ matrix.platform }} --limit 20 --json --non-interactive)"
-          BUILD_RT="$(printf '%s' "$BUILDS" | jq -r --arg ch '${{ inputs.channel }}' '
-            [ .[]
-              | { ch: (.updateChannel.name // .channel)
-                , rt: (.runtime.version // .runtimeVersion) }
-              | select(.ch == $ch and .rt != null)
-            ] | .[0].rt // empty')"
+          # iOS is built by EAS Build, so `eas build:list` knows its runtime
+          # version. Android is not: android-release.yml runs prebuild + Gradle
+          # on a runner, so an Android build NEVER appears in `eas build:list`
+          # and this step failed every Android publish on "no build found"
+          # (runs 34330100070, 34333791976) — a CI error that read like a
+          # fingerprint problem but only meant "unverifiable". The Android
+          # binary's runtime version is the fingerprint baked into the AAB,
+          # which android-release.yml publishes as its own small artifact.
+          if [ "${{ matrix.platform }}" = "android" ]; then
+            # The Gradle build hardcodes the production channel
+            # (native/plugins/withUpdatesChannel.js), because the only thing it
+            # produces is the Play release. So nothing on Android can receive a
+            # preview update — say so instead of pretending to compare.
+            if [ "${{ inputs.channel }}" != "production" ]; then
+              echo "::error::Android builds carry the production channel only — a ${{ inputs.channel }} update reaches no Android device."
+              exit 1
+            fi
+            ART_ID="$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/artifacts?name=videx-android-runtime-version&per_page=1" \
+              --jq '.artifacts[] | select(.expired == false) | .id')"
+            if [ -n "$ART_ID" ]; then
+              gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ART_ID/zip" > /tmp/android-rt.zip
+              BUILD_RT="$(unzip -p /tmp/android-rt.zip fingerprint | tr -d '[:space:]')"
+            else
+              BUILD_RT=""
+            fi
+          else
+            # eas-cli RENAMED these JSON fields between majors — 20.3.0 emits
+            # `channel` / `runtimeVersion`, 22.6.0 emits `updateChannel.name` /
+            # `runtime.version`. Reading only the old names is why this step
+            # found no build twice (runs 33096069758, 33096981708). Both shapes
+            # are accepted, and eas-cli is pinned to a major below so the
+            # contract cannot shift underneath this again.
+            #
+            # Deliberately NOT falling back to `.fingerprint.hash`: a build made
+            # before expo-updates has a fingerprint but a null runtime, and can
+            # receive no update at all. Treating it as comparable would let a
+            # mismatch look like a match.
+            #
+            # The platform MUST be the one just published. This was hardcoded to
+            # `ios`, so an Android publish compared its Android fingerprint
+            # against the newest iOS build — and fingerprints are per-platform,
+            # so the comparison could only ever fail (run 34328313179).
+            BUILDS="$(npx eas-cli@$EAS_CLI_MAJOR build:list --platform ${{ matrix.platform }} --limit 20 --json --non-interactive)"
+            BUILD_RT="$(printf '%s' "$BUILDS" | jq -r --arg ch '${{ inputs.channel }}' '
+              [ .[]
+                | { ch: (.updateChannel.name // .channel)
+                  , rt: (.runtime.version // .runtimeVersion) }
+                | select(.ch == $ch and .rt != null)
+              ] | .[0].rt // empty')"
+          fi
 
           echo "update runtimeVersion  : ${UPDATE_RT:-<none>}"
-          echo "newest build on channel: ${BUILD_RT:-<none>}"
+          echo "installed build runtime: ${BUILD_RT:-<none>}"
 
           {
             echo "## OTA update published"
@@ -144,7 +188,7 @@ jobs:
             echo "| channel | \`${{ inputs.channel }}\` |"
             echo "| platform | \`${{ matrix.platform }}\` |"
             echo "| update runtimeVersion | \`${UPDATE_RT:-none}\` |"
-            echo "| newest build runtimeVersion | \`${BUILD_RT:-none}\` |"
+            echo "| installed build runtimeVersion | \`${BUILD_RT:-none}\` |"
             echo
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -152,8 +196,12 @@ jobs:
           # An unverifiable publish is the same silent-success shape this
           # step exists to catch.
           if [ -z "$BUILD_RT" ]; then
-            echo "**No build found on channel \`${{ inputs.channel }}\` — reachability NOT verified.**" >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::No build on channel ${{ inputs.channel }} to compare against — cannot confirm any device will receive this update."
+            echo "**No build found to compare against — reachability NOT verified.**" >> "$GITHUB_STEP_SUMMARY"
+            if [ "${{ matrix.platform }}" = "android" ]; then
+              echo "::error::No videx-android-runtime-version artifact within retention — re-run android-release.yml so this check has the shipped AAB's runtime version to compare against."
+            else
+              echo "::error::No build on channel ${{ inputs.channel }} to compare against — cannot confirm any device will receive this update."
+            fi
             exit 1
           fi
 
