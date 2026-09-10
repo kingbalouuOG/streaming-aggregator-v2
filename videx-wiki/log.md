@@ -1436,3 +1436,9 @@ only thing at stake.
 - Updated: wiki/concepts/operations/phase-search-v2.md (addendum "Review closed")
 - Filed: wiki/registers/parking-lot.md IN-SL-013 (Follow-up A device cases, the one remainder still open)
 - Verified today: `typegen-check` ran for real for the first time (secret set) and passed on #149 after one formatting fix to the hand-typed Args block.
+
+## [2026-09-10] ingest | Roadmap v1.1 + the 10 September review
+- New raw (Joe-directed): raw/forward-planning/Videx_Product_Strategy_and_Roadmap_v1.1_2026-09.md, raw/forward-planning/Videx_Roadmap_Review_2026-09-10.md
+- New page: wiki/sources/strategy-roadmap-2026-09-v1-1.md
+- Updated: wiki/registers/next-steps.md (10 Sept "Now" block; 13 July section kept as history), wiki/concepts/architecture/notifications-v1.md (credentials were verified 13 Jul — page had said "blocked" for two months), wiki/registers/parking-lot.md (IN-SL-003 clause), index.md
+- Decisions recorded: iOS-first release; H0 dated close-out; H1 two-track replan; principle 3 restated; monetisation plumbing → H2 entry.

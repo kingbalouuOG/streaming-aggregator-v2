@@ -3,8 +3,10 @@ title: Next steps — Roadmap v1.0 H0 "Prove it & equip it"
 type: register
 tags: [register, next-steps, roadmap, h0, launch, notifications, share, beta, quiet-release]
 created: 2026-04-26
-updated: 2026-07-13
+updated: 2026-09-10
 sources:
+  - raw/forward-planning/Videx_Product_Strategy_and_Roadmap_v1.1_2026-09.md
+  - raw/forward-planning/Videx_Roadmap_Review_2026-09-10.md
   - raw/forward-planning/Videx_Product_Strategy_and_Roadmap_v1.0_2026-07.md
   - docs/strategy/Videx_Product_Strategy_and_Roadmap_v1.0.md
 related:
@@ -19,7 +21,27 @@ related:
 
 **Sequencing is now owned by the approved [Product Strategy & Roadmap v1.0](../sources/strategy-roadmap-2026-07.md)** (Joe, 2026-07-06; source of truth `docs/strategy/Videx_Product_Strategy_and_Roadmap_v1.0.md`). Thesis: the engine is ahead of the audience — users are the critical path. The old "internal-testing rollout → ENG-2" framing is superseded; ENG-2 remains data-gated (≥5–10K impressions, ≥500 positives) and now lands in H2 if its gate clears.
 
-## Now — H0 "Prove it & equip it" (Jul–Sep 2026)
+## Now — 10 September 2026 (roadmap v1.1)
+
+**Sequencing is owned by [Roadmap v1.1](../sources/strategy-roadmap-2026-09-v1-1.md)** (Joe, 2026-09-10; source of truth `docs/strategy/Videx_Product_Strategy_and_Roadmap_v1.1.md`), cut from the [10 Sept review](../sources/strategy-roadmap-2026-09-v1-1.md). The section below this one is the 13 July snapshot, kept as history.
+
+**State:** v2.3.1 on Play internal + TestFlight, natively current; store privacy forms filed 10 Sept; catalogue 35K titles, pipeline healthy on the vendor's direct channel; search rebuilt (one-intent Browse, presets, refine row, logging). **1 real user; 2 sign-ins in 30 days.** H0's four people/admin gate items had not started by 10 Sept.
+
+**Decisions 10 Sept:** close H0 on dated actions (ICO this week; Play closed track starts with 3 testers now, recruit to 12; weekly ritual starts; 24 Sept tripwire moves the marketing beat to January) · **iOS first** — App Store submission made 10 Sept as publicly available; Android follows its closed test · H1 replanned as two tracks: user track (1.1 community rollout → pulse → 1.7 beat) + search track (1.2 query understanding + hybrid retrieval → 1.3 semantic for everyone → 1.4 voice → 1.5 services wave 1: HBO Max, Discovery+, Crunchyroll, MUBI, Pluto TV) · monetisation plumbing → H2 entry · principle 3 restated "one question, any input".
+
+| Item | Owner | Status 2026-09-10 |
+|---|---|---|
+| ICO registration | Joe | ⬜ this week |
+| App Store review (public) | Joe | 🔶 submitted 10 Sept |
+| Play closed test (12 testers / 14 days) | Joe | ⬜ 3 of 12 testers; start the clock now |
+| Weekly ritual | Joe | ⬜ starts this week |
+| 1.5 services wave 1 | CC session | ⬜ handoff ready (`docs/plans/2026-09-10-001-handoffs-search-track.md`) |
+| 1.4 voice | CC session | ⬜ handoff ready |
+| 1.2 query understanding | CC session | ⬜ handoff ready |
+| 1.3 semantic flip | CC session | ⬜ gated on 1.2's eval |
+| IN-SL-013 device cases | Joe + device | ⬜ |
+
+## Then — 13 July 2026 snapshot (history) — H0 "Prove it & equip it" (Jul–Sep 2026)
 
 Fix what's unmeasurable, clear legal, build the two loops into v1, shake out with friends & family, then **quiet public release on both stores** (staged rollout, no press). Full item detail in the roadmap §6/§7 — **§6 status block + §7 per-item markers are the live tracker (status pass 2026-07-13)**. Headline state:
 

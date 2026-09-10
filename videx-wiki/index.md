@@ -171,6 +171,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Project Orchestration v0.5](wiki/sources/project-orchestration-v0-5.md) — Superseded by v0.8.
 - [Project Orchestration v0.3.3](wiki/sources/project-orchestration-v0-3-3.md) — Superseded by v0.5.
 - [Detail Page Signal Capture Spec v0.3.2](wiki/sources/detail-page-signal-capture-spec-v0-3-2.md) — Signal taxonomy and capture spec.
+- [Product Strategy & Roadmap v1.1 + 10 Sept review](wiki/sources/strategy-roadmap-2026-09-v1-1.md) — Current: iOS-first release, dated H0 close-out, H1 = user track + search track (query understanding, voice, services wave 1).
 - [Home and For You Composition Hypothesis v0.4](wiki/sources/home-foryou-composition-hypothesis-v0-4.md) — Current: anchored-rooms flip on the For You row (supersedes v0.3).
 - [Home and For You Composition Hypothesis v0.3](wiki/sources/home-foryou-composition-hypothesis-v0-3.md) — Superseded by v0.4.
 - [Implementation Guide v0.2](wiki/sources/implementation-guide-v0-2.md) — CC workflow runbook.
