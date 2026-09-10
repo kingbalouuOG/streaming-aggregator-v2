@@ -48,6 +48,10 @@ RLS: authenticated SELECT, service_role write. No anon (onboarding Step 2 happen
 
 13 services fingerprinted post-Phase 2.5: apple, bbc, channel4, discovery, disney, itvx, mubi, netflix, now, paramount, plutotv, prime, skygo.
 
+**2026-09-10 — 18 services, and the bug that kept it at 13.** `build-service-fingerprints.ts` derived its service list from a single unpaginated `select('service_id')` on `streaming_availability`. PostgREST caps that at 1,000 rows, so the "distinct services" were really the services appearing in an arbitrary 1,000-row window. Measured that day: 12 of the 17 ids in the table, with Discovery+, MUBI and Crunchyroll among the missing — which is why Discovery+'s fingerprint was still the 13-title one built in April while every large service had been rebuilt since. Nothing failed and nothing was logged; small catalogues were simply dropped. The query now paginates.
+
+Wave 1 title counts after the rebuild: hbo 150 (full) · plutotv 95 · crunchyroll 56 · mubi 55 · **discovery 15**, below the script's own `< 50` low-confidence warning. Discovery+'s catalogue is factual and reality TV, which carries low TMDb vote counts, so 125 of its 140 titles fail the `vote_count >= 50` noise filter. That is the genre, not a data fault. A thin centroid contributes a weak, not a wrong, signal to the onboarding bootstrap; a service with no row at all contributes nothing, which is `fetchServiceCentroids`'s existing neutral fallback.
+
 Low-confidence (< 50 titles): discovery (13), mubi (47).
 
 BBC/NOW/SkyGo absent from SA API; backfilled via TMDb watch/providers (200 SA rows each, all subscription) in Phase 2.5.

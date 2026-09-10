@@ -37,7 +37,7 @@ Personalised mode. Heavy ranking, sliders, mood rooms. Service-filtered. Maximum
 
 ## Locked rules
 
-- Hard-filtered by user services.
+- Hard-filtered by user services — `hardFilters.ts` does this with `.overlaps('available_services', services)`, so the set of services is data, not code, and the surface picked up wave 1's five (`hbo`, `discovery`, `crunchyroll`, `mubi`, `plutotv`) the moment they became selectable. See [uk-services](../../entities/streaming-services/uk-services.md) for the full fifteen.
 - Heavy personalisation: every row taste-aware.
 - Mood rooms are the dominant row type (per Pillar 1 USP).
 - Sliders Option C dual-access.
