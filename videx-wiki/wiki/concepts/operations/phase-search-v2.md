@@ -440,6 +440,20 @@ removed. The reopening condition is a §6 metric — a *Clear all* followed
 within ten seconds by a preset tap — not a standing intention to revisit.
 
 
+## Addendum — Review closed (2026-09-10)
+
+The 2026-09-09 review of PRs #131–#142 (`docs/plans/2026-09-09-001-review-quick-filters-search-presets.md`) is closed. All nine should-fix findings were fixed in #144–#147 and verified in source and live (review §"Follow-up verification", PR #148). The six remainders from that verification were closed in #149, except one:
+
+- **Still open — the six device acceptance cases for Follow-up A** (embed call never fires on a title search; title-hit grid unfiltered; zero-result copy; banner names the running phrase; flag-off makes no per-query network call; refine chips never boost). Registered as IN-SL-013. Nothing blocks on them; run on the next device pass.
+
+What #149 changed that later work should know about:
+
+- `typegen-check` **fails** when `SUPABASE_ACCESS_TOKEN` is missing (it used to soft-skip and pass vacuously). The secret is now set (Joe, 2026-09-10, scoped to the Videx project, Database read), and the first real run confirmed `src/lib/database.types.ts` matches the live schema, including the 3-arg `match_titles_by_vector`.
+- The Worker logs one `foryou_render` JSON line per cold render with `renderMs`, so MMR/render cost is measurable from Workers Logs next time (the k=36→20 cap in #146 was sized on a local bench because this did not exist).
+- The title-hit whole-word-run boundary is pinned by tests (IN-SL-012): "true crime" opens *True Crime Story*; the scorer cannot tell that from "hail mary". Resolves with query understanding, not a scorer tweak.
+
+Gates on public promotion are unchanged: store privacy forms with v2.3.1; `search_semantic` internal-only until query understanding lands.
+
 ## Decisions resolved (locked during plan-mode)
 
 1. **Salmon `#ff8d5a` token bump** app-wide. Minor visual drift on Calendar / Detail / Watchlist accepted.
