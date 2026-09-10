@@ -77,3 +77,40 @@ Two sessions, not four. Group by the code they touch, not by the session that wr
 **Follow-up B — Engine and web** (findings 6, 7, 9; the `released` push-down if Joe wants it now; the `renderMs` measurement). One PR, with `eval:eng1` and `eval:novelty` re-run and pasted.
 
 Handoff prompts are in [2026-09-09-002](2026-09-09-002-handoffs-search-followups.md).
+
+---
+
+## Follow-up verification (2026-09-09 evening, main @ bb20a5f, PRs #144–#147)
+
+All nine should-fix items are closed. Verified in source and, where it applies, live in the database.
+
+| # | Status | Evidence |
+|---|---|---|
+| 1 refine rows boost | Fixed | refine metadata is `{refine,on,filters}` only, query null; `isContentIntentSearch` has an explicit `refine` exclusion that wins over `mood_key`; three tests. The 3 pre-fix refine rows in production still carry `mood_key` and are now ignored by the exclusion. |
+| 2 embed on title hits | Fixed | `describedRoute` requires `results !== undefined`; semantic query is null while Mode A is pending, so the hook is disabled. |
+| 3 hidden filters on title hit | Fixed | title route returns `results.slice(1)` sorted, no `applyBrowseFilters`. |
+| 4 zero-result copy | Fixed | gated on `tightened \|\| !searching`. |
+| 5 banner names wrong card | Fixed | `intent.phraseKey` set only by phrase-bearing cards; banner reads its label. (#147 then records that two-card stacking was never reachable in the UI — see below.) |
+| 6 usedIds reserve | Fixed | `visibleIds` (20 + 15) passed to Outside Your Usual and the paid row; full 36 still dedups the two long rows; four tests. |
+| 7 MMR cost | Done differently | The Worker never logs `renderMs`, so no production measurement was possible. Capped at `MMR_MAX_K = 20` after a local bench (p50 31/54/170 ms at k = 15/20/36); tail filled by score with genre spread; tests. |
+| 8 flag read | Fixed | `getSession()`, 10-minute TTL with test, gate before dedupe key. |
+| 9 web documentaries | Fixed | `useSearch.ts`, `App.tsx`, `PosterOverlays.tsx` on the shared predicate; web Home "Docs" also fixed (it showed every film). Remaining `'doc'` hits are filter-value comparisons. |
+| released push-down | Fixed, live | Migration 082: 3-arg `match_titles_by_vector(vector, integer, integer)` live, 2-arg dropped; *Newer* survivors 7.4 → 150 mean; RPC p95 231 → 193 ms. Exactness depends on the planner choosing a seq scan at ~5% selectivity; `hnsw.iterative_scan` is off. |
+| 081 UTC cutoff | Fixed, live | rollup function uses `AT TIME ZONE 'UTC'`; `ON CONFLICT` now adds, justified and documented. |
+
+### Remaining, small
+
+1. **`src/lib/database.types.ts` was not regenerated** for the 3-arg RPC, and the `typegen-check` CI job passed vacuously because `SUPABASE_ACCESS_TOKEN` is not configured as an Actions secret ("soft-skipping" in the run log). Code compiles only because the RPC client is typed loosely. **Action for Joe:** add the secret in GitHub → Settings → Secrets, then re-run typegen. Make the job fail, not skip, when the secret is missing.
+2. **Store disclosure sheet omits the quick-filter `category` key.** One line in `docs/legal/store-privacy-disclosures.md`. Fix before filing the forms with v2.3.1.
+3. **The Follow-up A device cases were not run.** PR #144 says so explicitly. The evening's #145 device session covered the same screen but did not tick the six cases, including the "typing severance makes zero embed calls" network check. Run them on the next device pass; nothing here blocks.
+4. **#145 widened the title-hit match** (adjacent whole-word runs earn the prefix score) with tests for the fixture sentences but none for the new false-positive class: a short marker-less description that happens to be a whole-word run inside a prominent title. Bounded by prominence; add a test with two or three adversarial phrases.
+5. **Log `renderMs` from the Worker.** One line in `workers/api/src/index.ts` on the cold-render path would make item 7's measurement possible next time. Cheap; do it in any Worker PR.
+6. Wiki: `log.md` says 363 titles qualify for *Newer*; that is the *New & actually good* count. *Newer* is 1,690.
+
+### #147 / IN-SL-010, accepted with one note
+
+It records that the recommendation's §2.3 "compose, don't replace" two-tap story was never reachable: cards render only on the empty state and `intent.phrase` is one string. The refine row is now the composition surface, and the doc says so with a correction block rather than a quiet rewrite. Accepted. The one loss it calls "small" without evidence is that a genre-led card (*Whole family*) stacked on a vibe card has no chip route now. The §6 reopening metric (Clear-all → preset within ~10 s) cannot see a user who wanted that and gave up. If the search logs later show *Whole family* taps followed by immediate Clear-all, that is the signal to revisit.
+
+### Verdict
+
+The search, filters and presets work is closed as specified. The two hard gates on any public promotion are unchanged: file the store privacy forms with v2.3.1, and keep the semantic flag internal until query understanding lands.
