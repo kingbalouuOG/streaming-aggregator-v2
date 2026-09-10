@@ -83,7 +83,9 @@ export function ReportSheet({ visible, onClose, tmdbId, mediaType, services, onR
               <X size={20} color="rgba(245,241,232,0.62)" />
             </Pressable>
           </View>
-          <ScrollView contentContainerClassName="px-5 pb-4 pt-3">
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerClassName="px-5 pb-4 pt-3">
             <Text className="font-sans-bold text-kicker uppercase tracking-[1.6px] text-muted-foreground">
               Which service?
             </Text>

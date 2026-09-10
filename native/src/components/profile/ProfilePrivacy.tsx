@@ -58,7 +58,7 @@ export function ProfilePrivacy() {
   return (
     <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-background">
       <SubScreenHeader title="Privacy & Data" />
-      <ScrollView contentContainerClassName="px-5 pb-6 pt-3">
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="px-5 pb-6 pt-3">
         <Text className="font-sans text-body leading-relaxed text-muted-foreground">
           Videx learns from what you watch, rate, and explore to recommend titles that match your
           taste. We never sell this data or share it with other services.
