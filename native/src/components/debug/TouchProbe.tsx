@@ -48,7 +48,7 @@ const PANEL = "rgba(0,0,0,0.86)";
 const WIRE = "rgba(245,241,232,0.22)";
 
 /**
- * Wraps the whole app. `onTouchStartCapture` sees every touch that reaches
+ * Wraps the whole app. `onTouchStart` sees every touch that reaches
  * the RN responder system; `onStartShouldSetResponderCapture` returns false
  * so nothing is stolen. If a tap Joe makes produces no `root:down` line,
  * the touch was consumed before JS ever heard about it.
@@ -57,7 +57,7 @@ export function TouchProbeRoot({ children }: { children: React.ReactNode }) {
   return (
     <View
       style={{ flex: 1 }}
-      onTouchStartCapture={() => probe("root:down")}
+      onTouchStart={() => probe("root:down")}
       onStartShouldSetResponderCapture={() => {
         probe("root:ask");
         return false;

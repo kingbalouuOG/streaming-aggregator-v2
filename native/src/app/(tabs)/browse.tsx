@@ -611,7 +611,7 @@ export default function BrowseScreen() {
     <SafeAreaView edges={["top"]} className="flex-1 bg-background">
       <View className="px-5 pt-2">
         <View
-          onTouchStartCapture={() => probe("  search box:down")}
+          onTouchStart={() => probe("  search box:down")}
           className="flex-row items-center gap-3 rounded-card border border-border bg-card px-4 py-3"
         >
           <Search size={18} color="rgba(245,241,232,0.62)" />
