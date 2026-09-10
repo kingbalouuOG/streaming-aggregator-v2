@@ -48,6 +48,8 @@ export function platformBucket(userAgent: string | null | undefined): PlatformBu
 export const SHARE_SERVICE_LABELS: Record<string, string> = {
   netflix: 'Netflix', prime: 'Prime Video', disney: 'Disney+', apple: 'Apple TV+',
   now: 'NOW', paramount: 'Paramount+', itvx: 'ITVX', channel4: 'Channel 4',
+  hbo: 'HBO Max', discovery: 'Discovery+', crunchyroll: 'Crunchyroll',
+  mubi: 'MUBI', plutotv: 'Pluto TV',
   bbc: 'BBC iPlayer', skygo: 'Sky Go',
 };
 

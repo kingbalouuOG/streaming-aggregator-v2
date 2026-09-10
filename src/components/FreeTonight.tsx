@@ -10,7 +10,7 @@ interface FreeTonightProps {
   watchedIds: Set<string>;
 }
 
-const FREE_SERVICES: ServiceId[] = ["bbc", "itvx", "channel4"];
+const FREE_SERVICES: ServiceId[] = ["bbc", "itvx", "channel4", "plutotv"];
 
 /**
  * FreeTonight — green-framed editorial row for items watchable for

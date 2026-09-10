@@ -34,7 +34,7 @@ const SPOTLIGHT_SIZE = 15;
 const SPOTLIGHT_FETCH_SIZE = 20;
 // UK free-to-air services — "Free Tonight" is no-subscription content, so it's
 // scoped to these regardless of the user's selected stack.
-const FREE_UK_SERVICES: ServiceId[] = ['bbc', 'itvx', 'channel4'];
+const FREE_UK_SERVICES: ServiceId[] = ['bbc', 'itvx', 'channel4', 'plutotv'];
 
 export interface GenreSpotlight {
   clusterName: string;

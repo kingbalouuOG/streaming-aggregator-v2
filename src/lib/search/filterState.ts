@@ -8,7 +8,7 @@
 // data spans UK/US/MPAA/TV schemas with no clean mapping). Add back
 // in a later phase if parental controls or a real user need surfaces.
 
-import type { ServiceId } from "../types/content";
+import { SERVICE_DISPLAY_NAMES, type ServiceId } from "../types/content";
 
 // ─── Types ────────────────────────────────────────────────────────
 
@@ -208,9 +208,9 @@ function unslugAgainst(slugs: readonly string[], catalogue: readonly string[]): 
   return slugs.map((s) => slugToOriginal.get(s)).filter((v): v is string => v !== undefined);
 }
 
-const SERVICE_IDS: readonly string[] = [
-  "netflix", "prime", "apple", "disney", "now", "skygo", "paramount", "bbc", "itvx", "channel4",
-];
+// Derived, not restated: a hand-maintained copy silently dropped any new
+// ServiceId from serialised filter state (wave 1 added five).
+const SERVICE_IDS: readonly string[] = Object.keys(SERVICE_DISPLAY_NAMES);
 
 function isServiceId(v: string): v is ServiceId {
   return SERVICE_IDS.includes(v);

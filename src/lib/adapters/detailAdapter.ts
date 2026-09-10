@@ -114,6 +114,11 @@ const NAME_TO_SERVICE_ID: Record<string, ServiceId> = {
   'bbc iplayer': 'bbc',
   'itvx': 'itvx',
   'channel 4': 'channel4', 'all 4': 'channel4',
+  'hbo max': 'hbo', 'max': 'hbo',
+  'discovery+': 'discovery', 'discovery plus': 'discovery',
+  'crunchyroll': 'crunchyroll',
+  'mubi': 'mubi',
+  'pluto tv': 'plutotv',
 };
 
 function resolveServiceKey(providerName: string, providerId?: number): ServiceId | null {

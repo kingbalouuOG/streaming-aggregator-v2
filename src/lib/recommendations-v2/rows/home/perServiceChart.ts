@@ -11,10 +11,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import type { UserScope } from '@/lib/server/userScope';
 import { getAuthUserId, isSupabaseActive } from '@/lib/storage';
+import { SERVICE_DISPLAY_NAMES } from '@/lib/types/content';
 import { titleRowToContentItem } from '../../titleAdapter';
 import { EXTENDED_TITLE_SELECT } from '../../types';
 import type { ExtendedTitleRow } from '../../types';
-import type { ContentItem } from '@/lib/types/content';
+import type { ContentItem, ServiceId } from '@/lib/types/content';
 
 export interface PerServiceChartRow {
   serviceId: string;
@@ -22,18 +23,9 @@ export interface PerServiceChartRow {
   items: ContentItem[];
 }
 
-const SERVICE_DISPLAY_NAMES: Record<string, string> = {
-  netflix: 'Netflix',
-  prime: 'Prime Video',
-  disney: 'Disney+',
-  apple: 'Apple TV+',
-  now: 'NOW',
-  bbc: 'BBC iPlayer',
-  itvx: 'ITVX',
-  channel4: 'Channel 4',
-  paramount: 'Paramount+',
-  skygo: 'Sky Go',
-};
+// Display names come from the canonical map in @/lib/types/content. This
+// module used to keep its own copy, which meant every new service needed
+// remembering in two places or its chart row was headed by a raw id.
 
 /**
  * Fetch per-service chart rows for the Home surface.
@@ -177,7 +169,7 @@ async function fetchServiceRow(
   serviceId: string,
   db: SupabaseClient = supabase,
 ): Promise<PerServiceChartRow> {
-  const serviceName = SERVICE_DISPLAY_NAMES[serviceId] ?? serviceId;
+  const serviceName = SERVICE_DISPLAY_NAMES[serviceId as ServiceId] ?? serviceId;
 
   try {
     // Only titles the user can watch WITHOUT paying per title on this

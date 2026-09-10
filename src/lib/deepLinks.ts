@@ -40,6 +40,23 @@ const SEARCH_FALLBACKS: Record<string, (title: string, year?: number) => string>
   bbc: (t) => `https://www.bbc.co.uk/iplayer/search?q=${encodeURIComponent(t)}`,
   itvx: (t) => `https://www.itv.com/watch/search?q=${encodeURIComponent(t)}`,
   channel4: (t, y) => `https://www.channel4.com/programmes/${buildChannel4Slug(t, y)}`,
+
+  // ── Wave 1 (roadmap v1.1 item 1.5) ────────────────────────────────
+  // Every wave-1 row the vendor returns carries an exact link, so these
+  // fire only when a row is missing one. URL shapes checked in a browser
+  // on 2026-09-10.
+  //
+  // HBO Max and Discovery+ have NO usable unauthenticated search route:
+  // hbomax.com/gb/en and discoveryplus.com/gb/en expose no search link
+  // when signed out, play.hbomax.com/search?q= redirects to the marketing
+  // home page and discoveryplus.com/gb/en/search?q= renders "This link
+  // seems broken". Both therefore take the site-scoped Google fallback,
+  // the same treatment Sky Go already gets for the same reason.
+  hbo: (t) => `https://www.google.com/search?q=${encodeURIComponent(t)}+site:hbomax.com`,
+  discovery: (t) => `https://www.google.com/search?q=${encodeURIComponent(t)}+site:discoveryplus.com`,
+  crunchyroll: (t) => `https://www.crunchyroll.com/search?q=${encodeURIComponent(t)}`,
+  mubi: (t) => `https://mubi.com/en/search?query=${encodeURIComponent(t)}`,
+  plutotv: (t) => `https://pluto.tv/en/search?q=${encodeURIComponent(t)}`,
 };
 
 // Services where the SA API exact deep link should be discarded in favour

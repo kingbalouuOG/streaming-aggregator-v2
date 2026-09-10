@@ -359,6 +359,7 @@ const MAX_SERVICES = 20;
 const VALID_SERVICE_IDS = new Set([
   'netflix', 'prime', 'apple', 'disney', 'now',
   'skygo', 'paramount', 'bbc', 'itvx', 'channel4',
+  'hbo', 'discovery', 'crunchyroll', 'mubi', 'plutotv',
 ]);
 // 20 min — mid-range of the brief's 15–30. Stale-feed worst case is one
 // TTL; vector-moving interactions bust earlier via the key timestamp.

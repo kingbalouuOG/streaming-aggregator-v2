@@ -794,6 +794,7 @@ function StepAccount({
 // UK services ordered by approximate market size
 const SERVICE_DISPLAY_ORDER = [
   'netflix', 'prime', 'disney', 'bbc', 'itvx', 'channel4', 'now', 'skygo', 'apple', 'paramount',
+  'hbo', 'plutotv', 'discovery', 'crunchyroll', 'mubi',
 ];
 const orderedServices = [...allServices].sort((a, b) => {
   const ai = SERVICE_DISPLAY_ORDER.indexOf(a.id);

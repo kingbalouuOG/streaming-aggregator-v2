@@ -20,7 +20,16 @@ export type ServiceId =
   | "paramount"
   | "bbc"
   | "itvx"
-  | "channel4";
+  | "channel4"
+  // Wave 1 service coverage (roadmap v1.1 item 1.5). The vendor already
+  // carries GB catalogues for all five; Videx ids match the vendor's own
+  // slugs here, so the rows already in `streaming_availability` need no
+  // migration.
+  | "hbo"
+  | "discovery"
+  | "crunchyroll"
+  | "mubi"
+  | "plutotv";
 
 /** Display names — single source for UI labels and lib copy (e.g.
  *  active-filter pills). platformLogos.ts builds PLATFORMS from this. */
@@ -35,6 +44,11 @@ export const SERVICE_DISPLAY_NAMES: Record<ServiceId, string> = {
   bbc: "BBC iPlayer",
   itvx: "ITVX",
   channel4: "Channel 4",
+  hbo: "HBO Max",
+  discovery: "Discovery+",
+  crunchyroll: "Crunchyroll",
+  mubi: "MUBI",
+  plutotv: "Pluto TV",
 };
 
 // ── Content item — the UI-facing title shape ────────────────────────

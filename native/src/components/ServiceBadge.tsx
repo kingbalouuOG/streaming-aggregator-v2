@@ -17,6 +17,11 @@ const LOGOS: Record<ServiceId, number> = {
   bbc: require('../assets/bbc.png'),
   itvx: require('../assets/itvx.png'),
   channel4: require('../assets/channel4.png'),
+  hbo: require('../assets/hbo.png'),
+  discovery: require('../assets/discovery.png'),
+  crunchyroll: require('../assets/crunchyroll.png'),
+  mubi: require('../assets/mubi.png'),
+  plutotv: require('../assets/plutotv.png'),
 };
 
 // Design system: standalone ServiceBadge sm 28 / md 38 / lg 48; xs 22 is the
