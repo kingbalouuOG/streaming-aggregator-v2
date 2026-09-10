@@ -1,11 +1,12 @@
-import { FlashList } from '@shopify/flash-list';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Search, Sparkles, X } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { FlashList } from "@shopify/flash-list";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Search, Sparkles, X } from "lucide-react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { BrowsePresearch } from '@/components/BrowsePresearch';
+import { probe } from "@/components/debug/TouchProbe";
+import { BrowsePresearch } from "@/components/BrowsePresearch";
 import {
   applyBrowseFilters,
   countActiveFilters,
@@ -14,30 +15,30 @@ import {
   sortItems,
   type BrowseFilters,
   type SortMode,
-} from '@/components/browseFilters';
-import { FilterSheet } from '@/components/FilterSheet';
-import { PosterGridCard } from '@/components/PosterGridCard';
-import { RefineRow } from '@/components/RefineRow';
-import { PosterGridSkeleton } from '@/components/Skeleton';
-import { TitleHitCard } from '@/components/TitleHitCard';
-import { useBrowseDiscover } from '@/hooks/useBrowseDiscover';
-import { useSearch } from '@/hooks/useSearch';
+} from "@/components/browseFilters";
+import { FilterSheet } from "@/components/FilterSheet";
+import { PosterGridCard } from "@/components/PosterGridCard";
+import { RefineRow } from "@/components/RefineRow";
+import { PosterGridSkeleton } from "@/components/Skeleton";
+import { TitleHitCard } from "@/components/TitleHitCard";
+import { useBrowseDiscover } from "@/hooks/useBrowseDiscover";
+import { useSearch } from "@/hooks/useSearch";
 import {
   useSearchIntentLog,
   useTypedSearchLog,
   type SearchIntent,
-} from '@/hooks/useSearchLogging';
-import { useSemanticFlag, useSemanticSearch } from '@/hooks/useSemanticSearch';
-import { useUserServices } from '@/hooks/useUserServices';
-import { useWatchlist } from '@/hooks/useWatchlist';
-import { parseContentItemId } from '@/lib/adapters/contentAdapter';
+} from "@/hooks/useSearchLogging";
+import { useSemanticFlag, useSemanticSearch } from "@/hooks/useSemanticSearch";
+import { useUserServices } from "@/hooks/useUserServices";
+import { useWatchlist } from "@/hooks/useWatchlist";
+import { parseContentItemId } from "@/lib/adapters/contentAdapter";
 import {
   PRESET_SENTENCES,
   presetByKey,
   selectPresets,
   weekBucketFor,
   type SelectedPreset,
-} from '@/lib/content/presets';
+} from "@/lib/content/presets";
 import {
   activeRefineFields,
   describeRefineEmptyState,
@@ -45,11 +46,11 @@ import {
   toggleRefineChip,
   type RefineChip,
   type RefineField,
-} from '@/lib/content/refineChips';
-import { selectTitleHit } from '@/lib/search/titleHit';
-import { getV2TasteProfile } from '@/lib/taste-v2/tasteProfileV2';
-import type { ContentItem } from '@/lib/types/content';
-import { useQuery } from '@tanstack/react-query';
+} from "@/lib/content/refineChips";
+import { selectTitleHit } from "@/lib/search/titleHit";
+import { getV2TasteProfile } from "@/lib/taste-v2/tasteProfileV2";
+import type { ContentItem } from "@/lib/types/content";
+import { useQuery } from "@tanstack/react-query";
 
 // Browse — one intent, refined in place (recommendation 2026-09-08-002 §9).
 //
@@ -103,7 +104,7 @@ interface Intent {
 }
 
 const EMPTY_INTENT: Intent = {
-  text: '',
+  text: "",
   phrase: null,
   phraseKey: null,
   moodKey: null,
@@ -113,9 +114,9 @@ const EMPTY_INTENT: Intent = {
 export default function BrowseScreen() {
   const router = useRouter();
   const [intent, setIntent] = useState<Intent>(EMPTY_INTENT);
-  const [debounced, setDebounced] = useState('');
+  const [debounced, setDebounced] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [sortMode, setSortMode] = useState<SortMode>('best');
+  const [sortMode, setSortMode] = useState<SortMode>("best");
   // The chip added most recently, so the zero-result copy can name the one
   // thing to undo instead of telling the user to loosen "the filters".
   const [lastRefine, setLastRefine] = useState<RefineField | null>(null);
@@ -131,7 +132,9 @@ export default function BrowseScreen() {
   // Search-term logging (§5). Typed queries log themselves once settled; the
   // two discrete intents — a preset tap and a FilterSheet apply — each stage a
   // SearchIntent that fires as soon as its result count is known.
-  const [semanticIntent, setSemanticIntent] = useState<SearchIntent | null>(null);
+  const [semanticIntent, setSemanticIntent] = useState<SearchIntent | null>(
+    null,
+  );
   const [filterIntent, setFilterIntent] = useState<SearchIntent | null>(null);
 
   // Applied from the route so the quick-filter empty state's "Browse all
@@ -149,15 +152,16 @@ export default function BrowseScreen() {
   // and without a fresh token the second tap would do nothing. The ref then
   // stops the effect re-applying on unrelated re-renders, so this can never
   // yank filters out from under someone mid-browse.
-  const { contentType: contentTypeParam, seed: filterSeed } = useLocalSearchParams<{
-    contentType?: string;
-    seed?: string;
-  }>();
+  const { contentType: contentTypeParam, seed: filterSeed } =
+    useLocalSearchParams<{
+      contentType?: string;
+      seed?: string;
+    }>();
   const appliedSeedRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!filterSeed || appliedSeedRef.current === filterSeed) return;
-    if (!isContentType(contentTypeParam) || contentTypeParam === 'all') return;
+    if (!isContentType(contentTypeParam) || contentTypeParam === "all") return;
     appliedSeedRef.current = filterSeed;
     setIntent((prev) => ({
       ...prev,
@@ -198,13 +202,21 @@ export default function BrowseScreen() {
   // above); it is the routing DECISION that now waits for the cheaper of the
   // two answers before committing.
   const describedRoute =
-    searching && results !== undefined && !titleHit && !!semanticOn && !forceTitles;
+    searching &&
+    results !== undefined &&
+    !titleHit &&
+    !!semanticOn &&
+    !forceTitles;
 
   // The phrase actually sent to vector search: the typed text when it reads
   // as a description, otherwise the active preset's phrase. A preset whose
   // phrase is null ("Free to watch" — a fact, not a feeling) contributes only
   // its filters and leaves whatever phrase is already running (§2.3).
-  const semanticQuery = describedRoute ? debounced.trim() : searching ? null : intent.phrase;
+  const semanticQuery = describedRoute
+    ? debounced.trim()
+    : searching
+      ? null
+      : intent.phrase;
   const semanticMode = !!semanticOn && !!semanticQuery;
   const semantic = useSemanticSearch(
     semanticQuery,
@@ -221,13 +233,18 @@ export default function BrowseScreen() {
   // the prototype's state 2 shows the card with no controls above it.
   const showRefine = (searching && !titleHit) || filterOnlyMode || semanticMode;
 
-  const browse = useBrowseDiscover(filters, sortMode, filterOnlyMode, userServices ?? []);
+  const browse = useBrowseDiscover(
+    filters,
+    sortMode,
+    filterOnlyMode,
+    userServices ?? [],
+  );
 
   // Which four cards the empty state offers. Recomputed on mount and
   // whenever the profile lands; the hour is read once per render of the
   // empty state, which is as often as the answer can change.
   const { data: tasteProfile } = useQuery({
-    queryKey: ['native', 'tasteProfile', 'clusters'],
+    queryKey: ["native", "tasteProfile", "clusters"],
     queryFn: () => getV2TasteProfile().catch(() => null),
     staleTime: 30 * 60 * 1000,
   });
@@ -251,7 +268,8 @@ export default function BrowseScreen() {
 
   const watchedIds = useMemo(() => {
     const set = new Set<string>();
-    for (const w of watchlist ?? []) if (w.status === 'watched') set.add(`${w.type}-${w.id}`);
+    for (const w of watchlist ?? [])
+      if (w.status === "watched") set.add(`${w.type}-${w.id}`);
     return set;
   }, [watchlist]);
 
@@ -285,7 +303,7 @@ export default function BrowseScreen() {
         ...prev,
         // A tap is not a typed query; leaving stale text in the box would
         // route straight back to Mode A on the next render.
-        text: '',
+        text: "",
         phrase: preset.phrase ?? prev.phrase,
         // Only a card that brought a phrase renames the banner. A phrase-less
         // card leaves the running phrase alone, so it must leave the name of
@@ -294,13 +312,13 @@ export default function BrowseScreen() {
         moodKey: preset.key,
         filters: { ...prev.filters, ...preset.filters },
       }));
-      setDebounced('');
+      setDebounced("");
 
       if (semanticOn && (preset.phrase ?? intent.phrase)) {
         setFilterIntent(null);
         setSemanticIntent({
           nonce,
-          mode: 'semantic',
+          mode: "semantic",
           query: preset.phrase ?? intent.phrase,
           metadata: { ...meta, semantic: true },
         });
@@ -311,7 +329,7 @@ export default function BrowseScreen() {
         // with no free text.
         setFilterIntent({
           nonce,
-          mode: 'filter',
+          mode: "filter",
           query: null,
           metadata: { ...meta, semantic: false },
         });
@@ -335,7 +353,12 @@ export default function BrowseScreen() {
     setLastRefine(null);
     setFilterIntent(
       countActiveFilters(next) > 0
-        ? { nonce: Date.now(), mode: 'filter', query: null, metadata: { filters: next } }
+        ? {
+            nonce: Date.now(),
+            mode: "filter",
+            query: null,
+            metadata: { filters: next },
+          }
         : null,
     );
   }, []);
@@ -387,12 +410,14 @@ export default function BrowseScreen() {
       // a user who had just cleared their last filter, which reads in §6 as
       // exactly the retrieval failure the zero-result rate exists to catch.
       const stillASearch =
-        countActiveFilters(next) > 0 || intent.text.trim().length > 0 || !!intent.moodKey;
+        countActiveFilters(next) > 0 ||
+        intent.text.trim().length > 0 ||
+        !!intent.moodKey;
       setFilterIntent(
         stillASearch
           ? {
               nonce: Date.now(),
-              mode: 'filter',
+              mode: "filter",
               query: null,
               metadata: refineLogMetadata(chip.field, on, next),
             }
@@ -423,9 +448,13 @@ export default function BrowseScreen() {
       // local, so that one axis stays here.
       const base = semantic.data ?? [];
       const watchApplied =
-        filters.showWatched === 'all'
+        filters.showWatched === "all"
           ? base
-          : base.filter((it) => (filters.showWatched === 'hide' ? !isWatched(it.id) : isWatched(it.id)));
+          : base.filter((it) =>
+              filters.showWatched === "hide"
+                ? !isWatched(it.id)
+                : isWatched(it.id),
+            );
       // Sorted like every other grid. The control is visible in this mode now
       // that filters reach the engine, and a visible Sort that does nothing is
       // the same defect as the category pills above. 'best' is identity, which
@@ -446,7 +475,10 @@ export default function BrowseScreen() {
         // control still has, is identity.
         return sortItems(results.slice(1), sortMode);
       }
-      return sortItems(applyBrowseFilters(results, filters, isWatched), sortMode);
+      return sortItems(
+        applyBrowseFilters(results, filters, isWatched),
+        sortMode,
+      );
     }
     if (filterOnlyMode) {
       // /discover already applied service/genre/rating/runtime/type/released/
@@ -454,9 +486,13 @@ export default function BrowseScreen() {
       // watchlist).
       const base = browse.data ?? [];
       const watchApplied =
-        filters.showWatched === 'all'
+        filters.showWatched === "all"
           ? base
-          : base.filter((it) => (filters.showWatched === 'hide' ? !isWatched(it.id) : isWatched(it.id)));
+          : base.filter((it) =>
+              filters.showWatched === "hide"
+                ? !isWatched(it.id)
+                : isWatched(it.id),
+            );
       return sortItems(watchApplied, sortMode);
     }
     return [];
@@ -490,9 +526,11 @@ export default function BrowseScreen() {
   // The card whose PHRASE is running, which is not always the last card
   // tapped — see `Intent.phraseKey`. The banner and the "nothing in that
   // mood" copy both name the query, so both read this rather than `moodKey`.
-  const phrasePreset = intent.phraseKey ? presetByKey(intent.phraseKey) : undefined;
+  const phrasePreset = intent.phraseKey
+    ? presetByKey(intent.phraseKey)
+    : undefined;
   /** Which layout answered the typed text. Both logged and stamped on impressions. */
-  const route = titleHit ? 'title' : describedRoute ? 'described' : 'lookup';
+  const route = titleHit ? "title" : describedRoute ? "described" : "lookup";
   // Mode A with the flag off is the one grid that is post-filtered rather
   // than refetched, so it is the one grid `cost` cannot reach — see
   // `orderedRefineChips`.
@@ -501,17 +539,19 @@ export default function BrowseScreen() {
   // name or by description, and everything else — a preset, filters alone —
   // is browsing. Closes the §4 gap (IN-SL-001): Browse rendered every result
   // set and recorded no impressions, so search CTR had no denominator.
-  const gridSurface = searching ? ('search' as const) : ('browse' as const);
+  const gridSurface = searching ? ("search" as const) : ("browse" as const);
   // "There WAS something here before the filters" — the precondition for
   // blaming a chip. Mode A's unfiltered hit list answers it directly, which is
   // why this is the only place it can be asked.
-  const tightened = Boolean(activeCount > 0 && searching && (results?.length ?? 0) > 0);
+  const tightened = Boolean(
+    activeCount > 0 && searching && (results?.length ?? 0) > 0,
+  );
   // Serialised rather than the array itself: a fresh array every render would
   // re-record every impression on the grid on every render.
-  const activeRefineKey = activeRefineFields(filters).join(',');
+  const activeRefineKey = activeRefineFields(filters).join(",");
   const impressionMetadata = useMemo(
     () => ({
-      route: searching ? route : semanticMode ? 'preset' : 'filter',
+      route: searching ? route : semanticMode ? "preset" : "filter",
       refine: activeRefineKey || null,
     }),
     [searching, route, semanticMode, activeRefineKey],
@@ -540,7 +580,11 @@ export default function BrowseScreen() {
     isFetching: describedRoute ? loading : isFetching,
   });
   // Preset taps on the semantic path log against the semantic result set.
-  useSearchIntentLog(semanticMode ? semanticIntent : null, semantic.data, semantic.isFetching);
+  useSearchIntentLog(
+    semanticMode ? semanticIntent : null,
+    semantic.data,
+    semantic.isFetching,
+  );
   // Preset taps (flag off), FilterSheet applies and refine-chip toggles log
   // against what is actually on screen, whichever list that came from —
   // `shown` is the semantic grid in semanticMode and `loading` covers its
@@ -558,15 +602,18 @@ export default function BrowseScreen() {
     // that the user stopped on this text.
     markQuerySettled();
     return router.push({
-      pathname: '/detail/[id]',
+      pathname: "/detail/[id]",
       params: { id: item.id, title: item.title, image: item.image },
     });
   };
 
   return (
-    <SafeAreaView edges={['top']} className="flex-1 bg-background">
+    <SafeAreaView edges={["top"]} className="flex-1 bg-background">
       <View className="px-5 pt-2">
-        <View className="flex-row items-center gap-3 rounded-card border border-border bg-card px-4 py-3">
+        <View
+          onTouchStartCapture={() => probe("  search box:down")}
+          className="flex-row items-center gap-3 rounded-card border border-border bg-card px-4 py-3"
+        >
           <Search size={18} color="rgba(245,241,232,0.62)" />
           <TextInput
             value={intent.text}
@@ -579,7 +626,10 @@ export default function BrowseScreen() {
               setSemanticIntent(null);
               setFilterIntent(null);
             }}
-            onBlur={() => setPlaceholderIndex((i) => (i + 1) % PRESET_SENTENCES.length)}
+            onFocus={() => probe("  BROWSE txt:FOCUS")}
+            onBlur={() =>
+              setPlaceholderIndex((i) => (i + 1) % PRESET_SENTENCES.length)
+            }
             placeholder={`Try: “${PRESET_SENTENCES[placeholderIndex]}”`}
             placeholderTextColor="rgba(245,241,232,0.4)"
             autoCapitalize="none"
@@ -589,10 +639,11 @@ export default function BrowseScreen() {
           />
           {intent.text.length > 0 ? (
             <Pressable
-              onPress={() => setIntent((prev) => ({ ...prev, text: '' }))}
+              onPress={() => setIntent((prev) => ({ ...prev, text: "" }))}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="Clear search text">
+              accessibilityLabel="Clear search text"
+            >
               <X size={18} color="rgba(245,241,232,0.62)" />
             </Pressable>
           ) : null}
@@ -612,14 +663,16 @@ export default function BrowseScreen() {
             <Sparkles size={14} color="#e85d25" />
             <Text
               numberOfLines={1}
-              className="flex-1 font-body-serif italic text-body text-foreground">
+              className="flex-1 font-body-serif italic text-body text-foreground"
+            >
               Reading that as a feeling, not a title.
             </Text>
             <Pressable
               onPress={() => setForceTitles(true)}
               hitSlop={8}
               accessibilityRole="button"
-              className="rounded-pill px-2 py-1.5 active:opacity-70">
+              className="rounded-pill px-2 py-1.5 active:opacity-70"
+            >
               <Text className="font-sans-medium text-meta text-faint-foreground">
                 Search titles instead
               </Text>
@@ -632,7 +685,10 @@ export default function BrowseScreen() {
           <View className="mt-3 flex-row items-center justify-between gap-3">
             <View className="flex-1 flex-row items-center gap-2">
               <Sparkles size={14} color="#e85d25" />
-              <Text numberOfLines={1} className="flex-1 font-body-serif italic text-body text-foreground">
+              <Text
+                numberOfLines={1}
+                className="flex-1 font-body-serif italic text-body text-foreground"
+              >
                 Titles that feel like “{phrasePreset.label}”
               </Text>
             </View>
@@ -648,9 +704,12 @@ export default function BrowseScreen() {
               }}
               hitSlop={8}
               accessibilityRole="button"
-              className="flex-row items-center gap-1 rounded-pill px-2 py-1.5 active:opacity-70">
+              className="flex-row items-center gap-1 rounded-pill px-2 py-1.5 active:opacity-70"
+            >
               <X size={12} color="rgba(245,241,232,0.5)" />
-              <Text className="font-sans-medium text-meta text-faint-foreground">Clear</Text>
+              <Text className="font-sans-medium text-meta text-faint-foreground">
+                Clear
+              </Text>
             </Pressable>
           </View>
         ) : null}
@@ -661,7 +720,9 @@ export default function BrowseScreen() {
             onToggle={handleRefineToggle}
             activeCount={activeCount}
             onOpenSheet={() => setSheetOpen(true)}
-            onClearAll={activeCount > 0 || intent.moodKey ? clearAll : undefined}
+            onClearAll={
+              activeCount > 0 || intent.moodKey ? clearAll : undefined
+            }
             sortMode={sortMode}
             onSortChange={setSortMode}
             resultCount={shown.length}
@@ -796,8 +857,9 @@ function NoResults({
           Nothing quite like that
         </Text>
         <Text className="mt-2 text-center font-sans text-body text-muted-foreground">
-          We read “{query.trim()}” as a description and found nothing matching it and your
-          filters. Try loosening the filters, or search for a title instead.
+          We read “{query.trim()}” as a description and found nothing matching
+          it and your filters. Try loosening the filters, or search for a title
+          instead.
         </Text>
       </View>
     );
@@ -805,27 +867,36 @@ function NoResults({
   if (semantic) {
     return (
       <View className="flex-1 items-center justify-center px-10">
-        <Text className="text-center font-standfirst text-section text-foreground">Nothing in that mood</Text>
+        <Text className="text-center font-standfirst text-section text-foreground">
+          Nothing in that mood
+        </Text>
         <Text className="mt-2 text-center font-sans text-body text-muted-foreground">
-          We couldn’t find titles that feel like “{moodLabel}” right now. Try another feeling.
+          We couldn’t find titles that feel like “{moodLabel}” right now. Try
+          another feeling.
         </Text>
       </View>
     );
   }
-  const title = filterOnly || tightened ? 'Nothing matches' : 'No matches';
+  const title = filterOnly || tightened ? "Nothing matches" : "No matches";
   const body =
     filterOnly || tightened
-      ? 'Nothing matches this filter combination. Try loosening the filters.'
+      ? "Nothing matches this filter combination. Try loosening the filters."
       : `Nothing found for “${query.trim()}”. Try a different title.`;
   return (
     <View className="flex-1 items-center justify-center px-10">
-      <Text className="text-center font-standfirst text-section text-foreground">{title}</Text>
-      <Text className="mt-2 text-center font-sans text-body text-muted-foreground">{body}</Text>
+      <Text className="text-center font-standfirst text-section text-foreground">
+        {title}
+      </Text>
+      <Text className="mt-2 text-center font-sans text-body text-muted-foreground">
+        {body}
+      </Text>
     </View>
   );
 }
 
 /** Narrows an untrusted route param to the filter vocabulary. */
 function isContentType(value: string | undefined): value is ContentType {
-  return value === 'all' || value === 'movie' || value === 'tv' || value === 'doc';
+  return (
+    value === "all" || value === "movie" || value === "tv" || value === "doc"
+  );
 }
