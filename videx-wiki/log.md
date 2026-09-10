@@ -1425,3 +1425,9 @@ The general lesson: before designing around a missing interaction, check
 whether the capability is missing or only the route to it. Here three of four
 cards were duplicates of controls already on screen, and the fourth was the
 only thing at stake.
+
+## [2026-09-10] query | review remainders 2–6 (PR follow-up to #148)
+- Correction to the [2026-09-09] released push-down entry above: "363 titles qualify" is the *New & actually good* count (released + minRating ≥ 7). The *Newer* (released only) count is **1,690** of 34,563 — the figure the migration 082 EXPLAIN was run against. History is not rewritten; this entry supersedes that sentence.
+- Filed: wiki/registers/parking-lot.md IN-SL-012 (title-hit whole-word-run boundary; tests pin it).
+- Code alongside: `workers/api/src/index.ts` logs one `foryou_render` line with renderMs per cold render; `.github/workflows/typegen-check.yml` now fails instead of skipping when the Supabase token secret is missing; `src/lib/database.types.ts` gains `min_release_year` on `match_titles_by_vector` by hand pending the first real typegen run; `docs/legal/store-privacy-disclosures.md` lists the quick-filter `category` key.
+- Not done here: Follow-up A's six device acceptance cases (remainder 3) still need a device.

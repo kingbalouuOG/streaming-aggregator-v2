@@ -481,6 +481,20 @@ app.get('/v1/foryou', async (c) => {
         },
         { availableIdsCache },
       );
+      // Review 2026-09-09, remainder 5: the Worker never logged how long a
+      // cold render took, so the MMR cap (k=36 -> 20) had to be sized on a
+      // local bench. One structured line per genuine miss makes the next
+      // such question answerable from `wrangler tail` / Workers Logs. No
+      // user id: the x-videx-cache header already tells miss from hit.
+      console.log(
+        JSON.stringify({
+          event: 'foryou_render',
+          renderMs: payload.renderMs,
+          services: services.length,
+          rows: payload.recommendedForYou.length,
+          interleaved: payload.pool?.interleaved ?? false,
+        }),
+      );
       const body = JSON.stringify(payload);
       // Don't cache the no-taste-vector empty payload — the user is mid
       // onboarding and a 20-minute-stale empty feed is the worst outcome.
