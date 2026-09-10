@@ -229,3 +229,35 @@ describe('the fixture calibrates this module', () => {
     }
   });
 });
+
+describe('selectTitleHit — the whole-word-run boundary (review 2026-09-09, remainder 4)', () => {
+  // The 2026-09-09 change let an adjacent, ordered run of whole words earn
+  // the prefix score, so "hail mary" finds Project Hail Mary. The same rule
+  // means a short marker-less description that happens to be a run inside a
+  // prominent longer title also clears the bar. These cases pin where that
+  // boundary sits today so a later change to the scorer cannot move it
+  // silently. The structural fix is the query-understanding step (§8.2),
+  // not a tweak here — see parking-lot IN-SL-012.
+
+  it('two words of a three-word prominent title open a card, whatever the words are', () => {
+    // Same arithmetic as "hail mary" (2/3 words → 0.567 × 0.7 + prominence).
+    // The scorer cannot tell a half-remembered name from a genre phrase.
+    expect(selectTitleHit([item({ title: 'True Crime Story', voteCount: 3000 })], 'true crime')).not.toBeNull();
+    expect(selectTitleHit([item({ title: 'Easy and Warm Nights', voteCount: 3000 })], 'easy and warm')).not.toBeNull();
+  });
+
+  it('two words of a four-word title do not', () => {
+    // 2/4 words is 0.5 coverage → 0.445, under MIN_TITLE_MATCH.
+    expect(titleMatchScore('A Dark Comedy Tonight', 'dark comedy')).toBeLessThan(0.5);
+    expect(selectTitleHit([item({ title: 'A Dark Comedy Tonight', voteCount: 3000 })], 'dark comedy')).toBeNull();
+  });
+
+  it('an obscure longer title does not open on a two-word run', () => {
+    // Prominence is the only guard on this class; below ~256 votes it holds.
+    expect(selectTitleHit([item({ title: 'True Crime Story', voteCount: 100 })], 'true crime')).toBeNull();
+  });
+
+  it('a description marker still wins over any run', () => {
+    expect(selectTitleHit([item({ title: 'True Crime Story', voteCount: 5000 })], 'something true crime')).toBeNull();
+  });
+});

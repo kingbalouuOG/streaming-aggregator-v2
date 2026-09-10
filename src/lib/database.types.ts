@@ -2210,7 +2210,11 @@ export type Database = {
         }[]
       }
       match_titles_by_vector: {
-        Args: { match_limit?: number; query_vector: string }
+        Args: {
+          match_limit?: number
+          min_release_year?: number
+          query_vector: string
+        }
         Returns: {
           distance: number
           id: number

@@ -92,7 +92,7 @@ Worth having to hand, because both forms ask follow-up questions and the honest 
 | `semantic` | preset card taps | Whether the tap ran vector search or the deterministic filter fallback. |
 | `filters` | filter applies, refine toggles | The whole `BrowseFilters` object as applied — content type, genres, minimum rating, runtime band, release window, cost, watched-state, **and the streaming services selected**. Services are a user's own subscription list, which is already stored in the profile; this records which of them a given search was scoped to. |
 | `refine`, `on` | refine-chip toggles | Which of the five one-tap axes was touched and in which direction. |
-| `surface`, `rails_visible`, `items_visible` | quick-filter chips on New and For You | Which screen, and how much of it survived the chip. Counts, not content. |
+| `surface`, `category`, `rails_visible`, `items_visible` | quick-filter chips on New and For You | Which screen, which chip (All / Movies / TV / Documentaries), and how much of the page survived it. Counts and a category label, not content. |
 
 **Impression rows** (`event_type = 'card_impression'`, a different row type, same table and the same deletion/export coverage) additionally carry `route` and `refine` for anything rendered on Browse, so a search can be joined to whether its results were actually looked at. No title-level personal data beyond the content id already recorded for every impression.
 
