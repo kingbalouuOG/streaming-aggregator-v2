@@ -3,7 +3,7 @@ title: Notifications v1 (arrival + leaving-soon alerts)
 type: concept
 tags: [notifications, push, expo, edge-function, cron, retention, h0, stream-b]
 created: 2026-07-06
-updated: 2026-07-06
+updated: 2026-09-10
 sources:
   - docs/strategy/briefs/h0-stream-b-notifications-share.md
   - docs/strategy/Videx_Product_Strategy_and_Roadmap_v1.0.md
@@ -69,7 +69,7 @@ Bundling into one push/day per user + dedup means a catch-up sync that adds 50 t
 
 - `native/src/notifications/push.ts` — token register/refresh/clear, prefs, permission (`expo-notifications`, SDK 56: `getExpoPushTokenAsync({ projectId })`, handler returns `shouldShowBanner`/`shouldShowList`). Lives OUTSIDE the `native/src/lib` junction (native-only deps).
 - `native/src/providers/notifications.tsx` — handler + Android channel + token lifecycle across auth transitions + tap routing (warm + cold via `getLastNotificationResponseAsync`).
-- Plugin: `["expo-notifications", { color }]` in `app.json`; EAS FCM v1 / APNs credentials needed for real delivery (blocked on Joe's Google/Apple accounts — the roadmap 0.12 **release valve** ships v1 without notifications if credentialing drags >2 weeks).
+- Plugin: `["expo-notifications", { color }]` in `app.json`; EAS FCM v1 / APNs credentials **in place and device-verified 2026-07-13** (arrival, bundling, dedup, 20h cap, warm/cold tap routing — see `docs/strategy/briefs/h0-device-test-checklist.md`); the roadmap 0.12 release valve was never needed. *Correction 2026-09-10: this page said "blocked on credentials" for two months after they landed; as of 10 Sept there are 10 push tokens and 5 test deliveries, and no real (non-seeded) alert has been observed only because there is no cohort yet.*
 
 ## Related
 
