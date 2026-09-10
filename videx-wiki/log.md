@@ -1431,3 +1431,8 @@ only thing at stake.
 - Filed: wiki/registers/parking-lot.md IN-SL-012 (title-hit whole-word-run boundary; tests pin it).
 - Code alongside: `workers/api/src/index.ts` logs one `foryou_render` line with renderMs per cold render; `.github/workflows/typegen-check.yml` now fails instead of skipping when the Supabase token secret is missing; `src/lib/database.types.ts` gains `min_release_year` on `match_titles_by_vector` by hand pending the first real typegen run; `docs/legal/store-privacy-disclosures.md` lists the quick-filter `category` key.
 - Not done here: Follow-up A's six device acceptance cases (remainder 3) still need a device.
+
+## [2026-09-10] query | search review closed (PRs #143, #148, #149 merged)
+- Updated: wiki/concepts/operations/phase-search-v2.md (addendum "Review closed")
+- Filed: wiki/registers/parking-lot.md IN-SL-013 (Follow-up A device cases, the one remainder still open)
+- Verified today: `typegen-check` ran for real for the first time (secret set) and passed on #149 after one formatting fix to the hand-typed Args block.
