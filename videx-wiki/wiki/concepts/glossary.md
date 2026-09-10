@@ -26,7 +26,7 @@ Single-page reference for acronyms, internal naming, and recurring terms. Mirror
 | Home | Discovery surface. Recency-led, lightly personalised. |
 | For You | Personalised surface. Heavy ranking, sliders, mood rooms. |
 | Mood Room | Topical cluster of titles produced by HDBSCAN over title embeddings. |
-| Service / Platform | Streaming provider. Internal slugs: `netflix`, `prime`, `disney`, `apple`, `now`, `bbc`, `itvx`, `channel4`, `paramount`, `skygo`. |
+| Service / Platform | Streaming provider. Internal slugs: `netflix`, `prime`, `disney`, `apple`, `now`, `bbc`, `itvx`, `channel4`, `paramount`, `skygo`, and (wave 1, Sept 2026) `hbo`, `discovery`, `crunchyroll`, `mubi`, `plutotv`. |
 | Variant | TMDb provider that should be canonicalised (e.g. "Netflix Standard with Ads" → Netflix). |
 | Deep link | Exact URL into a streaming app for a specific title. May be HTTPS that resolves to a native intent on Android. |
 | Search-URL fallback | Search query URL on a service's website used when an exact deep link is unavailable (BBC iPlayer, Sky Go). |

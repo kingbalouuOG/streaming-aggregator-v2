@@ -110,6 +110,8 @@ const watchlistUrl = () => `videx://watchlist`;
 const SERVICE_LABELS: Record<string, string> = {
   netflix: 'Netflix', prime: 'Prime Video', disney: 'Disney+', apple: 'Apple TV+',
   now: 'NOW', paramount: 'Paramount+', itvx: 'ITVX', channel4: 'Channel 4',
+  hbo: 'HBO Max', discovery: 'Discovery+', crunchyroll: 'Crunchyroll',
+  mubi: 'MUBI', plutotv: 'Pluto TV',
   bbc: 'BBC iPlayer', skygo: 'Sky Go',
 };
 const serviceLabel = (id: string) => SERVICE_LABELS[id] ?? id;

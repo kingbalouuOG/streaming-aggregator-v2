@@ -223,18 +223,39 @@ async function main(): Promise<void> {
   console.log(`  mode: ${dryRun ? 'DRY RUN' : 'LIVE'}`);
   console.log();
 
-  // 1. Get distinct services from streaming_availability
-  const { data: serviceRows, error: serviceErr } = await supabase
-    .from('streaming_availability')
-    .select('service_id')
-    .in('stream_type', ['subscription', 'free']);
+  // 1. Get distinct services from streaming_availability.
+  //
+  // ⚠ This MUST paginate. It used to be a single unpaginated select, which
+  // PostgREST caps at 1,000 rows — so the "distinct services" were really
+  // just the services appearing in an arbitrary 1,000-row window. Measured
+  // 2026-09-10: that window yielded 12 of the 17 service ids in the table,
+  // and Discovery+, MUBI and Crunchyroll were among the missing. It is why
+  // Discovery+'s fingerprint was still the 13-title one built in April
+  // while every large service had been rebuilt since — small catalogues
+  // were being dropped silently, with no failure recorded anywhere.
+  const serviceIdSet = new Set<string>();
+  {
+    let offset = 0;
+    const PAGE = 1000;
+    while (true) {
+      const { data, error } = await supabase
+        .from('streaming_availability')
+        .select('service_id')
+        .in('stream_type', ['subscription', 'free'])
+        .range(offset, offset + PAGE - 1);
 
-  if (serviceErr) {
-    console.error('Failed to query services:', serviceErr.message);
-    process.exit(1);
+      if (error) {
+        console.error('Failed to query services:', error.message);
+        process.exit(1);
+      }
+      if (!data || data.length === 0) break;
+      for (const row of data) serviceIdSet.add(row.service_id);
+      if (data.length < PAGE) break;
+      offset += PAGE;
+    }
   }
 
-  const allServices = [...new Set((serviceRows || []).map(r => r.service_id))].sort();
+  const allServices = [...serviceIdSet].sort();
   console.log(`  services found: ${allServices.length} (${allServices.join(', ')})`);
   console.log();
 

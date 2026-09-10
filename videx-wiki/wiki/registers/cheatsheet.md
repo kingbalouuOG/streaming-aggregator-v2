@@ -121,6 +121,11 @@ Single-page lookup table for "which phase, which branch, which migration, what s
 | `channel4` | Channel 4 | 103 | `all4` | yes |
 | `bbc` | BBC iPlayer | 38 | `iplayer` | **no** (search-URL fallback) |
 | `skygo` | Sky Go | 29 | (absent) | **no** (search-URL fallback) |
+| `hbo` | HBO Max | 1899 | `hbo` | yes |
+| `discovery` | Discovery+ | 524 | `discovery` | yes |
+| `crunchyroll` | Crunchyroll | 283 | `crunchyroll` | yes |
+| `mubi` | MUBI | 11 | `mubi` | yes |
+| `plutotv` | Pluto TV | 300 | `plutotv` | yes |
 
 ## Surface row composition (Phase 4 shipped)
 

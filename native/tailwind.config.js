@@ -55,6 +55,12 @@ module.exports = {
           skygo: '#0072ec',
           bbc: '#f54b3a',
           itvx: '#2470ff',
+          channel4: '#0095d9',
+          hbo: '#991eeb',
+          discovery: '#0271e5',
+          crunchyroll: '#ff5e00',
+          mubi: '#001489',
+          plutotv: '#fff200',
         },
       },
       fontSize: {

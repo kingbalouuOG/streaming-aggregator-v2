@@ -68,12 +68,41 @@ const SA_TO_VIDEX: Record<string, string> = {
   itvx: 'itvx',
   all4: 'channel4',
   iplayer: 'bbc',
+  // Wave 1: Videx reuses the vendor's slug, so these are identities. They
+  // were previously reaching the table only via the `|| opt.service.id`
+  // passthrough below, which is why they existed but were never surfaced.
+  hbo: 'hbo',
+  discovery: 'discovery',
+  crunchyroll: 'crunchyroll',
+  mubi: 'mubi',
+  plutotv: 'plutotv',
 };
 
-// All SA API services with UK catalogue data
+// All SA API services with UK catalogue data.
+//
+// This list is what the daily `changes` walk enumerates, so a catalogue
+// missing from it receives no updates at all — ever. That is why HBO Max
+// had zero rows on 2026-09-10 despite launching in the UK on 26 March:
+// the bulk `sync-content.ts` pass that first populated Discovery+, Pluto
+// TV, MUBI and Crunchyroll last ran 16-20 March, and nothing since has
+// looked at any catalogue outside this list.
+//
+// Verified against /countries/gb on 2026-09-10: the vendor carries 17 GB
+// catalogues. The five added below are roadmap v1.1 wave 1. The remaining
+// four (curiosity, hotstar, zee5, and iplayer's empty catalogue) stay out
+// because Videx does not surface them.
+//
+// ⚠ Each id here costs at least one `changes` request per change type per
+// run, so this list is a direct multiplier on SA API quota (R-032). The
+// floor goes 4×8=32 to 4×13=52 requests per run; a healthy day measured
+// ~145 against SA_REQUEST_BUDGET of 500, and the five added catalogues are
+// small (16-1,000 titles each), so the daily figure lands near ~175. If
+// that stops being true, drop crunchyroll and mubi first — they are the
+// two smallest.
 const SA_SERVICES_GB = [
   'netflix', 'prime', 'disney', 'apple', 'itvx',
   'paramount', 'now', 'all4',
+  'hbo', 'plutotv', 'discovery', 'crunchyroll', 'mubi',
 ];
 
 const CHANGE_TYPES = ['new', 'updated', 'removed', 'expiring'] as const;

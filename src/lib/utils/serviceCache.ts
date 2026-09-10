@@ -61,6 +61,7 @@ if (globalWithVersion[SC_VERSION_KEY] !== CACHE_VERSION) {
 const VALID_SERVICES = new Set<ServiceId>([
   'netflix', 'prime', 'disney', 'apple', 'now',
   'skygo', 'paramount', 'bbc', 'itvx', 'channel4',
+  'hbo', 'discovery', 'crunchyroll', 'mubi', 'plutotv',
 ]);
 
 // ─────────────────────────────────────────────────────────────

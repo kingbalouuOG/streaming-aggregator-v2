@@ -106,8 +106,17 @@ async function tmdbFetch(path: string, params: Record<string, string> = {}): Pro
   return res.json();
 }
 
-// UK streaming provider IDs for TMDb discover
-const UK_PROVIDER_IDS = [8, 9, 350, 337, 39, 29, 582, 38, 54, 103]; // All 10 UK services
+// UK streaming provider IDs for TMDb discover. Kept in the same order as
+// SERVICE_ID_TO_TMDB in src/lib/adapters/platformAdapter.ts.
+//   8 Netflix · 9 Prime · 350 Apple TV+ · 337 Disney+ · 39 NOW · 29 Sky Go
+//   582 Paramount+ · 38 BBC iPlayer · 54 ITVX · 103 Channel 4
+// Wave 1 (roadmap v1.1 item 1.5), ids read from TMDb watch/providers for
+// watch_region=GB on 2026-09-10:
+//   1899 HBO Max · 524 Discovery+ · 283 Crunchyroll · 11 MUBI · 300 Pluto TV
+const UK_PROVIDER_IDS = [
+  8, 9, 350, 337, 39, 29, 582, 38, 54, 103,
+  1899, 524, 283, 11, 300,
+];
 const UK_PROVIDER_STRING = UK_PROVIDER_IDS.join('|'); // OR logic
 
 // ── SA API helpers ───────────────────────────────────────
@@ -135,6 +144,14 @@ const SA_TO_VIDEX: Record<string, string> = {
   itvx: 'itvx',
   all4: 'channel4',
   iplayer: 'bbc',
+  // Wave 1: Videx reuses the vendor's slug, so these are identities. They
+  // were previously reaching the table only via the `|| opt.service.id`
+  // passthrough below, which is why they existed but were never surfaced.
+  hbo: 'hbo',
+  discovery: 'discovery',
+  crunchyroll: 'crunchyroll',
+  mubi: 'mubi',
+  plutotv: 'plutotv',
 };
 
 async function saApiFetch(path: string): Promise<any> {

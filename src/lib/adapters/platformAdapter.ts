@@ -19,6 +19,13 @@ const TMDB_TO_SERVICE_ID: Record<number, ServiceId> = {
   38: 'bbc',
   54: 'itvx',
   103: 'channel4',
+  // Wave 1 (roadmap v1.1 item 1.5). Ids read from TMDb watch/providers
+  // for watch_region=GB on 2026-09-10.
+  1899: 'hbo',
+  524: 'discovery',
+  283: 'crunchyroll',
+  11: 'mubi',
+  300: 'plutotv',
 };
 
 // ServiceId → TMDb provider_id
@@ -33,6 +40,11 @@ const SERVICE_ID_TO_TMDB: Record<ServiceId, number> = {
   bbc: 38,
   itvx: 54,
   channel4: 103,
+  hbo: 1899,
+  discovery: 524,
+  crunchyroll: 283,
+  mubi: 11,
+  plutotv: 300,
 };
 
 /**
@@ -85,6 +97,15 @@ const SA_SERVICE_TO_VIDEX: Record<string, ServiceId> = {
   itvx: 'itvx',
   all4: 'channel4',
   iplayer: 'bbc',       // Listed in API but catalogue empty as of March 2026
+  // Wave 1. Videx reuses the vendor's own slug for these five, so the
+  // mapping is an identity — listed explicitly rather than left to the
+  // `|| opt.service.id` passthrough in the sync scripts, because the
+  // passthrough is what silently created these ids in the first place.
+  hbo: 'hbo',
+  discovery: 'discovery',
+  crunchyroll: 'crunchyroll',
+  mubi: 'mubi',
+  plutotv: 'plutotv',
 };
 
 // ServiceId → SA API service slug (reverse mapping)
@@ -115,6 +136,13 @@ export function serviceIdToSaService(serviceId: ServiceId): string | null {
 const DISCOVER_VARIANT_IDS: Partial<Record<ServiceId, number[]>> = {
   itvx: [41],  // ITV Hub — TMDb discover has 878 results vs 0 for ID 54
 };
+
+// Deliberately NOT variants: TMDb's "<service> Amazon Channel" ids (1825
+// HBO Max, 584 Discovery+, 1968 Crunchyroll, 201 MUBI). Those describe a
+// Prime add-on entitlement the user may not hold — the same surprise-paywall
+// risk that keeps stream_type 'addon' out of the per-service charts. All
+// five canonical ids return healthy GB discover counts on their own
+// (checked 2026-09-10), so no variant is needed to make them work.
 
 /**
  * Convert an array of ServiceId strings to TMDb provider IDs.

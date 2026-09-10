@@ -14,6 +14,13 @@ export const SERVICE_CATALOG: { id: ServiceId; name: string; description: string
   { id: 'skygo', name: 'Sky Go', description: 'Live TV & Sky Originals' },
   { id: 'apple', name: 'Apple TV+', description: 'Apple Originals' },
   { id: 'paramount', name: 'Paramount+', description: 'CBS & Paramount' },
+  // Wave 1 (roadmap v1.1 item 1.5), appended so the existing ten keep the
+  // running order Joe signed off; within the wave, UK reach descending.
+  { id: 'hbo', name: 'HBO Max', description: 'HBO, Max Originals & DC' },
+  { id: 'plutotv', name: 'Pluto TV', description: 'Free, Ad-Supported' },
+  { id: 'discovery', name: 'Discovery+', description: 'Factual & Real-Life' },
+  { id: 'crunchyroll', name: 'Crunchyroll', description: 'Anime & Simulcasts' },
+  { id: 'mubi', name: 'MUBI', description: 'Curated Arthouse Cinema' },
 ];
 
 export const ALL_SERVICE_IDS: ServiceId[] = SERVICE_CATALOG.map((s) => s.id);

@@ -10,6 +10,11 @@ export const UK_PROVIDERS: Record<string, { id: number; name: string; color: str
   channel4: { id: 103, name: 'Channel 4', color: '#0095D9' },
   paramount: { id: 582, name: 'Paramount+', color: '#0064FF' },
   skyGo: { id: 29, name: 'Sky Go', color: '#0072C9' },
+  hboMax: { id: 1899, name: 'HBO Max', color: '#991EEB' },
+  discoveryPlus: { id: 524, name: 'Discovery+', color: '#0271E5' },
+  crunchyroll: { id: 283, name: 'Crunchyroll', color: '#FF5E00' },
+  mubi: { id: 11, name: 'MUBI', color: '#001489' },
+  plutoTv: { id: 300, name: 'Pluto TV', color: '#FFF200' },
 };
 
 export const UK_PROVIDERS_ARRAY = Object.values(UK_PROVIDERS);
@@ -71,7 +76,12 @@ export const PROVIDER_ID_VARIANTS: Record<number, number> = {
   130: 39,   // Sky Store (rent/buy) -> Now TV / Sky
   1796: 8,   // Netflix basic with Ads -> Netflix
   2100: 9,   // Amazon Prime Video with Ads -> Amazon Prime Video
-  1899: 337, // Disney+ Basic with Ads -> Disney+
+  // REMOVED 2026-09-10 (service coverage wave 1): `1899: 337` was labelled
+  // "Disney+ Basic with Ads", but TMDb provider 1899 is HBO Max — verified
+  // against /watch/providers/movie, which has no separate id for a Disney+
+  // ad tier at all (122 Disney+, 337 Disney Plus, 508 DisneyNOW). The entry
+  // was harmless only while Videx ignored HBO Max; left in place it would
+  // have canonicalised every HBO Max availability into Disney+.
 };
 
 export const mapProviderIdToCanonical = (providerId: number): number => {
@@ -91,6 +101,11 @@ const NETWORK_TO_PROVIDER_ID: Record<string, number> = {
   'Channel 4': 103, 'E4': 103, 'More4': 103, 'Film4': 103,
   'Sky Atlantic': 39, 'Sky One': 39, 'Sky Max': 39, 'Sky Arts': 39,
   'Paramount+': 582,
+  // Wave 1 services are deliberately absent. This map is a last-resort
+  // guess from a title's production network, and a wrong guess here reads
+  // to the user as "it's on HBO Max" when it is not — the surprise-paywall
+  // failure the availability rules exist to prevent. The five wave-1
+  // services have real vendor rows; they do not need the guess.
 };
 
 export const networkNameToProviderId = (networkName: string): number | null => {

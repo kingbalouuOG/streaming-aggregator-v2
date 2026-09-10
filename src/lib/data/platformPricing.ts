@@ -4,6 +4,12 @@
 // 3-tier), Prime Video standalone (now £7.99), NOW/Sky restructure (Sky Stream folded
 // into Sky Essential/Ultimate TV; Sky Go is bundled free with Sky TV, not standalone).
 // Parking lot IN-XPS-007: quarterly review cadence — next review ~Oct 2026.
+// Wave 1 services (HBO Max, Discovery+, Crunchyroll, MUBI, Pluto TV) added
+// 10 Sep 2026 and verified against their UK pages that day. Note that
+// getDefaultTier() returns null for a service with no entry here, and the
+// spend surfaces coalesce that to £0 — so an unpriced service silently
+// understates the user's monthly spend rather than showing as unknown.
+// Every ServiceId must have an entry.
 
 export interface PricingTier {
   name: string;
@@ -105,6 +111,59 @@ export const PLATFORM_PRICING: PlatformPricing[] = [
     // Core service is free (ad-funded). An optional ad-free tier "Channel 4+"
     // exists at £3.99/mo but is not modelled here so the default stays Free —
     // the overwhelming-majority consumer experience.
+    tiers: [
+      { name: "Free", price: 0.00 },
+    ],
+  },
+
+  // ── Wave 1 (roadmap v1.1 item 1.5) ────────────────────────────────
+  // Verified 10 September 2026 against each service's own UK page. Same
+  // rule as the original ten: base consumer tiers only, no sport or
+  // ad-free bolt-ons, because those are entitlements a user may not hold
+  // and the spend dashboard would overstate.
+  {
+    serviceId: "hbo",
+    // hbomax.com/gb/en. TNT Sports tiers (£30.99 sport-only, £36.98
+    // bundled) excluded as bolt-ons, per the rule above.
+    tiers: [
+      { name: "Standard with Ads", price: 5.99 },
+      { name: "Standard", price: 9.99 },
+      { name: "Premium", price: 14.99 },
+    ],
+  },
+  {
+    serviceId: "discovery",
+    // discoveryplus.com/gb/en lists exactly one UK plan as of this date;
+    // the old Premium and Sports tiers are gone, the sport having moved
+    // to HBO Max's TNT Sports plans in the Warner Bros. Discovery
+    // restructure. All plans include ads.
+    tiers: [
+      { name: "Entertainment", price: 3.99 },
+    ],
+  },
+  {
+    serviceId: "crunchyroll",
+    // crunchyroll.com/welcome, VAT inclusive. Ultimate Fan sits behind
+    // "compare all plans" and is not modelled — Mega Fan is the tier the
+    // page marks most popular and it is not the default here anyway.
+    tiers: [
+      { name: "Fan", price: 5.99 },
+      { name: "Mega Fan", price: 6.99 },
+    ],
+  },
+  {
+    serviceId: "mubi",
+    // mubi.com/en/gb/memberships. MUBI GO adds a weekly cinema ticket, so
+    // it is a genuine tier rather than a bolt-on.
+    tiers: [
+      { name: "MUBI", price: 11.99 },
+      { name: "MUBI GO", price: 18.99 },
+    ],
+  },
+  {
+    serviceId: "plutotv",
+    // Free and ad-funded with no paid tier at all — the only service here
+    // for which £0 is the true answer rather than a missing entry.
     tiers: [
       { name: "Free", price: 0.00 },
     ],

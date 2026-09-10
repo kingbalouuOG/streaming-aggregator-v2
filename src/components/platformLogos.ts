@@ -1,5 +1,7 @@
 // ── Central Platform Configuration ──────────────────────────────────
-// All 10 streaming platforms with their logo assets and metadata.
+// All 15 streaming platforms with their logo assets and metadata.
+// Logo tiles are the TMDb/JustWatch provider images (200x200 RGBA), the
+// same source and size as the original ten.
 
 import imgNetflix from "@/assets/netflix.png";
 import imgPrime from "@/assets/prime.png";
@@ -11,6 +13,11 @@ import imgParamount from "@/assets/paramount.png";
 import imgBBC from "@/assets/bbc.png";
 import imgITVX from "@/assets/itvx.png";
 import imgChannel4 from "@/assets/channel4.png";
+import imgHBO from "@/assets/hbo.png";
+import imgDiscovery from "@/assets/discovery.png";
+import imgCrunchyroll from "@/assets/crunchyroll.png";
+import imgMUBI from "@/assets/mubi.png";
+import imgPlutoTV from "@/assets/plutotv.png";
 
 // ── Service ID type ─────────────────────────────────────────────────
 // Canonical definition moved to @/lib/types/content (NATIVE-1 W2) so
@@ -137,6 +144,56 @@ export const PLATFORMS: PlatformDef[] = [
     label: "4",
     selectedBorder: "border-lime-300",
     ring: "ring-lime-300",
+  },
+  {
+    id: "hbo",
+    name: SERVICE_DISPLAY_NAMES.hbo,
+    description: "HBO, Max Originals & DC",
+    logo: imgHBO,
+    bg: "bg-purple-700",
+    label: "MAX",
+    selectedBorder: "border-purple-500",
+    ring: "ring-purple-500",
+  },
+  {
+    id: "discovery",
+    name: SERVICE_DISPLAY_NAMES.discovery,
+    description: "Factual & Real-Life",
+    logo: imgDiscovery,
+    bg: "bg-blue-700",
+    label: "D+",
+    selectedBorder: "border-blue-500",
+    ring: "ring-blue-500",
+  },
+  {
+    id: "crunchyroll",
+    name: SERVICE_DISPLAY_NAMES.crunchyroll,
+    description: "Anime & Simulcasts",
+    logo: imgCrunchyroll,
+    bg: "bg-orange-600",
+    label: "CR",
+    selectedBorder: "border-orange-500",
+    ring: "ring-orange-500",
+  },
+  {
+    id: "mubi",
+    name: SERVICE_DISPLAY_NAMES.mubi,
+    description: "Curated Arthouse Cinema",
+    logo: imgMUBI,
+    bg: "bg-indigo-900",
+    label: "M",
+    selectedBorder: "border-indigo-500",
+    ring: "ring-indigo-500",
+  },
+  {
+    id: "plutotv",
+    name: SERVICE_DISPLAY_NAMES.plutotv,
+    description: "Free, Ad-Supported",
+    logo: imgPlutoTV,
+    bg: "bg-yellow-400",
+    label: "PL",
+    selectedBorder: "border-yellow-300",
+    ring: "ring-yellow-300",
   },
 ];
 
