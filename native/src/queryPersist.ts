@@ -1,6 +1,8 @@
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { createMMKV } from 'react-native-mmkv';
 
+import { notePersist } from '@/components/debug/TouchProbe';
+
 // Query-cache persistence to MMKV (NATIVE-POLISH W3). Lets Home/For You
 // paint from the last cached payload on cold start instead of a spinner
 // — the UX-1 instant-For-You lesson, native edition. A dedicated MMKV
@@ -11,7 +13,10 @@ const cache = createMMKV({ id: 'videx-query-cache' });
 export const queryPersister = createSyncStoragePersister({
   storage: {
     getItem: (key) => cache.getString(key) ?? null,
-    setItem: (key, value) => cache.set(key, value),
+    setItem: (key, value) => {
+      notePersist(value.length); // debug branch only — size of each full re-serialize
+      cache.set(key, value);
+    },
     removeItem: (key) => cache.remove(key),
   },
   throttleTime: 1000,

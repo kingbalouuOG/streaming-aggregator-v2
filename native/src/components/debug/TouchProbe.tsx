@@ -50,6 +50,26 @@ const listeners = new Set<() => void>();
 
 const DEAD_AFTER_MS = 350;
 
+// JS-THREAD STALL DETECTION (v4).
+//
+// Nothing measured so far could see the one mechanism that fits every
+// observation: a tap that lands while JS is blocked is processed after the
+// finger has already lifted, and a late press is a cancelled press. It would
+// hit fields and buttons alike, app-wide, and only when something happens to
+// be blocking — which is why three quiet six-tap runs on a static screen all
+// came back clean.
+//
+// The prime suspect is the query persister. It is the SYNC one: it
+// JSON.stringify's the whole query cache and writes it to MMKV on the JS
+// thread, up to once a second, whenever any query changes. The cost scales
+// with how much has been browsed, which matches "worst on Browse".
+//
+// A 100ms interval that reports its own lateness catches any such block
+// whatever its source; `persistSize` names the suspect when it is this one.
+let stalls = 0;
+let maxStall = 0;
+let lastPersistKB = 0;
+
 function emit() {
   listeners.forEach((l) => l());
 }
@@ -61,6 +81,19 @@ function log(tag: string) {
 function bump(name: string, field: keyof Count) {
   const c = counts[name] ?? { touched: 0, dead: 0 };
   counts = { ...counts, [name]: { ...c, [field]: c[field] + 1 } };
+}
+
+/** A free-text line in the probe log, for non-touch events. */
+export function note(tag: string) {
+  log(tag);
+  emit();
+}
+
+/** Called by the instrumented query persister with the serialized size. */
+export function notePersist(bytes: number) {
+  lastPersistKB = Math.round(bytes / 1024);
+  log(`persist ${lastPersistKB}KB`);
+  emit();
 }
 
 /** A touch landed on this control. Starts the dead-tap clock. */
@@ -102,10 +135,16 @@ function subscribe(l: () => void) {
   return () => listeners.delete(l);
 }
 
-const snap = () => ({ entries, counts, deadTotal });
+const snap = () => ({ entries, counts, deadTotal, stalls, maxStall, lastPersistKB });
 let cached = snap();
 function getSnapshot() {
-  if (cached.entries !== entries || cached.counts !== counts || cached.deadTotal !== deadTotal) {
+  if (
+    cached.entries !== entries ||
+    cached.counts !== counts ||
+    cached.deadTotal !== deadTotal ||
+    cached.stalls !== stalls ||
+    cached.lastPersistKB !== lastPersistKB
+  ) {
     cached = snap();
   }
   return cached;
@@ -116,7 +155,14 @@ const WIRE = 'rgba(245,241,232,0.22)';
 const DIM = 'rgba(245,241,232,0.5)';
 
 export function TouchProbePanel() {
-  const { entries: log10, counts: c, deadTotal: dead } = useSyncExternalStore(
+  const {
+    entries: log10,
+    counts: c,
+    deadTotal: dead,
+    stalls: stallCount,
+    maxStall: worstStall,
+    lastPersistKB: persistKB,
+  } = useSyncExternalStore(
     subscribe,
     getSnapshot,
     getSnapshot,
@@ -127,7 +173,27 @@ export function TouchProbePanel() {
       log(`APP → ${s}`);
       emit();
     });
-    return () => sub.remove();
+
+    // Report the timer's own lateness. Anything that blocks the JS thread —
+    // the persister, a big render, an image decode on the wrong queue —
+    // shows up here as drift, whatever its source.
+    let expected = Date.now() + 100;
+    const tick = setInterval(() => {
+      const now = Date.now();
+      const late = now - expected;
+      expected = now + 100;
+      if (late > 120) {
+        stalls += 1;
+        if (late > maxStall) maxStall = late;
+        log(`STALL ${late}ms`);
+        emit();
+      }
+    }, 100);
+
+    return () => {
+      sub.remove();
+      clearInterval(tick);
+    };
   }, []);
 
   const names = Object.keys(c);
@@ -148,12 +214,15 @@ export function TouchProbePanel() {
       }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Text style={{ color: '#e85d25', fontSize: 10, fontWeight: '700', letterSpacing: 1 }}>
-          IN-UX-001 PROBE v2
+          IN-UX-001 PROBE v4
         </Text>
         <Text style={{ color: dead > 0 ? '#ef4444' : '#10b981', fontSize: 13, fontWeight: '700' }}>
           DEAD TAPS: {dead}
         </Text>
       </View>
+      <Text style={{ color: stallCount > 0 ? '#e3b04b' : DIM, fontSize: 10, marginTop: 2 }}>
+        JS STALLS: {stallCount} · worst {worstStall}ms · cache {persistKB}KB
+      </Text>
 
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
         <Pressable
