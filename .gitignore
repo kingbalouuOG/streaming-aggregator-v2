@@ -131,3 +131,6 @@ _fq/
 _fv/
 _fz/
 *.mp4
+
+# Saved vendor catalogue walks (--map-out); vendor data, seed sa_show_map with --map-in
+scripts/sync/walks/

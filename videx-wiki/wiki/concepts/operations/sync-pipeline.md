@@ -3,7 +3,7 @@ title: Sync pipeline runbook
 type: concept
 tags: [runbook, sync, tmdb, sa-api, omdb]
 created: 2026-04-26
-updated: 2026-08-25
+updated: 2026-09-11
 sources:
   - raw/runbooks/sync-pipeline.md
 related:
@@ -46,6 +46,31 @@ npx tsx scripts/sync-content.ts --stage vectors
 pg_cron at 06:00 UTC (migration 006; timeout set in 062). Edge Function `supabase/functions/sync-incremental/`. Hits SA API `/changes`, writes deltas to `streaming_availability`, appends to `streaming_history`.
 
 **It does not write `titles`.** There is no `.from('titles')` call anywhere in the file. Only `scripts/sync-content.ts` and the `backfill-missing-titles` Edge Function create title rows.
+
+### Vendor id resolution (IN-SY-001, migration 083)
+
+`/changes` identifies a title only by the vendor's own `showId` — it carries **no TMDb id**. From 2026-04-01 to 2026-09-11 the sync stored that vendor id in `tmdb_id` (58,718 rows; post-mortem: [sync-vendor-show-id-in-tmdb-id](solutions/sync-vendor-show-id-in-tmdb-id.md)). Every show id is now resolved through `sa_show_map`:
+
+| Step | Cost | Where |
+|---|---|---|
+| One map read per `/changes` page | 0 vendor requests | `resolveShowIds()` |
+| Per miss: `GET /shows/{showId}`, answer written back to the map | 1 request, bounded by `MISS_LOOKUP_BUDGET` = 200 per chain (`lookupBudget` in the body overrides) | same |
+| Unresolved change | skipped and counted (`chain_state.stats.unresolved`, error bucket `change.unresolved`) — never written under the vendor id | change loop |
+| Map read fails (incl. table absent) | fetch failure → run `failed`, window not advanced | per-pair catch |
+
+The map is **seeded by catalogue walks**: `scripts/sync/backfill-service-catalogue.ts` upserts every entry it sees on any non-dry run (`--map-only` seeds without touching availability; `--map-out` / `--map-in` save and replay a walk so it is paid for once). A high `unresolved` count means a catalogue has not been walked — walk it rather than raising the lookup budget.
+
+```sql
+-- Is the map warm? Misses should be a few dozen a day once the big catalogues are walked.
+SELECT started_at, status,
+       chain_state->'stats'->>'mapHits'    AS map_hits,
+       chain_state->'stats'->>'mapLookups' AS lookups,
+       chain_state->'stats'->>'unresolved' AS unresolved,
+       sa_requests
+FROM sync_log WHERE sync_type = 'incremental' ORDER BY started_at DESC LIMIT 7;
+
+SELECT source, count(*) FROM sa_show_map GROUP BY source;
+```
 
 Manual: `supabase functions invoke sync-incremental --no-verify-jwt`.
 
@@ -128,7 +153,7 @@ Both long-running Edge Functions process **one slice per invocation** and hand o
 
 | Job | Slice size | Budget | Chain cap | Resume state |
 |---|---|---|---|---|
-| `sync-incremental` | until budget | 75s | 10 slices | `chain_state` = `{since, ti, si, cursor}` |
+| `sync-incremental` | until budget | 75s | 20 slices | `chain_state` = `{since, ti, si, cursor}`; stats carry `mapHits / mapLookups / unresolved` (IN-SY-001) |
 | `backfill-missing-titles` | 250 rows | 75s | 12 (3,000 titles) | none — `list_missing_title_ids` self-advances |
 | `enrich-new-titles` | 250 rows | 75s | 12 (3,000 rows) | none — `WHERE keywords IS NULL` self-advances |
 | `embed-new-titles` | 500 rows | 75s | 12 (6,000 rows) | none — `WHERE embedding IS NULL` self-advances |

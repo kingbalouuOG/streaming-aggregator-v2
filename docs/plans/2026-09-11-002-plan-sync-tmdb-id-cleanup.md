@@ -1,0 +1,187 @@
+# IN-SY-001 — fix landed in code; what Joe needs to run, and the four cleanup decisions
+
+**Date:** 2026-09-11 · **Follows:** `2026-09-11-001-handoff-sync-tmdb-id-corruption.md` · **Branch:** the IN-SY-001 PR (worktree `fix-sync-tmdb-id-map`) · **Clock:** the next sync is 06:00 UTC on 12 Sept.
+
+Everything in §1 is built, type-checked (`deno check`) and smoke-tested. Nothing in §2 or §3 has touched production — the migration apply was permission-gated to Joe (production DDL is an explicit-Joe action, as with 044–046), and the deploy is manual by design.
+
+---
+
+## 1. What the PR contains
+
+| Piece | What it does |
+|---|---|
+| `supabase/migrations/083_sa_show_map.sql` | `sa_show_map (sa_show_id text PK, tmdb_id, media_type, title, source, first_seen_at, last_seen_at)`, index on `(tmdb_id, media_type)`, RLS on with no policies (service-role only, same as `backfill_skips`). Additive; reversible with `DROP TABLE`. |
+| `scripts/sync/backfill-service-catalogue.ts` | Upserts every catalogue entry into the map on any non-dry run (`/shows/search/filters` returns both `id` and `tmdbId`). New flags `--map-only`, `--map-out <file>`, `--map-in <file>`. `--prune` now leaves `sa_service_id = 'tmdb-backfill'` rows alone. |
+| `supabase/functions/sync-incremental/index.ts` | `resolveShowIds()`: one map read per `/changes` page, then a bounded `/shows/{id}` lookup per miss (`MISS_LOOKUP_BUDGET` = 200/chain, body override `lookupBudget`), answer written back to the map. Unresolved changes are skipped and counted (`stats.unresolved`), never written under the vendor id. A map-read failure — including the table not existing — is a fetch failure: run marked `failed`, window not advanced. Buggy `extractTmdbId` ('series' test) replaced by `parseTmdbRef`. |
+| Saved walks | `scripts/sync/walks/netflix.json` (8,567 entries) and `scripts/sync/walks/prime.json` (24,000 entries, the popularity head) from the dry-run measurement — gitignored, in the main checkout. Seeding from them costs **zero** vendor requests. |
+
+## 2. Run list for Joe — in this order
+
+The order matters: the function refuses to write without the table, and the map should be warm before the first run or the 200-lookup budget is spent on ids a walk would have given for free.
+
+```bash
+# 1. Apply migration 083 (Studio SQL editor, or the MCP apply_migration).
+#    Verify:  select to_regclass('public.sa_show_map');
+
+# 2. Seed the map from the saved dry-run walks (0 vendor requests each).
+npx tsx scripts/sync/backfill-service-catalogue.ts --service netflix --map-in scripts/sync/walks/netflix.json
+npx tsx scripts/sync/backfill-service-catalogue.ts --service prime   --map-in scripts/sync/walks/prime.json
+#    Verify:  select source, count(*) from sa_show_map group by source;
+
+# 3. Deploy the fixed function (manual; not in CI). The live function has verify_jwt = true — keep it.
+npx supabase functions deploy sync-incremental
+#    (needs SUPABASE_ACCESS_TOKEN / `supabase login`; the MCP deploy_edge_function tool is the alternative)
+
+# 4. Optional but recommended before 06:00: run one chain now against the small window since this morning.
+#    select enqueue_function_call('sync-incremental', '{}'::jsonb);
+#    Then the verification query in §4. Rows it writes will carry last_verified_at >= now.
+```
+
+If step 3 happens without step 1, tomorrow's run fails loudly (`fetch_failures`, status `failed`, pipeline-health `no-failed-runs` emails you) and the window is re-covered once the table exists. It cannot write vendor ids.
+
+## 3. The four decisions
+
+### 3.1 Cadence and architecture — RECOMMENDED: map + daily `/changes` + weekly walk
+
+Three shapes were costed in the handoff. The synthesis is what shipped: `/changes` survives as the daily delta (≈121 requests/day on 13 catalogues, measured 11 Sept), resolved against the map at zero cost; misses fall back to one lookup each, bounded.
+
+Walk cost, measured today in dry-run (the five wave-1 catalogues were 253 requests / 4,876 entries on 10 Sept):
+
+| Catalogue | Requests | Entries | Walk complete |
+|---|---|---|---|
+| netflix | 429 | 8,567 | yes (4m16s; 5,218 subscription rows for held titles, 3,349 entries not in `titles`) |
+| prime | 1,200 (ceiling) | 24,000+ | **no** — stopped at the ceiling after 10m41s at cursor `18530713:0`. Head: 2,937 subscription / 6,746 buy / 3,434 rent / 1,927 addon / 859 free rows for held titles; 17,907 of the first 24,000 entries not in `titles` |
+
+**Recommendation.** Bare `catalogs=prime` returns every option type (the stream-type breakdown proves it: buy and rent dominate), so Prime's full catalogue is well beyond 24,000 entries and did not finish in 1,200 requests. A weekly full Prime walk alone would be ≥5,200/month — too much. Split the cadence by how fast each catalogue moves:
+
+| Cadence | Catalogues | Cost |
+|---|---|---|
+| Daily | `/changes` on all 13, resolved through the map | ~121/day ≈ 3,600/month (measured 11 Sept) |
+| Weekly | netflix (429) + disney, itvx, paramount, now, all4 (unmeasured; small subscription catalogues) + the wave-1 five (253) | ≈ 700–1,100/week ≈ 3,000–4,700/month |
+| Monthly | prime and apple full walks (buy/rent-heavy, slow-moving inventory) | prime ≥1,200, plausibly 2,000–3,000; apple unmeasured (~9k March rows suggests ~1,000–1,500) |
+
+Roughly 10,000–13,000/month against the 25,000 plan, leaving room for the one-off cleanup walks. Two numbers to pin before committing to it: **finish the Prime measurement from the saved cursor** (at most one more ceiling; the file it saves seeds the tail of the map) and **measure apple**:
+
+```bash
+npx tsx scripts/sync/backfill-service-catalogue.ts --service prime --dry-run --max-requests 1500 --cursor 18530713:0 --map-out scripts/sync/walks/prime-2.json
+npx tsx scripts/sync/backfill-service-catalogue.ts --service apple --dry-run --max-requests 1500 --map-out scripts/sync/walks/apple.json
+```
+
+Until Prime's tail is walked, changes on Prime buy/rent titles outside the popularity head fall to the 200/chain lookup budget — watch `unresolved` in the first few runs. The weekly/monthly walks are run by hand (or a GitHub Actions cron alongside `pipeline-health.yml`) — not from an Edge Function, which cannot run long enough.
+
+### 3.2 The 58,718 suspect availability rows — RECOMMENDED: rebuild by walk, then delete the residue
+
+Repairing in place is possible for rows whose vendor id the map knows, but it cannot distinguish a vendor-id row from a correct row written the same day by the wave-1 walk on the same five services, so it is not trustworthy. The walk is: for each of the 13 catalogues, `--prune` deletes every row the vendor no longer lists for that service and rewrites the rest from the listing. A vendor-id row survives only if its number coincides with a real TMDb id that is genuinely on that service, in which case the walk replaces it with a correct row.
+
+```bash
+# dry-run each first; Joe approves with the numbers in hand
+for s in netflix prime disney apple itvx paramount now all4 hbo plutotv discovery crunchyroll mubi; do
+  npx tsx scripts/sync/backfill-service-catalogue.ts --service $s --dry-run --prune --max-requests 1500
+done
+# then live, same list, without --dry-run
+```
+
+Then the residue — since-April rows, not `tmdb-backfill`, whose id matches no title. After the walks these can only be vendor ids for services the walk did not cover (there are none) or coincidences the walk pruned:
+
+```sql
+-- count first
+select count(*) from streaming_availability sa
+left join titles t on t.tmdb_id = sa.tmdb_id and t.media_type = sa.media_type
+where t.tmdb_id is null
+  and sa.last_verified_at >= '2026-04-01'
+  and sa.sa_service_id <> 'tmdb-backfill';
+
+-- then delete with the identical predicate
+delete from streaming_availability sa
+using (
+  select sa2.id from streaming_availability sa2
+  left join titles t on t.tmdb_id = sa2.tmdb_id and t.media_type = sa2.media_type
+  where t.tmdb_id is null
+    and sa2.last_verified_at >= '2026-04-01'
+    and sa2.sa_service_id <> 'tmdb-backfill'
+) x where x.id = sa.id;
+
+select public.count_available_services_drift();   -- expect 0
+```
+
+The March rows are touched only where a title has genuinely left a service, which is the prune working as intended. `tmdb-backfill` rows (bbc, now, skygo — 765 since April, all correct) are never touched.
+
+**Optional, and a decision in its own right — absorb IN-SC-001 into the same walks.** The walk already carries a correct TMDb id for every catalogue entry, including the ~3,979 wave-1 entries `titles` has no row for (Crunchyroll 1,431 · HBO Max 965 · Discovery+ 808 · Pluto TV 371 · MUBI 404). Adding `--include-unknown-titles` writes their availability rows too (still no `titles` write); the nightly `backfill-missing-titles` chain at 05:00 UTC then creates the titles from those rows, as it does for the daily sync's, and enrich/embed follow at 06:30/07:15. The real queue is 411 today, so there is headroom, though ~4k rows is a few nights of chain capacity (~1,900/day). **Caveat to decide rather than inherit:** roughly 1,700 of those are anime; dropping them into a 34,587-title catalogue shifts its composition, and service fingerprints, mood clusters and taste vectors all derive from it. Crunchyroll at 71 titles is close to useless, so it may well be right — but measure it: `npm run eval:fingerprints` before and after. Raised by the session that filed IN-SC-001.
+
+### 3.3 `backfill_skips` — RECOMMENDED: delete the 16,692 explained rows, keep the 412
+
+All 17,104 are `tmdb_404`, but only 16,692 are since-April orphan ids; 412 are not explained by any orphan row and are probably genuine dead TMDb ids. **Run before the walks** — the prune removes the orphan rows this predicate depends on.
+
+```sql
+-- expect 16,692
+select count(*) from backfill_skips s
+join (
+  select distinct sa.tmdb_id, sa.media_type from streaming_availability sa
+  left join titles t on t.tmdb_id = sa.tmdb_id and t.media_type = sa.media_type
+  where t.tmdb_id is null and sa.last_verified_at >= '2026-04-01' and sa.sa_service_id <> 'tmdb-backfill'
+) o on o.tmdb_id = s.tmdb_id and o.media_type = s.media_type;
+
+delete from backfill_skips s
+using (
+  select distinct sa.tmdb_id, sa.media_type from streaming_availability sa
+  left join titles t on t.tmdb_id = sa.tmdb_id and t.media_type = sa.media_type
+  where t.tmdb_id is null and sa.last_verified_at >= '2026-04-01' and sa.sa_service_id <> 'tmdb-backfill'
+) o where o.tmdb_id = s.tmdb_id and o.media_type = s.media_type;
+```
+
+`count_missing_title_ids()` will not move: the residue rows are deleted in 3.2, so nothing new enters the backfill queue.
+
+### 3.4 `streaming_history` and the alerts — two options, Joe's call
+
+Every since-April row (108,592) is from this one writer (`sync_run_id` set on all of them), so `tmdb_id` is a vendor id on every one. `send-notifications` builds arrival alerts from `event_type = 'added'` in the last day; leaving-soon reads `expires_on` off availability directly. Nothing has reached a real user.
+
+**Option A — repair through the map (keeps the audit trail).** Unambiguous because there is exactly one writer. Run **once**, in **one transaction**, delete-unexplained-first — the update is not idempotent (a repaired TMDb id could coincidentally equal another vendor id on a second pass):
+
+```sql
+begin;
+-- rows the map cannot explain (count first; expect small once all 13 catalogues are walked)
+delete from streaming_history h
+where h.recorded_at >= '2026-04-01'
+  and not exists (select 1 from sa_show_map m where m.sa_show_id = h.tmdb_id::text);
+
+update streaming_history h
+set tmdb_id = m.tmdb_id, media_type = m.media_type
+from sa_show_map m
+where m.sa_show_id = h.tmdb_id::text
+  and h.recorded_at >= '2026-04-01';
+commit;
+```
+
+**Option B — purge.** `delete from streaming_history where recorded_at >= '2026-04-01';` Simpler; loses five months of movement data that was wrong anyway.
+
+Either way, do it before the H1 community rollout, and after the walks (Option A needs the map warm).
+
+## 4. Verification after the first post-fix run
+
+```sql
+-- every new row's tmdb_id must name the title its own link points at
+select t.title, sa.service_id, sa.deep_link_url
+from streaming_availability sa
+join titles t on t.tmdb_id = sa.tmdb_id and t.media_type = sa.media_type
+where sa.service_id in ('itvx','channel4','now')
+  and sa.last_verified_at >= '2026-09-11 12:00'   -- after deploy
+order by random() limit 14;
+
+-- the run's own accounting
+select started_at, status, sa_requests,
+       chain_state->'stats'->>'mapHits'    as map_hits,
+       chain_state->'stats'->>'mapLookups' as lookups,
+       chain_state->'stats'->>'unresolved' as unresolved,
+       error_details
+from sync_log where sync_type = 'incremental' order by started_at desc limit 3;
+
+-- no new orphans should appear from a resolved change unless the title is genuinely not in `titles`
+-- (that is the legitimate backfill queue, ~411 today)
+select count_missing_title_ids();
+```
+
+## 5. Rollback
+
+- Function: redeploy the previous commit. The old code writes vendor ids again — do not.
+- Migration: `drop table public.sa_show_map;` — the fixed function then fails loudly and stops writing; it never falls back to the vendor id.
+- Script: `--map-only` / `--map-in` write only `sa_show_map`; a walk without `--prune` only adds and refreshes.

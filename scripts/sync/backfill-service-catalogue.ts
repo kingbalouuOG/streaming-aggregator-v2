@@ -22,10 +22,18 @@
  * title, which is roughly two orders of magnitude cheaper against the SA
  * API quota (R-032).
  *
- * SCOPE BOUNDARY. It writes `streaming_availability` ONLY. `titles` is
- * owned by sync-content.ts and backfill_missing_titles.ts; a catalogue
- * entry whose title Videx does not hold is counted and skipped, not
- * inserted. Run the title backfill first if that count is high.
+ * SCOPE BOUNDARY. It writes `streaming_availability` (and `sa_show_map`)
+ * ONLY. `titles` is owned by sync-content.ts and backfill_missing_titles.ts.
+ * By default a catalogue entry whose title Videx does not hold is counted
+ * and skipped. With `--include-unknown-titles` its availability rows are
+ * written anyway — still no `titles` write — so the nightly
+ * `backfill-missing-titles` chain (05:00 UTC) creates the title from the
+ * row, exactly as it does for rows the daily sync writes. That is how the
+ * IN-SC-001 title gap (~3,979 entries across the wave-1 five) can drain
+ * through machinery that already exists. It is opt-in because it changes
+ * catalogue composition (roughly 1,700 of those are anime), which service
+ * fingerprints, mood clusters and taste vectors all derive from — run
+ * `npm run eval:fingerprints` before and after, and let Joe decide.
  *
  * Usage:
  *   npx tsx scripts/sync/backfill-service-catalogue.ts --service hbo --dry-run
@@ -40,6 +48,36 @@
  *   --prune                 after a COMPLETE walk, delete this service's
  *                           rows for titles the vendor no longer lists.
  *                           Refused on a partial walk (see below).
+ *   --map-only              write ONLY `sa_show_map` (vendor show id ->
+ *                           TMDb id, migration 083); touch no availability
+ *                           row and never prune. This is how the map that
+ *                           `sync-incremental` resolves `/changes` against
+ *                           is seeded (IN-SY-001), and how a catalogue's
+ *                           walk cost is measured without writing
+ *                           availability. --dry-run still writes nothing.
+ *   --map-out <file>        also save the staged map entries as JSON. Works
+ *                           under --dry-run, so a measuring walk need not be
+ *                           paid for twice: seed the map later from the file.
+ *   --map-in <file>         upsert `sa_show_map` from a --map-out file and
+ *                           exit. Zero vendor requests.
+ *   --include-unknown-titles
+ *                           also write availability rows for catalogue
+ *                           entries `titles` does not hold (see SCOPE
+ *                           BOUNDARY). Default off.
+ *   --cursor <cursor>       resume a walk from the cursor a previous run
+ *                           printed when it hit its request ceiling, so a
+ *                           large catalogue (Prime: >24,000 entries, not
+ *                           finished in 1,200 requests) is never paid for
+ *                           twice. A resumed walk never saw the head of the
+ *                           catalogue, so it is partial by definition and
+ *                           --prune is refused.
+ *
+ * THE MAP IS A SIDE EFFECT OF EVERY LIVE WALK. `/shows/search/filters`
+ * returns both the vendor's own `id` and the real `tmdbId` for every
+ * catalogue entry, so any non-dry run upserts every entry it sees into
+ * `sa_show_map` — including entries whose title Videx does not hold,
+ * because a later `/changes` row for that title must still resolve to a
+ * real TMDb id (which is what feeds the title backfill queue).
  *
  * ⚠ BULK WRITES AND MIGRATION 075. `streaming_availability` carries a
  * per-row trigger that maintains `titles.available_services`. This script
@@ -52,7 +90,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 
 // ── Env ──────────────────────────────────────────────────
@@ -94,6 +132,11 @@ function flag(name: string): string | undefined {
 const saServiceId = flag('service');
 const dryRun = args.includes('--dry-run');
 const prune = args.includes('--prune');
+const mapOnly = args.includes('--map-only');
+const mapOut = flag('map-out');
+const mapIn = flag('map-in');
+const includeUnknownTitles = args.includes('--include-unknown-titles');
+const startCursor = flag('cursor');
 const maxRequests = flag('max-requests') ? parseInt(flag('max-requests')!, 10) : 300;
 
 if (!saServiceId) {
@@ -178,6 +221,53 @@ function parseTmdbRef(ref: unknown): { tmdbId: number; mediaType: string } | nul
   const tmdbId = Number(id);
   if (!Number.isInteger(tmdbId) || (mediaType !== 'movie' && mediaType !== 'tv')) return null;
   return { tmdbId, mediaType };
+}
+
+// ── Vendor id → TMDb id map (migration 083, IN-SY-001) ───
+//
+// `sync-incremental` consumes `/changes`, which identifies a title only by
+// the vendor's own `showId`. This walk is the cheapest source of the
+// (showId → tmdbId) pairs it needs: both ids arrive on every entry.
+
+interface ShowMapRow {
+  sa_show_id: string;
+  tmdb_id: number;
+  media_type: string;
+  title: string | null;
+  source: 'catalogue-walk';
+  last_seen_at: string;
+}
+
+async function upsertShowMap(rows: ShowMapRow[]): Promise<void> {
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error } = await supabase
+      .from('sa_show_map')
+      .upsert(rows.slice(i, i + 500), { onConflict: 'sa_show_id' });
+    if (error) throw new Error(`sa_show_map upsert at ${i}: ${error.message}`);
+  }
+}
+
+function saveShowMap(path: string, rows: ShowMapRow[]): void {
+  writeFileSync(resolve(path), JSON.stringify({ catalogue: saServiceId, savedAt: new Date().toISOString(), rows }));
+}
+
+function loadShowMap(path: string): ShowMapRow[] {
+  const parsed = JSON.parse(readFileSync(resolve(path), 'utf-8'));
+  const rows: unknown[] = Array.isArray(parsed) ? parsed : parsed?.rows;
+  if (!Array.isArray(rows)) throw new Error(`${path}: expected a --map-out file`);
+  return rows.map((r: any) => {
+    if (typeof r?.sa_show_id !== 'string' || !Number.isInteger(r?.tmdb_id) || (r?.media_type !== 'movie' && r?.media_type !== 'tv')) {
+      throw new Error(`${path}: malformed map row ${JSON.stringify(r).slice(0, 120)}`);
+    }
+    return {
+      sa_show_id: r.sa_show_id,
+      tmdb_id: r.tmdb_id,
+      media_type: r.media_type,
+      title: typeof r.title === 'string' ? r.title : null,
+      source: 'catalogue-walk',
+      last_seen_at: new Date().toISOString(),
+    };
+  });
 }
 
 function buildRow(opt: any, tmdbId: number, mediaType: string): AvailabilityRow {
@@ -296,10 +386,16 @@ async function findStaleRows(
   const PAGE = 1000;
 
   while (true) {
+    // `tmdb-backfill` rows come from TMDb watch/providers, not from this
+    // vendor (scripts/fingerprints/backfill-tmdb-providers.ts). The walk
+    // only knows the vendor's view, so it may only prune what the vendor
+    // wrote: NOW carries ~290 such rows that a vendor-scoped prune would
+    // otherwise delete.
     const { data, error } = await supabase
       .from('streaming_availability')
       .select('id, tmdb_id, media_type')
       .eq('service_id', videxServiceId)
+      .neq('sa_service_id', 'tmdb-backfill')
       .range(offset, offset + PAGE - 1);
     if (error) throw new Error(`stale scan: ${error.message}`);
     if (!data || data.length === 0) break;
@@ -316,12 +412,30 @@ async function findStaleRows(
 // ── Main ─────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  if (mapIn) {
+    const rows = loadShowMap(mapIn);
+    console.log(`Seeding sa_show_map from ${mapIn}: ${rows.length} entries (no vendor requests)`);
+    if (dryRun) {
+      console.log('  DRY RUN — nothing written.');
+      return;
+    }
+    await upsertShowMap(rows);
+    console.log(`  sa_show_map upserted: ${rows.length}`);
+    return;
+  }
+
   console.log(`Backfill catalogue '${saServiceId}' -> service_id '${videxServiceId}'`);
-  console.log(`  mode: ${dryRun ? 'DRY RUN (no writes)' : 'LIVE'}`);
+  console.log(
+    `  mode: ${dryRun ? 'DRY RUN (no writes)' : mapOnly ? 'MAP ONLY (sa_show_map only, no availability writes)' : 'LIVE'}`,
+  );
   console.log(`  request ceiling: ${maxRequests}`);
+  if (includeUnknownTitles) {
+    console.log('  unknown titles: INCLUDED — rows written for entries `titles` lacks; the 05:00 backfill creates the titles');
+  }
   console.log();
 
-  let cursor: string | undefined;
+  let cursor: string | undefined = startCursor;
+  if (startCursor) console.log(`  resuming from cursor ${startCursor} — partial walk, --prune refused`);
   let page = 0;
   // A prune may only run off a walk that reached the end of the catalogue.
   // Pruning from a truncated walk would delete every title the walk never
@@ -331,6 +445,8 @@ async function main(): Promise<void> {
   let missingTitles = 0;
   const rows: AvailabilityRow[] = [];
   const seen = new Set<string>();
+  const mapRows: ShowMapRow[] = [];
+  const mapSeen = new Set<string>();
 
   while (true) {
     const params = new URLSearchParams({
@@ -352,6 +468,20 @@ async function main(): Promise<void> {
       const ref = parseTmdbRef(show.tmdbId);
       if (!ref) continue;
       catalogueEntries++;
+      // The vendor documents `id` as an opaque string ("6", "22007718");
+      // keep it as text, never as a number.
+      const showId = show.id != null ? String(show.id) : null;
+      if (showId && !mapSeen.has(showId)) {
+        mapSeen.add(showId);
+        mapRows.push({
+          sa_show_id: showId,
+          tmdb_id: ref.tmdbId,
+          media_type: ref.mediaType,
+          title: typeof show.title === 'string' ? show.title : null,
+          source: 'catalogue-walk',
+          last_seen_at: new Date().toISOString(),
+        });
+      }
       pairs.push(ref);
       const opts: any[] = (show.streamingOptions?.gb ?? []).filter(
         (o: any) => o?.service?.id === saServiceId,
@@ -366,7 +496,7 @@ async function main(): Promise<void> {
       const titleKey = `${tmdbId}:${mediaType}`;
       if (!known.has(titleKey)) {
         missingThisPage.add(titleKey);
-        continue;
+        if (!includeUnknownTitles) continue;
       }
       // Dedupe on the table's unique key: (tmdb_id, media_type,
       // service_id, stream_type, quality).
@@ -383,7 +513,10 @@ async function main(): Promise<void> {
     );
 
     if (!body.hasMore || !body.nextCursor) {
-      walkComplete = true;
+      // Reached the end — but only a walk that started at the head has
+      // seen the whole catalogue. Pruning off a resumed walk would delete
+      // everything before the start cursor.
+      walkComplete = !startCursor;
       break;
     }
     cursor = body.nextCursor;
@@ -396,15 +529,22 @@ async function main(): Promise<void> {
   console.log();
   console.log(`  vendor requests used:        ${requestsUsed}`);
   console.log(`  catalogue entries seen:      ${catalogueEntries}`);
-  console.log(`  titles Videx does not hold:  ${missingTitles}`);
+  console.log(
+    `  titles Videx does not hold:  ${missingTitles}` +
+      (includeUnknownTitles ? ' (rows written; titles arrive via the 05:00 backfill)' : ' (skipped)'),
+  );
   console.log(`  availability rows to write:  ${rows.length}`);
+  console.log(`  sa_show_map entries:         ${mapRows.length}`);
+  console.log(`  walk complete:               ${walkComplete ? 'yes' : 'NO (stopped at request ceiling)'}`);
 
   const byType = new Map<string, number>();
   for (const r of rows) byType.set(r.stream_type, (byType.get(r.stream_type) ?? 0) + 1);
   for (const [t, n] of [...byType].sort()) console.log(`    ${t}: ${n}`);
 
-  const stale = prune ? await findStaleRows(rows, walkComplete) : [];
-  if (prune) {
+  const stale = prune && !mapOnly ? await findStaleRows(rows, walkComplete) : [];
+  if (prune && mapOnly) {
+    console.log('  --prune ignored under --map-only.');
+  } else if (prune) {
     if (walkComplete) {
       console.log(`  stale rows to prune:         ${stale.length}`);
     } else {
@@ -412,8 +552,22 @@ async function main(): Promise<void> {
     }
   }
 
+  if (mapOut) {
+    saveShowMap(mapOut, mapRows);
+    console.log(`  saved ${mapRows.length} map entries to ${mapOut}`);
+  }
+
   if (dryRun) {
     console.log('\n  DRY RUN — nothing written.');
+    return;
+  }
+
+  // The map goes first and unconditionally: it is what makes the next
+  // /changes run resolve, and it is cheap.
+  await upsertShowMap(mapRows);
+  console.log(`  sa_show_map upserted: ${mapRows.length}`);
+  if (mapOnly) {
+    console.log('\n  MAP ONLY — availability untouched.');
     return;
   }
 
