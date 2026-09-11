@@ -4,6 +4,7 @@ type: concept
 tags: [solution, post-mortem, sync, sa-api, data-corruption, quota]
 created: 2026-09-11
 updated: 2026-09-11
+status: closed — fix live and cleanup complete 2026-09-11
 sources:
   - docs/plans/2026-09-11-001-handoff-sync-tmdb-id-corruption.md (not yet snapshotted into raw/)
   - docs/plans/2026-09-11-002-plan-sync-tmdb-id-cleanup.md (not yet snapshotted into raw/)
@@ -70,9 +71,9 @@ New per-chain stats in `sync_log.chain_state.stats`: `mapHits`, `mapLookups`, `u
 | netflix | 429 | 8,567 | complete in 4m16s; 5,218 subscription rows for held titles; 3,349 entries Videx does not hold |
 | prime | 1,200 (ceiling) | 24,000+ | **NOT complete** after 10m41s — stopped at the ceiling, cursor `18530713:0`; the popularity-ordered head yields 2,937 subscription / 6,746 buy / 3,434 rent / 1,927 addon / 859 free rows for held titles; 17,907 of the first 24,000 entries are not in `titles`. Bare `catalogs=prime` includes every option type, so the full catalogue is far larger than the subscription tier |
 
-## Cleanup (decisions for Joe, not inherited)
+## Cleanup — DONE 2026-09-11 evening (Joe approved the recommendations)
 
-Costed and written up with SQL in `docs/plans/2026-09-11-002-plan-sync-tmdb-id-cleanup.md`. Nothing below has been run.
+All four ran the same day; numbers in `docs/plans/2026-09-11-002-plan-sync-tmdb-id-cleanup.md` §2b. Outcome: 241,834 availability rows, **0** from the corrupt writer; 102,537 history rows repaired + 6,055 deleted; skip list 17,104 → 412; drift 0; 18,502/18,566 rebuilt titles match the vendor's. Side effects worth knowing: NOW's vendor catalogue is 318 titles today (IN-SC-003), and `--include-unknown-titles` put 58,029 titles into the backfill queue (IN-SC-001), which drains over 3–4 weeks. The decisions as they were framed:
 
 1. **Suspect availability rows** — rebuild per catalogue with the walk script (`--prune`), which deletes every row the vendor no longer lists for that service and rewrites the rest from the listing. A vendor-id row survives only if its number coincides with a real TMDb id that is genuinely on that service, in which case it is replaced by a correct row. Then delete the residue: since-April rows, not `tmdb-backfill`, whose id matches no title. March rows for titles that have genuinely left a service are pruned too — that is the walk doing its job, not collateral. The same walks can absorb **IN-SC-001** (`--include-unknown-titles` lets title-less rows through for the 05:00 backfill to create the titles) — opt-in, because ~1,700 of the ~3,979 missing wave-1 titles are anime and that shifts catalogue composition; measure with `npm run eval:fingerprints` first.
 2. **`backfill_skips`** — delete the 16,692 rows whose id is a since-April orphan; keep the 412 that are not explained by orphans (likely genuine 404s). Must run **before** the walks, because the prune removes the orphan rows the predicate depends on.

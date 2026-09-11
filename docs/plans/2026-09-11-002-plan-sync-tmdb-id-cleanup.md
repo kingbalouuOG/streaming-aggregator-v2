@@ -59,6 +59,38 @@ done
 
 The wave-1 five cost 253 last time; disney/itvx/paramount/now/all4 are unmeasured but small; apple is the unknown (buy/rent-heavy, plausibly 1,000–1,500). Until then, watch `unresolved` in `sync_history` each morning.
 
+## 2b. Cleanup run 2026-09-11 (Joe approved the recommendations; §3 decisions taken) — DONE
+
+Order actually run: skip-list prune (3.3) → walks with `--prune --include-unknown-titles` for the eleven single-tier catalogues → Apple and Prime walked **without** prune, corrupt cohort removed by date, unrefreshed March rows removed as the prune-equivalent → history repair (3.4 option A) → verification.
+
+| Catalogue | Requests | Entries | Rows written | Pruned / removed | Note |
+|---|---|---|---|---|---|
+| mubi | 24 | 465 | 465 | 22 | |
+| crunchyroll | 76 | 1,504 | 1,510 | 51 | |
+| discovery | 48 | 948 | 948 | 5 | |
+| plutotv | 17 | 325 | 325 | 595 | vendor lists 325 today (513 on 10 Sept) |
+| hbo | 73 | 1,452 | 1,453 | 9 | |
+| itvx | 44 | 877 | 877 | 386 | |
+| all4 | 65 | 1,294 | 1,294 | 650 | |
+| paramount | 45 | 881 | 882 | 347 | |
+| now | 16 + 16 | 318 | 318 | 1,802 | **vendor lists 318 NOW titles today** (Hayu 148 · Entertainment 106 · Cinema 64) vs ~1,840 in March; `now.addon` returns the same 318 — filed IN-SC-003 |
+| disney | 179 | 3,564 | 3,569 | 1,816 | |
+| netflix | 429 | 8,568 | 8,568 | 4,328 | |
+| apple | 1,504 | 30,067 | 67,134 | 11,207 corrupt + 904 stale March | buy 42,415 · rent 21,705 · addon 2,699 · sub 315 |
+| prime | 2,625 (+2,625 failed first attempt) | 52,496 | 153,850 | 33,574 corrupt + 1,324 stale March | buy 60,764 · rent 50,364 · addon 18,166 · sub 18,045 · free 6,511; 41,001 entries not in `titles` |
+
+`backfill_skips`: 16,692 deleted, 412 kept. `count_available_services_drift()` = 0 throughout. The first Prime attempt (2,625 requests) completed its walk but the writes died at row 5,400 on a transient Supabase "fetch failed" with nothing persisted — hence the retry/replay hardening in the script and a second walk (which itself absorbed five transient failures).
+
+**History (3.4, option A) — done, run once.** 102,537 rows repaired through the map (`tmdb_id`/`media_type` rewritten), 6,055 rows the map could not explain deleted. Post-fix rows untouched.
+
+**Verification after everything:** 241,834 availability rows; **0** rows left from the corrupt writer (the 930 April `iplayer` rows on BBC are per-title fetches, all titled, and were never in the changes feed); every title-less row's id is vouched for by the map (0 orphans the map cannot explain); of 18,566 rebuilt rows with a Videx title, **18,502 match the vendor's title exactly and 64 differ only by punctuation or alternate title**; 10 of 10 random ITVX / Channel 4 / NOW links point at their own title.
+
+**Vendor quota, 11 Sept:** dry-run measurement 1,631 + first fixed chain 294 + cleanup walks 7,786 + probes ~15 ≈ **9,700**. Month to date ≈ 11,200 of 25,000, with ~19 daily runs (~200 each) still to come.
+
+**Titles — the one number Joe should look at.** With `--include-unknown-titles` on every catalogue, `count_missing_title_ids()` went from 411 to **58,029**. Most of that is Prime's and Apple's buy/rent long tail (41,001 + 24,139 unknown entries), not the ~4k wave-1 titles the question started from. The 05:00 `backfill-missing-titles` chain creates ~1,900–3,000 a night (one TMDb request each), then enrich and embed follow — so at the default cadence the queue drains over **three to four weeks**, and `titles` roughly triples (34,587 → ~92k). Two levers if that is more than wanted: delete the title-less `buy`/`rent`-only rows on prime and apple before tonight (the queue collapses to the subscription/free/addon tail, ~15k), or raise `MAX_CHAIN_DEPTH` in the backfill for a faster drain. Baseline fingerprint eval before any of this: **FAIL** (max pairwise 0.985, mean 0.809, anchor fail) — saved as `scripts/sync/walks/eval-fingerprints-before-2026-09-11.md`; run `npm run eval:fingerprints` again after a Sunday 07:00 refresh once the new titles are embedded.
+
+**Still open:** scheduling the weekly/monthly walks (3.1) as a GitHub Actions cron; the eval "after".
+
 ## 3. The four decisions
 
 ### 3.1 Cadence and architecture — RECOMMENDED: map + daily `/changes` + weekly walk
