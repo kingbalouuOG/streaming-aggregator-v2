@@ -133,6 +133,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Solution: Supabase Security Advisor accepted warnings](wiki/concepts/operations/solutions/supabase-advisor-accepted-warnings.md)
 - [Solution: Client-side cache never written (dead code)](wiki/concepts/operations/solutions/supabase-content-cache-dead-code.md)
 - [Solution: Numeric 0 rendered as text under `&&` guard](wiki/concepts/operations/solutions/react-numeric-falsy-renders-zero.md)
+- [Solution: The incremental sync stored the vendor's show id as `tmdb_id` (IN-SY-001)](wiki/concepts/operations/solutions/sync-vendor-show-id-in-tmdb-id.md) — 58,718 corrupt availability rows; fixed with a vendor-id → TMDb-id map seeded by catalogue walks.
 
 ### Evaluations
 

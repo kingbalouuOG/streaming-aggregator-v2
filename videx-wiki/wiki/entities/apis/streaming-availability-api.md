@@ -37,9 +37,9 @@ X-RapidAPI-Host: streaming-availability.p.rapidapi.com
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /shows/{id}`, `GET /shows/movie/{tmdb_id}`, `GET /shows/series/{tmdb_id}` | Single-title lookup. Returns availability per service per country, deep links, pricing. |
-| `GET /shows/search/filters` | Catalogue search by service/country/type. Used by wire-format spike and historic backfill. |
-| `GET /changes` | Daily delta endpoint. Powers `sync-incremental` (06:00 UTC). Writes to `streaming_history` for audit trail. |
+| `GET /shows/{id}`, `GET /shows/movie/{tmdb_id}`, `GET /shows/series/{tmdb_id}` | Single-title lookup. Returns availability per service per country, deep links, pricing. `{id}` accepts the vendor's own show id or an IMDb id (verified 2026-09-11: `/shows/6` → Stranger Things, `tmdbId: "tv/66732"`). `sync-incremental` uses it as the bounded per-miss fallback for `sa_show_map` (IN-SY-001). |
+| `GET /shows/search/filters` | Catalogue listing by service/country/type, 20 per request, cursor-paginated. Returns **both** the vendor `id` and the real `tmdbId` per entry — the cheapest source of the (vendor id → TMDb id) pairs `sa_show_map` needs. Walked by `scripts/sync/backfill-service-catalogue.ts`. |
+| `GET /changes` | Daily delta endpoint. Powers `sync-incremental` (06:00 UTC). Writes to `streaming_history` for audit trail. ⚠ **Carries no TMDb id.** Keys are exactly `changeType, itemType, link, service, showId, showType, streamingOptionType, timestamp`; `showId` is the vendor's own id and unrelated to TMDb's numbering. See [IN-SY-001 post-mortem](../../concepts/operations/solutions/sync-vendor-show-id-in-tmdb-id.md). |
 | `GET /countries/{country}` | Service list for a country. Iterate `Object.values(countriesData.services)`. |
 
 ## Response shape
@@ -60,6 +60,7 @@ Higher RapidAPI tiers do not unlock additional UK service coverage.
 ## Quirks
 
 - `service.id` and Videx slug diverge for some services (`now` ↔ NOW, `all4` ↔ Channel 4). Mapping in `lib/adapters/platformAdapter.ts`.
+- The vendor's show `id` is an opaque **string** (`"6"`, `"22007718"`) and is not a TMDb id. Store it as text, resolve it through `sa_show_map`, never `parseInt` it into `tmdb_id` (IN-SY-001).
 - `streamingOptions.gb[]` may contain multiple entries per service (subscription + addon + rent + buy). Sync writes one row per `(tmdb_id, media_type, service_id, type, quality)`.
 - `link` may be web URL or app-scheme depending on service. Confidence tagged at click time by `openDeepLink.ts`.
 - `expiresOn` set for some services (NOW especially); used for "leaving soon".

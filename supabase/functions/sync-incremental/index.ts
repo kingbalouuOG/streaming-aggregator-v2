@@ -10,6 +10,14 @@
  *
  * Query params:
  *   ?since=<unix_timestamp>  Override the "since" timestamp (default: last sync)
+ *
+ * Body overrides (catch-up only, see CATCH-UP below):
+ *   { since, budget, maxDepth, lookupBudget }
+ *
+ * IN-SY-001 (2026-09-11): `/changes` carries no TMDb id. Every showId is
+ * resolved through `sa_show_map` (migration 083) before anything is
+ * written; see resolveShowIds(). A change that cannot be resolved is
+ * skipped and counted, never written under the vendor's id.
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -409,7 +417,11 @@ const MAX_CHAIN_DEPTH = 20;
 // invocation:
 //
 //   select enqueue_function_call('sync-incremental',
-//     '{"since": 1787897520, "budget": 2500, "maxDepth": 70}'::jsonb);
+//     '{"since": 1787897520, "budget": 2500, "maxDepth": 70, "lookupBudget": 1000}'::jsonb);
+//
+// `lookupBudget` (IN-SY-001) is the same idea for the per-miss /shows/{id}
+// lookups: MISS_LOOKUP_BUDGET is sized for a warm sa_show_map, and a
+// catch-up over a window the map has not seen needs more.
 //
 // A normal run sends neither and is unchanged. An override is visible in
 // chain_state afterwards, so a run that spent more than usual says why.
@@ -448,6 +460,7 @@ interface SyncChainState {
   // Absent on every normal run, which then uses the module defaults.
   budget?: number;
   max_depth?: number;
+  lookup_budget?: number;
   // (change_type, service) pairs this chain failed to FETCH. Distinct from
   // the error buckets, which also hold per-title processing errors that do
   // not mean data was missed. Only a fetch failure means a page was never
@@ -482,13 +495,136 @@ async function getLastSyncTimestamp(): Promise<number> {
   return nowSec - 86400;
 }
 
-function extractTmdbId(saApiTmdbId: string): { tmdbId: number; mediaType: 'movie' | 'tv' } {
-  // SA API returns tmdbId as "movie/238" or "tv/1396"
-  const parts = saApiTmdbId.split('/');
-  return {
-    tmdbId: parseInt(parts[1], 10),
-    mediaType: parts[0] === 'series' ? 'tv' : 'movie',
-  };
+// ── Vendor id resolution (IN-SY-001, migration 083) ──────
+//
+// A `/changes` row names its title only by Movie of the Night's own
+// `showId`. There is no TMDb id anywhere in the payload (keys: changeType,
+// itemType, link, service, showId, showType, streamingOptionType,
+// timestamp), and the vendor id bears no relationship to TMDb's numbering:
+// Stranger Things is vendor `6`, TMDb `tv/66732`. From 2026-04-01 to
+// 2026-09-11 this function stored the vendor id in `tmdb_id` — 58,718
+// rows, 27,644 of them rendering on cards against the wrong title.
+//
+// `sa_show_map` holds the correspondence. It is seeded by catalogue walks
+// (scripts/sync/backfill-service-catalogue.ts — the listing endpoint
+// returns both ids on every entry, 20 per request) and topped up here: an
+// id the map has never seen costs ONE `/shows/{id}` lookup, whose answer
+// is written back so it is never paid for again.
+//
+// The lookup budget bounds what a cold map can cost per chain. ~1,100
+// distinct ids arrive per day; resolving all of them by lookup would be
+// ~33,000 requests/month against a 25,000 quota, which is why the map
+// exists at all. With the big catalogues walked, misses should be genuine
+// arrivals only. If `unresolved` in chain_state.stats stays high, walk the
+// catalogue producing them (or pass lookupBudget for a one-off) rather
+// than raising this number.
+const MISS_LOOKUP_BUDGET = 200;
+
+function resolveLookupBudget(state: SyncChainState): number {
+  return state.lookup_budget && state.lookup_budget > 0 ? state.lookup_budget : MISS_LOOKUP_BUDGET;
+}
+
+interface ResolvedShow {
+  tmdbId: number;
+  mediaType: 'movie' | 'tv';
+}
+
+/**
+ * The vendor writes tmdbId as "movie/1054867" or "tv/224372". The
+ * extractTmdbId this replaces tested for 'series' and would have filed
+ * every TV title as a movie — it never ran, because nothing ever carried a
+ * tmdbId to it.
+ */
+function parseTmdbRef(ref: unknown): ResolvedShow | null {
+  if (typeof ref !== 'string') return null;
+  const [kind, id] = ref.split('/');
+  const tmdbId = Number(id);
+  if (!Number.isInteger(tmdbId) || tmdbId <= 0) return null;
+  if (kind === 'movie') return { tmdbId, mediaType: 'movie' };
+  if (kind === 'tv' || kind === 'series') return { tmdbId, mediaType: 'tv' };
+  return null;
+}
+
+/**
+ * Resolve a page's vendor show ids to TMDb ids: one map read for the whole
+ * page, then a bounded per-miss lookup. Ids that cannot be resolved are
+ * absent from the result and the reason is recorded under
+ * `change.unresolved`; the caller skips those changes rather than writing
+ * anything under the vendor id.
+ *
+ * A map-read failure is THROWN: without the map nothing on the page can be
+ * processed, and the per-pair catch upstream counts it as a fetch failure
+ * so the window is not advanced past it. That is also what happens if
+ * migration 083 has not been applied — the run fails loudly instead of
+ * writing. A single lookup failing is not thrown (QuotaError excepted):
+ * one bad vendor response should cost one change, not the whole page.
+ */
+async function resolveShowIds(
+  showIds: string[],
+  state: SyncChainState,
+  stats: SyncStats,
+  errors: ErrorCollector,
+): Promise<Map<string, ResolvedShow>> {
+  const out = new Map<string, ResolvedShow>();
+  const ids = [...new Set(showIds)];
+  if (ids.length === 0) return out;
+
+  const { data, error } = await supabase
+    .from('sa_show_map')
+    .select('sa_show_id, tmdb_id, media_type')
+    .in('sa_show_id', ids);
+  if (error) throw new Error(`sa_show_map read failed: ${ErrorCollector.describe(error)}`);
+  for (const row of data ?? []) {
+    if (row.media_type !== 'movie' && row.media_type !== 'tv') continue;
+    out.set(String(row.sa_show_id), { tmdbId: row.tmdb_id, mediaType: row.media_type });
+  }
+  stats.mapHits += out.size;
+
+  for (const id of ids) {
+    if (out.has(id)) continue;
+    const budget = resolveLookupBudget(state);
+    if (stats.mapLookups >= budget) {
+      errors.record('change.unresolved', `show id lookup budget (${budget}) spent — change skipped`, id);
+      continue;
+    }
+    stats.mapLookups++;
+    let show: any = null;
+    try {
+      show = await saApiFetch(`/shows/${encodeURIComponent(id)}?country=gb`);
+    } catch (err) {
+      if (err instanceof QuotaError) throw err;
+      errors.record('change.unresolved', err, id);
+      continue;
+    }
+    const ref = show ? parseTmdbRef(show.tmdbId) : null;
+    if (!ref) {
+      errors.record(
+        'change.unresolved',
+        show ? 'vendor /shows/{id} carries no usable tmdbId' : 'vendor /shows/{id} returned 404',
+        id,
+      );
+      continue;
+    }
+    out.set(id, ref);
+    const { error: upsertError } = await supabase
+      .from('sa_show_map')
+      .upsert(
+        {
+          sa_show_id: id,
+          tmdb_id: ref.tmdbId,
+          media_type: ref.mediaType,
+          title: typeof show.title === 'string' ? show.title : null,
+          source: 'changes-lookup',
+          last_seen_at: new Date().toISOString(),
+        },
+        { onConflict: 'sa_show_id' },
+      );
+    // Not fatal: the change still resolves this run; the id is merely paid
+    // for again the next time it appears.
+    if (upsertError) errors.record('map.upsert', upsertError, id);
+    await delay(150);
+  }
+  return out;
 }
 
 /**
@@ -520,6 +656,14 @@ interface SyncStats {
   availabilityRemoved: number;
   /** Billable SA requests across the whole chain (A2 cost control). */
   saRequests: number;
+  /** IN-SY-001: vendor show ids resolved from sa_show_map (per page, so an
+   *  id seen on several pages counts each time — a rate, not a set). */
+  mapHits: number;
+  /** IN-SY-001: /shows/{id} lookups spent on ids the map had not seen. */
+  mapLookups: number;
+  /** IN-SY-001: changes skipped because their show id could not be
+   *  resolved (budget spent, vendor 404, or no usable tmdbId). */
+  unresolved: number;
 }
 
 function emptyStats(): SyncStats {
@@ -529,6 +673,9 @@ function emptyStats(): SyncStats {
     availabilityUpdated: 0,
     availabilityRemoved: 0,
     saRequests: 0,
+    mapHits: 0,
+    mapLookups: 0,
+    unresolved: 0,
   };
 }
 
@@ -630,55 +777,41 @@ async function runSyncSlice(
           const result = await saApiFetch(path);
           if (!result) { hasMore = false; break; }
 
-          for (const change of result.changes || []) {
+          // One map read per page, then a bounded lookup per miss. Throws
+          // on a map-read failure — caught by the per-pair catch below and
+          // counted as a fetch failure, so the window does not advance.
+          const changes: any[] = result.changes || [];
+          const resolved = await resolveShowIds(
+            changes
+              .map((c: any) => (c?.showId != null ? String(c.showId) : null))
+              .filter((id: string | null): id is string => id !== null),
+            state,
+            stats,
+            errors,
+          );
+
+          for (const change of changes) {
             try {
-              // ⚠⚠ KNOWN BROKEN — IN-SY-001, do not trust this block. ⚠⚠
-              //
-              // `showId` is NOT a TMDb id. It is Movie of the Night's own
-              // show id and bears no relationship to TMDb's numbering:
-              // Stranger Things is vendor `6` and TMDb `tv/66732`. Every
-              // row this loop has written since 2026-04-01 carries a vendor
-              // id in the `tmdb_id` column — 58,718 of them, of which
-              // 27,644 collide with a real but unrelated title and render
-              // on cards with a link to different content. The other 31,074
-              // match nothing and are the whole of `backfill_skips`.
-              //
-              // The `show.tmdbId` fallback below has NEVER executed: the
-              // /changes payload has no `show` object and no TMDb id at
-              // all (keys: changeType, itemType, link, service, showId,
-              // showType, streamingOptionType, timestamp).
-              //
-              // Not patchable here — there is no correct id at this point,
-              // and resolving each change through /shows/{showId} costs
-              // ~33,000 requests/month against a 25,000 quota. See
-              // docs/plans/2026-09-11-001-handoff-sync-tmdb-id-corruption.md
-              // for the measurements and the three costed options.
-              //
-              // Left running deliberately (Joe, 2026-09-11) rather than
-              // paused. Do not "fix" the comment below without fixing the
-              // behaviour — the stale comment is what hid this for five
-              // months.
-              //
-              // SA API new format: showId is a plain numeric string (e.g. "28584"),
-              // showType is "movie" or "series" as a separate field.
-              // Old format had show.tmdbId = "movie/238" — keep fallback for safety.
-              let tmdbId: number;
-              let mediaType: 'movie' | 'tv';
-              if (change.showId && change.showType) {
-                tmdbId = parseInt(change.showId, 10);
-                mediaType = change.showType === 'series' ? 'tv' : 'movie';
-              } else if (change.show?.tmdbId) {
-                ({ tmdbId, mediaType } = extractTmdbId(change.show.tmdbId));
-              } else {
-                errors.record('change.shape', 'missing showId/showType', Object.keys(change).join(','));
-                console.error(`Skipping change: missing showId/showType. Keys: ${Object.keys(change).join(', ')}`);
+              // IN-SY-001. `showId` is the VENDOR's id, and the payload has
+              // no TMDb id — see resolveShowIds() above for the whole story.
+              // Between 2026-04-01 and 2026-09-11 this block did
+              // `parseInt(change.showId)` straight into `tmdb_id`, under a
+              // comment claiming showId was a TMDb reference. It is resolved
+              // through sa_show_map now, and an unresolved id is skipped —
+              // never written under the vendor's number.
+              const showId = change.showId != null ? String(change.showId) : null;
+              if (!showId) {
+                errors.record('change.shape', 'missing showId', Object.keys(change).join(','));
+                console.error(`Skipping change: missing showId. Keys: ${Object.keys(change).join(', ')}`);
                 continue;
               }
-              if (!tmdbId || isNaN(tmdbId)) {
-                errors.record('change.shape', 'invalid tmdbId', String(change.showId));
-                console.error(`Skipping change: invalid tmdbId "${change.showId}"`);
+              const resolvedShow = resolved.get(showId);
+              if (!resolvedShow) {
+                // The resolver has already recorded WHY under change.unresolved.
+                stats.unresolved++;
                 continue;
               }
+              const { tmdbId, mediaType } = resolvedShow;
               const saServiceId = change.service?.id || service;
               const serviceId = SA_TO_VIDEX[saServiceId] || saServiceId;
               const streamType = change.streamingOptionType as string;
@@ -816,9 +949,9 @@ async function runSyncSlice(
               errors.record(
                 `change.${changeType}`,
                 err,
-                `${change.showType ?? '?'}/${change.showId ?? change.show?.tmdbId ?? '?'}`
+                `${change.showType ?? '?'}/${change.showId ?? '?'}`
               );
-              console.error(`Error processing ${changeType} for ${change.showId ?? change.show?.tmdbId}:`, err.message);
+              console.error(`Error processing ${changeType} for ${change.showId ?? '?'}:`, err.message);
             }
           }
 
@@ -908,6 +1041,8 @@ interface ChainBody {
   /** One-off overrides for a deliberate catch-up. See CATCH-UP below. */
   budget?: number;
   maxDepth?: number;
+  /** IN-SY-001: per-chain ceiling on /shows/{id} lookups for unmapped ids. */
+  lookupBudget?: number;
 }
 
 function emptySyncChainState(since: number): SyncChainState {
@@ -957,6 +1092,7 @@ Deno.serve(async (req) => {
   let sinceOverride: number | undefined;
   let budgetOverride: number | undefined;
   let maxDepthOverride: number | undefined;
+  let lookupBudgetOverride: number | undefined;
   try {
     const body = (await req.json()) as ChainBody;
     if (typeof body?.depth === 'number') depth = body.depth;
@@ -964,6 +1100,7 @@ Deno.serve(async (req) => {
     if (typeof body?.since === 'number') sinceOverride = body.since;
     if (typeof body?.budget === 'number') budgetOverride = body.budget;
     if (typeof body?.maxDepth === 'number') maxDepthOverride = body.maxDepth;
+    if (typeof body?.lookupBudget === 'number') lookupBudgetOverride = body.lookupBudget;
   } catch {
     // No body, or not JSON — treat as a fresh chain.
   }
@@ -1000,10 +1137,13 @@ Deno.serve(async (req) => {
     const initialState = emptySyncChainState(since);
     if (budgetOverride && budgetOverride > 0) initialState.budget = budgetOverride;
     if (maxDepthOverride && maxDepthOverride > 0) initialState.max_depth = maxDepthOverride;
-    if (initialState.budget || initialState.max_depth) {
+    if (lookupBudgetOverride && lookupBudgetOverride > 0) initialState.lookup_budget = lookupBudgetOverride;
+    if (initialState.budget || initialState.max_depth || initialState.lookup_budget) {
       console.log(
         `catch-up overrides: budget=${resolveBudget(initialState)} ` +
-        `maxDepth=${resolveMaxDepth(initialState)} since=${new Date(since * 1000).toISOString()}`,
+        `maxDepth=${resolveMaxDepth(initialState)} ` +
+        `lookupBudget=${resolveLookupBudget(initialState)} ` +
+        `since=${new Date(since * 1000).toISOString()}`,
       );
     }
 
@@ -1134,6 +1274,7 @@ Deno.serve(async (req) => {
       `processed=${stats.processed} availability_added=${stats.availabilityAdded} ` +
       `availability_updated=${stats.availabilityUpdated} ` +
       `availability_removed=${stats.availabilityRemoved} sa_requests=${stats.saRequests} ` +
+      `map_hits=${stats.mapHits} lookups=${stats.mapLookups} unresolved=${stats.unresolved} ` +
       `fetch_failures=${fetchFailures} errors=${errors.total} — ${stop}`
     );
     return json(
