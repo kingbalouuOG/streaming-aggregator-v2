@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ProbePair, reacted, touched } from '@/components/debug/TouchProbe';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth';
 import { SubScreenHeader } from './SubScreenHeader';
@@ -41,12 +42,18 @@ export function ProfileAccount() {
   return (
     <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-background">
       <SubScreenHeader title="Account Details" />
+      <View className="px-5">
+        <ProbePair label="E in-screen/no-scroll" />
+      </View>
       <ScrollView contentContainerClassName="px-5 pb-4 pt-3" keyboardShouldPersistTaps="handled">
+        <ProbePair label="F in-screen/in-scroll" />
         <Text className="mb-1.5 font-sans text-kicker uppercase tracking-[1.6px] text-muted-foreground">Username</Text>
         <View className="flex-row items-center gap-3 rounded-card border border-border bg-card px-4 py-3.5">
           <User size={18} color="rgba(245,241,232,0.62)" />
           <TextInput
             value={name}
+            onTouchStart={() => touched('Username REAL')}
+            onFocus={() => reacted('Username REAL')}
             onChangeText={(t) => {
               setName(t);
               setSaved(false);

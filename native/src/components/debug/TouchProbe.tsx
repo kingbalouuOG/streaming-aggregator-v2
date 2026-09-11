@@ -37,6 +37,15 @@ let entries: Entry[] = [];
 let counts: Record<string, Count> = {};
 let deadTotal = 0;
 const pending = new Map<string, ReturnType<typeof setTimeout>>();
+// v2 assumed onTouchStart always precedes the reaction. On Pressable it does
+// NOT — onPressIn arrives from the responder grant about a millisecond
+// BEFORE the bubbled touch event, so every button press armed a timer that
+// its own reaction had already passed, and scored itself dead. Both red
+// counts in the 12:56 run were this, not the bug. Reactions are therefore
+// timestamped and a touch that lands within RECENT_MS of one is already
+// satisfied.
+const lastReact = new Map<string, number>();
+const RECENT_MS = 120;
 const listeners = new Set<() => void>();
 
 const DEAD_AFTER_MS = 350;
@@ -60,6 +69,11 @@ export function touched(name: string) {
   log(`${name} ·touch`);
   const t = pending.get(name);
   if (t) clearTimeout(t);
+  if (Date.now() - (lastReact.get(name) ?? 0) < RECENT_MS) {
+    pending.delete(name);
+    emit();
+    return; // already reacted, a hair before the touch bubbled
+  }
   pending.set(
     name,
     setTimeout(() => {
@@ -75,6 +89,7 @@ export function touched(name: string) {
 
 /** The control actually reacted. Cancels the dead-tap clock. */
 export function reacted(name: string) {
+  lastReact.set(name, Date.now());
   const t = pending.get(name);
   if (t) clearTimeout(t);
   pending.delete(name);
@@ -202,6 +217,33 @@ export function TouchProbePanel() {
           {log10[i + 1] ? `  +${e.at - log10[i + 1].at}ms` : ''}
         </Text>
       ))}
+    </View>
+  );
+}
+
+/**
+ * A TextInput + Pressable pair that can be dropped anywhere to ask "does a
+ * control need two taps HERE?". The point is the placement, not the widget:
+ * the same pair inside a screen's ScrollView, inside the screen but outside
+ * the ScrollView, and outside the navigator entirely, separates
+ * react-native-screens from the ScrollView from neither.
+ */
+export function ProbePair({ label }: { label: string }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 8, marginVertical: 6 }}>
+      <TextInput
+        placeholder={`${label} txt`}
+        placeholderTextColor={DIM}
+        onTouchStart={() => touched(`${label} txt`)}
+        onFocus={() => reacted(`${label} txt`)}
+        style={{ flex: 1, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: '#e85d25', color: '#f5f1e8', fontSize: 12 }}
+      />
+      <Pressable
+        onTouchStart={() => touched(`${label} btn`)}
+        onPressIn={() => reacted(`${label} btn`)}
+        style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e85d25' }}>
+        <Text style={{ color: '#f5f1e8', fontSize: 12 }}>{label} btn</Text>
+      </Pressable>
     </View>
   );
 }
