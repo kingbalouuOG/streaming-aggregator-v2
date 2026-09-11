@@ -632,6 +632,33 @@ async function runSyncSlice(
 
           for (const change of result.changes || []) {
             try {
+              // ⚠⚠ KNOWN BROKEN — IN-SY-001, do not trust this block. ⚠⚠
+              //
+              // `showId` is NOT a TMDb id. It is Movie of the Night's own
+              // show id and bears no relationship to TMDb's numbering:
+              // Stranger Things is vendor `6` and TMDb `tv/66732`. Every
+              // row this loop has written since 2026-04-01 carries a vendor
+              // id in the `tmdb_id` column — 58,718 of them, of which
+              // 27,644 collide with a real but unrelated title and render
+              // on cards with a link to different content. The other 31,074
+              // match nothing and are the whole of `backfill_skips`.
+              //
+              // The `show.tmdbId` fallback below has NEVER executed: the
+              // /changes payload has no `show` object and no TMDb id at
+              // all (keys: changeType, itemType, link, service, showId,
+              // showType, streamingOptionType, timestamp).
+              //
+              // Not patchable here — there is no correct id at this point,
+              // and resolving each change through /shows/{showId} costs
+              // ~33,000 requests/month against a 25,000 quota. See
+              // docs/plans/2026-09-11-001-handoff-sync-tmdb-id-corruption.md
+              // for the measurements and the three costed options.
+              //
+              // Left running deliberately (Joe, 2026-09-11) rather than
+              // paused. Do not "fix" the comment below without fixing the
+              // behaviour — the stale comment is what hid this for five
+              // months.
+              //
               // SA API new format: showId is a plain numeric string (e.g. "28584"),
               // showType is "movie" or "series" as a separate field.
               // Old format had show.tmdbId = "movie/238" — keep fallback for safety.
