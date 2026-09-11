@@ -3,7 +3,7 @@ title: Deferred items register
 type: register
 tags: [register, deferred, parked, post-v2, v2-5, v3, e-p-track]
 created: 2026-04-26
-updated: 2026-06-10
+updated: 2026-09-11
 sources:
   - raw/v2-strategy/Videx_v2_Engine_and_Platform_Hardening_Brief_v0.2.md
   - raw/v2-strategy/Videx_v2_Implementation_Notes_Parking_Lot_v0.7.md
@@ -24,6 +24,7 @@ related:
   - wiki/sources/ep-hardening-brief-v0-2.md
   - wiki/concepts/forward-planning/v3-conversational-discovery.md
   - wiki/concepts/forward-planning/monetisation-strategy.md
+  - wiki/concepts/forward-planning/send-to-tv-feasibility.md
 ---
 
 # Deferred items register
@@ -131,6 +132,7 @@ Things explicitly parked, with the trigger to revisit each. Distinct from [pre-l
 | IN-464 — detail-page "Make a room from this title" | Phase 6+. |
 | IN-468 — Variant B SWR For You snapshot | Superseded in spirit by PLAT-3's feed cache; revisit only if PLAT-3 slips and warm p95 > 1.0s. |
 | IN-OB-006 — onboarding cluster taxonomy review | After 3 months of anchored-rooms telemetry (Phase 6 review). |
+| Send to TV (phone launches the streaming app on a title on the TV) — see [feasibility](../concepts/forward-planning/send-to-tv-feasibility.md) | Matter Casting adoption beyond Amazon; Google documents the Android TV Remote protocol; an installed base that justifies delight features (~5–8K MAU); or a TV-platform / Netflix partnership route. Bench-test with Home Assistant before any app code. |
 
 ## Categorisation summary
 
@@ -142,4 +144,4 @@ Things explicitly parked, with the trigger to revisit each. Distinct from [pre-l
 | Post-v2 / v3 | 7 |
 | Done since last refresh | 6 |
 | Discharged (will not do) | 16 |
-| Parked (trigger-based) | 12 |
+| Parked (trigger-based) | 13 |

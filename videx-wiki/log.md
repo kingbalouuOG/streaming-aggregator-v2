@@ -1480,3 +1480,10 @@ only thing at stake.
 - **IN-SC-001 can ride the same walks** (raised by the wave-1 session mid-way): `--include-unknown-titles` on the walk script writes availability rows for entries `titles` lacks, and the 05:00 `backfill-missing-titles` chain creates the titles — no third `titles` writer. Off by default; the anime composition shift is Joe's call after `npm run eval:fingerprints`.
 - New: wiki/concepts/operations/solutions/sync-vendor-show-id-in-tmdb-id.md
 - Updated: wiki/concepts/operations/sync-pipeline.md (vendor id resolution section + health query), wiki/entities/apis/streaming-availability-api.md (`/changes` has no TMDb id; `/shows/{id}` takes the vendor id; listing returns both ids), wiki/entities/codebase/migrations.md (083), wiki/registers/parking-lot.md (IN-SY-001 → ⚠ partial), index.md
+## [2026-09-11] query | "can Videx send a title to a smart TV?" — feasibility research
+- Five research agents (Roku ECP; Android TV Remote v2 + Fire TV; Samsung Tizen + LG webOS; Apple TV Companion + DIAL + Matter Casting + competitors; RN/Expo local-network implementation). Full write-up with sources: `docs/strategy/briefs/send-to-tv-feasibility.md` (not yet snapshotted into raw/).
+- **Answer:** per TV platform, not per service; LAN-only; mostly reverse-engineered; pairing prompt on the TV. App-level launch feasible on Roku/Google TV/Samsung/LG/Apple TV; Fire TV and Sky/Virgin/Freely closed. Title-level launch proven only for LG+Netflix, Apple TV by URL, Roku+Disney+. Netflix removed phone casting to most TVs 2025-11. No standard before ~2028 (Matter Casting is Amazon-only + per-app whitelist). Effort 2–12 eng-weeks.
+- **Recommendation: park** (not on Roadmap v1.1). Joe has not yet decided; register row filed as parked-pending-decision. If revisited: reframe as "Open on TV"; 2-day Home Assistant bench test before any app code.
+- New page: wiki/concepts/forward-planning/send-to-tv-feasibility.md
+- Updated: wiki/registers/deferred-items.md (Parked row, 12 → 13), wiki/sources/forward-planning.md (table row), index.md
+- Note for Joe: copy the brief into `raw/forward-planning/` when convenient so the wiki page has a raw source.

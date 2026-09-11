@@ -3,7 +3,7 @@ title: Source — Forward planning (post-v2 horizon)
 type: source
 tags: [forward-planning, exploratory, monetisation, v3, conversational-discovery]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-09-11
 sources:
   - raw/forward-planning/README.md
   - raw/forward-planning/Videx_Monetisation_Strategy_Exploration_v0_1.md
@@ -22,6 +22,7 @@ Three docs under `raw/forward-planning/`. Per AGENTS.md, **status: exploratory**
 | `README.md` | (this index) | — |
 | `Videx_Monetisation_Strategy_Exploration_v0_1.md` | [monetisation-strategy](../concepts/forward-planning/monetisation-strategy.md) | exploratory |
 | `Videx_v3_Conversational_Discovery_Semantic_Search_Strategy_v0_1.md` | [v3-conversational-discovery](../concepts/forward-planning/v3-conversational-discovery.md) | exploratory / pre-spike |
+| *(not yet in raw/; lives at `docs/strategy/briefs/send-to-tv-feasibility.md`)* | [send-to-tv-feasibility](../concepts/forward-planning/send-to-tv-feasibility.md) | parked (2026-09-11) |
 
 ## Status conventions (per README)
 
