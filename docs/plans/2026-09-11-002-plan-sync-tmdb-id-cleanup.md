@@ -1,8 +1,8 @@
 # IN-SY-001 — fix landed in code; what Joe needs to run, and the four cleanup decisions
 
-**Date:** 2026-09-11 · **Follows:** `2026-09-11-001-handoff-sync-tmdb-id-corruption.md` · **Branch:** the IN-SY-001 PR (worktree `fix-sync-tmdb-id-map`) · **Clock:** the next sync is 06:00 UTC on 12 Sept.
+**Date:** 2026-09-11 · **Follows:** `2026-09-11-001-handoff-sync-tmdb-id-corruption.md` · **Branch:** PR #156 (`fix/sync-tmdb-id-map`) · **Status:** 083 applied, map seeded, function v32 deployed and verified on a live chain — see §2a. The sync has not written a vendor id since 11:24 UTC on 11 Sept.
 
-Everything in §1 is built, type-checked (`deno check`) and smoke-tested. Nothing in §2 or §3 has touched production — the migration apply was permission-gated to Joe (production DDL is an explicit-Joe action, as with 044–046), and the deploy is manual by design.
+Everything in §1 is built, type-checked (`deno check`) and smoke-tested. §2 is done (§2a has the numbers). §3 — the cleanup — has not touched production and is Joe's call.
 
 ---
 
@@ -38,6 +38,26 @@ npx supabase functions deploy sync-incremental
 ```
 
 If step 3 happens without step 1, tomorrow's run fails loudly (`fetch_failures`, status `failed`, pipeline-health `no-failed-runs` emails you) and the window is re-covered once the table exists. It cannot write vendor ids.
+
+## 2a. Done 2026-09-11 (Joe applied 083 at ~11:10 UTC; the rest ran from the session)
+
+| Step | Result |
+|---|---|
+| 083 applied | `to_regclass('public.sa_show_map')` → present, RLS on |
+| Map seeded from the saved walks | 31,767 rows (32,567 entries; 800 vendor ids are on both Netflix and Prime) |
+| Function deployed | version 32, `verify_jwt = true` kept |
+| First chain (11:24–11:28 UTC, window since 06:05) | **completed, window consumed**, 4 slices, 294 SA requests (94 pages + 200 lookups). 683 changes processed: 457 added, 96 updated, 130 removed. `map_hits` 484, `lookups` 200, **`unresolved` 539** (the 200/chain lookup budget was spent at 11:26; every later miss was skipped, never written). 1 change skipped for having no deep link. |
+| Verification | 296 rows written; 101 of them have a Videx title and **101 of 101 match the vendor's title for the same TMDb id, 0 differ**. Readable-slug sample: *Bob's Burgers* on ITVX → `itv.com/watch/bobs-burgers`. The other 195 are genuine orphans with real TMDb ids — the legitimate backfill queue, which `backfill-missing-titles` clears at 05:00. |
+
+**What the 539 unresolved mean.** The map is warm for Netflix and Prime's popularity head only; every other catalogue's changes fell to the 200-lookup budget and the remainder were skipped for this window. That is the designed transitional behaviour (skipped beats corrupt), but it repeats daily until the other catalogues are walked — and a skipped change is only recovered by a walk of that catalogue. So the next quota spend to approve is a `--map-only` seed of the remaining catalogues (or, better, their full cleanup walks in §3.2, which seed the map as a side effect and do the rebuild in the same requests):
+
+```bash
+for s in disney apple itvx paramount now all4 hbo plutotv discovery crunchyroll mubi; do
+  npx tsx scripts/sync/backfill-service-catalogue.ts --service $s --map-only --max-requests 1500
+done
+```
+
+The wave-1 five cost 253 last time; disney/itvx/paramount/now/all4 are unmeasured but small; apple is the unknown (buy/rent-heavy, plausibly 1,000–1,500). Until then, watch `unresolved` in `sync_history` each morning.
 
 ## 3. The four decisions
 

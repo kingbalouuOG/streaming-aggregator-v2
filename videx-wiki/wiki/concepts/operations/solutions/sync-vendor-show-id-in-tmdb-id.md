@@ -60,6 +60,8 @@ constraint, so the shape of the fix is an architecture decision.
 
 New per-chain stats in `sync_log.chain_state.stats`: `mapHits`, `mapLookups`, `unresolved`.
 
+**Live since 2026-09-11 11:24 UTC** (function v32; 083 applied by Joe; map seeded with 31,767 entries from the Netflix and Prime walks). First chain: window consumed, 683 changes, 0 fetch failures, `map_hits` 484, `lookups` 200, `unresolved` 539 — the budget ran out because only two catalogues were mapped. 101 of 101 written rows with a Videx title match the vendor's title; 0 differ.
+
 ### Walk cost (measured 2026-09-11, dry-run)
 
 | Catalogue | Requests | Entries | Notes |
