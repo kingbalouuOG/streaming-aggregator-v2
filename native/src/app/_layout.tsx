@@ -14,7 +14,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 
-import { TouchProbePanel, TouchProbeRoot } from "@/components/debug/TouchProbe";
+import { TouchProbePanel } from "@/components/debug/TouchProbe";
 import { AuthProvider } from "@/providers/auth";
 import { NotificationsProvider } from "@/providers/notifications";
 import { QUERY_CACHE_BUSTER, queryPersister } from "@/queryPersist";
@@ -100,36 +100,34 @@ function RootLayout() {
       <StatusBar style="light" />
       <AuthProvider>
         <NotificationsProvider>
-          <TouchProbeRoot>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: BG },
-              }}
-            >
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="auth" options={{ animation: "fade" }} />
-              <Stack.Screen
-                name="forgot-password"
-                options={{ animation: "slide_from_right" }}
-              />
-              <Stack.Screen
-                name="reset-password"
-                options={{ animation: "fade" }}
-              />
-              <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
-              <Stack.Screen name="curating" options={{ animation: "fade" }} />
-              <Stack.Screen
-                name="detail/[id]"
-                options={{ animation: "slide_from_right" }}
-              />
-              <Stack.Screen
-                name="profile/[section]"
-                options={{ animation: "slide_from_right" }}
-              />
-            </Stack>
-            <TouchProbePanel />
-          </TouchProbeRoot>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: BG },
+            }}
+          >
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="auth" options={{ animation: "fade" }} />
+            <Stack.Screen
+              name="forgot-password"
+              options={{ animation: "slide_from_right" }}
+            />
+            <Stack.Screen
+              name="reset-password"
+              options={{ animation: "fade" }}
+            />
+            <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
+            <Stack.Screen name="curating" options={{ animation: "fade" }} />
+            <Stack.Screen
+              name="detail/[id]"
+              options={{ animation: "slide_from_right" }}
+            />
+            <Stack.Screen
+              name="profile/[section]"
+              options={{ animation: "slide_from_right" }}
+            />
+          </Stack>
+          <TouchProbePanel />
         </NotificationsProvider>
       </AuthProvider>
     </PersistQueryClientProvider>

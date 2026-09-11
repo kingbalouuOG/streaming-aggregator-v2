@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { probe } from "@/components/debug/TouchProbe";
+import { reacted, touched } from "@/components/debug/TouchProbe";
 import { BrowsePresearch } from "@/components/BrowsePresearch";
 import {
   applyBrowseFilters,
@@ -611,7 +611,7 @@ export default function BrowseScreen() {
     <SafeAreaView edges={["top"]} className="flex-1 bg-background">
       <View className="px-5 pt-2">
         <View
-          onTouchStart={() => probe("  search box:down")}
+          onTouchStart={() => touched('Browse search')}
           className="flex-row items-center gap-3 rounded-card border border-border bg-card px-4 py-3"
         >
           <Search size={18} color="rgba(245,241,232,0.62)" />
@@ -626,7 +626,7 @@ export default function BrowseScreen() {
               setSemanticIntent(null);
               setFilterIntent(null);
             }}
-            onFocus={() => probe("  BROWSE txt:FOCUS")}
+            onFocus={() => reacted('Browse search')}
             onBlur={() =>
               setPlaceholderIndex((i) => (i + 1) % PRESET_SENTENCES.length)
             }

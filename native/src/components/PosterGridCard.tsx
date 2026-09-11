@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { useEffect } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
+import { reacted, touched } from '@/components/debug/TouchProbe';
 import { useIsBookmarked, useWatchlistMutations } from '@/hooks/useWatchlist';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import { setCardClickContext } from '@/lib/instrumentation/clickContext';
@@ -82,7 +83,11 @@ export function PosterGridCard({
   };
 
   return (
-    <Pressable onPress={press} className="flex-1 p-1.5 active:opacity-80">
+    <Pressable
+      onTouchStart={() => touched('Poster card')}
+      onPressIn={() => reacted('Poster card')}
+      onPress={press}
+      className="flex-1 p-1.5 active:opacity-80">
       <View className="overflow-hidden rounded-card bg-card">
         <Image
           source={item.image ? { uri: item.image } : undefined}
