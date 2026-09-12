@@ -76,7 +76,10 @@ export function FilterSheet({
             </Pressable>
           </View>
 
-          <ScrollView contentContainerClassName="px-5 pb-4 pt-3" showsVerticalScrollIndicator={false}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerClassName="px-5 pb-4 pt-3"
+            showsVerticalScrollIndicator={false}>
             <SectionLabel>Streaming services</SectionLabel>
             <View className="mt-2 flex-row flex-wrap gap-2">
               {SERVICES.map((s) => {

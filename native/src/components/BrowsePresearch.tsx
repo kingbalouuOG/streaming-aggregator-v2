@@ -62,6 +62,7 @@ export function BrowsePresearch({
   return (
     <ScrollView
       contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 }}
+      keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
       showsVerticalScrollIndicator={false}>
       {/* Build-your-search CTA — the larger journey, intentional orange weight */}

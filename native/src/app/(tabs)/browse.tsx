@@ -690,6 +690,7 @@ export default function BrowseScreen() {
         <PosterGridSkeleton />
       ) : shown.length > 0 ? (
         <FlashList
+          keyboardShouldPersistTaps="handled"
           data={shown}
           numColumns={2}
           keyExtractor={(item) => item.id}
