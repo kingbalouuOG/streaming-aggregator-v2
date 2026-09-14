@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Sparkles } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BrowseChips } from '@/components/BrowseChips';
@@ -10,17 +10,21 @@ import { ForYouSkeleton } from '@/components/ForYouSkeleton';
 import { MagazineHero } from '@/components/MagazineHero';
 import { MoodRooms } from '@/components/MoodRooms';
 import { HiddenRailsNote, QuickFilterEmptyState } from '@/components/QuickFilterNotices';
+import { RefreshableScrollView } from '@/components/RefreshableScrollView';
 import { Reveal } from '@/components/Reveal';
 import { SectionHead } from '@/components/SectionHead';
 import { TasteFingerprint } from '@/components/TasteFingerprint';
 import { WatchlistListRow } from '@/components/WatchlistListRow';
 import { WideCard } from '@/components/WideCard';
 import { useForYou } from '@/hooks/useForYou';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useQuickFilterLog } from '@/hooks/useQuickFilterLog';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import { recordImpression } from '@/lib/instrumentation/impressionBatcher';
+import type { WorkerRenderPayload } from '@/lib/recommendations-v2/edgeRender';
 import { DEFAULT_SLIDERS } from '@/lib/taste-v2/types';
 import type { ContentItem } from '@/lib/types/content';
+import { itemSignature } from '@/lib/utils/pullToRefresh';
 import { useAuth } from '@/providers/auth';
 import {
   applyQuickFilter,
@@ -78,11 +82,27 @@ function sliceRow(
   return applyQuickFilter(items, category).slice(0, FILTERED_ROW_MAX);
 }
 
+/**
+ * The titles the payload can put on the page, for the refresh cue. Not the
+ * payload itself: `wallclockMs` and `renderMs` differ on every fetch.
+ */
+function forYouSignature(payload: WorkerRenderPayload | null | undefined): string {
+  if (!payload) return '';
+  return itemSignature([
+    payload.recommendedForYou,
+    payload.hiddenGems,
+    payload.paidTitles,
+    payload.fromYourWatchlist,
+    payload.outsideYourUsual,
+    ...(payload.becauseYouWatched ?? []).map((row) => row.items),
+  ]);
+}
+
 export default function ForYouScreen() {
   const router = useRouter();
   const { session } = useAuth();
   const { data, isLoading, isError, isBootstrapping, refetch } = useForYou();
-  const [refreshing, setRefreshing] = useState(false);
+  const refresh = usePullToRefresh({ data, refetch, signature: forYouSignature });
   const { category, nonce, setCategory } = useQuickFilter('forYou');
 
   const sliders = data?.sliders ?? DEFAULT_SLIDERS;
@@ -244,15 +264,6 @@ export default function ForYouScreen() {
     });
   }, [router, category]);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await refetch();
-    } finally {
-      setRefreshing(false);
-    }
-  }, [refetch]);
-
   // B6: order matters. While the MMKV cache is restoring (or services
   // have not resolved) the query is paused — not loading, not errored,
   // just empty — so without this branch the `!data` case below rendered
@@ -270,7 +281,7 @@ export default function ForYouScreen() {
     // error is a connection problem, not a young taste profile — saying
     // "warming up" for a network failure sends users waiting on the
     // wrong thing.
-    return <NotReady onRetry={onRefresh} failed={isError} />;
+    return <NotReady onRetry={refresh.onRefresh} failed={isError} />;
   }
 
   const { hero } = view;
@@ -278,11 +289,7 @@ export default function ForYouScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <ScrollView
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#e85d25" />
-        }
-        contentContainerClassName="pb-10">
+      <RefreshableScrollView refresh={refresh} contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Greeting */}
         <SafeAreaView edges={['top']}>
           <View className="px-5 pb-1 pt-2">
@@ -405,7 +412,7 @@ export default function ForYouScreen() {
         ) : null}
 
         <HiddenRailsNote names={view.hiddenNames} category={category} />
-      </ScrollView>
+      </RefreshableScrollView>
     </View>
   );
 }
