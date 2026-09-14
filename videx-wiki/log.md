@@ -1584,3 +1584,21 @@ only thing at stake.
   - The Worker change ships on merge through `deploy-worker.yml`.
   - The Edge Function change only takes effect once `label-anchor-room` and `embed-query` are redeployed. No workflow deploys Edge Functions, so that is a manual step.
 - Updated: wiki/entities/codebase/rpcs.md, wiki/registers/pre-launch-blockers.md (item 23). The Phase 5 pages and summaries that list the original allow-list are history, left as written.
+
+## [2026-09-14] query | #164 device check passed on a fresh ad-hoc iOS build — IN-DEP-003 closed
+- **What was checked:** PR #164 (native npm audit triage, IN-DEP-001), merged 2026-09-14 as `ee96840`: axios 1.20.0 in `native/`, the in-range tooling updates, and the deep-link query guard (`native/src/app/+native-intent.tsx` → `stripMalformedQuery` in `src/lib/deepLinkQueryGuard.ts`) for GHSA-vcc3-ghjq-m6fr (`decode-uri-component` 0.2.2 under expo-router → `query-string` 7; IN-DEP-003).
+- **OTA could not reach the phone:** #164's lockfile update moved the native fingerprint. The preview update's runtime `b0e3c78c…` did not match the installed build's `e844d787…`, so a new binary was needed.
+- **Fresh ad-hoc build:**
+  - EAS build `213af0ce-29b4-4c0c-89cf-8544fb6c3879`;
+  - profile `preview`, channel `preview`;
+  - runtime `b0e3c78c3e692bf34d1636dab951bbba74d1eb5a`;
+  - app 2.3.1 (11), from `main` `7ead274`;
+  - not submitted to TestFlight.
+- **Device check (Joe, iPhone, 2026-09-14) — all passed:**
+  - TMDb surfaces load: Home rails, Browse discover, search, detail "More like this";
+  - a password-reset email link verifies, cold start and warm;
+  - `videx://detail/movie-550` opens the detail page;
+  - a KB-long `videx://detail/movie-550?a=%FF%FF…` link opens without a stall.
+- **Shipping unchanged (Joe):** production gets axios 1.20.0 and the guard with the next store build, not OTA.
+- **Filed separately, not fixed here:** a pre-existing New tab pull-to-refresh problem found in the same session. The spinner is cut off under the status bar and snaps shut with no clear refreshed signal. It is being fixed in its own session.
+- Updated: wiki/registers/parking-lot.md (IN-DEP-003 closed, device-verified; IN-DEP-001 device check recorded; Counts bullet). Still open on IN-DEP-003: remove the guard once expo-router leaves `query-string` 7.
