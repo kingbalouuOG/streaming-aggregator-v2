@@ -1506,3 +1506,9 @@ only thing at stake.
 - **Fix:** `native`'s `lint` script now runs `../node_modules/eslint/bin/eslint.js src` with `expo lint`'s own cache location (`.expo/cache/eslint/`, gitignored). Same inputs, same result on current `main` (0 errors, 1 pre-existing warning at `(tabs)/index.tsx:263`). No new dependencies, no lockfile change. Without a root install it now fails at once with a missing-module error instead of downloading an unpinned ESLint.
 - **The gate is now `npm run lint` in `native/`, after a root `npm install`/`npm ci`.** Updated: native/README.md, docs/CONVENTIONS.md, both ESLint config comments, wiki/concepts/architecture/platform-architecture.md. Older handoff plans still say `npx expo lint`; they are historical and left as written.
 - Still not in CI: `typecheck-lint.yml` covers the root only, which is how this rotted unnoticed.
+
+## [2026-09-14] query | native lint now runs in CI
+- `typecheck-lint.yml` gains a `Lint (native)` step after the root lint: `npm run lint` in `native/`, on every PR and push to `main`. Closes the gap in the entry above: the native gate had never run in CI, which is how it rotted unnoticed.
+- **No native install in CI.** Measured on a clean root `npm ci` with `native/node_modules` and `native/.expo` moved aside: same result (0 errors, 1 pre-existing warning at `(tabs)/index.tsx:263`), and ESLint creates its own cache directory. The native config takes ESLint and every plugin from the root and is not type-aware, so it never reads native's install. The step costs seconds rather than a native `npm install`.
+- `native/src/lib`, the postinstall junction, will not exist in CI. The native config already ignores `src/lib/**`; the shared tree is linted by the root config.
+- Not added: native `tsc --noEmit`. That does need native's install for React Native and Expo types, so it is a separate decision.
