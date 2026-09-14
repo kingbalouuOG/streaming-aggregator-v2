@@ -62,7 +62,7 @@
     "android:dev": "cross-env APP_VARIANT=development expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "node ../node_modules/eslint/bin/eslint.js src --cache --cache-location .expo/cache/eslint/"
   },
   "private": true
 }
