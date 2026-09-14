@@ -153,7 +153,6 @@ Debug logger (POSTs to Supabase in dev only); in-memory session cache for home s
 | `@capacitor/core` v8 | Runtime for the Capacitor plugins below (`Capacitor.isNativePlatform()` gating). The Android wrapper itself (`@capacitor/android`, `@capacitor/cli`, root `android/`) was removed 2026-09-14 (IN-DEP-002). |
 | `@capacitor/network` | Online/offline detection. |
 | `@capacitor/app` | Lifecycle events (`appUrlOpen`, `appStateChange`). |
-| `@capacitor/browser` | In-app browser fallback. |
 | `@capacitor/app-launcher` | Native intent-based deep linking. |
 
 ## Notable omissions

@@ -1538,3 +1538,9 @@ only thing at stake.
 - **Gates:** root `npm ci`; `tsc --noEmit` clean; lint 0 errors / 72 warnings (baseline); vitest 41 files / 453 tests; `vite build` clean; `npm audit` 0. `workers/api` `wrangler deploy --dry-run` bundles (720 KiB).
 - Updated: wiki/registers/parking-lot.md (IN-DEP-002 ✅), wiki/entities/infrastructure/capacitor.md (retired banner), wiki/concepts/operations/apk-build-and-install.md (obsolete banner), wiki/concepts/architecture/platform-architecture.md, wiki/entities/codebase/module-map.md, wiki/registers/pre-launch-blockers.md (item 16 superseded), wiki/concepts/glossary.md (PWA row), index.md; also README.md, docs/CONVENTIONS.md.
 - Joe's main checkout may still hold an untracked `android/` directory with a local `keystore.properties` or keystore. This change did not touch it; delete it by hand after merge.
+
+## [2026-09-14] query | `@capacitor/browser` removed (IN-DEP-002 follow-up)
+- The one runtime plugin flagged in the wrapper retirement (PR #162) as having no imports. A whole-repo grep (everything except `node_modules`, the lockfile, `docs/plans`, `raw/` and this log) found it only in root `package.json` and two wiki tables. `native/package.json` never listed it, and it was not in the `vite.config.ts` `capacitor` chunk. `openDeepLink.ts` uses `AppLauncher` + `window.open`.
+- `npm uninstall @capacitor/browser`: the lockfile loses only that package's entry and its root dependency line. No other entry changed.
+- Gates: root `npm ci`; `tsc --noEmit` clean; lint 0 errors / 72 warnings (baseline); vitest 41 files / 453 tests; `vite build` clean; `npm audit` 0.
+- Updated: wiki/entities/infrastructure/capacitor.md and wiki/entities/codebase/module-map.md (plugin rows removed).
