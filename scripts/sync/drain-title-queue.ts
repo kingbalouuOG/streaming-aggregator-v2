@@ -135,9 +135,15 @@ const CHAINS: Chain[] = [
     loop: 'embed',
     fn: 'embed-new-titles',
     syncType: 'embed',
+    // Embed-READY, not merely unembedded: embed-new-titles only selects
+    // `keywords IS NOT NULL`, so a title enrich has not reached yet is not
+    // work for this loop. Counting every NULL embedding made the loop start
+    // chains that found 78 rows in 3,261 "pending" and burn its cycles
+    // (measured 2026-09-14 19:16 UTC).
     pending: async () => {
       const { count, error } = await supabase
-        .from('titles').select('id', { count: 'exact', head: true }).is('embedding', null);
+        .from('titles').select('id', { count: 'exact', head: true })
+        .is('embedding', null).not('keywords', 'is', null);
       if (error) throw new Error(`awaiting embed: ${error.message}`);
       return count ?? 0;
     },
