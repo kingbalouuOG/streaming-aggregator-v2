@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
-import type { DetailData, RentalOption } from '@/lib/adapters/detailAdapter';
+import type { ChannelOption, DetailData, RentalOption } from '@/lib/adapters/detailAdapter';
 import { getDeepLink } from '@/lib/deepLinks';
 import { exitDwell, getCurrentDwellSeconds } from '@/lib/instrumentation/dwellTimer';
 import { openDeepLink } from '@/lib/openDeepLink';
@@ -29,7 +29,8 @@ export function WhereToWatch({ detail, userServices }: WhereToWatchProps) {
     userServices ?? [],
   );
 
-  const hasAny = tier1.length > 0 || tier2.length > 0 || tier3.length > 0;
+  const channels = detail.channelOptions ?? [];
+  const hasAny = tier1.length > 0 || tier2.length > 0 || tier3.length > 0 || channels.length > 0;
 
   if (!hasAny) {
     return (
@@ -121,6 +122,48 @@ export function WhereToWatch({ detail, userServices }: WhereToWatchProps) {
       {tier3.length > 0 ? (
         <RentBuyList options={tier3} detail={detail} onOpen={open} />
       ) : null}
+
+      {channels.length > 0 ? <ChannelList options={channels} onOpen={open} /> : null}
+    </View>
+  );
+}
+
+// Paid channels inside a parent service (Prime Video Channels, Apple TV
+// Channels, NOW passes). Shown apart from the service chips and labelled,
+// because "on Prime Video" would be wrong for a Prime subscriber without
+// the channel — interim until channels are per-user entitlements
+// (docs/strategy/briefs/addon-entitlements.md).
+function ChannelList({
+  options,
+  onOpen,
+}: {
+  options: ChannelOption[];
+  onOpen: (service: ServiceId, saUrl: string | null, priceShown: string | null) => void;
+}) {
+  return (
+    <View className="mt-3">
+      <Text className="mb-2 font-sans-bold text-kicker uppercase tracking-[1.6px] text-faint-foreground">
+        Via a channel
+      </Text>
+      <View className="gap-2">
+        {options.map((option) => (
+          <Pressable
+            key={`${option.serviceKey}-${option.channelName}`}
+            onPress={() => onOpen(option.serviceKey, option.deepLinkUrl ?? null, null)}
+            className="flex-row items-center justify-between rounded-card bg-secondary px-3.5 py-3 active:opacity-80">
+            <View className="flex-row items-center gap-2.5">
+              <ServiceBadge service={option.serviceKey} size="sm" />
+              <Text className="font-sans-medium text-body text-foreground">{option.channelName}</Text>
+            </View>
+            <Text className="font-sans-medium text-meta text-muted-foreground">
+              on {SERVICE_DISPLAY_NAMES[option.serviceKey] ?? option.serviceKey}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text className="mt-1.5 font-sans text-meta text-muted-foreground">
+        Needs a subscription to the channel, not just the service it sits in.
+      </Text>
     </View>
   );
 }

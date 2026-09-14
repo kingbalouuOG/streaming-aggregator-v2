@@ -100,6 +100,28 @@ A title whose availability arrives in today's 06:00 sync is picked up by
 *tomorrow's* 05:00 backfill, so new titles carry a one-day lag. Deliberate:
 reordering backfill after the sync leaves no room before enrich.
 
+### Relevance floor on title creation (2026-09-14)
+
+`backfill-missing-titles` is the only automatic writer of `titles`, so it is where "is this worth having?" is decided. After the IN-SY-001 cleanup walks wrote availability for every vendor catalogue entry (`--include-unknown-titles`), the queue held 58,029 titles — mostly Prime's and Apple's rent/buy long tail. Measured on the 10,132 created before the floor existed: median TMDb votes 12–26, 70–81% under 100 votes (the pre-existing catalogue is 72% under 100 votes too).
+
+| Reach tier (cheapest way the title is available anywhere) | Floor (TMDb `vote_count`) |
+|---|---|
+| Subscription or free on some service | **20** (`INCLUDED_VOTE_FLOOR`) |
+| Rent/buy-only or paid-channel-only | **200** (`OTHER_VOTE_FLOOR`) |
+
+Titles under the floor go to `backfill_skips` with `reason = 'below_floor'` and leave the queue; `chain_state.skipped_floor` and `error_details.skipped_floor` count them per chain. Reversible: `delete from backfill_skips where reason = 'below_floor'` re-queues them (e.g. after lowering a floor). Language is deliberately not a criterion. Chosen with Joe 2026-09-14; the alternative — dropping whole tiers — was rejected because it would have kept Scareycrows (on a subscription) and dropped Shaun of the Dead (rent only).
+
+```sql
+-- How much is the floor cutting?
+SELECT reason, count(*) FROM backfill_skips GROUP BY reason;
+SELECT started_at, titles_added, chain_state->>'skipped_floor' AS skipped_floor, chain_state->>'skipped_404' AS skipped_404
+FROM sync_log WHERE sync_type = 'backfill' ORDER BY started_at DESC LIMIT 5;
+```
+
+### Addon-tier rows (Prime Video Channels, Apple TV Channels, NOW passes)
+
+`stream_type = 'addon'` means "reachable only through a paid channel inside the parent service"; the row carries `addon_id` / `addon_name`. Since migration 084 these rows **do not** count toward `titles.available_services`, the detail page lists them under "Via a channel", and the share page skips them. The per-user entitlement model that replaces this interim is `docs/strategy/briefs/addon-entitlements.md` (IN-SC-004).
+
 ### Queue ordering (A3)
 
 `list_missing_title_ids` orders by **most recent availability**, not

@@ -17,6 +17,8 @@ export interface StreamingLink {
   serviceId: ServiceId;
   saServiceId: string;
   streamType: 'subscription' | 'rent' | 'buy' | 'free' | 'addon';
+  /** For `addon` rows: the paid channel inside the parent service (e.g. "HBO Max" on Prime Video). */
+  addonName?: string;
   deepLinkUrl: string;
   videoLinkUrl?: string;
   quality?: string;
@@ -40,7 +42,7 @@ export async function getStreamingLinks(
   try {
     const { data, error } = await supabase
       .from('streaming_availability')
-      .select('service_id, sa_service_id, stream_type, deep_link_url, video_link_url, quality, price_amount, price_currency, price_formatted, expires_soon')
+      .select('service_id, sa_service_id, stream_type, addon_name, deep_link_url, video_link_url, quality, price_amount, price_currency, price_formatted, expires_soon')
       .eq('tmdb_id', tmdbId)
       .eq('media_type', mediaType)
       .order('stream_type', { ascending: true });
@@ -54,6 +56,7 @@ export async function getStreamingLinks(
           serviceId: serviceId as ServiceId,
           saServiceId: row.sa_service_id,
           streamType: row.stream_type as StreamingLink['streamType'],
+          addonName: row.addon_name || undefined,
           deepLinkUrl: row.deep_link_url,
           videoLinkUrl: row.video_link_url || undefined,
           quality: (row.quality === 'default' ? undefined : row.quality) as string | undefined,
