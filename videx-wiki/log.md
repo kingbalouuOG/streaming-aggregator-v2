@@ -1647,3 +1647,18 @@ only thing at stake.
 - **Brief written:** `docs/strategy/briefs/addon-entitlements.md` — channels as sub-entitlements of the parent, one entitlement per channel however bought, curated picker, availability follows entitlement. Handoff for a fresh session: `docs/plans/2026-09-14-001-handoff-addon-entitlements.md`.
 - Updated: wiki/concepts/operations/sync-pipeline.md (floor + addon sections), wiki/entities/codebase/migrations.md (084), wiki/registers/parking-lot.md (IN-SC-004)
 - Not verified here: the native component (no native node_modules on this machine) — review only; CI build + device check with the next release.
+
+## [2026-09-14] ingest | Videx_Growth_Loops_Strategy_v0.1_2026-09.md (raw/forward-planning)
+- New page: wiki/sources/growth-loops-strategy-v0-1.md (five loops, foundations, G0–G5 order, measures; §8 Q1/Q2 answered; §3 audit corrections recorded)
+- New page: wiki/concepts/forward-planning/growth-loops.md (status shortlisted; verified current state vs net-new; proposed routing position pending ADR-015; decisions list)
+- Updated: index.md (Forward planning + Sources)
+- Plan written alongside: docs/plans/2026-09-14-003-feat-phase-g0-g1-growth-foundations-and-sharing-plan.md (audit of items 1–8, G0/G1 tasks, migrations pre-assigned 085–088, 19 decisions for Joe). Plan only; nothing implemented or applied.
+- Corrections found: the strategy's §3 audit predates H0 Stream B (Share v1 + `/t/` OG title pages shipped July 2026); the shipped title URL is `/t/{type}/{tmdbId}`, not `/t/{slug}`; Notifications v1 migrations are 055–060 (an older memory note said 048–052).
+- Not updated: registers (parking-lot, open-questions, next-steps) — wait for Joe's decisions; AGENTS.md step 2 ("discuss takeaways with the human") deferred to the plan review.
+
+## [2026-09-14] query | G0/G1 decisions taken; execution shape agreed
+- Joe took all 19 decisions in plan §9 (title URL with cosmetic slug; rooms shared as `shared_rooms` snapshots; `/list/` reserved for G2; D5 stands → ADR-015 in S1; `.well-known` on the Worker; Apple + Google via id token with a placeholder-username migration; in-app pending link + Android Install Referrer; `growth_events` table; `via` + `src`; no flag; `IN-GR` family).
+- Product answers recorded in plan §9b (share copy fallbacks, "tell someone" on arrival first then leaving-soon, anonymous no-expiry room snapshots with the Worker page as the non-user journey, providers per platform, recipient actions, share glyph placement, all loops launch together).
+- Execution: five sessions (S1 links → S2 attribution ‖ S3 sign-in → S4 sharing → S5 verification); migrations re-assigned 085 shared_rooms / 086 handle_new_user / 087 growth_events. S1 handoff: docs/plans/2026-09-14-004-handoff-growth-s1-links.md.
+- Updated: wiki/concepts/forward-planning/growth-loops.md (status locked, decisions section)
+- Still not updated: registers — `IN-GR` opens in S1; open-questions D5 row closes with ADR-015.
