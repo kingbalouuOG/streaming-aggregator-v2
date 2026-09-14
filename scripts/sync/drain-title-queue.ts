@@ -32,7 +32,18 @@
  *   --max-cycles <n>     per-loop ceiling on chains started (default 30)
  *   --max-hours <h>      wall-clock ceiling for the whole run (default 14)
  *   --floor <n>          stop the backfill loop once count_missing_title_ids() < n (default 100)
- *   --only <name>        run only one loop: backfill | enrich | embed
+ *   --only <names>       run only these loops, comma-separated: backfill | enrich | embed
+ *
+ * MEASURED 2026-09-14 (first live run): the enrich and embed loops burned
+ * their 25-cycle ceilings inside the first hour on chains that processed a
+ * dozen rows each — every trickle from the upstream loop looked like work,
+ * and each chain then "drained" and counted as a cycle. Both loops had
+ * stopped by 16:09 while backfill ran on for hours, leaving 5,348 titles
+ * unenriched and 9,224 unembedded. Two rules follow, both below: a loop
+ * does not start a chain for less than a slice's worth of work while its
+ * upstream is still producing, and "still producing" is read from
+ * sync_log as well as from this process, so a loop started on its own
+ * (--only) cooperates with a driver running elsewhere.
  *
  * It never starts a chain between 04:50 and 07:45 UTC — that window belongs
  * to the crons (backfill 05:00, sync 06:00, enrich 06:30, embed 07:15) and a
@@ -80,6 +91,11 @@ const maxCycles = flag('max-cycles') ? parseInt(flag('max-cycles')!, 10) : 30;
 const maxHours = flag('max-hours') ? parseFloat(flag('max-hours')!) : 14;
 const floor = flag('floor') ? parseInt(flag('floor')!, 10) : 100;
 const only = flag('only');
+const onlyLoops = new Set((only ?? '').split(',').map((s) => s.trim()).filter(Boolean));
+
+// A slice is 250 rows for every chain type. Starting a chain for less than
+// that while more is on its way wastes an invocation and a cycle.
+const MIN_BATCH = 250;
 
 // ── Chain descriptors ────────────────────────────────────
 
@@ -230,6 +246,14 @@ function describe(run: RunRow): string {
 const deadline = Date.now() + maxHours * 3600_000;
 const finished: Record<LoopName, boolean> = { backfill: false, enrich: false, embed: false };
 
+/** Is the stage before us still producing — in this process, or as a live chain anywhere? */
+async function upstreamActive(upstream: LoopName | null): Promise<boolean> {
+  if (upstream === null) return false;
+  if (!finished[upstream]) return true;
+  const upstreamChain = CHAINS.find((c) => c.loop === upstream)!;
+  return isLive(await latestRun(upstreamChain.syncType));
+}
+
 async function driveLoop(chain: Chain, upstream: LoopName | null): Promise<void> {
   const { loop } = chain;
   let cycles = 0;
@@ -246,7 +270,7 @@ async function driveLoop(chain: Chain, upstream: LoopName | null): Promise<void>
     }
 
     const pending = await chain.pending();
-    const upstreamDone = upstream === null || finished[upstream];
+    const upstreamDone = !(await upstreamActive(upstream));
     const threshold = loop === 'backfill' ? floor : 0;
 
     if (pending <= threshold) {
@@ -256,6 +280,13 @@ async function driveLoop(chain: Chain, upstream: LoopName | null): Promise<void>
       }
       // Nothing to do yet, but the stage before us is still producing.
       if (idleChecks++ % 6 === 0) log(loop, `nothing pending; waiting for ${upstream} to produce more`);
+      await sleep(60_000);
+      continue;
+    }
+    if (!upstreamDone && pending < MIN_BATCH) {
+      // Less than a slice's worth, and more is coming: let it accumulate
+      // rather than spend a chain (and a cycle) on a trickle.
+      if (idleChecks++ % 6 === 0) log(loop, `${pending} pending (< ${MIN_BATCH}) while ${upstream} still runs — accumulating`);
       await sleep(60_000);
       continue;
     }
@@ -288,8 +319,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  const selected = only ? CHAINS.filter((c) => c.loop === only) : CHAINS;
-  if (selected.length === 0) throw new Error(`--only must be one of backfill | enrich | embed`);
+  const selected = onlyLoops.size > 0 ? CHAINS.filter((c) => onlyLoops.has(c.loop)) : CHAINS;
+  if (selected.length === 0) throw new Error(`--only must name one or more of backfill | enrich | embed`);
   // Mark unselected loops as finished so downstream stop conditions are not blocked on them.
   for (const c of CHAINS) if (!selected.includes(c)) finished[c.loop] = true;
 
