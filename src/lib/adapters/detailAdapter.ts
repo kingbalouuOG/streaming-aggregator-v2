@@ -77,6 +77,22 @@ export interface ServiceLink {
   type: 'exact' | 'search';
 }
 
+/**
+ * A title reachable through a paid channel sold inside a parent service —
+ * Prime Video Channels, Apple TV Channels, NOW's passes. NOT "on" the
+ * parent service for a subscriber who does not hold the channel, so these
+ * never join `allServices` or `serviceLinks`; they are listed separately,
+ * labelled with the channel. Interim until the entitlement model
+ * (docs/strategy/briefs/addon-entitlements.md) makes them per-user.
+ */
+export interface ChannelOption {
+  /** The parent service the channel is bought through. */
+  serviceKey: ServiceId;
+  /** The vendor's channel name, e.g. "HBO Max", "Paramount+", "Hayu". */
+  channelName: string;
+  deepLinkUrl?: string;
+}
+
 export interface DetailData {
   id: string;
   title: string;
@@ -91,6 +107,7 @@ export interface DetailData {
   services: ServiceId[];
   allServices: ServiceId[];
   rentalOptions: RentalOption[];
+  channelOptions: ChannelOption[];
   serviceLinks: Record<string, ServiceLink>;
   cast: CastMember[];
   runtime?: string;
@@ -272,6 +289,26 @@ export function buildDetailData(
     });
   }
 
+  // ── Channel options from SA API addon rows ──
+  // Skipped when the parent service already streams the title outright
+  // (subscription/free), since the channel adds nothing then.
+  const channelOptions: ChannelOption[] = [];
+  if (streamingLinks?.length) {
+    const seenChannels = new Set<string>();
+    for (const link of streamingLinks) {
+      if (link.streamType !== 'addon' || !link.addonName) continue;
+      if (flatrateServiceSet.has(link.serviceId)) continue;
+      const key = `${link.serviceId}:${link.addonName}`;
+      if (seenChannels.has(key)) continue;
+      seenChannels.add(key);
+      channelOptions.push({
+        serviceKey: link.serviceId,
+        channelName: link.addonName,
+        deepLinkUrl: link.deepLinkUrl,
+      });
+    }
+  }
+
   // Runtime
   const runtime = mediaType === 'movie' && tmdbDetail.runtime
     ? `${Math.floor(tmdbDetail.runtime / 60)}h ${tmdbDetail.runtime % 60}m`
@@ -284,6 +321,6 @@ export function buildDetailData(
   return {
     id, title, heroImage, year, contentRating,
     imdbRating, rottenTomatoes, description: tmdbDetail.overview || '',
-    genres, genreIds, services, allServices, rentalOptions, serviceLinks, cast, runtime, seasons, language, mediaType,
+    genres, genreIds, services, allServices, rentalOptions, channelOptions, serviceLinks, cast, runtime, seasons, language, mediaType,
   };
 }

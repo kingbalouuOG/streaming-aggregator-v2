@@ -316,6 +316,10 @@ app.get('/t/:type/:tmdbId', async (c) => {
       const subSet = new Set<string>();
       const rentBuySet = new Set<string>();
       for (const row of avail ?? []) {
+        // A paid channel inside a service (Prime Video Channels etc.) is not
+        // "stream on Prime" — skip until channels are per-user entitlements
+        // (docs/strategy/briefs/addon-entitlements.md).
+        if (row.stream_type === 'addon') continue;
         const label = SHARE_SERVICE_LABELS[row.service_id] ?? row.service_id;
         if (row.stream_type === 'rent' || row.stream_type === 'buy') rentBuySet.add(label);
         else subSet.add(label);

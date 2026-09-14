@@ -1638,3 +1638,11 @@ only thing at stake.
   - A bypass would mostly recompute the same picks, for a cold render per pull, 30/min rate-limit exposure and a reshuffle on every pull.
   - Revisit if testers find "You're up to date" unsatisfying. Cheaper option then: refresh only entries older than ~2 min.
 - Updated: wiki/registers/parking-lot.md (IN-UX-002 ✅)
+
+## [2026-09-14] query | ingestion floor, addon-tier interim, entitlement brief
+- **Why the queue was 58k, answered with data:** the March catalogue was built TMDb-first (~20k titles by popularity, then the vendor asked per title), so Videx only ever held Prime/Apple rent-buy rows for popular titles; the vendor's stores are 52,496 (Prime) and 30,067 (Apple) entries. The 10,132 titles created from the queue before any floor look like the existing catalogue (72% under 100 votes) and include titles that plainly should have existed — Harry Potter, The Matrix, John Wick (HBO Max), The Truman Show (Paramount+), Léon, The Terminator (channels), Shaun of the Dead, Sin City (rent). So the tier is the wrong knife.
+- **Relevance floor** in `backfill-missing-titles` (Joe's choice): 20 TMDb votes when included with a subscription/free somewhere, 200 when rent/buy-only or channel-only; skipped titles recorded as `backfill_skips.reason = 'below_floor'` (reversible). Language deliberately not a criterion.
+- **Addon-tier interim (IN-SC-004):** migration 084 excludes `stream_type = 'addon'` from `available_services` (For You / Home had been treating 11,895 channel-only Prime titles as "on Prime"); `detailAdapter.channelOptions` + a labelled "Via a channel" list in the native where-to-watch; the share page skips addon rows. Search hits and fingerprints were already right.
+- **Brief written:** `docs/strategy/briefs/addon-entitlements.md` — channels as sub-entitlements of the parent, one entitlement per channel however bought, curated picker, availability follows entitlement. Handoff for a fresh session: `docs/plans/2026-09-14-001-handoff-addon-entitlements.md`.
+- Updated: wiki/concepts/operations/sync-pipeline.md (floor + addon sections), wiki/entities/codebase/migrations.md (084), wiki/registers/parking-lot.md (IN-SC-004)
+- Not verified here: the native component (no native node_modules on this machine) — review only; CI build + device check with the next release.

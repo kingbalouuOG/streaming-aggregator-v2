@@ -32,6 +32,19 @@
  * by `runId` and carried in `chain_state`. `titles_added` on that row is
  * the only honest title count the system produces.
  *
+ * RELEVANCE FLOOR (2026-09-14). This is the only place titles enter the
+ * catalogue automatically, so it is where "is this worth having?" is
+ * decided. The 2026-09-11 cleanup walks wrote availability for every
+ * catalogue entry the vendor lists (--include-unknown-titles), which put
+ * 58,029 titles in this queue — Prime's and Apple's rent/buy long tail
+ * for the most part. A title is created only if its TMDb vote count
+ * clears a floor that depends on how it is reachable: INCLUDED_VOTE_FLOOR
+ * when some service offers it with a subscription or for free,
+ * OTHER_VOTE_FLOOR when it is rent/buy-only or paid-channel-only. Titles
+ * under the floor are recorded in `backfill_skips` with reason
+ * 'below_floor' so they leave the queue; delete those rows to reconsider
+ * them (e.g. after lowering a floor).
+ *
  * Deploy: npx supabase functions deploy backfill-missing-titles --project-ref fmusugdcnnwiuzkbjquo
  * Manual: curl -X POST https://<project>.supabase.co/functions/v1/backfill-missing-titles \
  *           -H "Authorization: Bearer <service_role_key>"
@@ -84,6 +97,23 @@ const SLICE_BUDGET_MS = 75_000;
 const HANDOFF_DELAY_MS = 3_000;
 
 const FLUSH_EVERY = 10;
+
+// ── Relevance floor ──────────────────────────────────────
+// Measured on the 10,132 titles created from the post-cleanup queue
+// (2026-09-12/13) before any floor existed: median TMDb votes 12–26, and
+// 70–81% of them under 100 votes, across every reach tier. The pre-existing
+// catalogue is 72% under 100 votes too, so the floors below are a
+// relevance cut the catalogue never had, not a return to some earlier
+// standard. Chosen with Joe 2026-09-14:
+//   - included with a subscription or free somewhere: keep breadth on the
+//     services people pay for, drop only the genuinely unknown.
+//   - rent/buy-only or paid-channel-only: only titles people would
+//     recognise. Shaun of the Dead (9,614 votes) passes; Scareycrows does
+//     not.
+// Language is deliberately NOT a criterion — a third of the catalogue is
+// non-English and the UK demand for it is real.
+const INCLUDED_VOTE_FLOOR = 20;
+const OTHER_VOTE_FLOOR = 200;
 
 // Hard ceiling on chain length: 12 x 250 = 3,000 rows per chain. Against
 // ~1,000 rows/day of inflow from the daily SA sync, daily cadence (A5,
@@ -213,6 +243,32 @@ interface MissingRow {
   media_type: 'movie' | 'tv';
 }
 
+interface SkipRow extends MissingRow {
+  reason: 'tmdb_404' | 'below_floor';
+}
+
+/**
+ * Which of these keys are offered with a subscription or for free by ANY
+ * service. Decides which relevance floor applies. One query per media
+ * type for the whole slice, so this costs two round trips per 250 rows.
+ */
+async function includedTitles(rows: MissingRow[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  for (const mediaType of ['movie', 'tv'] as const) {
+    const ids = rows.filter((r) => r.media_type === mediaType).map((r) => r.tmdb_id);
+    if (ids.length === 0) continue;
+    const { data, error } = await supabase
+      .from('streaming_availability')
+      .select('tmdb_id')
+      .eq('media_type', mediaType)
+      .in('stream_type', ['subscription', 'free'])
+      .in('tmdb_id', ids);
+    if (error) throw new Error(`included-titles lookup (${mediaType}) failed: ${error.message}`);
+    for (const r of data ?? []) out.add(`${r.tmdb_id}:${mediaType}`);
+  }
+  return out;
+}
+
 interface RunStats {
   // Rows the RPC handed back for this slice.
   missing: number;
@@ -227,6 +283,9 @@ interface RunStats {
   attempted: number;
   upserted: number;
   skipped404: number;
+  // Fetched from TMDb and deliberately not created: vote count under the
+  // relevance floor for its reach tier. Recorded in backfill_skips.
+  skippedFloor: number;
   failed: number;
   remaining: number;
 // A short fetch only means the queue is empty if the slice actually got
@@ -260,7 +319,7 @@ let heartbeatRunId: string | undefined;
 
 async function runBackfillSlice(): Promise<RunStats> {
   const stats: RunStats = {
-    missing: 0, attempted: 0, upserted: 0, skipped404: 0, failed: 0,
+    missing: 0, attempted: 0, upserted: 0, skipped404: 0, skippedFloor: 0, failed: 0,
     remaining: 0, truncated: false, failures: {},
   };
   const startedAt = Date.now();
@@ -274,8 +333,10 @@ async function runBackfillSlice(): Promise<RunStats> {
   stats.missing = missing.length;
   console.log(`  slice: ${missing.length} missing IDs (cap ${SLICE_LIMIT})`);
 
+  const included = missing.length > 0 ? await includedTitles(missing) : new Set<string>();
+
   const buffer: ReturnType<typeof buildTitleRow>[] = [];
-  const skips: MissingRow[] = [];
+  const skips: SkipRow[] = [];
 
   async function flushTitles() {
     if (buffer.length === 0) return;
@@ -339,7 +400,7 @@ async function runBackfillSlice(): Promise<RunStats> {
       // 260ms first. Unfinished rows stay in list_missing_title_ids and the
       // next slice picks them up — nothing is lost by stopping early.
       if (Date.now() - startedAt > SLICE_BUDGET_MS) {
-        console.log(`  slice budget reached after ${stats.upserted + stats.skipped404 + stats.failed} rows`);
+        console.log(`  slice budget reached after ${stats.upserted + stats.skipped404 + stats.skippedFloor + stats.failed} rows`);
         stats.truncated = true;
         break;
       }
@@ -349,7 +410,7 @@ async function runBackfillSlice(): Promise<RunStats> {
       const tmdb = await tmdbFetch(row.tmdb_id, row.media_type);
       if (tmdb === 'notfound') {
         stats.skipped404++;
-        skips.push(row);
+        skips.push({ ...row, reason: 'tmdb_404' });
       } else if (tmdb === null) {
         // Transient/unknown failure: count it, DON'T blacklist it — the
         // row stays in list_missing_title_ids for the next slice.
@@ -358,7 +419,17 @@ async function runBackfillSlice(): Promise<RunStats> {
         // are already in the function logs via tmdbFetch's console.error.
         noteFailure(stats, 'TMDb fetch failed (non-404, retries exhausted)');
       } else {
-        buffer.push(buildTitleRow(tmdb, row.media_type));
+        const floor = included.has(`${row.tmdb_id}:${row.media_type}`)
+          ? INCLUDED_VOTE_FLOOR
+          : OTHER_VOTE_FLOOR;
+        if ((tmdb.vote_count ?? 0) < floor) {
+          // Below the relevance floor for how it is reachable. Recorded so
+          // it leaves the queue; reversible by deleting the skip row.
+          stats.skippedFloor++;
+          skips.push({ ...row, reason: 'below_floor' });
+        } else {
+          buffer.push(buildTitleRow(tmdb, row.media_type));
+        }
       }
 
       if (buffer.length + skips.length >= FLUSH_EVERY) await flushBoth();
@@ -374,7 +445,7 @@ async function runBackfillSlice(): Promise<RunStats> {
 // the queue is systematically broken. Chaining another 39 slices into it
 // just burns TMDb calls, so the chain stops and says why.
 function madeNoProgress(stats: RunStats): boolean {
-  return stats.missing > 0 && stats.upserted === 0 && stats.skipped404 === 0;
+  return stats.missing > 0 && stats.upserted === 0 && stats.skipped404 === 0 && stats.skippedFloor === 0;
 }
 
 /// ── Edge Function handler ────────────────────────────────
@@ -395,6 +466,9 @@ interface ChainState {
   gap_at_end: number | null;
   failures: Record<string, number>;
   skipped_404: number;
+  // Titles fetched and left uncreated because they were under the
+  // relevance floor (see INCLUDED_VOTE_FLOOR / OTHER_VOTE_FLOOR).
+  skipped_floor: number;
   stopped_because: string | null;
   // Set after each handoff so resume_stalled_chains() (migration 068) can
   // report WHY a chain stalled, not merely that it did.
@@ -411,6 +485,7 @@ function emptyChainState(gapAtStart: number | null): ChainState {
     gap_at_end: null,
     failures: {},
     skipped_404: 0,
+    skipped_floor: 0,
     stopped_because: null,
     last_request_id: null,
   };
@@ -580,6 +655,7 @@ Deno.serve(async (req) => {
   state.slices += 1;
   if (stats) {
     state.skipped_404 += stats.skipped404;
+    state.skipped_floor = (state.skipped_floor ?? 0) + stats.skippedFloor;
     for (const [message, count] of Object.entries(stats.failures)) {
       state.failures[message] = (state.failures[message] ?? 0) + count;
     }
@@ -613,6 +689,7 @@ Deno.serve(async (req) => {
           total: totals.errors,
           fatal,
           skipped_404: state.skipped_404,
+          skipped_floor: state.skipped_floor,
           errors: failureEntries
             .sort((a, b) => b[1] - a[1])
             .slice(0, 25)
