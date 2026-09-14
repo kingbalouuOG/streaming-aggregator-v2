@@ -28,6 +28,12 @@ fallthrough = true
 [vars]
 # Public project URL (not a secret — it ships in the client bundle too).
 SUPABASE_URL = "https://fmusugdcnnwiuzkbjquo.supabase.co"
+# Growth S1 (ADR-015): SHA-256 certificate fingerprints served in
+# /.well-known/assetlinks.json, comma-separated, colon-hex. Both the upload
+# key (99:CE:FF:7E…) and the Play App Signing key (Play Console → App
+# integrity), because a Play-installed APK is signed with the latter.
+# Public values, not secrets. A key rotation is an edit here + deploy.
+ASSETLINKS_FINGERPRINTS = ""
 
 # PLAT-3 W3: per-user feed cache. Key = userId : taste_vector_updated_at
 # : sliderHash : sorted services; TTL 20 min. An interaction that moves

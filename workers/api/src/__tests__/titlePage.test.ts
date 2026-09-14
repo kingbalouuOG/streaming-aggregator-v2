@@ -13,8 +13,10 @@ import {
   renderTitleNotFoundPage,
   esc,
   PLAY_STORE_URL,
+  titlePageCacheKey,
   type TitlePageData,
 } from '../titlePage';
+import { applyAttribution, DEEP_LINK_QUERY_MARK, PLAY_REFERRER_MARK } from '../pageShell';
 
 const SAMPLE: TitlePageData = {
   title: 'Predator',
@@ -95,10 +97,17 @@ describe('renderTitlePage CTA by platform', () => {
     expect(html).toContain('>Get Videx<');
     expect(html).toContain('iOS coming soon');
   });
-  it('keeps the deep-link and canonical intact', () => {
+  it('keeps the deep-link and uses the slugged canonical', () => {
     const html = renderTitlePage('movie', 106, SAMPLE, 'https://x.videx', 'android');
     expect(html).toContain('videx://detail/movie-106');
-    expect(html).toContain('<link rel="canonical" href="https://x.videx/t/movie/106">');
+    expect(html).toContain('<link rel="canonical" href="https://x.videx/t/movie/106-predator-1987">');
+    expect(html).toContain('<meta property="og:url" content="https://x.videx/t/movie/106-predator-1987">');
+  });
+  it('carries the iOS smart banner pointing at the canonical URL', () => {
+    const html = renderTitlePage('movie', 106, SAMPLE, 'https://x.videx', 'ios');
+    expect(html).toContain(
+      '<meta name="apple-itunes-app" content="app-id=6785395342, app-argument=https://x.videx/t/movie/106-predator-1987">',
+    );
   });
   it('escapes title text (esc discipline preserved)', () => {
     const evil: TitlePageData = { ...SAMPLE, title: 'A <b> & "co"' };
@@ -115,6 +124,46 @@ describe('renderTitleNotFoundPage', () => {
   });
   it('stays noindex', () => {
     expect(renderTitleNotFoundPage('other')).toContain('<meta name="robots" content="noindex">');
+  });
+});
+
+describe('attribution pass-through (?via= / ?src=)', () => {
+  const page = renderTitlePage('movie', 603, { ...SAMPLE, title: 'The Matrix', year: 1999 }, 'https://videxstreaming.com', 'android');
+
+  it('fills via and src into the deep link and the Play referrer, unchanged', () => {
+    const html = applyAttribution(page, 'share', 'push');
+    expect(html).toContain('href="videx://detail/movie-603?via=share&amp;src=push"');
+    expect(html).toContain(`href="${PLAY_STORE_URL}&amp;referrer=via%3Dshare%26src%3Dpush"`);
+  });
+
+  it('leaves clean links and no markers when there is no query', () => {
+    const html = applyAttribution(page, null, undefined);
+    expect(html).toContain('href="videx://detail/movie-603"');
+    expect(html).toContain(`href="${PLAY_STORE_URL}"`);
+    expect(html).not.toContain(DEEP_LINK_QUERY_MARK);
+    expect(html).not.toContain(PLAY_REFERRER_MARK);
+  });
+
+  it('drops values outside the contract instead of echoing them', () => {
+    const html = applyAttribution(page, '"><script>', 'organic');
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('href="videx://detail/movie-603?src=organic"');
+  });
+
+  it('the canonical URL never carries the query', () => {
+    const html = applyAttribution(page, 'share', 'push');
+    expect(html).toContain('<link rel="canonical" href="https://videxstreaming.com/t/movie/603-the-matrix-1999">');
+  });
+});
+
+describe('titlePageCacheKey', () => {
+  // index.ts reads and writes the edge cache with this key, so a shared
+  // URL's slug and ?via= / ?src= can never mint a separate cache entry.
+  it('is type + id + platform bucket only (the index.ts:281 pattern)', () => {
+    expect(titlePageCacheKey('movie', 603, 'ios')).toBe('https://cache.videx/t/movie/603?p=ios');
+  });
+  it('takes no slug or query input', () => {
+    expect(titlePageCacheKey.length).toBe(3);
   });
 });
 

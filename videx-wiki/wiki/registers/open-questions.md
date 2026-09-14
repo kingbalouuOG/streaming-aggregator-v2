@@ -34,7 +34,7 @@ Things to validate, with resolutions recorded as phases close them. Refreshed 20
 | Proxy/feed infrastructure choice | **D2: Cloudflare Workers + Hono** (zero cold starts; wrangler dissolves ADR-011). |
 | Interest-centroid K — fixed or adaptive? | **D3: fixed cap of 3**; adaptive K is ENG-2-era. |
 | What happens to the client pipeline after PLAT-3? | **D4: fallback for one release, then deleted.** ADR at cutover supersedes ADR-011 + ADR-012. |
-| Router adoption in PLAT-1? | **D5: `React.lazy` only** — router is YAGNI until web distribution matters. |
+| Router adoption in PLAT-1? | **D5: `React.lazy` only** — router is YAGNI until web distribution matters. **Trigger resolved 2026-09-14 ([ADR-015](../concepts/decisions/adr-015-object-urls-and-inbound-links.md)):** web distribution is Worker-rendered object pages, not the SPA; D5 stands. |
 | Worker code location | **D6: plain `workers/api/` folder** (stub created in REPO-1). |
 
 ## Resolved 2026-06-10 (ENG-1 plan Q1–Q4 + eval)

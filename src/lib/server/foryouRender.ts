@@ -179,6 +179,8 @@ export interface AnchorRoomPreview {
   anchorMediaType: 'movie' | 'tv';
   thumbnails: ContentItem[];
   titleCount: number;
+  /** Every room title, ids only, for a share snapshot (Growth S1). */
+  titleRefs?: { tmdb_id: number; media_type: 'movie' | 'tv' }[];
   llmLabel: { label: string; description: string | null } | null;
 }
 
@@ -891,6 +893,14 @@ async function buildAnchorRooms(
           anchorMediaType: anchor.mediaType,
           thumbnails: result.items.slice(0, 4),
           titleCount: result.items.length,
+          // Ids only ("movie-603" → ref), so a share can snapshot the room.
+          titleRefs: result.items.map((item) => {
+            const dash = item.id.indexOf('-');
+            return {
+              tmdb_id: Number(item.id.slice(dash + 1)),
+              media_type: item.id.slice(0, dash) === 'tv' ? ('tv' as const) : ('movie' as const),
+            };
+          }),
           llmLabel: dbCachedLabels.get(anchorKey) ?? null,
         };
         return { preview, latency: elapsed };

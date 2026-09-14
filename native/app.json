@@ -21,6 +21,7 @@
       "bundleIdentifier": "app.videx.streaming",
       "buildNumber": "12",
       "supportsTablet": false,
+      "associatedDomains": ["applinks:videxstreaming.com"],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -30,6 +31,18 @@
       "googleServicesFile": "./google-services.json",
       "versionCode": 15,
       "allowBackup": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "https", "host": "videxstreaming.com", "pathPrefix": "/t/" },
+            { "scheme": "https", "host": "videxstreaming.com", "pathPrefix": "/room/" },
+            { "scheme": "https", "host": "videxstreaming.com", "pathPrefix": "/list/" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0a0a0f",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

@@ -2,14 +2,23 @@ import { Image } from 'expo-image';
 import { ArrowRight } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 
+import { MAX_ROOM_TITLES } from '@/lib/growth/roomSnapshot';
 import type { AnchorRoomPreview } from '@/lib/recommendations-v2/types';
 import type { ContentItem } from '@/lib/types/content';
+import { createRoomShare } from '@/sharedRoomApi';
 import { SectionHead } from './SectionHead';
+import { ShareButton } from './ShareButton';
 
 // Mood rooms (web CoverStoryMoodRoom + grid). Rooms are prebuilt server-side
 // (Worker `anchorRooms`); each carries up to 4 thumbnails + a title count +
 // an (async) LLM label. Featured cover-story room then a 2×2 grid, each tinted
 // by an atmosphere accent. Tap opens a representative title from the room.
+//
+// Growth S1: each card can be shared. The share button snapshots the room
+// (POST /v1/share/room — frozen titles, label de-personalised by the Worker)
+// and opens the OS sheet with https://videxstreaming.com/room/{id}.
+
+type ShareRoom = () => Promise<string | null>;
 
 const TINTS = ['#a16ed4', '#3fb6a1', '#e3b04b', '#e16b8c', '#5b8def', '#7fb37b'];
 
@@ -63,16 +72,19 @@ function FeaturedRoom({
   room,
   tint,
   onPress,
+  share,
 }: {
   room: AnchorRoomPreview;
   tint: string;
   onPress: () => void;
+  share?: ShareRoom;
 }) {
   return (
     <Pressable
       onPress={onPress}
       className="mx-5 mt-3 overflow-hidden rounded-card p-4 active:opacity-90"
       style={{ backgroundColor: withAlpha(tint, 0.14), borderWidth: 0.5, borderColor: withAlpha(tint, 0.35) }}>
+      {share ? <ShareButton top={10} url={share} /> : null}
       <View className="flex-row items-center gap-2">
         <View style={{ width: 14, height: 1.5, borderRadius: 1, backgroundColor: tint }} />
         <Text className="font-sans-bold text-[10px] uppercase tracking-[1.4px]" style={{ color: tint }}>
@@ -106,10 +118,12 @@ function GridRoom({
   room,
   tint,
   onPress,
+  share,
 }: {
   room: AnchorRoomPreview;
   tint: string;
   onPress: () => void;
+  share?: ShareRoom;
 }) {
   return (
     <View className="w-1/2 p-1.5">
@@ -118,9 +132,12 @@ function GridRoom({
         className="overflow-hidden rounded-card p-3 active:opacity-90"
         style={{ backgroundColor: withAlpha(tint, 0.16), borderWidth: 0.5, borderColor: withAlpha(tint, 0.3), minHeight: 184 }}>
         <PosterFan thumbnails={room.thumbnails} size={50} />
-        <Text className="mt-3 font-sans-bold text-[10px] uppercase tracking-[0.4px]" style={{ color: tint }}>
-          Mood Room · {room.titleCount}
-        </Text>
+        <View className="mt-3 flex-row items-center justify-between">
+          <Text className="font-sans-bold text-[10px] uppercase tracking-[0.4px]" style={{ color: tint }}>
+            Mood Room · {room.titleCount}
+          </Text>
+          {share ? <ShareButton url={share} /> : null}
+        </View>
         <Text numberOfLines={2} className="mt-1 font-title text-body text-foreground">
           {roomLabel(room)}
         </Text>
@@ -142,17 +159,42 @@ export function MoodRooms({
     const first = room.thumbnails[0];
     if (first) onItemPress(first);
   };
+  // No titleRefs (a payload cached before they existed): no share button
+  // rather than a four-title snapshot.
+  const shareFor = (room: AnchorRoomPreview): ShareRoom | undefined => {
+    const titles = room.titleRefs;
+    if (!titles || titles.length === 0) return undefined;
+    return () =>
+      createRoomShare({
+        kind: 'anchor',
+        source_ref: room.id,
+        label: roomLabel(room),
+        description: room.llmLabel?.description ?? null,
+        titles: titles.slice(0, MAX_ROOM_TITLES),
+      });
+  };
 
   return (
     <View>
       <View className="mt-7 px-5">
         <SectionHead kicker="Mood rooms" title="Rooms for the mood you're in." />
       </View>
-      <FeaturedRoom room={featured} tint={tintFor(featured.id)} onPress={() => open(featured)} />
+      <FeaturedRoom
+        room={featured}
+        tint={tintFor(featured.id)}
+        onPress={() => open(featured)}
+        share={shareFor(featured)}
+      />
       {more.length > 0 ? (
         <View className="mt-1 flex-row flex-wrap px-3.5">
           {more.slice(0, 4).map((room) => (
-            <GridRoom key={room.id} room={room} tint={tintFor(room.id)} onPress={() => open(room)} />
+            <GridRoom
+              key={room.id}
+              room={room}
+              tint={tintFor(room.id)}
+              onPress={() => open(room)}
+              share={shareFor(room)}
+            />
           ))}
         </View>
       ) : null}

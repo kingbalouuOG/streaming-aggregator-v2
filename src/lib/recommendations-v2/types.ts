@@ -260,6 +260,13 @@ export interface AnchorRoomPreview {
   /** Total titles in the room post-filter (for "X titles" copy if shown). */
   titleCount: number;
   /**
+   * Every title in the room, in room order — what a share snapshots
+   * (Growth S1, POST /v1/share/room). Optional: KV-cached payloads from
+   * before this field have none, and the share action hides until they
+   * expire (20 min).
+   */
+  titleRefs?: { tmdb_id: number; media_type: 'movie' | 'tv' }[];
+  /**
    * LLM-generated thematic label (IN-463). Populated asynchronously
    * after the room renders — cards initially show "If you love {anchor}"
    * and swap to the thematic label when the cache read or Edge

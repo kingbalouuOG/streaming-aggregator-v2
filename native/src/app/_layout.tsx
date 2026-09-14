@@ -46,6 +46,14 @@ Sentry.init({
 // remount it.
 const BG = '#0a0a0f';
 
+// Growth S1: a cold-start universal link opens /detail or /room directly.
+// Rendering (tabs) beneath it gives Back somewhere to go; the tabs guard
+// only redirects when (tabs) is focused, so a signed-out recipient still
+// sees the object first and meets /auth on the way back.
+export const unstable_settings = {
+  initialRouteName: '(tabs)',
+};
+
 // Hold the splash until fonts are in — Fraunces/DM Sans ARE the brand;
 // a system-font flash is the native equivalent of the UX-1 white flash.
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -106,6 +114,7 @@ function RootLayout() {
             <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
             <Stack.Screen name="curating" options={{ animation: 'fade' }} />
             <Stack.Screen name="detail/[id]" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="room/[id]" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="profile/[section]" options={{ animation: 'slide_from_right' }} />
           </Stack>
         </NotificationsProvider>

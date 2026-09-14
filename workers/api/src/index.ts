@@ -18,6 +18,14 @@
  *                                injected server-side; per-class TTLs
  *                                (rules.ts). Off-allowlist → 404.
  *
+ * Object URLs (Growth S1, ADR-015) — each needs a dashboard zone route:
+ *   GET /t/:type/:ref          — title page; ref {tmdbId}[-{slug}], 301 to canonical.
+ *   GET /room/:id              — shared room snapshot page.
+ *   GET /list/:id              — reserved for G2; branded 404.
+ *   GET /.well-known/apple-app-site-association, /.well-known/assetlinks.json
+ *   POST /v1/share/room        — snapshot a room (Supabase JWT).
+ *   GET /v1/room/:id           — snapshot JSON for the app.
+ *
  * Caching: caches.default keyed on the normalised request URL; the
  * Cache-Control written by cacheControlFor() drives both the Worker
  * cache and Cloudflare's CDN tier. Failures are never cached.
@@ -36,12 +44,31 @@ import { verifySupabaseJwt } from './auth';
 import { markdownToHtml, renderPolicyPage } from './policyPages';
 import { renderResetBridgePage, TOKEN_HASH_RE } from './resetBridge';
 import {
+  CANONICAL_REF_HEADER,
   platformBucket,
   renderTitlePage,
   renderTitleNotFoundPage,
   SHARE_SERVICE_LABELS,
+  titlePageCacheKey,
   type TitlePageData,
 } from './titlePage';
+import { applyAttribution, HTML_SECURITY_HEADERS } from './pageShell';
+import {
+  renderListNotFoundPage,
+  renderRoomNotFoundPage,
+  renderRoomPage,
+  roomPageCacheKey,
+} from './roomPage';
+import {
+  appleAppSiteAssociation,
+  assetLinks,
+  parseFingerprints,
+  WELL_KNOWN_HEADERS,
+} from './wellKnown';
+import { isUuid, validateShareRoomBody } from './sharedRooms';
+import { insertSharedRoom, loadSharedRoom } from './roomStore';
+import { parseTitleRef, titleRef } from '../../../src/lib/growth/slug';
+import { sharedRoomUrl, type ShareRoomResponse } from '../../../src/lib/growth/roomSnapshot';
 // Bundled as text (wrangler [[rules]] Text rule) — the single source of
 // truth for the hosted /privacy + /terms pages is docs/legal/*.md.
 import privacyMd from '../../../docs/legal/privacy-policy.md';
@@ -84,6 +111,8 @@ type Env = {
   FORYOU_CACHE: KVNamespace;
   /** LAUNCH-1 W1 (IN-PX-60): per-user rate limiter on /v1/foryou. */
   FORYOU_RATELIMIT: RateLimit;
+  /** Growth S1: comma-separated SHA-256 cert fingerprints for assetlinks.json ([vars]). */
+  ASSETLINKS_FINGERPRINTS: string;
 };
 
 /** Cloudflare rate-limit binding surface (the `limit()` runtime API). */
@@ -129,10 +158,22 @@ const POLICY_CACHE_CONTROL = 'public, max-age=3600';
 // and framing (clickjacking) outright. Applied to /privacy, /terms, /t/
 // and /reset via their handlers.
 export function htmlSecurityHeaders(c: { header: (k: string, v: string) => void }): void {
-  c.header('X-Content-Type-Options', 'nosniff');
-  c.header('X-Frame-Options', 'DENY');
-  c.header('Content-Security-Policy', "frame-ancestors 'none'");
+  for (const [k, v] of Object.entries(HTML_SECURITY_HEADERS)) c.header(k, v);
 }
+
+// ── Association files (Growth S1, ADR-015) ───────────────────────────
+// Answered directly (no redirect) with application/json: Apple's CDN and
+// Android's verifier both reject anything else. Needs the dashboard route
+// videxstreaming.com/.well-known/* or the request reaches Vercel and 404s.
+const AASA_BODY = JSON.stringify(appleAppSiteAssociation());
+app.get('/.well-known/apple-app-site-association', () =>
+  new Response(AASA_BODY, { headers: WELL_KNOWN_HEADERS }),
+);
+app.get('/.well-known/assetlinks.json', (c) =>
+  new Response(JSON.stringify(assetLinks(parseFingerprints(c.env.ASSETLINKS_FINGERPRINTS))), {
+    headers: WELL_KNOWN_HEADERS,
+  }),
+);
 
 app.get('/privacy', (c) => {
   c.header('Cache-Control', POLICY_CACHE_CONTROL);
@@ -261,20 +302,54 @@ app.get('/v1/title/:type/:id', async (c) => {
   });
 });
 
+// ── Public object pages: shared helpers ──────────────────────────────
+const HTML_CONTENT_TYPE = 'text/html; charset=utf-8';
+
+function htmlPage(html: string, status = 200, extra: Record<string, string> = {}): Response {
+  return new Response(html, {
+    status,
+    headers: { 'Content-Type': HTML_CONTENT_TYPE, ...HTML_SECURITY_HEADERS, ...extra },
+  });
+}
+
+/**
+ * Fill the ?via= / ?src= markers AFTER the edge-cache read (pageShell.ts):
+ * the cached body is query-free, the served body carries the attribution
+ * into the app deep link and the Play referrer. Also strips the internal
+ * canonical-ref header.
+ */
+async function withAttribution(
+  resp: Response,
+  via: string | undefined,
+  src: string | undefined,
+): Promise<Response> {
+  if (!(resp.headers.get('Content-Type') ?? '').startsWith('text/html')) return resp;
+  const out = new Response(applyAttribution(await resp.text(), via, src), resp);
+  out.headers.delete('Content-Length');
+  out.headers.delete(CANONICAL_REF_HEADER);
+  return out;
+}
+
 // ── Public share / SEO title page (H0 Stream B — Share v1) ───────────
-// GET /t/:type/:tmdbId — a minimal, crawlable, server-rendered
+// GET /t/:type/:ref — a minimal, crawlable, server-rendered
 // "where to watch X in the UK" page. Rendered from the Supabase content
 // cache (titles + streaming_availability), OG-tagged for link unfurls,
 // carrying store links + an "Open in Videx" deep link. 24h CDN cache.
 // This is the target of the native Share action AND the SEO seed.
+//
+// Growth S1 (ADR-015): ref is {tmdbId} or {tmdbId}-{slug}. Resolved by type
+// and id only; a missing or stale slug 301s to the canonical ref (query
+// kept). The canonical ref rides the cached response in a header, so a
+// cache hit redirects without touching the database.
 const TITLE_PAGE_TTL_SECONDS = 24 * 60 * 60;
 
-app.get('/t/:type/:tmdbId', async (c) => {
-  const { type, tmdbId } = c.req.param();
-  if (!isValidTitleRequest(type, tmdbId)) {
+app.get('/t/:type/:ref', async (c) => {
+  const { type, ref } = c.req.param();
+  const parsed = parseTitleRef(ref);
+  if (!parsed || !isValidTitleRequest(type, parsed.id)) {
     return c.text('Not found', 404);
   }
-  const id = Number(tmdbId);
+  const id = Number(parsed.id);
 
   // Beta feedback 2026-07-09: the store CTA said "Get Videx on Android"
   // to iPhone visitors. Render is now UA-dependent, so the edge cache
@@ -283,9 +358,10 @@ app.get('/t/:type/:tmdbId', async (c) => {
   // cached variants per title (android|ios|other).
   const bucket = platformBucket(c.req.header('user-agent'));
 
+  // Key: type + id + bucket. Never the slug or the query (titlePageCacheKey).
   const resp = await withEdgeCache(
     c,
-    `https://cache.videx/t/${type}/${id}?p=${bucket}`,
+    titlePageCacheKey(type, id, bucket),
     TITLE_PAGE_TTL_SECONDS,
     async () => {
       const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -307,16 +383,7 @@ app.get('/t/:type/:tmdbId', async (c) => {
       // Unknown title: a real 404 (never a junk "Title #N" 200 stuck in
       // the 24h edge cache — withEdgeCache only stores ok responses).
       if (!titleRow) {
-        return new Response(renderTitleNotFoundPage(bucket), {
-          status: 404,
-          headers: {
-            'Content-Type': 'text/html; charset=utf-8',
-            'Cache-Control': 'public, max-age=300',
-            'X-Content-Type-Options': 'nosniff',
-            'X-Frame-Options': 'DENY',
-            'Content-Security-Policy': "frame-ancestors 'none'",
-          },
-        });
+        return htmlPage(renderTitleNotFoundPage(bucket), 404, { 'Cache-Control': 'public, max-age=300' });
       }
 
       // Distinct service labels, split by whether you can stream vs rent/buy.
@@ -343,17 +410,142 @@ app.get('/t/:type/:tmdbId', async (c) => {
         rentBuy: [...rentBuySet].filter((s) => !subSet.has(s)).sort(),
       };
 
-      return new Response(renderTitlePage(type, id, data, CANONICAL_ORIGIN, bucket), {
-        headers: {
-          'Content-Type': 'text/html; charset=utf-8',
-          'X-Content-Type-Options': 'nosniff',
-          'X-Frame-Options': 'DENY',
-          'Content-Security-Policy': "frame-ancestors 'none'",
-        },
+      return htmlPage(renderTitlePage(type, id, data, CANONICAL_ORIGIN, bucket), 200, {
+        [CANONICAL_REF_HEADER]: titleRef(id, data.title, data.year),
       });
     },
   );
-  return resp;
+
+  const canonicalRef = resp.headers.get(CANONICAL_REF_HEADER);
+  if (resp.ok && canonicalRef && canonicalRef !== ref) {
+    // Relative Location keeps workers.dev requests on workers.dev; the
+    // query (?via= / ?src=) survives the hop.
+    return new Response(null, {
+      status: 301,
+      headers: {
+        Location: `/t/${type}/${canonicalRef}${new URL(c.req.url).search}`,
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
+  }
+  return withAttribution(resp, c.req.query('via'), c.req.query('src'));
+});
+
+// ── Shared room snapshots (Growth S1, migration 088) ─────────────────
+// GET /room/:id — public page; GET /v1/room/:id — the same snapshot as
+// JSON for the app's room screen. Both read through loadSharedRoom. Rows
+// are immutable (no unshare, no expiry), so the page caches 24h by id and
+// platform bucket; the JSON 1h, since it carries today's availability.
+const ROOM_PAGE_TTL_SECONDS = 24 * 60 * 60;
+const ROOM_JSON_TTL_SECONDS = 60 * 60;
+
+app.get('/room/:id', async (c) => {
+  const bucket = platformBucket(c.req.header('user-agent'));
+  const id = c.req.param('id').toLowerCase();
+  const via = c.req.query('via');
+  const src = c.req.query('src');
+  if (!isUuid(id)) {
+    return withAttribution(
+      htmlPage(renderRoomNotFoundPage(bucket), 404, { 'Cache-Control': 'public, max-age=300' }),
+      via,
+      src,
+    );
+  }
+  try {
+    const resp = await withEdgeCache(c, roomPageCacheKey(id, bucket), ROOM_PAGE_TTL_SECONDS, async () => {
+      const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
+      const room = await loadSharedRoom(client, id);
+      if (!room) {
+        return htmlPage(renderRoomNotFoundPage(bucket), 404, { 'Cache-Control': 'public, max-age=300' });
+      }
+      const html = renderRoomPage(
+        {
+          id: room.id,
+          label: room.label,
+          description: room.description,
+          createdAt: room.createdAt,
+          titles: room.items.map((i) => ({ title: i.title, year: i.year, image: i.image })),
+        },
+        CANONICAL_ORIGIN,
+        bucket,
+      );
+      return htmlPage(html);
+    });
+    return withAttribution(resp, via, src);
+  } catch (err) {
+    console.error('[room-page] error:', err);
+    return c.text('Internal error', 500);
+  }
+});
+
+app.get('/v1/room/:id', async (c) => {
+  const id = c.req.param('id').toLowerCase();
+  if (!isUuid(id)) return c.json({ error: 'not found' }, 404);
+  try {
+    return await withEdgeCache(c, `https://cache.videx/v1/room/${id}`, ROOM_JSON_TTL_SECONDS, async () => {
+      const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
+      const room = await loadSharedRoom(client, id);
+      return room ? Response.json(room) : Response.json({ error: 'not found' }, { status: 404 });
+    });
+  } catch (err) {
+    console.error('[room-json] error:', err);
+    return c.json({ error: 'internal error' }, 500);
+  }
+});
+
+// GET /list/:id — grammar reserved for the G2 watchlists entity (plan D3).
+app.get('/list/:id', (c) =>
+  withAttribution(
+    htmlPage(renderListNotFoundPage(platformBucket(c.req.header('user-agent'))), 404, {
+      'Cache-Control': 'public, max-age=300',
+    }),
+    c.req.query('via'),
+    c.req.query('src'),
+  ),
+);
+
+// POST /v1/share/room — freeze a room at share time and return its URL.
+// Authorization: Bearer <supabase user JWT>. Rate limited on the verified
+// user id with the /v1/foryou binding (own key prefix, so its own budget).
+// The body is validated and the label de-personalised in sharedRooms.ts;
+// the insert is service-role (shared_rooms has no client policies).
+const SHARE_ROOM_BODY_MAX_BYTES = 16 * 1024;
+
+app.post('/v1/share/room', async (c) => {
+  const token = (c.req.header('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
+  const userId = await verifySupabaseJwt(token, c.env.SUPABASE_URL);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const { success: withinLimit } = await c.env.FORYOU_RATELIMIT.limit({ key: `share-room:${userId}` });
+  if (!withinLimit) {
+    return c.json({ error: 'rate limited' }, 429, { 'Retry-After': '60' });
+  }
+
+  if (Number(c.req.header('content-length') ?? '0') > SHARE_ROOM_BODY_MAX_BYTES) {
+    return c.json({ error: 'body too large' }, 413);
+  }
+  let body: unknown;
+  try {
+    const text = await c.req.text();
+    if (text.length > SHARE_ROOM_BODY_MAX_BYTES) return c.json({ error: 'body too large' }, 413);
+    body = JSON.parse(text);
+  } catch {
+    return c.json({ error: 'invalid json' }, 400);
+  }
+
+  const result = validateShareRoomBody(body);
+  if (!result.ok) return c.json({ error: result.error }, 400);
+
+  try {
+    const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
+    const id = await insertSharedRoom(client, userId, result.value);
+    const payload: ShareRoomResponse = { id, url: sharedRoomUrl(id) };
+    return c.json(payload, 201);
+  } catch (err) {
+    // Generic body: postgrest messages can leak schema names (LOW-1).
+    console.error('[share-room] insert failed:', err);
+    return c.json({ error: 'internal error' }, 500);
+  }
 });
 
 // ── Server-side For You render (PLAT-3) ──────────────────────────────
