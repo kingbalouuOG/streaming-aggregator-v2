@@ -1610,3 +1610,13 @@ only thing at stake.
   - device check on both tabs;
   - decide whether a pull should bypass the Worker KV feed cache. Today a pull cannot surface picks newer than the 04:00 UTC recompute or the last taste change.
 - Updated: wiki/registers/parking-lot.md (IN-UX-002 filed, ⚠ fix built)
+
+## [2026-09-14] query | IN-UX-002 closed — device-verified, no KV bypass on pull
+- **OTA:** `ota-update.yml` on `fix/native-pull-to-refresh`, channel `preview`, iOS (run 34841564484). Update runtime `b0e3c78c3e692bf34d1636dab951bbba74d1eb5a` = installed build `213af0ce`.
+- **Device check (Joe, iPhone):** passed on New and For You ("looks great").
+- **Decision (Joe): pull-to-refresh keeps reading the Worker KV feed cache.**
+  - For You: 20-min TTL, and the key resets on `taste_vector_updated_at` / sliders / services. Ordering reshuffles on the matching 20-min bucket.
+  - Home: 10-min TTL, and the key resets on services / clusters.
+  - A bypass would mostly recompute the same picks, for a cold render per pull, 30/min rate-limit exposure and a reshuffle on every pull.
+  - Revisit if testers find "You're up to date" unsatisfying. Cheaper option then: refresh only entries older than ~2 min.
+- Updated: wiki/registers/parking-lot.md (IN-UX-002 ✅)
