@@ -1586,7 +1586,7 @@ only thing at stake.
 - Updated: wiki/entities/codebase/rpcs.md, wiki/registers/pre-launch-blockers.md (item 23). The Phase 5 pages and summaries that list the original allow-list are history, left as written.
 
 ## [2026-09-14] query | pull-to-refresh on New / For You — half a spinner, snapped shut, no completion cue (IN-UX-002)
-- **Report (Joe, iPhone):** pulling New showed half a spinner under the status bar. It vanished as the finger lifted, with nothing to say a refresh had happened. For You uses the same pattern.
+- **Report (Joe, iPhone):** pulling New showed half a spinner under the status bar. It vanished as the finger lifted, with nothing to say a refresh had happened. Joe then confirmed on device that For You does the same.
 - **Not #161:** that PR only changed the `onRefresh` `useCallback` dependency.
 - **Causes, from RN 0.85.3 source (`RCTPullToRefreshViewComponentView.mm`, `RCTScrollViewComponentView.mm`, `RefreshControl.js`):**
   1. *Cut off:* no header, and a full-bleed hero, so the scroll view starts at y=0. `UIRefreshControl`'s ~60pt band sits under the Dynamic Island. `progressViewOffset` IS applied on iOS in 0.85 (as a `bounds` shift), contrary to the brief, but the control is the scroll view's `refreshControl`, behind the content, so it would hide behind the hero instead.
