@@ -19,7 +19,6 @@ Netflix, Amazon Prime Video, Apple TV+, Disney+, NOW, Sky Go, Paramount+, BBC iP
 - **Web** — React 18 + TypeScript · **Vite 6** · **Tailwind CSS v4**
 - **Native (the live app)** — React Native 0.85 / **Expo SDK 56** + NativeWind 4 · Android/Hermes (`native/`)
 - **Edge** — Cloudflare Worker (`workers/api/`): TMDb/OMDB proxy + server-rendered `/v1/foryou`
-- *Legacy:* the original Capacitor 8 Android wrapper of the web app remains in `android/`, superseded by the Expo build at the NATIVE-4 cutover
 - **Supabase** — authentication, database (pgvector), Edge Functions, cloud sync
 - **Motion** (`motion/react`), **Sonner**, **Lucide React**, **react-markdown** (in-app legal docs)
 - **Vitest + jsdom** — `npm test` is the single test entry (suites in `__tests__/` beside source in `src/` and `scripts/`). CI: `tsc --noEmit` + lint + `npm test` on phase branches; build verification on main. (The `shared-tree-drift` + `foryou-parity` probes were retired at PLAT-3 with the `_shared/` mirror — ADR-014.)
@@ -66,7 +65,7 @@ git tag v2.0.2 && git push origin v2.0.2   # → Android AAB to Play + iOS IPA t
 
 **Full steps + one-time setup: [docs/v2/launch/release-runbook.md](docs/v2/launch/release-runbook.md).** A local `cd native/android && ./gradlew bundleRelease` still produces a one-off signed AAB (see [`native/README.md`](native/README.md)), but CI is the supported path — the Windows-local NDK build is fragile.
 
-> The original Capacitor wrapper of the web app (`npm run build && npx cap sync android`) is **legacy** — superseded by the Expo build at the NATIVE-4 cutover.
+`native/` is the only app build. The original Capacitor Android wrapper of the web app was superseded at the NATIVE-4 cutover and removed from the tree on 2026-09-14 (it remains in git history).
 
 ## Project Structure
 
@@ -89,13 +88,12 @@ native/                    LIVE Android app — React Native / Expo (app.videx.s
                            to ../src/lib + ../src/assets. See native/README.md.
 scripts/                   Node tooling in named subfolders (evaluation/, enrichment/, embeddings/,
                            fingerprints/, mood_rooms/, test/); root holds only sync-content.ts,
-                           debug-server.js, gen-android-icons.py
+                           debug-server.js
 workers/api/               videx-api Cloudflare Worker — TMDb/OMDB proxy + /v1/foryou (live)
 supabase/
   migrations/              Numbered schema migrations (apply process: see CONVENTIONS.md)
   functions/               Edge Functions (the _shared/ engine mirror was removed at PLAT-3)
   queries/                 Operational SQL (dashboard, funnel, reports)
-android/                   Legacy Capacitor wrapper of the web app (superseded by native/)
 docs/                      CONVENTIONS, design/ (design system + search briefs), legal/, plans/,
                            solutions/ (post-mortems), v2/ (strategy, orchestration, phase-summaries/)
 videx-wiki/                The knowledge base (see above)

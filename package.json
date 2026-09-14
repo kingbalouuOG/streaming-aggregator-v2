@@ -8,10 +8,6 @@
     "dev:debug": "node scripts/debug-server.js & npm run dev",
     "build": "vite build",
     "lint": "eslint .",
-    "cap:sync": "npx cap sync android",
-    "cap:open": "npx cap open android",
-    "build:android": "npm run build && npx cap sync android",
-    "dev:android": "echo Run: set LIVE_RELOAD=YOUR_IP && npx cap sync android",
     "backfill:enrichment": "npx tsx scripts/enrichment/backfill-enrichment.ts",
     "backfill:embeddings": "npx tsx scripts/embeddings/backfill-embeddings.ts",
     "build:fingerprints": "npx tsx scripts/fingerprints/build-service-fingerprints.ts",
@@ -28,11 +24,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@capacitor/android": "^8.0.2",
     "@capacitor/app": "^8.0.0",
     "@capacitor/app-launcher": "^8.0.1",
-    "@capacitor/browser": "^8.0.2",
-    "@capacitor/cli": "^8.0.2",
     "@capacitor/core": "^8.0.2",
     "@capacitor/device": "^8.0.2",
     "@capacitor/filesystem": "^8.1.2",

@@ -35,19 +35,12 @@ __pycache__/
 .venv/
 venv/
 
-# Capacitor Android build artifacts
-android/app/build/
-android/app/release/
-android/.gradle/
-android/build/
-android/captures/
-android/.idea/
+# Android build outputs and release signing material
 *.apk
 *.aab
 *.jks
 *.keystore
 # LAUNCH-1 W2: release signing credentials (passwords + keystore path).
-android/keystore.properties
 keystore.properties
 
 # Debug logs
