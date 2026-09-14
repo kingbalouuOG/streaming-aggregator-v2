@@ -25,5 +25,12 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # native/ lints with the root's pinned ESLint and plugins (see
+      # native/eslint.config.mjs), so the root `npm ci` above is all it needs.
+      # No native install: the result is identical without native/node_modules.
+      - name: Lint (native)
+        working-directory: native
+        run: npm run lint
+
       - name: Test (vitest)
         run: npm test
