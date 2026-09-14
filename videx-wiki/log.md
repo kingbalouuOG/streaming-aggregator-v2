@@ -1538,3 +1538,20 @@ only thing at stake.
 - **Gates:** root `npm ci`; `tsc --noEmit` clean; lint 0 errors / 72 warnings (baseline); vitest 41 files / 453 tests; `vite build` clean; `npm audit` 0. `workers/api` `wrangler deploy --dry-run` bundles (720 KiB).
 - Updated: wiki/registers/parking-lot.md (IN-DEP-002 ✅), wiki/entities/infrastructure/capacitor.md (retired banner), wiki/concepts/operations/apk-build-and-install.md (obsolete banner), wiki/concepts/architecture/platform-architecture.md, wiki/entities/codebase/module-map.md, wiki/registers/pre-launch-blockers.md (item 16 superseded), wiki/concepts/glossary.md (PWA row), index.md; also README.md, docs/CONVENTIONS.md.
 - Joe's main checkout may still hold an untracked `android/` directory with a local `keystore.properties` or keystore. This change did not touch it; delete it by hand after merge.
+
+## [2026-09-14] query | `capacitor://localhost` dropped from the CORS allow-lists (IN-DEP-002 follow-up)
+- **Two allow-lists carried it:** `supabase/functions/_shared/cors.ts` (`STATIC_ALLOWED_ORIGINS`, imported today by `label-anchor-room` and `embed-query`) and the `videx-api` Worker's Hono `cors()` origin list (`workers/api/src/index.ts`). Removed from both.
+- **Why it's safe:**
+  - No shipped client sends that origin. The Capacitor wrapper is gone (#162).
+  - The Expo app calls through native `fetch`, which sends no `Origin` header, so CORS never gates it.
+  - The web `src/` tree has never been deployed (IN-SL-003).
+- **Kept:** `https://localhost`, `http://localhost(:port)` and the `VIDEX_ALLOWED_DEV_ORIGINS` hook. `https://localhost` is the old Capacitor WebView origin as well, and would be the next candidate to drop.
+- **Correction:** the old `cors.ts` comment had the defaults swapped. `capacitor://localhost` is the iOS WebView default, `https://localhost` Android's. The Worker's comment was already right.
+- **Checks:**
+  - `isAllowedOrigin`, run under `tsx` (no local Deno): `capacitor://localhost` rejected with no ACAO header; `https://localhost`, `http://localhost` and `http://localhost:5173` allowed; a foreign origin and `null` rejected.
+  - Worker: `wrangler deploy --dry-run` bundles (720 KiB); ESLint clean on `index.ts`.
+  - Root `tsc --noEmit` clean.
+- **Deploy:**
+  - The Worker change ships on merge through `deploy-worker.yml`.
+  - The Edge Function change only takes effect once `label-anchor-room` and `embed-query` are redeployed. No workflow deploys Edge Functions, so that is a manual step.
+- Updated: wiki/entities/codebase/rpcs.md, wiki/registers/pre-launch-blockers.md (item 23). The Phase 5 pages and summaries that list the original allow-list are history, left as written.
