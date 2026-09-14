@@ -1525,3 +1525,7 @@ only thing at stake.
 - **Lockfile churn:** ~790 lines across the three commits; most of commit 3 is rollup's 21 per-platform binaries moving together. Zero major-version changes (diffed package-by-package). One addition to note: rollup 4.63.0 upstream declares optional `@napi-rs/lzma-linux-x64-gnu` (linux-x64 only, published by the napi-rs maintainer) — genuine, not a stray.
 - **Deferred:** IN-DEP-001 — `native/` still resolves axios 1.17.0, inside the vulnerable range, and it is what the device runs. Its own PR: the "stale native lockfile" reason first given for deferring was wrong — PR #106 repaired it on 2026-08-27, and it matches `native/package.json` today. Native `npm audit --omit=dev`: 29 (13 high, 16 moderate). IN-DEP-002 — retire the legacy Capacitor wrapper (`@capacitor/cli`, `android/`, `capacitor.config.ts`, `cap:*` scripts); Joe's call.
 - Updated: wiki/registers/parking-lot.md (new "Dependency hygiene" section, IN-DEP-001/002)
+- **Follow-ups, same day:**
+  - Joe approved deleting the legacy Capacitor build path (IN-DEP-002).
+  - Handoffs written for both follow-ups, to run in fresh sessions after #160 merges: `docs/plans/2026-09-14-001-handoff-native-npm-audit.md` and `docs/plans/2026-09-14-002-handoff-retire-capacitor-wrapper.md`.
+  - Native chain lookup found `decode-uri-component` 0.2.2 under `expo-router` → `query-string` 7.1.3. That puts it in the app bundle, not tooling, and it fixes only via a major, so the native session must establish reachability before deciding.
