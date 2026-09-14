@@ -1544,3 +1544,26 @@ only thing at stake.
 - `npm uninstall @capacitor/browser`: the lockfile loses only that package's entry and its root dependency line. No other entry changed.
 - Gates: root `npm ci`; `tsc --noEmit` clean; lint 0 errors / 72 warnings (baseline); vitest 41 files / 453 tests; `vite build` clean; `npm audit` 0.
 - Updated: wiki/entities/infrastructure/capacitor.md and wiki/entities/codebase/module-map.md (plugin rows removed).
+
+## [2026-09-14] query | native npm audit triage (IN-DEP-001) — 29 → 19, axios fixed, a reachable deep-link DoS guarded in code
+- **Baseline** (`native/` on `main` 582295e, `npm audit --omit=dev --package-lock-only`): 29 (13 high, 16 moderate). Gates on `main` before any change: native lint 0 errors / 1 warning (`(tabs)/index.tsx:263`), native `tsc --noEmit` 0 errors, root vitest 41 files / 453 tests.
+- **Fixed, three commits, no majors:**
+  1. `axios` ^1.17.0 → ^1.20.0; the lockfile changes the axios entry only.
+  2. Lockfile-only `npm update` of the tooling transitives: brace-expansion 5.0.9, browserslist 4.28.9, baseline-browser-mapping 2.11.23, js-yaml 4.3.2, nanoid 3.3.19, postcss 8.5.28, shell-quote 1.10.0, @xmldom/xmldom 0.8.15 / 0.9.12, `@expo/metro` 56.0.2 (nested metro 0.84.5), `@expo/config-plugins` 56.0.16, `@expo/prebuild-config` 56.0.23. Diffed package-by-package: 21 minor/patch changes, 17 nested additions (the metro 0.84.5 family), 0 majors.
+  3. The deep-link guard below. Result: 19 (4 high, 15 moderate).
+- **`decode-uri-component` is reachable, and no dependency fixes it:**
+  - **Path:** Expo Router's `getInitialURL` (cold) and `subscribe` (warm) → `getStateFromPath` → `parseQueryParams` → `query-string` 7.1.3 `parse` → `decode-uri-component` 0.2.2 (GHSA-vcc3-ghjq-m6fr). `videx://` is a plain custom scheme, so any page or app can open one.
+  - **Measured in Node:** `%FF`×500 in the query (1.5 KB) blocked parsing for 25 s; a well-formed 12 KB query took 0 ms.
+  - **Why no dependency fix:** expo-router 57.0.21 (latest) and 58.0.0 (next) still pin `query-string` ^7.1.3, so an SDK bump would not help. `decode-uri-component` 0.5.0 is ESM-only, so an `overrides` pin under CommonJS `query-string` 7 is out.
+  - **Decision (Joe):** mitigate in our code. `native/src/app/+native-intent.tsx` `redirectSystemPath` → `src/lib/deepLinkQueryGuard.ts` `stripMalformedQuery` drops any query that native `decodeURIComponent` rejects; the slow path only runs on that rejection.
+  - **Tests:** 16 vitest cases; fuzzed against the real `query-string` (2,000 valid queries up to ~4 KB, worst parse 0.75 ms; 20,000 mixed queries, 0 disagreements with a per-key/value decode).
+- **Not reachable, deferred (IN-DEP-004):**
+  - `uuid` 7.0.3 via `xcode`: only `uuid.v4()` with no buffer, during prebuild. It accounts for the `@expo/*`, `expo`, `expo-splash-screen` and `@sentry/react-native` derived entries.
+  - Root `metro` 0.84.4 → `image-size` 1.2.1: no `image-size` release is outside the range. Expo CLI uses the nested metro 0.84.5, which has no `image-size`; root 0.84.4 is held only by `@react-native/community-cli-plugin`, which nothing here runs.
+- **Merged `main` (#161–#163) into the branch:** the only conflicts were this log and parking-lot.md, where both sides had appended; both sides were kept. On the merged tree: native lint **0 problems** (#161 fixed the `:263` warning); `tsc` 0 errors; root vitest 42 files / 469 tests.
+- **Gates on this branch before the merge** (clean root + native `npm ci`): native lint 0 errors / same 1 warning; `tsc` 0 errors; root vitest 42 files / 469 tests; `npx expo export --platform android` clean (one 9.4 MB Hermes bundle, which contains `redirectSystemPath`, `+native-intent` and the `axios/1.20.0` version string).
+- **Shipping (Joe):** next store build, not OTA. Device check owed:
+  - TMDb surfaces load;
+  - a password-reset email link still verifies;
+  - a KB-long `%FF` link opens without a stall.
+- Updated: wiki/registers/parking-lot.md (IN-DEP-001 closed; IN-DEP-003 mitigated, device check pending; IN-DEP-004 deferred)
