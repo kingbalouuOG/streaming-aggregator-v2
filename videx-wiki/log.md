@@ -1602,3 +1602,39 @@ only thing at stake.
 - **Shipping unchanged (Joe):** production gets axios 1.20.0 and the guard with the next store build, not OTA.
 - **Filed separately, not fixed here:** a pre-existing New tab pull-to-refresh problem found in the same session. The spinner is cut off under the status bar and snaps shut with no clear refreshed signal. It is being fixed in its own session.
 - Updated: wiki/registers/parking-lot.md (IN-DEP-003 closed, device-verified; IN-DEP-001 device check recorded; Counts bullet). Still open on IN-DEP-003: remove the guard once expo-router leaves `query-string` 7.
+
+## [2026-09-14] query | pull-to-refresh on New / For You — half a spinner, snapped shut, no completion cue (IN-UX-002)
+- **Report (Joe, iPhone):** pulling New showed half a spinner under the status bar. It vanished as the finger lifted, with nothing to say a refresh had happened. Joe then confirmed on device that For You does the same.
+- **Not #161:** that PR only changed the `onRefresh` `useCallback` dependency.
+- **Causes, from RN 0.85.3 source (`RCTPullToRefreshViewComponentView.mm`, `RCTScrollViewComponentView.mm`, `RefreshControl.js`):**
+  1. *Cut off:* no header, and a full-bleed hero, so the scroll view starts at y=0. `UIRefreshControl`'s ~60pt band sits under the Dynamic Island. `progressViewOffset` IS applied on iOS in 0.85 (as a `bounds` shift), contrary to the brief, but the control is the scroll view's `refreshControl`, behind the content, so it would hide behind the hero instead.
+  2. *Snap:* `refreshing` went false as soon as the KV-cached `refetch()` resolved, often mid-gesture. Checked and ruled out: a `RefreshControl` JS/native desync (`_onRefresh` + `forceUpdate` batch with `setRefreshing(true)`).
+  3. *No signal:* the Worker usually returns the same titles.
+- **Fix (JS-only, both tabs):** `RefreshableScrollView` + `usePullToRefresh` + `src/lib/utils/pullToRefresh.ts`.
+  - iOS: the native control keeps the gesture and the hold with `tintColor="transparent"`, and an overlay chip spinner sits at `insets.top + 8`. Its opacity follows the drag and is pinned while refreshing, so bounces and spring-back don't flash it.
+  - Android: native disc with `progressViewOffset`.
+  - A 700 ms minimum hold, then a 1.2 s pill: *Updated just now* / *You're up to date* / *Couldn't refresh*. It compares rendered title ids, because For You's payload carries a per-fetch `wallclockMs` and reference equality would always say "updated".
+  - iOS holds the control open under the pill, so it lands in the gap, not on the hero kicker.
+  - VoiceOver/TalkBack announcement.
+  - The hero stays full-bleed.
+- **Rejected:** re-running the Reveal cascade on refresh, because remounting rows re-fires `recordImpression` and would feed C1 fatigue.
+- **Gates** (clean root + native `npm ci`):
+  - native lint 0 problems;
+  - native `tsc --noEmit` 0 errors;
+  - root vitest 43 files / 477 tests (+8);
+  - `npx expo export --platform android` clean (one 9.4 MB Hermes bundle).
+- **No dependency or native-config change**, so the fingerprint should match the ad-hoc build `213af0ce` (`b0e3c78c…`). OTA to `preview` / iOS is Joe's call, and must run from CI.
+- **Open (Joe):**
+  - device check on both tabs;
+  - decide whether a pull should bypass the Worker KV feed cache. Today a pull cannot surface picks newer than the 04:00 UTC recompute or the last taste change.
+- Updated: wiki/registers/parking-lot.md (IN-UX-002 filed, ⚠ fix built)
+
+## [2026-09-14] query | IN-UX-002 closed — device-verified, no KV bypass on pull
+- **OTA:** `ota-update.yml` on `fix/native-pull-to-refresh`, channel `preview`, iOS (run 34841564484). Update runtime `b0e3c78c3e692bf34d1636dab951bbba74d1eb5a` = installed build `213af0ce`.
+- **Device check (Joe, iPhone):** passed on New and For You ("looks great").
+- **Decision (Joe): pull-to-refresh keeps reading the Worker KV feed cache.**
+  - For You: 20-min TTL, and the key resets on `taste_vector_updated_at` / sliders / services. Ordering reshuffles on the matching 20-min bucket.
+  - Home: 10-min TTL, and the key resets on services / clusters.
+  - A bypass would mostly recompute the same picks, for a cold render per pull, 30/min rate-limit exposure and a reshuffle on every pull.
+  - Revisit if testers find "You're up to date" unsatisfying. Cheaper option then: refresh only entries older than ~2 min.
+- Updated: wiki/registers/parking-lot.md (IN-UX-002 ✅)
