@@ -1560,7 +1560,8 @@ only thing at stake.
 - **Not reachable, deferred (IN-DEP-004):**
   - `uuid` 7.0.3 via `xcode`: only `uuid.v4()` with no buffer, during prebuild. It accounts for the `@expo/*`, `expo`, `expo-splash-screen` and `@sentry/react-native` derived entries.
   - Root `metro` 0.84.4 → `image-size` 1.2.1: no `image-size` release is outside the range. Expo CLI uses the nested metro 0.84.5, which has no `image-size`; root 0.84.4 is held only by `@react-native/community-cli-plugin`, which nothing here runs.
-- **Gates on this branch** (clean root + native `npm ci`): native lint 0 errors / same 1 warning; `tsc` 0 errors; root vitest 42 files / 469 tests; `npx expo export --platform android` clean (one 9.4 MB Hermes bundle, which contains `redirectSystemPath`, `+native-intent` and the `axios/1.20.0` version string).
+- **Merged `main` (#161–#163) into the branch:** the only conflicts were this log and parking-lot.md, where both sides had appended; both sides were kept. On the merged tree: native lint **0 problems** (#161 fixed the `:263` warning); `tsc` 0 errors; root vitest 42 files / 469 tests.
+- **Gates on this branch before the merge** (clean root + native `npm ci`): native lint 0 errors / same 1 warning; `tsc` 0 errors; root vitest 42 files / 469 tests; `npx expo export --platform android` clean (one 9.4 MB Hermes bundle, which contains `redirectSystemPath`, `+native-intent` and the `axios/1.20.0` version string).
 - **Shipping (Joe):** next store build, not OTA. Device check owed:
   - TMDb surfaces load;
   - a password-reset email link still verifies;
