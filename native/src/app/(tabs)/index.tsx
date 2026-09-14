@@ -92,6 +92,10 @@ function buildRail(name: string, items: ContentItem[], category: QuickFilterCate
 export default function HomeScreen() {
   const router = useRouter();
   const feed = useHomeFeed();
+  // `feed` is a fresh object every render (the hook spreads the query), but
+  // react-query binds `refetch` once per observer. Depending on it alone keeps
+  // onRefresh stable.
+  const { refetch } = feed;
   const { data: services } = useUserServices();
   const [refreshing, setRefreshing] = useState(false);
   const { category, nonce, setCategory } = useQuickFilter('new');
@@ -256,11 +260,11 @@ export default function HomeScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await feed.refetch();
+      await refetch();
     } finally {
       setRefreshing(false);
     }
-  }, [feed.refetch]);
+  }, [refetch]);
 
   // first_home_view now fires from the post-onboarding Curating interstitial
   // (src/app/curating.tsx), not here: after the beta-feedback nav change the
