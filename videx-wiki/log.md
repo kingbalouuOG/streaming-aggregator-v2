@@ -1507,6 +1507,12 @@ only thing at stake.
 - **The gate is now `npm run lint` in `native/`, after a root `npm install`/`npm ci`.** Updated: native/README.md, docs/CONVENTIONS.md, both ESLint config comments, wiki/concepts/architecture/platform-architecture.md. Older handoff plans still say `npx expo lint`; they are historical and left as written.
 - Still not in CI: `typecheck-lint.yml` covers the root only, which is how this rotted unnoticed.
 
+## [2026-09-14] query | native lint now runs in CI
+- `typecheck-lint.yml` gains a `Lint (native)` step after the root lint: `npm run lint` in `native/`, on every PR and push to `main`. Closes the gap in the entry above: the native gate had never run in CI, which is how it rotted unnoticed.
+- **No native install in CI.** Measured on a clean root `npm ci` with `native/node_modules` and `native/.expo` moved aside: same result (0 errors, 1 pre-existing warning at `(tabs)/index.tsx:263`), and ESLint creates its own cache directory. The native config takes ESLint and every plugin from the root and is not type-aware, so it never reads native's install. The step costs seconds rather than a native `npm install`.
+- `native/src/lib`, the postinstall junction, will not exist in CI. The native config already ignores `src/lib/**`; the shared tree is linted by the root config.
+- Not added: native `tsc --noEmit`. That does need native's install for React Native and Expo types, so it is a separate decision.
+
 ## [2026-09-14] query | root npm audit triage — 23 advisories → 0, no majors, no blanket `audit fix`
 - **Baseline** (clean root `npm ci` on `main` 141b41c): 23 (1 low, 7 moderate, 14 high, 1 critical); 8 in prod `dependencies`. All pre-existing — no recent PR touched the root lockfile.
 - **Fixed in three commits, one group each, every bump inside the existing major:** (1) `axios` ^1.13.5 → ^1.20.0, which also brings `form-data` 4.0.6 and `follow-redirects` 1.16.0; (2) lockfile-only in-range update of the prod transitives `tar` 7.5.22, `@xmldom/xmldom` 0.8.15, `minimatch` 10.2.6, `brace-expansion` 1.1.18/5.0.9, `ws` 8.21.3; (3) `vite` 6.4.3, `vitest`/`@vitest/ui` 4.1.11, plus in-range `rollup`, `postcss`, `picomatch`, `nanoid`, `js-yaml`, `undici`, `browserslist`, `@babel/core`, `@humanfs/node`, `fflate`. Root `npm audit` and `npm audit --omit=dev` both report 0. Gates: `tsc --noEmit` clean, lint 0 errors (72 warnings), vitest 41 files / 453 tests, `vite build` clean.
@@ -1517,5 +1523,5 @@ only thing at stake.
   - `ws` sits under `@supabase/realtime-js`; nothing calls `.channel()`, and in the Worker realtime's websocket factory uses the platform `WebSocket`.
   - The rest were dev-only (lint, test, build tooling).
 - **Lockfile churn:** ~790 lines across the three commits; most of commit 3 is rollup's 21 per-platform binaries moving together. Zero major-version changes (diffed package-by-package). One addition to note: rollup 4.63.0 upstream declares optional `@napi-rs/lzma-linux-x64-gnu` (linux-x64 only, published by the napi-rs maintainer) — genuine, not a stray.
-- **Deferred:** IN-DEP-001 — `native/` still resolves axios 1.17.0, inside the vulnerable range, and it is what the device runs; rides the native lockfile repair. IN-DEP-002 — retire the legacy Capacitor wrapper (`@capacitor/cli`, `android/`, `capacitor.config.ts`, `cap:*` scripts); Joe's call.
+- **Deferred:** IN-DEP-001 — `native/` still resolves axios 1.17.0, inside the vulnerable range, and it is what the device runs. Its own PR: the "stale native lockfile" reason first given for deferring was wrong — PR #106 repaired it on 2026-08-27, and it matches `native/package.json` today. Native `npm audit --omit=dev`: 29 (13 high, 16 moderate). IN-DEP-002 — retire the legacy Capacitor wrapper (`@capacitor/cli`, `android/`, `capacitor.config.ts`, `cap:*` scripts); Joe's call.
 - Updated: wiki/registers/parking-lot.md (new "Dependency hygiene" section, IN-DEP-001/002)
