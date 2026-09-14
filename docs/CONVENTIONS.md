@@ -15,7 +15,7 @@ and reality disagree, fix one of them in the same PR.
 | `src/hooks/` | React service layer. Hooks orchestrate `lib/`; they do not contain business logic that `lib/` could own. |
 | `src/components/` | UI. Design citations point at `docs/design/design-system.md`. |
 | `native/` | The **live** RN/Expo mobile app (`app.videx.streaming`). React in `native/src/{app,components,hooks,providers}`; `native/src/lib` + `native/src/assets` are junctions to the shared tree — **never put React (hooks/components/providers) under `native/src/lib`** (dual-React crash). See the wiki `platform-architecture` page. |
-| `scripts/` | Node tooling, in named subfolders (`evaluation/`, `enrichment/`, `embeddings/`, `fingerprints/`, `mood_rooms/`, `test/`). **Nothing one-off lands at the root** — root is reserved for `sync-content.ts`, `debug-server.js`, `gen-android-icons.py`. Investigation artefacts are deleted when the investigation closes (git history preserves them). |
+| `scripts/` | Node tooling, in named subfolders (`evaluation/`, `enrichment/`, `embeddings/`, `fingerprints/`, `mood_rooms/`, `test/`). **Nothing one-off lands at the root** — root is reserved for `sync-content.ts` and `debug-server.js`. Investigation artefacts are deleted when the investigation closes (git history preserves them). |
 | `workers/api/` | Cloudflare Worker (PLAT-2+). Plain folder, no workspace split (locked D6). |
 | `supabase/migrations/` | Schema evolution only — see Migrations below. |
 | `supabase/queries/` | Operational/analytics SQL run by humans (dashboard, funnel, report queries). |
@@ -30,7 +30,7 @@ and reality disagree, fix one of them in the same PR.
 ## Lint
 
 - `npm run lint` must be **0 errors** at all times. `@typescript-eslint/no-explicit-any` is **error** in `src/` (burned to zero in REPO-1 — keep it there; type via `database.types.ts` for Supabase rows and minimal wire interfaces for third-party APIs). `react/jsx-no-leaked-render` is error — `cond ? <X/> : null`, never bare `count && <X/>`.
-- `scripts/**` runs a relaxed profile (warn-level any/unused, CJS allowed for `debug-server.js`). `supabase/functions/**` is ignored (Deno). `native/**` lints via its own `expo lint` (config `native/eslint.config.mjs`; the repo-root config ignores `native/**`).
+- `scripts/**` runs a relaxed profile (warn-level any/unused, CJS allowed for `debug-server.js`). `supabase/functions/**` is ignored (Deno). `native/**` lints via `npm run lint` inside `native/` (config `native/eslint.config.mjs`; the repo-root config ignores `native/**`). It runs the repo root's lockfile-pinned ESLint and plugins, so install the root first. CI runs it too (`typecheck-lint.yml`).
 
 ## Documents
 

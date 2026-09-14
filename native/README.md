@@ -114,7 +114,7 @@ cd android
 The release variant currently signs with the **debug keystore**, so `assembleRelease`
 APKs install directly on-device for testing — no separate signing setup required yet.
 
-Other scripts: `npm run lint` (`expo lint`), `npm run ios`, `npm run web`.
+Other scripts: `npm run lint` (ESLint on `src/` using the repo root's pinned ESLint, so install the root first), `npm run ios`, `npm run web`.
 
 ## Crash reporting (Sentry)
 

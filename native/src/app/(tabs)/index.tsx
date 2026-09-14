@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo } from 'react';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // NATIVE-2 W3 — Home composition parity with the web app:
@@ -21,15 +21,18 @@ import { EditorNoteCard } from '@/components/EditorNoteCard';
 import { FreeTonight } from '@/components/FreeTonight';
 import { MagazineHero } from '@/components/MagazineHero';
 import { HiddenRailsNote, QuickFilterEmptyState } from '@/components/QuickFilterNotices';
+import { RefreshableScrollView } from '@/components/RefreshableScrollView';
 import { Reveal } from '@/components/Reveal';
 import { TrendingRibbon } from '@/components/TrendingRibbon';
 import { useDocumentariesBackfill } from '@/hooks/useDocumentariesBackfill';
 import { useHomeFeed, type HomeFeed } from '@/hooks/useHomeFeed';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useQuickFilterLog } from '@/hooks/useQuickFilterLog';
 import { useUserServices } from '@/hooks/useUserServices';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import { recordImpression } from '@/lib/instrumentation/impressionBatcher';
 import type { ContentItem } from '@/lib/types/content';
+import { itemSignature } from '@/lib/utils/pullToRefresh';
 import {
   applyQuickFilter,
   categoryToContentType,
@@ -89,11 +92,31 @@ function buildRail(name: string, items: ContentItem[], category: QuickFilterCate
   };
 }
 
+/** Every title the payload can put on the page, for the refresh cue. */
+function homeFeedSignature(feed: HomeFeed | undefined): string {
+  if (!feed) return '';
+  return itemSignature([
+    feed.hero ? [feed.hero] : [],
+    feed.recentlyAdded,
+    feed.freeTonight,
+    feed.popular,
+    feed.paid,
+    feed.upcoming.map((u) => u.item),
+    ...feed.spotlights.map((sp) => sp.items),
+    ...feed.rows.map((row) => row.items),
+  ]);
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const feed = useHomeFeed();
+  // `feed` is a fresh object every render (the hook spreads the query), but
+  // react-query binds `refetch` once per observer. Depending on it alone keeps
+  // onRefresh stable.
+  const { refetch } = feed;
+  const refresh = usePullToRefresh({ data: feed.data, refetch, signature: homeFeedSignature });
+  const { refreshing, onRefresh } = refresh;
   const { data: services } = useUserServices();
-  const [refreshing, setRefreshing] = useState(false);
   const { category, nonce, setCategory } = useQuickFilter('new');
 
   // Documentaries is a genre — thin nearly everywhere — so it gets one extra
@@ -253,15 +276,6 @@ export default function HomeScreen() {
     });
   }, [router, category]);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await feed.refetch();
-    } finally {
-      setRefreshing(false);
-    }
-  }, [feed.refetch]);
-
   // first_home_view now fires from the post-onboarding Curating interstitial
   // (src/app/curating.tsx), not here: after the beta-feedback nav change the
   // landing surface is For You, so the funnel's first-paint capture moved
@@ -316,11 +330,7 @@ export default function HomeScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <ScrollView
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#e85d25" />
-        }
-        contentContainerClassName="pb-8">
+      <RefreshableScrollView refresh={refresh} contentContainerStyle={{ paddingBottom: 32 }}>
         {/* §1.2 asks for ONE card when everything hides — a surviving hero
             above "Not many films this week" would contradict it. */}
         {hero && !isEmpty ? (
@@ -457,7 +467,7 @@ export default function HomeScreen() {
             </Text>
           </View>
         ) : null}
-      </ScrollView>
+      </RefreshableScrollView>
     </View>
   );
 }

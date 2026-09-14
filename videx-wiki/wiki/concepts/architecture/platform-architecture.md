@@ -3,7 +3,7 @@ title: Platform Architecture — one repo, three surfaces, one engine
 type: concept
 tags: [architecture, monorepo, platform, native, workers, shared-tree, adr-014, orientation]
 created: 2026-06-18
-updated: 2026-06-18
+updated: 2026-09-14
 sources:
   - docs/v2/native-4-cutover-runbook.md
   - docs/v2/phase-summaries/phase-native-4-and-polish-summary.md
@@ -45,8 +45,10 @@ The recommendation + taste engine in `src/lib/` is the **single source of truth*
 - **First-time setup (fresh checkout):** `cd native && npm install` (runs `link-shared.js` → creates the junctions) + hand-copy `native/.env` (mirrors the `EXPO_PUBLIC_*` vars from the root `.env`).
 - **Release build:** `npx expo prebuild --platform android --clean` regenerates the gitignored `android/`, then recreate `native/android/local.properties` (`sdk.dir=…`), then `cd android && ./gradlew bundleRelease`. Release **signing auto-injects** via the Expo config plugin `native/plugins/withReleaseSigning.js` (Play **upload** key SHA-256 `99:CE:FF:7E`; `allowBackup=false`). Full steps live in the native release-rebuild runbook.
 - **iOS release build (TestFlight):** runs on **EAS Build** via `.github/workflows/ios-release.yml` (a Linux runner) — iOS can't be built on the Windows dev machine (eas-cli can't package the `src/lib`/`src/assets` junction symlinks into the upload tarball, `EPERM`). Bundle id `app.videx.streaming`; ships to TestFlight. The signing creds (stored on EAS), the `EXPO_TOKEN` repo secret, and the `EXPO_PUBLIC_*` EAS env vars are one-time setup. Full steps in the [iOS / TestFlight runbook](../../../../docs/v2/launch/ios-testflight-runbook.md).
-- **Lint:** `npx expo lint` (config `native/eslint.config.mjs`, which reuses the root-hoisted plugins — the repo-root `eslint.config.mjs` deliberately ignores `native/**`).
+- **Lint:** `npm run lint` in `native/` (config `native/eslint.config.mjs`). It runs the repo root's pinned ESLint and root-hoisted plugins, so the root must be installed; the repo-root `eslint.config.mjs` deliberately ignores `native/**`. Not `npx expo lint`: with no root install that downloads an unpinned ESLint. CI runs it on every PR and push to `main` (`typecheck-lint.yml`, after the root lint).
 
 ## What changed at the NATIVE-4 cutover
 
-The Expo app **replaced** the old Capacitor WebView build (still in git history, no longer the product — see [phase-history](../operations/phase-history.md)). Package id flipped `com.videx.app.dev` → `app.videx.streaming`; version → 2.0.0. The `@capacitor/*` entries in the root `package.json` are legacy to the web build; the live mobile product is the Expo app under `native/`.
+The Expo app **replaced** the old Capacitor WebView build (no longer the product — see [phase-history](../operations/phase-history.md)). Package id flipped `com.videx.app.dev` → `app.videx.streaming`; version → 2.0.0. `native/` is the only app build.
+
+**Wrapper retired 2026-09-14 (IN-DEP-002):** the root `android/` Capacitor project, `capacitor.config.ts`, the `cap:*` / `build:android` / `dev:android` scripts, `@capacitor/cli`, `@capacitor/android` and `scripts/gen-android-icons.py` were deleted (git history keeps them). The `@capacitor/*` **runtime** plugins (`core`, `app`, `network`, `filesystem`, …) remain in the root `package.json` because the web `src/` tree still imports them.

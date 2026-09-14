@@ -13,7 +13,7 @@
     "@tanstack/query-sync-storage-persister": "^5.101.0",
     "@tanstack/react-query": "^5.101.0",
     "@tanstack/react-query-persist-client": "^5.101.0",
-    "axios": "^1.17.0",
+    "axios": "^1.20.0",
     "crypto-js": "^4.2.0",
     "expo": "~56.0.11",
     "expo-constants": "~56.0.18",
@@ -62,7 +62,7 @@
     "android:dev": "cross-env APP_VARIANT=development expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "node ../node_modules/eslint/bin/eslint.js src --cache --cache-location .expo/cache/eslint/"
   },
   "private": true
 }

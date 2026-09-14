@@ -8,16 +8,14 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
-      'android/**',
       '_archive/**',
       'node_modules/**',
       'supabase/functions/**', // Deno runtime, separate type system (engine mirror gone since PLAT-3)
-      'native/**', // NATIVE-1: Expo app lints via its own `expo lint` (Metro/Babel config + RN globals)
+      'native/**', // NATIVE-1: Expo app lints via `npm run lint` in native/ (own config + RN globals, root's pinned ESLint)
       'workers/api/.wrangler-check/**', // wrangler dry-run bundle output
       'workers/api/.wrangler/**',
       'tests/**',
       '.claude/**',
-      'capacitor.config.ts',
       'vite.config.ts',
       '*.config.js',
     ],

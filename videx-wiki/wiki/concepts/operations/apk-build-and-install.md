@@ -3,14 +3,17 @@ title: APK build and install runbook
 type: concept
 tags: [runbook, android, capacitor, apk, build]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-09-14
 sources:
   - raw/runbooks/apk-build-and-install.md
 related:
   - wiki/entities/infrastructure/capacitor.md
+  - wiki/concepts/architecture/platform-architecture.md
 ---
 
 # APK build and install runbook
+
+> **Obsolete (2026-09-14).** This runbook builds the legacy Capacitor wrapper, which was removed from the tree under IN-DEP-002: root `android/`, `capacitor.config.ts` and the `cap:*` scripts no longer exist, so none of the commands below work. The live app is the Expo build in `native/`, released by CI (`android-release.yml` / `ios-release.yml`); see [Platform architecture](../architecture/platform-architecture.md) and `docs/v2/launch/release-runbook.md`. Kept as history.
 
 Builds a Capacitor-wrapped Android APK and installs it onto a connected device.
 

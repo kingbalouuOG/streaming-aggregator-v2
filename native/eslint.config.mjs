@@ -13,6 +13,11 @@ import globals from 'globals';
 // for the native project and reuses the SAME plugins the web config uses (hoisted
 // to the root node_modules), so the rules stay consistent across web + native
 // without pulling in eslint-config-expo.
+//
+// ESLint itself comes from the root too: `npm run lint` runs
+// ../node_modules/eslint/bin/eslint.js, the lockfile-pinned copy. Not
+// `npx expo lint`, which hands the run to `npx eslint` and, with no root
+// install, downloads whatever ESLint is latest.
 export default tseslint.config(
   {
     ignores: [

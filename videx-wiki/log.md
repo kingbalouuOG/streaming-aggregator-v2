@@ -1481,3 +1481,161 @@ only thing at stake.
 - **Evening: cleanup complete, IN-SY-001 closed.** Joe approved the recommendations and `--include-unknown-titles`. Skip list pruned 17,104 → 412; 13 catalogues walked (7,786 requests; Prime twice — the first attempt's writes died on a transient "fetch failed" at row 5,400 with nothing persisted, so the script gained write retries and `--rows-in` replay); Apple and Prime cleaned by date rather than `--prune` (channel addons); 102,537 history rows repaired through the map, 6,055 deleted. **0 rows from the corrupt writer remain**; 18,502/18,566 rebuilt titles match the vendor's; drift 0. Two findings filed: **IN-SC-003** — the vendor lists only 318 NOW titles today (vs ~1,840 in March; `now.addon` agrees), so the prune of NOW's March tiers matched vendor truth; and the title queue is **58,029** (Prime/Apple buy-rent long tail), draining over 3–4 weeks — Joe's lever is to drop buy/rent-only title-less rows if that is too much. Baseline `eval:fingerprints` before the run: FAIL (max 0.985, mean 0.809) — re-run after a Sunday refresh.
 - New: wiki/concepts/operations/solutions/sync-vendor-show-id-in-tmdb-id.md
 - Updated: wiki/concepts/operations/sync-pipeline.md (vendor id resolution section + health query), wiki/entities/apis/streaming-availability-api.md (`/changes` has no TMDb id; `/shows/{id}` takes the vendor id; listing returns both ids), wiki/entities/codebase/migrations.md (083), wiki/registers/parking-lot.md (IN-SY-001 → ⚠ partial), index.md
+
+## [2026-09-11] query | "can Videx send a title to a smart TV?" — feasibility research
+- Five research agents (Roku ECP; Android TV Remote v2 + Fire TV; Samsung Tizen + LG webOS; Apple TV Companion + DIAL + Matter Casting + competitors; RN/Expo local-network implementation). Full write-up with sources: `docs/strategy/briefs/send-to-tv-feasibility.md` (not yet snapshotted into raw/).
+- **Answer:** per TV platform, not per service; LAN-only; mostly reverse-engineered; pairing prompt on the TV. App-level launch feasible on Roku/Google TV/Samsung/LG/Apple TV; Fire TV and Sky/Virgin/Freely closed. Title-level launch proven only for LG+Netflix, Apple TV by URL, Roku+Disney+. Netflix removed phone casting to most TVs 2025-11. No standard before ~2028 (Matter Casting is Amazon-only + per-app whitelist). Effort 2–12 eng-weeks.
+- **Recommendation: park** (not on Roadmap v1.1). Joe has not yet decided; register row filed as parked-pending-decision. If revisited: reframe as "Open on TV"; 2-day Home Assistant bench test before any app code.
+- New page: wiki/concepts/forward-planning/send-to-tv-feasibility.md
+- Updated: wiki/registers/deferred-items.md (Parked row, 12 → 13), wiki/sources/forward-planning.md (table row), index.md
+- Note for Joe: copy the brief into `raw/forward-planning/` when convenient so the wiki page has a raw source.
+
+## [2026-09-11] query | IN-UX-001 — the first tap was dismissing the keyboard, on the list nobody checked
+- **What it was.** On Browse, typing a query and going straight for a title lost the first tap: it dismissed the keyboard, and the second opened the detail page. Joe's own sentence identified it; the counter confirmed it — a poster card logs `touch → DEAD`, then a clean reaction 887ms later on the retry.
+- **Why the triage missed it, and why the register was right to say the obvious cause did not fit.** The search asked whether the nine files containing a `TextInput` had a scroll parent. Browse's field genuinely has none — that part of the entry was correct. But the scrollable that matters is **not the one holding the text field, it is the one holding whatever is tapped next**. On Browse that is the results `FlashList`, which no `TextInput` search would ever surface. The rule to carry forward: audit scrollables against *what can be tapped while a keyboard is up*, not against where the field lives.
+- **Fixed** on three call sites reachable while the Browse field holds focus — the results `FlashList`, the presearch presets, and `FilterSheet` (it opens over a live keyboard because `RefineRow` already persists taps) — plus `ReportSheet` and `ProfilePrivacy`, which were the same class. The other 20 scrollables are deliberately untouched: the fault is scoped to scroll views (a `Pressable` outside one takes its first tap with the keyboard up, measured on device) and no text field can be focused on those screens.
+- **Ruled out on device, each with a number rather than an impression:** new-architecture touch handling; react-native-screens intercepting after a transition; control placement — the same control pair behaves identically outside the navigator, inside a screen, and inside its ScrollView; NativeWind's `className` interop, paired against plain `style` throughout; and JS-thread blocking — 0 stalls while three 500KB+ query-cache re-serializations landed alongside the dead taps.
+- **The synchronous query persister is exonerated but still worth a look.** `queryPersist` uses `createSyncStoragePersister`, so it `JSON.stringify`s the whole cache onto the JS thread up to once a second. Measured at 528KB with zero stalls, so it is not this bug and not urgent — but it scales with browsing.
+- **Method note.** Four probe iterations, two of which were instrument bugs, not app bugs: `onTouchStartCapture` does not exist in RN 0.85's `ViewProps`, and `onPressIn` fires ~1ms BEFORE the bubbled `onTouchStart` on `Pressable`, so v2's dead-tap timer scored every button press dead. Both red counts in that run were the probe. Verify the instrument before believing a red number.
+- **Incidental:** the native lint gate is broken in a fresh worktree. `native/` has no ESLint of its own and `eslint.config.mjs` borrows the root's plugins, but the root can no longer satisfy `@babel/core`. Runs clean as `cd native && NODE_PATH="$(pwd)/node_modules" npx expo lint`.
+- **Fix verified on device 2026-09-13** by Joe, with the counter still running over the fix: search, then straight to a title with the keyboard up — 0 dead taps, title opens on the first tap.
+- Probe branch `debug/touch-probe` is diagnostic only and is never merged. Kept rather than deleted: it is a working dead-tap and JS-stall detector for the next touch report.
+
+## [2026-09-14] query | native lint gate — correcting the IN-UX-001 diagnosis, and pinning ESLint
+- **Correction to the 2026-09-11 incidental note.** That entry said the root "can no longer satisfy `@babel/core`". Wrong: the root lockfile lists `@babel/core` 7.29.0 and `eslint-plugin-react-hooks` 7.0.1 declares it as a dependency. The main checkout's root install was simply stale — ESLint 9.39.4 and the hooks plugin present, `@babel/core` missing. A worktree lives under the main checkout, so with no root install of its own, module resolution walked up into that stale install. The `NODE_PATH` workaround only papered over it.
+- **The real defect was quieter.** `expo lint` version-checks with `require('eslint')` but runs the lint through `npx eslint`. With no root install, `npx` downloads the latest ESLint (10.10.0 at the time), outside the hooks plugin's `≤ ^9` peer range and different from root's pin. With the root installed, `npx eslint` resolves 9.39.4 and the old gate passes.
+- **Fix:** `native`'s `lint` script now runs `../node_modules/eslint/bin/eslint.js src` with `expo lint`'s own cache location (`.expo/cache/eslint/`, gitignored). Same inputs, same result on current `main` (0 errors, 1 pre-existing warning at `(tabs)/index.tsx:263`). No new dependencies, no lockfile change. Without a root install it now fails at once with a missing-module error instead of downloading an unpinned ESLint.
+- **The gate is now `npm run lint` in `native/`, after a root `npm install`/`npm ci`.** Updated: native/README.md, docs/CONVENTIONS.md, both ESLint config comments, wiki/concepts/architecture/platform-architecture.md. Older handoff plans still say `npx expo lint`; they are historical and left as written.
+- Still not in CI: `typecheck-lint.yml` covers the root only, which is how this rotted unnoticed.
+
+## [2026-09-14] query | native lint now runs in CI
+- `typecheck-lint.yml` gains a `Lint (native)` step after the root lint: `npm run lint` in `native/`, on every PR and push to `main`. Closes the gap in the entry above: the native gate had never run in CI, which is how it rotted unnoticed.
+- **No native install in CI.** Measured on a clean root `npm ci` with `native/node_modules` and `native/.expo` moved aside: same result (0 errors, 1 pre-existing warning at `(tabs)/index.tsx:263`), and ESLint creates its own cache directory. The native config takes ESLint and every plugin from the root and is not type-aware, so it never reads native's install. The step costs seconds rather than a native `npm install`.
+- `native/src/lib`, the postinstall junction, will not exist in CI. The native config already ignores `src/lib/**`; the shared tree is linted by the root config.
+- Not added: native `tsc --noEmit`. That does need native's install for React Native and Expo types, so it is a separate decision.
+
+## [2026-09-14] query | root npm audit triage — 23 advisories → 0, no majors, no blanket `audit fix`
+- **Baseline** (clean root `npm ci` on `main` 141b41c): 23 (1 low, 7 moderate, 14 high, 1 critical); 8 in prod `dependencies`. All pre-existing — no recent PR touched the root lockfile.
+- **Fixed in three commits, one group each, every bump inside the existing major:** (1) `axios` ^1.13.5 → ^1.20.0, which also brings `form-data` 4.0.6 and `follow-redirects` 1.16.0; (2) lockfile-only in-range update of the prod transitives `tar` 7.5.22, `@xmldom/xmldom` 0.8.15, `minimatch` 10.2.6, `brace-expansion` 1.1.18/5.0.9, `ws` 8.21.3; (3) `vite` 6.4.3, `vitest`/`@vitest/ui` 4.1.11, plus in-range `rollup`, `postcss`, `picomatch`, `nanoid`, `js-yaml`, `undici`, `browserslist`, `@babel/core`, `@humanfs/node`, `fflate`. Root `npm audit` and `npm audit --omit=dev` both report 0. Gates: `tsc --noEmit` clean, lint 0 errors (72 warnings), vitest 41 files / 453 tests, `vite build` clean.
+- **Reachability, recorded because it decides what matters next time:**
+  - `@capacitor/cli` (tar critical, xmldom high, minimatch prod path) is not needed by anything that ships. It runs only under the legacy `cap:*` scripts. Its `tar.extract` calls unpack its own bundled template archives (`config.cli.assets.*`), and `plist.parse` reads iOS `Info.plist` / Cordova plugin plists — there is no `ios/` and no Cordova plugin. No untrusted archive or XML path.
+  - Nothing in `src/`, `scripts/` or `workers/` parses XML or archives.
+  - `axios` is imported only by `src/lib/api/tmdb.ts` + `omdb.ts` (web tree hooks, and native via the junction). The Worker bundle (wrangler dry-run, sourcemap checked before and after) contains no axios, form-data, follow-redirects or `ws`; PLAT-3 W1 had already split `imageUrls.ts` out for exactly this. No Node script imports tmdb/omdb, so the Node-adapter advisories (proxy SSRF, form-data CRLF, redirect header leak) had no runtime; the root web tree has never been deployed (see IN-SL-003).
+  - `ws` sits under `@supabase/realtime-js`; nothing calls `.channel()`, and in the Worker realtime's websocket factory uses the platform `WebSocket`.
+  - The rest were dev-only (lint, test, build tooling).
+- **Lockfile churn:** ~790 lines across the three commits; most of commit 3 is rollup's 21 per-platform binaries moving together. Zero major-version changes (diffed package-by-package). One addition to note: rollup 4.63.0 upstream declares optional `@napi-rs/lzma-linux-x64-gnu` (linux-x64 only, published by the napi-rs maintainer) — genuine, not a stray.
+- **Deferred:** IN-DEP-001 — `native/` still resolves axios 1.17.0, inside the vulnerable range, and it is what the device runs. Its own PR: the "stale native lockfile" reason first given for deferring was wrong — PR #106 repaired it on 2026-08-27, and it matches `native/package.json` today. Native `npm audit --omit=dev`: 29 (13 high, 16 moderate). IN-DEP-002 — retire the legacy Capacitor wrapper (`@capacitor/cli`, `android/`, `capacitor.config.ts`, `cap:*` scripts); Joe's call.
+- Updated: wiki/registers/parking-lot.md (new "Dependency hygiene" section, IN-DEP-001/002)
+- **Follow-ups, same day:**
+  - Joe approved deleting the legacy Capacitor build path (IN-DEP-002).
+  - Handoffs written for both follow-ups, to run in fresh sessions after #160 merges: `docs/plans/2026-09-14-001-handoff-native-npm-audit.md` and `docs/plans/2026-09-14-002-handoff-retire-capacitor-wrapper.md`.
+  - Native chain lookup found `decode-uri-component` 0.2.2 under `expo-router` → `query-string` 7.1.3. That puts it in the app bundle, not tooling, and it fixes only via a major, so the native session must establish reachability before deciding.
+
+## [2026-09-14] query | IN-DEP-002 — legacy Capacitor wrapper retired from the root tree
+- **Deleted** (branch `chore/retire-capacitor-wrapper`, off `main` 582295e, which contains #160): tracked root `android/` (78 files, incl. `keystore.properties.example`), `capacitor.config.ts`, the `cap:sync` / `cap:open` / `build:android` / `dev:android` scripts, `@capacitor/cli` + `@capacitor/android` (`npm uninstall`), `scripts/gen-android-icons.py` (hardcoded absolute path into root `android/app/src/main/res`; only README and CONVENTIONS named it), the ESLint ignores for `android/**` and `capacitor.config.ts`, and the `.gitignore` Capacitor block + `android/keystore.properties`. Generic `*.apk` / `*.aab` / `*.jks` / `*.keystore` / `keystore.properties` ignores kept; `native/.gitignore` ignores its own `/android`.
+- **Pre-check:** nothing in `native/` or `.github/` referenced root `android/`. Every workflow hit is `native/android/`.
+- **Kept:** the `@capacitor/*` runtime plugins, which `src/` still imports. `@capacitor/browser` has **zero imports** (src, workers, native/src), so it is a removal candidate for a later change. Also kept: the `capacitor` chunk in `vite.config.ts`, historical docs, and `native/` untouched. `supabase/functions/_shared/cors.ts` still names `capacitor.config.ts` in a comment and allow-lists `capacitor://localhost`. That is an Edge Function runtime decision, left alone.
+- **Lockfile:** 71 entries removed (`@capacitor/cli` / `android` plus the `@ionic/utils-*`, `native-run`, `tar`, `@xmldom/xmldom`, `plist`, `xml2js` chain), 0 added, 0 version changes. 16 surviving entries gained `dev: true` (and `@babel/core` gained `peer: true`): they were reachable from prod only through `@capacitor/cli`.
+- **Gates:** root `npm ci`; `tsc --noEmit` clean; lint 0 errors / 72 warnings (baseline); vitest 41 files / 453 tests; `vite build` clean; `npm audit` 0. `workers/api` `wrangler deploy --dry-run` bundles (720 KiB).
+- Updated: wiki/registers/parking-lot.md (IN-DEP-002 ✅), wiki/entities/infrastructure/capacitor.md (retired banner), wiki/concepts/operations/apk-build-and-install.md (obsolete banner), wiki/concepts/architecture/platform-architecture.md, wiki/entities/codebase/module-map.md, wiki/registers/pre-launch-blockers.md (item 16 superseded), wiki/concepts/glossary.md (PWA row), index.md; also README.md, docs/CONVENTIONS.md.
+- Joe's main checkout may still hold an untracked `android/` directory with a local `keystore.properties` or keystore. This change did not touch it; delete it by hand after merge.
+
+## [2026-09-14] query | `@capacitor/browser` removed (IN-DEP-002 follow-up)
+- The one runtime plugin flagged in the wrapper retirement (PR #162) as having no imports. A whole-repo grep (everything except `node_modules`, the lockfile, `docs/plans`, `raw/` and this log) found it only in root `package.json` and two wiki tables. `native/package.json` never listed it, and it was not in the `vite.config.ts` `capacitor` chunk. `openDeepLink.ts` uses `AppLauncher` + `window.open`.
+- `npm uninstall @capacitor/browser`: the lockfile loses only that package's entry and its root dependency line. No other entry changed.
+- Gates: root `npm ci`; `tsc --noEmit` clean; lint 0 errors / 72 warnings (baseline); vitest 41 files / 453 tests; `vite build` clean; `npm audit` 0.
+- Updated: wiki/entities/infrastructure/capacitor.md and wiki/entities/codebase/module-map.md (plugin rows removed).
+
+## [2026-09-14] query | native npm audit triage (IN-DEP-001) — 29 → 19, axios fixed, a reachable deep-link DoS guarded in code
+- **Baseline** (`native/` on `main` 582295e, `npm audit --omit=dev --package-lock-only`): 29 (13 high, 16 moderate). Gates on `main` before any change: native lint 0 errors / 1 warning (`(tabs)/index.tsx:263`), native `tsc --noEmit` 0 errors, root vitest 41 files / 453 tests.
+- **Fixed, three commits, no majors:**
+  1. `axios` ^1.17.0 → ^1.20.0; the lockfile changes the axios entry only.
+  2. Lockfile-only `npm update` of the tooling transitives: brace-expansion 5.0.9, browserslist 4.28.9, baseline-browser-mapping 2.11.23, js-yaml 4.3.2, nanoid 3.3.19, postcss 8.5.28, shell-quote 1.10.0, @xmldom/xmldom 0.8.15 / 0.9.12, `@expo/metro` 56.0.2 (nested metro 0.84.5), `@expo/config-plugins` 56.0.16, `@expo/prebuild-config` 56.0.23. Diffed package-by-package: 21 minor/patch changes, 17 nested additions (the metro 0.84.5 family), 0 majors.
+  3. The deep-link guard below. Result: 19 (4 high, 15 moderate).
+- **`decode-uri-component` is reachable, and no dependency fixes it:**
+  - **Path:** Expo Router's `getInitialURL` (cold) and `subscribe` (warm) → `getStateFromPath` → `parseQueryParams` → `query-string` 7.1.3 `parse` → `decode-uri-component` 0.2.2 (GHSA-vcc3-ghjq-m6fr). `videx://` is a plain custom scheme, so any page or app can open one.
+  - **Measured in Node:** `%FF`×500 in the query (1.5 KB) blocked parsing for 25 s; a well-formed 12 KB query took 0 ms.
+  - **Why no dependency fix:** expo-router 57.0.21 (latest) and 58.0.0 (next) still pin `query-string` ^7.1.3, so an SDK bump would not help. `decode-uri-component` 0.5.0 is ESM-only, so an `overrides` pin under CommonJS `query-string` 7 is out.
+  - **Decision (Joe):** mitigate in our code. `native/src/app/+native-intent.tsx` `redirectSystemPath` → `src/lib/deepLinkQueryGuard.ts` `stripMalformedQuery` drops any query that native `decodeURIComponent` rejects; the slow path only runs on that rejection.
+  - **Tests:** 16 vitest cases; fuzzed against the real `query-string` (2,000 valid queries up to ~4 KB, worst parse 0.75 ms; 20,000 mixed queries, 0 disagreements with a per-key/value decode).
+- **Not reachable, deferred (IN-DEP-004):**
+  - `uuid` 7.0.3 via `xcode`: only `uuid.v4()` with no buffer, during prebuild. It accounts for the `@expo/*`, `expo`, `expo-splash-screen` and `@sentry/react-native` derived entries.
+  - Root `metro` 0.84.4 → `image-size` 1.2.1: no `image-size` release is outside the range. Expo CLI uses the nested metro 0.84.5, which has no `image-size`; root 0.84.4 is held only by `@react-native/community-cli-plugin`, which nothing here runs.
+- **Merged `main` (#161–#163) into the branch:** the only conflicts were this log and parking-lot.md, where both sides had appended; both sides were kept. On the merged tree: native lint **0 problems** (#161 fixed the `:263` warning); `tsc` 0 errors; root vitest 42 files / 469 tests.
+- **Gates on this branch before the merge** (clean root + native `npm ci`): native lint 0 errors / same 1 warning; `tsc` 0 errors; root vitest 42 files / 469 tests; `npx expo export --platform android` clean (one 9.4 MB Hermes bundle, which contains `redirectSystemPath`, `+native-intent` and the `axios/1.20.0` version string).
+- **Shipping (Joe):** next store build, not OTA. Device check owed:
+  - TMDb surfaces load;
+  - a password-reset email link still verifies;
+  - a KB-long `%FF` link opens without a stall.
+- Updated: wiki/registers/parking-lot.md (IN-DEP-001 closed; IN-DEP-003 mitigated, device check pending; IN-DEP-004 deferred)
+
+## [2026-09-14] query | `capacitor://localhost` dropped from the CORS allow-lists (IN-DEP-002 follow-up)
+- **Two allow-lists carried it:** `supabase/functions/_shared/cors.ts` (`STATIC_ALLOWED_ORIGINS`, imported today by `label-anchor-room` and `embed-query`) and the `videx-api` Worker's Hono `cors()` origin list (`workers/api/src/index.ts`). Removed from both.
+- **Why it's safe:**
+  - No shipped client sends that origin. The Capacitor wrapper is gone (#162).
+  - The Expo app calls through native `fetch`, which sends no `Origin` header, so CORS never gates it.
+  - The web `src/` tree has never been deployed (IN-SL-003).
+- **Kept:** `https://localhost`, `http://localhost(:port)` and the `VIDEX_ALLOWED_DEV_ORIGINS` hook. `https://localhost` is the old Capacitor WebView origin as well, and would be the next candidate to drop.
+- **Correction:** the old `cors.ts` comment had the defaults swapped. `capacitor://localhost` is the iOS WebView default, `https://localhost` Android's. The Worker's comment was already right.
+- **Checks:**
+  - `isAllowedOrigin`, run under `tsx` (no local Deno): `capacitor://localhost` rejected with no ACAO header; `https://localhost`, `http://localhost` and `http://localhost:5173` allowed; a foreign origin and `null` rejected.
+  - Worker: `wrangler deploy --dry-run` bundles (720 KiB); ESLint clean on `index.ts`.
+  - Root `tsc --noEmit` clean.
+- **Deploy:**
+  - The Worker change ships on merge through `deploy-worker.yml`.
+  - The Edge Function change only takes effect once `label-anchor-room` and `embed-query` are redeployed. No workflow deploys Edge Functions, so that is a manual step.
+- Updated: wiki/entities/codebase/rpcs.md, wiki/registers/pre-launch-blockers.md (item 23). The Phase 5 pages and summaries that list the original allow-list are history, left as written.
+
+## [2026-09-14] query | #164 device check passed on a fresh ad-hoc iOS build — IN-DEP-003 closed
+- **What was checked:** PR #164 (native npm audit triage, IN-DEP-001), merged 2026-09-14 as `ee96840`: axios 1.20.0 in `native/`, the in-range tooling updates, and the deep-link query guard (`native/src/app/+native-intent.tsx` → `stripMalformedQuery` in `src/lib/deepLinkQueryGuard.ts`) for GHSA-vcc3-ghjq-m6fr (`decode-uri-component` 0.2.2 under expo-router → `query-string` 7; IN-DEP-003).
+- **OTA could not reach the phone:** #164's lockfile update moved the native fingerprint. The preview update's runtime `b0e3c78c…` did not match the installed build's `e844d787…`, so a new binary was needed.
+- **Fresh ad-hoc build:**
+  - EAS build `213af0ce-29b4-4c0c-89cf-8544fb6c3879`;
+  - profile `preview`, channel `preview`;
+  - runtime `b0e3c78c3e692bf34d1636dab951bbba74d1eb5a`;
+  - app 2.3.1 (11), from `main` `7ead274`;
+  - not submitted to TestFlight.
+- **Device check (Joe, iPhone, 2026-09-14) — all passed:**
+  - TMDb surfaces load: Home rails, Browse discover, search, detail "More like this";
+  - a password-reset email link verifies, cold start and warm;
+  - `videx://detail/movie-550` opens the detail page;
+  - a KB-long `videx://detail/movie-550?a=%FF%FF…` link opens without a stall.
+- **Shipping unchanged (Joe):** production gets axios 1.20.0 and the guard with the next store build, not OTA.
+- **Filed separately, not fixed here:** a pre-existing New tab pull-to-refresh problem found in the same session. The spinner is cut off under the status bar and snaps shut with no clear refreshed signal. It is being fixed in its own session.
+- Updated: wiki/registers/parking-lot.md (IN-DEP-003 closed, device-verified; IN-DEP-001 device check recorded; Counts bullet). Still open on IN-DEP-003: remove the guard once expo-router leaves `query-string` 7.
+
+## [2026-09-14] query | pull-to-refresh on New / For You — half a spinner, snapped shut, no completion cue (IN-UX-002)
+- **Report (Joe, iPhone):** pulling New showed half a spinner under the status bar. It vanished as the finger lifted, with nothing to say a refresh had happened. Joe then confirmed on device that For You does the same.
+- **Not #161:** that PR only changed the `onRefresh` `useCallback` dependency.
+- **Causes, from RN 0.85.3 source (`RCTPullToRefreshViewComponentView.mm`, `RCTScrollViewComponentView.mm`, `RefreshControl.js`):**
+  1. *Cut off:* no header, and a full-bleed hero, so the scroll view starts at y=0. `UIRefreshControl`'s ~60pt band sits under the Dynamic Island. `progressViewOffset` IS applied on iOS in 0.85 (as a `bounds` shift), contrary to the brief, but the control is the scroll view's `refreshControl`, behind the content, so it would hide behind the hero instead.
+  2. *Snap:* `refreshing` went false as soon as the KV-cached `refetch()` resolved, often mid-gesture. Checked and ruled out: a `RefreshControl` JS/native desync (`_onRefresh` + `forceUpdate` batch with `setRefreshing(true)`).
+  3. *No signal:* the Worker usually returns the same titles.
+- **Fix (JS-only, both tabs):** `RefreshableScrollView` + `usePullToRefresh` + `src/lib/utils/pullToRefresh.ts`.
+  - iOS: the native control keeps the gesture and the hold with `tintColor="transparent"`, and an overlay chip spinner sits at `insets.top + 8`. Its opacity follows the drag and is pinned while refreshing, so bounces and spring-back don't flash it.
+  - Android: native disc with `progressViewOffset`.
+  - A 700 ms minimum hold, then a 1.2 s pill: *Updated just now* / *You're up to date* / *Couldn't refresh*. It compares rendered title ids, because For You's payload carries a per-fetch `wallclockMs` and reference equality would always say "updated".
+  - iOS holds the control open under the pill, so it lands in the gap, not on the hero kicker.
+  - VoiceOver/TalkBack announcement.
+  - The hero stays full-bleed.
+- **Rejected:** re-running the Reveal cascade on refresh, because remounting rows re-fires `recordImpression` and would feed C1 fatigue.
+- **Gates** (clean root + native `npm ci`):
+  - native lint 0 problems;
+  - native `tsc --noEmit` 0 errors;
+  - root vitest 43 files / 477 tests (+8);
+  - `npx expo export --platform android` clean (one 9.4 MB Hermes bundle).
+- **No dependency or native-config change**, so the fingerprint should match the ad-hoc build `213af0ce` (`b0e3c78c…`). OTA to `preview` / iOS is Joe's call, and must run from CI.
+- **Open (Joe):**
+  - device check on both tabs;
+  - decide whether a pull should bypass the Worker KV feed cache. Today a pull cannot surface picks newer than the 04:00 UTC recompute or the last taste change.
+- Updated: wiki/registers/parking-lot.md (IN-UX-002 filed, ⚠ fix built)
+
+## [2026-09-14] query | IN-UX-002 closed — device-verified, no KV bypass on pull
+- **OTA:** `ota-update.yml` on `fix/native-pull-to-refresh`, channel `preview`, iOS (run 34841564484). Update runtime `b0e3c78c3e692bf34d1636dab951bbba74d1eb5a` = installed build `213af0ce`.
+- **Device check (Joe, iPhone):** passed on New and For You ("looks great").
+- **Decision (Joe): pull-to-refresh keeps reading the Worker KV feed cache.**
+  - For You: 20-min TTL, and the key resets on `taste_vector_updated_at` / sliders / services. Ordering reshuffles on the matching 20-min bucket.
+  - Home: 10-min TTL, and the key resets on services / clusters.
+  - A bypass would mostly recompute the same picks, for a cold render per pull, 30/min rate-limit exposure and a reshuffle on every pull.
+  - Revisit if testers find "You're up to date" unsatisfying. Cheaper option then: refresh only entries older than ~2 min.
+- Updated: wiki/registers/parking-lot.md (IN-UX-002 ✅)

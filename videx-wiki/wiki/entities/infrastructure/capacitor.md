@@ -3,7 +3,7 @@ title: Capacitor (Android wrapper)
 type: entity
 tags: [capacitor, android, native, plugins]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-09-14
 sources:
   - raw/infrastructure/capacitor-reference.md
   - raw/codebase-snapshots/package-json-annotated.md
@@ -11,11 +11,14 @@ related:
   - wiki/entities/codebase/module-map.md
   - wiki/concepts/architecture/lifecycle-manager.md
   - wiki/concepts/operations/apk-build-and-install.md
+  - wiki/concepts/architecture/platform-architecture.md
 ---
 
 # Capacitor 8
 
-Videx ships as a Capacitor-wrapped web app. Android only at present; iOS deferred.
+> **Wrapper retired (2026-09-14, IN-DEP-002).** The Capacitor Android build path is gone from the tree: root `android/`, `capacitor.config.ts`, the `cap:sync` / `cap:open` / `build:android` / `dev:android` scripts, `@capacitor/cli`, `@capacitor/android` and `scripts/gen-android-icons.py`. It had been dead since the NATIVE-4 cutover; the shipped app is the Expo build in `native/` ([Platform architecture](../../concepts/architecture/platform-architecture.md)). The **Project layout**, **Configuration** and **Build** sections below are history (git history holds the files). The `@capacitor/*` **runtime** plugins are still installed and imported by the web `src/` tree, so the **Plugins** and **Deep link out** sections still describe that code.
+
+Videx originally shipped as a Capacitor-wrapped web app (Android only).
 
 ## Project layout
 
@@ -40,7 +43,6 @@ Videx ships as a Capacitor-wrapped web app. Android only at present; iOS deferre
 |---|---|
 | `@capacitor/network` | `useNetworkStatus` reads `Network.getStatus()`, subscribes to `networkStatusChange`. |
 | `@capacitor/app` | `App.addListener('appStateChange')` powers [lifecycle manager](../../concepts/architecture/lifecycle-manager.md). Also `appUrlOpen` for inbound deep links. |
-| `@capacitor/browser` | In-app browser fallback. |
 | `@capacitor/app-launcher` | `AppLauncher.openUrl({ url })` fires intent at streaming app. Returns `{ completed: boolean }`. `completed: true` is high-confidence signal. |
 
 ## Deep link out

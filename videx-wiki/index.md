@@ -28,7 +28,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 ### Infrastructure
 
 - [Supabase](wiki/entities/infrastructure/supabase.md) — Postgres, Edge Functions, auth, cron, backups.
-- [Capacitor](wiki/entities/infrastructure/capacitor.md) — Android wrapper, plugins, deep linking, build.
+- [Capacitor](wiki/entities/infrastructure/capacitor.md) — Runtime plugins still used by the web tree; the Android wrapper build was retired 2026-09-14.
 - [Postgres extensions (pgvector, pg_partman, pg_cron, pg_net)](wiki/entities/infrastructure/pgvector-pg_partman-pg_cron.md) — pgvector + HNSW, partitioning, native cron.
 - [RapidAPI](wiki/entities/infrastructure/rapidapi.md) — SA API marketplace, auth, quotas, failure modes.
 - [GitHub Actions](wiki/entities/infrastructure/github-actions.md) — CI workflows + monthly mood-room recluster.
@@ -120,7 +120,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Embedding backfill runbook](wiki/concepts/operations/embedding-backfill.md)
 - [Edge Function deployment runbook](wiki/concepts/operations/edge-function-deployment.md)
 - [Monthly mood room recluster runbook](wiki/concepts/operations/monthly-mood-room-recluster.md)
-- [APK build and install runbook](wiki/concepts/operations/apk-build-and-install.md)
+- [APK build and install runbook](wiki/concepts/operations/apk-build-and-install.md) — Obsolete: legacy Capacitor wrapper build, removed 2026-09-14.
 - [Service-role JWT rotation runbook](wiki/concepts/operations/service-role-jwt-rotation.md)
 - [Supabase backup and restore runbook](wiki/concepts/operations/supabase-backup-restore.md)
 - [Supabase migration workflow runbook](wiki/concepts/operations/supabase-migration-workflow.md)
@@ -158,6 +158,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 
 - [Monetisation strategy exploration v0.1](wiki/concepts/forward-planning/monetisation-strategy.md) — ⚠ superseded 2026-07-06; absorbed into Roadmap v1.0 §5.
 - [V3 Conversational Discovery & Semantic Search Strategy v0.1](wiki/concepts/forward-planning/v3-conversational-discovery.md) — ⚠ superseded 2026-07-06; absorbed into Roadmap v1.0 H3 Bet 1.
+- [Send to TV — feasibility](wiki/concepts/forward-planning/send-to-tv-feasibility.md) — parked 2026-09-11; per-platform matrix (Roku/Google TV/Samsung/LG/Apple TV/Fire TV/Sky), title-level launch proven only for LG+Netflix, Apple TV by URL, Roku+Disney+; revisit triggers.
 
 ## Sources
 
