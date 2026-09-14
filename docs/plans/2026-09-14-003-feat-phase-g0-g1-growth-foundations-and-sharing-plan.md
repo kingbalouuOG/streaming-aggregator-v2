@@ -1,6 +1,6 @@
 # Phase G0 + G1: growth foundations and sharing. Audit and plan
 
-**Date:** 2026-09-14 · **Workstream:** Growth (G-phases) · **Scope source:** `docs/strategy/Videx_Growth_Loops_Strategy_v0.1.md` §4 (Loop 1, Loop 5), §5, §6 · **Branch:** `docs/growth-loops-strategy` · **Status:** plan approved by Joe 14 Sept 2026 with every §9 decision taken (§9). Execution is five sessions (§13); the S1 handoff is `2026-09-14-004-handoff-growth-s1-links.md`. Nothing implemented or applied yet.
+**Date:** 2026-09-14 · **Workstream:** Growth (G-phases) · **Scope source:** `docs/strategy/Videx_Growth_Loops_Strategy_v0.1.md` §4 (Loop 1, Loop 5), §5, §6 · **Branch:** `docs/growth-g0-g1-plan` · **Status:** plan approved by Joe 14 Sept 2026 with every §9 decision taken (§9). Execution is five sessions (§13); the S1 handoff is `2026-09-14-004-handoff-growth-s1-links.md`. Nothing implemented or applied yet.
 
 Everything in §2 was read from the working tree on 14 Sept (five parallel read-only audits, spot-checked by hand).
 
