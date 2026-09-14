@@ -64,6 +64,33 @@
  *                           also write availability rows for catalogue
  *                           entries `titles` does not hold (see SCOPE
  *                           BOUNDARY). Default off.
+ *   --catalog <id>          walk this vendor catalogue instead of the bare
+ *                           service id, attributing rows to --service. The
+ *                           vendor's catalogue ids are `service` or
+ *                           `service.type` with type in subscription |
+ *                           rent | buy | free | addon (addon NAMES such as
+ *                           now.entertainment are rejected: "unknown
+ *                           streaming option type"). Needed because the
+ *                           bare listing is NOT the whole service for
+ *                           addon-tiered services: NOW is
+ *                           `subscription: false, addons: movies |
+ *                           entertainment | hayu`, and `catalogs=now`
+ *                           listed ~318 entries where `now.addon` holds the
+ *                           tiers. Measured 2026-09-11 the hard way: a
+ *                           --prune off the bare listing deleted NOW's
+ *                           March tiers. A --catalog walk is partial by
+ *                           definition, so --prune is refused. Prime and
+ *                           Apple have the same shape (channels), so never
+ *                           --prune them off the bare listing either.
+ *   --rows-in <file>        replay the availability writes from the
+ *                           `<map-out>.rows.json` a previous run saved,
+ *                           with zero vendor requests. Exists because the
+ *                           2026-09-11 Prime walk (2,625 requests, 153,840
+ *                           rows) died at row 5,400 on a transient
+ *                           "fetch failed" from Supabase and nothing had
+ *                           been persisted. --map-out now also writes the
+ *                           staged rows next to the map, and every write
+ *                           retries transient failures.
  *   --cursor <cursor>       resume a walk from the cursor a previous run
  *                           printed when it hit its request ceiling, so a
  *                           large catalogue (Prime: >24,000 entries, not
@@ -137,6 +164,8 @@ const mapOut = flag('map-out');
 const mapIn = flag('map-in');
 const includeUnknownTitles = args.includes('--include-unknown-titles');
 const startCursor = flag('cursor');
+const catalogOverride = flag('catalog');
+const rowsIn = flag('rows-in');
 const maxRequests = flag('max-requests') ? parseInt(flag('max-requests')!, 10) : 300;
 
 if (!saServiceId) {
@@ -238,13 +267,52 @@ interface ShowMapRow {
   last_seen_at: string;
 }
 
+/**
+ * A Supabase write that fails with "fetch failed" / ECONNRESET / a timeout
+ * is a network blip, not a data problem; the walk that staged the rows
+ * cost thousands of vendor requests and must not be thrown away for it.
+ * Three attempts, 3s / 8s / 20s.
+ */
+async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  const waits = [3000, 8000, 20000];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const transient = /fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|timeout|socket hang up|502|503|504/i.test(msg);
+      if (!transient || attempt >= waits.length) throw err;
+      console.log(`  ${label}: transient failure (${msg.slice(0, 80)}) — retry ${attempt + 1}/${waits.length} in ${waits[attempt] / 1000}s`);
+      await delay(waits[attempt]);
+    }
+  }
+}
+
 async function upsertShowMap(rows: ShowMapRow[]): Promise<void> {
   for (let i = 0; i < rows.length; i += 500) {
-    const { error } = await supabase
-      .from('sa_show_map')
-      .upsert(rows.slice(i, i + 500), { onConflict: 'sa_show_id' });
-    if (error) throw new Error(`sa_show_map upsert at ${i}: ${error.message}`);
+    await withRetry(`sa_show_map upsert at ${i}`, async () => {
+      const { error } = await supabase
+        .from('sa_show_map')
+        .upsert(rows.slice(i, i + 500), { onConflict: 'sa_show_id' });
+      if (error) throw new Error(`sa_show_map upsert at ${i}: ${error.message}`);
+    });
   }
+}
+
+function saveStagedRows(mapPath: string, rows: AvailabilityRow[]): string {
+  const p = resolve(mapPath.replace(/\.json$/i, '') + '.rows.json');
+  writeFileSync(p, JSON.stringify({ catalogue: saServiceId, videxServiceId, savedAt: new Date().toISOString(), rows }));
+  return p;
+}
+
+function loadStagedRows(path: string): AvailabilityRow[] {
+  const parsed = JSON.parse(readFileSync(resolve(path), 'utf-8'));
+  if (parsed?.videxServiceId !== videxServiceId) {
+    throw new Error(`${path}: saved for service '${parsed?.videxServiceId}', not '${videxServiceId}'`);
+  }
+  const rows: unknown[] = parsed?.rows;
+  if (!Array.isArray(rows)) throw new Error(`${path}: expected a .rows.json file`);
+  return rows as AvailabilityRow[];
 }
 
 function saveShowMap(path: string, rows: ShowMapRow[]): void {
@@ -347,17 +415,34 @@ async function replaceBatch(batch: AvailabilityRow[]): Promise<void> {
   }
 
   for (const [mediaType, ids] of byType) {
-    const { error } = await supabase
-      .from('streaming_availability')
-      .delete()
-      .eq('service_id', videxServiceId)
-      .eq('media_type', mediaType)
-      .in('tmdb_id', [...new Set(ids)]);
-    if (error) throw new Error(`delete (${mediaType}): ${error.message}`);
+    await withRetry(`delete (${mediaType})`, async () => {
+      const { error } = await supabase
+        .from('streaming_availability')
+        .delete()
+        .eq('service_id', videxServiceId)
+        .eq('media_type', mediaType)
+        .in('tmdb_id', [...new Set(ids)]);
+      if (error) throw new Error(`delete (${mediaType}): ${error.message}`);
+    });
   }
 
-  const { error } = await supabase.from('streaming_availability').insert(batch);
-  if (error) throw new Error(`insert: ${error.message}`);
+  // Delete-then-insert is idempotent per batch, so a retried insert after
+  // a lost response cannot duplicate: the unique index would reject it and
+  // the next attempt re-runs the delete first anyway.
+  await withRetry('insert', async () => {
+    const { error } = await supabase.from('streaming_availability').insert(batch);
+    if (error) throw new Error(`insert: ${error.message}`);
+  });
+}
+
+async function writeRows(rows: AvailabilityRow[]): Promise<void> {
+  let written = 0;
+  for (let i = 0; i < rows.length; i += 200) {
+    const batch = rows.slice(i, i + 200);
+    await replaceBatch(batch);
+    written += batch.length;
+    if (written % 2000 === 0 || written === rows.length) console.log(`  written ${written}/${rows.length}`);
+  }
 }
 
 /**
@@ -424,6 +509,19 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (rowsIn) {
+    const rows = loadStagedRows(rowsIn);
+    console.log(`Replaying ${rows.length} staged availability rows for '${videxServiceId}' from ${rowsIn} (no vendor requests)`);
+    if (dryRun) {
+      console.log('  DRY RUN — nothing written.');
+      return;
+    }
+    await writeRows(rows);
+    console.log('\n  Done. Verify available_services drift:');
+    console.log('    select public.count_available_services_drift();');
+    return;
+  }
+
   console.log(`Backfill catalogue '${saServiceId}' -> service_id '${videxServiceId}'`);
   console.log(
     `  mode: ${dryRun ? 'DRY RUN (no writes)' : mapOnly ? 'MAP ONLY (sa_show_map only, no availability writes)' : 'LIVE'}`,
@@ -436,6 +534,7 @@ async function main(): Promise<void> {
 
   let cursor: string | undefined = startCursor;
   if (startCursor) console.log(`  resuming from cursor ${startCursor} — partial walk, --prune refused`);
+  if (catalogOverride) console.log(`  walking catalogue '${catalogOverride}' for service '${saServiceId}' — partial by definition, --prune refused`);
   let page = 0;
   // A prune may only run off a walk that reached the end of the catalogue.
   // Pruning from a truncated walk would delete every title the walk never
@@ -451,7 +550,7 @@ async function main(): Promise<void> {
   while (true) {
     const params = new URLSearchParams({
       country: 'gb',
-      catalogs: saServiceId!,
+      catalogs: catalogOverride ?? saServiceId!,
       series_granularity: 'show',
       order_by: 'popularity_1year',
     });
@@ -516,7 +615,7 @@ async function main(): Promise<void> {
       // Reached the end — but only a walk that started at the head has
       // seen the whole catalogue. Pruning off a resumed walk would delete
       // everything before the start cursor.
-      walkComplete = !startCursor;
+      walkComplete = !startCursor && !catalogOverride;
       break;
     }
     cursor = body.nextCursor;
@@ -555,6 +654,10 @@ async function main(): Promise<void> {
   if (mapOut) {
     saveShowMap(mapOut, mapRows);
     console.log(`  saved ${mapRows.length} map entries to ${mapOut}`);
+    if (!mapOnly && rows.length > 0) {
+      const p = saveStagedRows(mapOut, rows);
+      console.log(`  saved ${rows.length} staged availability rows to ${p} (replay with --rows-in)`);
+    }
   }
 
   if (dryRun) {
@@ -571,20 +674,17 @@ async function main(): Promise<void> {
     return;
   }
 
-  let written = 0;
-  for (let i = 0; i < rows.length; i += 200) {
-    const batch = rows.slice(i, i + 200);
-    await replaceBatch(batch);
-    written += batch.length;
-    console.log(`  written ${written}/${rows.length}`);
-  }
+  await writeRows(rows);
 
   for (let i = 0; i < stale.length; i += 200) {
-    const { error } = await supabase
-      .from('streaming_availability')
-      .delete()
-      .in('id', stale.slice(i, i + 200));
-    if (error) throw new Error(`prune at row ${i}: ${error.message}`);
+    const slice = stale.slice(i, i + 200);
+    await withRetry(`prune at row ${i}`, async () => {
+      const { error } = await supabase
+        .from('streaming_availability')
+        .delete()
+        .in('id', slice);
+      if (error) throw new Error(`prune at row ${i}: ${error.message}`);
+    });
   }
   if (stale.length > 0) console.log(`  pruned ${stale.length} stale rows`);
 
