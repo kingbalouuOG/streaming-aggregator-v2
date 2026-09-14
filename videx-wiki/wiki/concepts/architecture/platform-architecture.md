@@ -3,7 +3,7 @@ title: Platform Architecture — one repo, three surfaces, one engine
 type: concept
 tags: [architecture, monorepo, platform, native, workers, shared-tree, adr-014, orientation]
 created: 2026-06-18
-updated: 2026-06-18
+updated: 2026-09-14
 sources:
   - docs/v2/native-4-cutover-runbook.md
   - docs/v2/phase-summaries/phase-native-4-and-polish-summary.md
@@ -49,4 +49,6 @@ The recommendation + taste engine in `src/lib/` is the **single source of truth*
 
 ## What changed at the NATIVE-4 cutover
 
-The Expo app **replaced** the old Capacitor WebView build (still in git history, no longer the product — see [phase-history](../operations/phase-history.md)). Package id flipped `com.videx.app.dev` → `app.videx.streaming`; version → 2.0.0. The `@capacitor/*` entries in the root `package.json` are legacy to the web build; the live mobile product is the Expo app under `native/`.
+The Expo app **replaced** the old Capacitor WebView build (no longer the product — see [phase-history](../operations/phase-history.md)). Package id flipped `com.videx.app.dev` → `app.videx.streaming`; version → 2.0.0. `native/` is the only app build.
+
+**Wrapper retired 2026-09-14 (IN-DEP-002):** the root `android/` Capacitor project, `capacitor.config.ts`, the `cap:*` / `build:android` / `dev:android` scripts, `@capacitor/cli`, `@capacitor/android` and `scripts/gen-android-icons.py` were deleted (git history keeps them). The `@capacitor/*` **runtime** plugins (`core`, `app`, `network`, `filesystem`, …) remain in the root `package.json` because the web `src/` tree still imports them.

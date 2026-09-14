@@ -150,7 +150,7 @@ Debug logger (POSTs to Supabase in dev only); in-memory session cache for home s
 | `sonner` | Toast notifications. |
 | `lucide-react` | Tree-shakable icons. |
 | `@supabase/supabase-js` | Auth, DB, Edge Functions, Storage. |
-| `@capacitor/core`, `@capacitor/android` v8 | Native Android wrapper. iOS deferred. |
+| `@capacitor/core` v8 | Runtime for the Capacitor plugins below (`Capacitor.isNativePlatform()` gating). The Android wrapper itself (`@capacitor/android`, `@capacitor/cli`, root `android/`) was removed 2026-09-14 (IN-DEP-002). |
 | `@capacitor/network` | Online/offline detection. |
 | `@capacitor/app` | Lifecycle events (`appUrlOpen`, `appStateChange`). |
 | `@capacitor/browser` | In-app browser fallback. |
