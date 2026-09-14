@@ -93,12 +93,13 @@ const CANONICAL_ORIGIN = 'https://videxstreaming.com';
 
 const app = new Hono<{ Bindings: Env }>();
 
-// Capacitor WebView origins (Android https://localhost, iOS
-// capacitor://localhost) + the Vite dev server.
+// The old Capacitor WebView origin (https://localhost) + the Vite dev server.
+// capacitor://localhost was dropped 2026-09-14 (IN-DEP-002); the Expo app's
+// native fetch sends no Origin, so CORS does not apply to it.
 app.use(
   '*',
   cors({
-    origin: ['https://localhost', 'capacitor://localhost', 'http://localhost:3000'],
+    origin: ['https://localhost', 'http://localhost:3000'],
     allowMethods: ['GET', 'OPTIONS'],
     maxAge: 86400,
   }),

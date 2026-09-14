@@ -101,7 +101,7 @@ These are not pg-callable RPCs but follow the same client-side pattern (`supabas
 
 - Server-side For You first paint (IN-466). Returns the full `recommendedForYou`/`hiddenGems`/`outsideYourUsual`/`becauseYouWatched`/`moreFromPerson`/`fromYourWatchlist` + anchor room previews + candidate pool + slider state in a single call.
 - Auth: `verify_jwt = true` (per-function `config.toml` since Phase 5 / IN-XPS-011); user identity via `extractUserIdFromJwt` decode (signature verification delegated to Supabase gateway).
-- CORS: tightened in Phase 5 (IN-XPS-013) — origin echo only when allow-listed (`capacitor://localhost`, `https://localhost`, regex `http://localhost(:port)?$`, plus `VIDEX_ALLOWED_DEV_ORIGINS` env hook).
+- CORS: tightened in Phase 5 (IN-XPS-013) — origin echo only when allow-listed (`https://localhost`, regex `http://localhost(:port)?$`, plus `VIDEX_ALLOWED_DEV_ORIGINS` env hook).
 - Phase 5 additions: contextual scoring + MMR + body fields `hourOfDay`/`dayOfWeek` (decision 9 — TZ skew avoidance) + embedding fetch for top-200 candidates.
 
 ### `label-anchor-room`

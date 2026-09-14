@@ -9,25 +9,21 @@
 // origin returns CORS-less, which the browser treats as rejected.
 //
 // Allow-list rules:
-//   - Capacitor production WebView origins:
-//       capacitor://localhost  (Android default)
-//       https://localhost      (iOS default — included even though
-//                               this build is Android-only, in case
-//                               the pre-launch hardening lands ahead
-//                               of an iOS spike)
+//   - https://localhost — the old Capacitor WebView origin. The
+//     capacitor://localhost scheme was dropped 2026-09-14 with the
+//     wrapper's retirement (IN-DEP-002); the Expo app's native fetch
+//     sends no Origin, so CORS does not apply to it.
 //   - Local web dev: http://localhost(:port) — covers Vite (5173),
 //     debug-server (3000), and any other localhost dev port.
-//   - Live-reload over LAN IP (LIVE_RELOAD env in capacitor.config.ts):
-//     read from VIDEX_ALLOWED_DEV_ORIGINS env var (comma-separated)
-//     so dev origins can be added without code edits, and the prod
-//     allow-list stays narrow.
+//   - Dev origins over a LAN IP: read from VIDEX_ALLOWED_DEV_ORIGINS
+//     env var (comma-separated) so dev origins can be added without
+//     code edits, and the prod allow-list stays narrow.
 //
 // Cron-invoked Edge Functions (embed-new-titles, enrich-new-titles,
 // refresh-service-fingerprints, sync-incremental) never face a
 // browser and therefore do not need this helper.
 
 const STATIC_ALLOWED_ORIGINS = new Set([
-  'capacitor://localhost',
   'https://localhost',
 ]);
 
