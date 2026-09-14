@@ -85,7 +85,7 @@ Single-page reference for acronyms, internal naming, and recurring terms. Mirror
 | RLS | Row-Level Security (Postgres). |
 | RPC | Remote Procedure Call. Used for any callable function on Supabase. |
 | PITR | Point-in-Time Recovery. |
-| PWA | Progressive Web App. Not Videx's deployment model; Capacitor wraps the web bundle as a native APK. |
+| PWA | Progressive Web App. Not Videx's deployment model; the mobile app is the React Native / Expo build in `native/` (the earlier Capacitor wrapper was retired). |
 | JWT | JSON Web Token. Supabase auth uses JWTs. |
 | FAST | Free Ad-Supported Streaming TV. Includes Pluto, Samsung TV Plus, ITVX free, Channel 4. |
 | AppLauncher | Capacitor plugin (`@capacitor/app-launcher`) that opens external URLs as native intents. |

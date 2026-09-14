@@ -15,7 +15,7 @@ and reality disagree, fix one of them in the same PR.
 | `src/hooks/` | React service layer. Hooks orchestrate `lib/`; they do not contain business logic that `lib/` could own. |
 | `src/components/` | UI. Design citations point at `docs/design/design-system.md`. |
 | `native/` | The **live** RN/Expo mobile app (`app.videx.streaming`). React in `native/src/{app,components,hooks,providers}`; `native/src/lib` + `native/src/assets` are junctions to the shared tree — **never put React (hooks/components/providers) under `native/src/lib`** (dual-React crash). See the wiki `platform-architecture` page. |
-| `scripts/` | Node tooling, in named subfolders (`evaluation/`, `enrichment/`, `embeddings/`, `fingerprints/`, `mood_rooms/`, `test/`). **Nothing one-off lands at the root** — root is reserved for `sync-content.ts`, `debug-server.js`, `gen-android-icons.py`. Investigation artefacts are deleted when the investigation closes (git history preserves them). |
+| `scripts/` | Node tooling, in named subfolders (`evaluation/`, `enrichment/`, `embeddings/`, `fingerprints/`, `mood_rooms/`, `test/`). **Nothing one-off lands at the root** — root is reserved for `sync-content.ts` and `debug-server.js`. Investigation artefacts are deleted when the investigation closes (git history preserves them). |
 | `workers/api/` | Cloudflare Worker (PLAT-2+). Plain folder, no workspace split (locked D6). |
 | `supabase/migrations/` | Schema evolution only — see Migrations below. |
 | `supabase/queries/` | Operational/analytics SQL run by humans (dashboard, funnel, report queries). |

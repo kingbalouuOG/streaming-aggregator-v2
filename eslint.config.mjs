@@ -8,7 +8,6 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
-      'android/**',
       '_archive/**',
       'node_modules/**',
       'supabase/functions/**', // Deno runtime, separate type system (engine mirror gone since PLAT-3)
@@ -17,7 +16,6 @@ export default tseslint.config(
       'workers/api/.wrangler/**',
       'tests/**',
       '.claude/**',
-      'capacitor.config.ts',
       'vite.config.ts',
       '*.config.js',
     ],

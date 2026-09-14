@@ -72,7 +72,7 @@ Things that **must** be done before the v2 build can ship to real users (beyond 
 | ID | Item | Source | Owner | Status |
 |---|---|---|---|---|
 | 15 | Generate Android release keystore and store securely + backed up | apk-build-and-install runbook | Joe | ⏳ Pre-launch task. Never commit keystore. |
-| 16 | Populate `signingConfigs.release` in `android/app/build.gradle` | apk-build-and-install runbook | Eng | ⏳ Pre-launch task. |
+| 16 | Populate `signingConfigs.release` in `android/app/build.gradle` | apk-build-and-install runbook | Eng | ✅ Superseded. Release signing is injected into the generated `native/android/` by `native/plugins/withReleaseSigning.js`; the root Capacitor `android/` this row named was removed 2026-09-14 (IN-DEP-002). |
 | 17 | Bump `versionCode` (integer monotonic) and `versionName` (semver) before release | apk-build-and-install runbook | Eng | ⏳ Pre-each-release task. |
 | 18 | Tag the release commit (`git tag v0.x.y && git push origin v0.x.y`) | apk-build-and-install runbook | Eng | ⏳ Pre-each-release task. |
 
