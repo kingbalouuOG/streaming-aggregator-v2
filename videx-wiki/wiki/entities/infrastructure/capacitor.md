@@ -43,7 +43,6 @@ Videx originally shipped as a Capacitor-wrapped web app (Android only).
 |---|---|
 | `@capacitor/network` | `useNetworkStatus` reads `Network.getStatus()`, subscribes to `networkStatusChange`. |
 | `@capacitor/app` | `App.addListener('appStateChange')` powers [lifecycle manager](../../concepts/architecture/lifecycle-manager.md). Also `appUrlOpen` for inbound deep links. |
-| `@capacitor/browser` | In-app browser fallback. |
 | `@capacitor/app-launcher` | `AppLauncher.openUrl({ url })` fires intent at streaming app. Returns `{ completed: boolean }`. `completed: true` is high-confidence signal. |
 
 ## Deep link out
