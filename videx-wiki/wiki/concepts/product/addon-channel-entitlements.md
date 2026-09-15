@@ -15,7 +15,7 @@ related:
 
 # Add-on channel entitlements
 
-Prime Video, Apple TV and NOW sell other services inside themselves: Prime Video Channels (~85 in the UK), Apple TV Channels (~50), NOW's passes. The vendor tags such a streaming option `stream_type = 'addon'` with `addon_id` / `addon_name`. Holding the parent does not mean holding the channel, so a channel row is "on your services" only for users who hold that channel. Built 2026-09-15 (IN-SC-004); replaces the 084/085 interim in which a channel-only title was on nobody's services.
+Prime Video, Apple TV and NOW sell other services inside themselves: Prime Video Channels (~85 in the UK), Apple TV Channels (~50), NOW's passes. The vendor tags such a streaming option `stream_type = 'addon'` with `addon_id` / `addon_name`. Holding the parent does not mean holding the channel, so a channel row is "on your services" only for users who hold that channel. Built, live and device-verified 2026-09-15 (IN-SC-004, PR #176); replaces the 084/085 interim in which a channel-only title was on nobody's services.
 
 ## The rules
 
@@ -72,6 +72,8 @@ Insert rows into `service_addons` — no release. A new `channel_id` is picked u
 - **One addon row per (title, service, quality).** `idx_sa_unique_entry` does not include `addon_id`, and `sync-content.ts` dedupes on `service_id-stream_type-quality`, so a title sold through two channels on one parent keeps only one of them. A holder of the dropped channel does not see the title. IN-SC-005.
 - Standalone services count their channel rows without the parent (a user with HBO Max direct gets the few titles the vendor lists only under Prime's HBO Max channel) — deliberate.
 - Held channels are not yet "included" for search hits or the semantic search cost filter.
+- The picker's chip panel spans both grid columns and opens by default, so it is unclear which tile it belongs to (IN-SC-006); redesign brief at `docs/strategy/briefs/service-picker-design-brief.md`.
+- The `user_service_addons` RLS policy should use `(select auth.uid())` (IN-SC-007).
 
 ## Decisions (Joe, 2026-09-15)
 
