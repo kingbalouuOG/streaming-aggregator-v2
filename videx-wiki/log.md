@@ -1748,3 +1748,8 @@ only thing at stake.
 - IN-GR-001 closed: Play App Signing uses the same key as the upload key (Joe checked Play Console); the live `assetlinks.json` and Google's Digital Asset Links API return the one fingerprint.
 - Rebuilds held until the other growth streams finish (Joe), so universal/app links are not active on devices yet; device checks move to S5.
 - Updated: wiki/registers/parking-lot.md (IN-GR-001 ✅, counts), wiki/concepts/forward-planning/growth-loops.md (status)
+
+## [2026-09-15] query | Growth S1 reviewed in the strategy thread; S2/S3 handoffs written
+- S1 summary reconciled into the plan (§11a): migrations renumbered 088/089/090; room sharing on For You cards only (IN-GR-003); no sign-in guard on detail/room screens; cold-start stack change (IN-GR-004); PAGE_CACHE_VERSION; §10 facts answered.
+- New: docs/plans/2026-09-15-001-handoffs-growth-s2-s3.md (parallel sessions with file ownership; IN-GR-005..009 reserved for S2, IN-GR-010..014 for S3; S2 adds the object to the Play referrer for an Android deferred deep link; S3 files the Apple token-revocation gap as IN-GR-010).
+- Updated: wiki/concepts/forward-planning/growth-loops.md (updated date, ADR-015 heading, Shipped section)

@@ -5,7 +5,7 @@ tags: [forward-planning, growth, loops, sharing, deep-links, universal-links, at
 status: in build — G0/G1 plan approved 2026-09-14; S1 links merged and deployed 2026-09-15 (PRs #172, #183, #184; migration 088 applied; routes and association files live; App Store flip + rebuilds pending; summary docs/v2/phase-summaries/phase-growth-s1-summary.md); next S2 attribution ‖ S3 sign-in, then S4 sharing, S5 verification
 horizon: H1 onward (runs beside the user track and search track from Roadmap v1.1)
 created: 2026-09-14
-updated: 2026-09-14
+updated: 2026-09-15
 sources:
   - raw/forward-planning/Videx_Growth_Loops_Strategy_v0.1_2026-09.md
   - docs/plans/2026-09-14-003-feat-phase-g0-g1-growth-foundations-and-sharing-plan.md (repo; not snapshotted into raw/)
@@ -69,6 +69,10 @@ Object URLs are Worker-owned on the web and Expo Router-owned on device. The Vit
 - Telemetry: new `growth_events` table (migration 090) written by the Worker; `via` = URL channel, `src` = originating session; notification opens are `growth_events` rows with `delivery_id`.
 - No feature flag. `IN-GR` parking-lot family. Install id and attribution accepted as personal data (policy and store labels in S2). Web share untouched.
 - "Tell someone" on arrival (the stronger nudge) and leaving-soon single-title pushes; nothing on bundles. Share glyph stays lucide `Share2`, top-right on detail and room screens.
+
+## Shipped
+
+- **S1 links (2026-09-15, PRs #172/#183/#184; summary `docs/v2/phase-summaries/phase-growth-s1-summary.md`):** ADR-015; `/t/{type}/{tmdbId}-{slug}` with 301 to canonical and the iOS smart banner; `shared_rooms` snapshots (migration 088) with `GET /room/:id`, `GET /v1/room/:id`, `POST /v1/share/room`; `/list/:id` reserved; AASA and assetlinks.json live (IN-GR-001 closed: Play App Signing uses the upload key); `native/app.json` associated domains + intent filter; `+native-intent` mapping + pending link (24h, resumed after sign-in or onboarding); `room/[id]` screen; share on For You room cards. Not yet in a device build (rebuild held until S2 and S3 merge). Open: IN-GR-002 (App Store CTA), IN-GR-003 (no global-room surface), IN-GR-004 (cold-start stack recheck). Strategy-thread review in the plan §11a; S2/S3 handoffs: `docs/plans/2026-09-15-001-handoffs-growth-s2-s3.md`.
 
 ## Measures to stand up in G1
 
