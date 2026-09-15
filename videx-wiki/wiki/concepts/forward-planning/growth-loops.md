@@ -2,7 +2,7 @@
 title: Growth loops (G-phases)
 type: concept
 tags: [forward-planning, growth, loops, sharing, deep-links, universal-links, attribution, households, seo]
-status: in build — G0/G1 plan approved 2026-09-14; S1 links merged and deployed 2026-09-15 (PR #172; migration 088 applied; dashboard routes live; Android fingerprints + App Store flip + rebuilds pending Joe); next S2 attribution ‖ S3 sign-in, then S4 sharing, S5 verification
+status: in build — G0/G1 plan approved 2026-09-14; S1 links merged and deployed 2026-09-15 (PRs #172, #183, #184; migration 088 applied; routes and association files live; App Store flip + rebuilds pending; summary docs/v2/phase-summaries/phase-growth-s1-summary.md); next S2 attribution ‖ S3 sign-in, then S4 sharing, S5 verification
 horizon: H1 onward (runs beside the user track and search track from Roadmap v1.1)
 created: 2026-09-14
 updated: 2026-09-14
@@ -20,7 +20,7 @@ related:
 
 # Growth loops (G-phases)
 
-> **Status: S1 (links) built 2026-09-14** — [ADR-015](../decisions/adr-015-object-urls-and-inbound-links.md), [inbound deep linking](../techniques/inbound-deep-linking.md), migration 088, follow-ups IN-GR-001..004. Merged, deployed, 088 applied and routes live 2026-09-15; still pending: Android fingerprints (IN-GR-001), App Store flip (IN-GR-002), rebuilds, device checks (S5). **G0/G1 approved.** Strategy at `docs/strategy/Videx_Growth_Loops_Strategy_v0.1.md` (summary: [source page](../../sources/growth-loops-strategy-v0-1.md)). The G0 + G1 audit and plan is `docs/plans/2026-09-14-003-…-plan.md`; its §9 records the 19 decisions Joe took on 14 Sept and §13 the five-session execution. S1 handoff: `docs/plans/2026-09-14-004-handoff-growth-s1-links.md`. Go-to-market: all loops go live together. Update this page when a session ships.
+> **Status: S1 (links) built 2026-09-14** — [ADR-015](../decisions/adr-015-object-urls-and-inbound-links.md), [inbound deep linking](../techniques/inbound-deep-linking.md), migration 088, follow-ups IN-GR-001..004. Merged, deployed, 088 applied and routes live 2026-09-15; Android fingerprints done (IN-GR-001 closed); still pending: App Store flip (IN-GR-002), rebuilds (held until the other streams finish), device checks (S5). Summary: `docs/v2/phase-summaries/phase-growth-s1-summary.md`. **G0/G1 approved.** Strategy at `docs/strategy/Videx_Growth_Loops_Strategy_v0.1.md` (summary: [source page](../../sources/growth-loops-strategy-v0-1.md)). The G0 + G1 audit and plan is `docs/plans/2026-09-14-003-…-plan.md`; its §9 records the 19 decisions Joe took on 14 Sept and §13 the five-session execution. S1 handoff: `docs/plans/2026-09-14-004-handoff-growth-s1-links.md`. Go-to-market: all loops go live together. Update this page when a session ships.
 
 ## The model
 

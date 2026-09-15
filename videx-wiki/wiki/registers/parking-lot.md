@@ -287,13 +287,14 @@ Family for the G-phases ([growth loops](../concepts/forward-planning/growth-loop
 
 | ID | Subject | Status |
 |---|---|---|
-| IN-GR-001 | **`assetlinks.json` ships with no fingerprints.** `workers/api/wrangler.toml` `[vars] ASSETLINKS_FINGERPRINTS = ""`: the repo records only the upload key's prefix (`99:CE:FF:7E:70:01:19:F5…18:41:4C:57`), and the Play App Signing key is in Play Console. Until both full SHA-256s are set and deployed, Android app-link verification fails and https links open the browser page. | ⏳ Filed 2026-09-14. Live since 2026-09-15 serving an empty list (verified); upload key added 2026-09-15 (full SHA-256 read from the android-release.yml apksigner step); Play App Signing key still to confirm. Joe: paste both fingerprints into the var before the S1 Android build. |
+| IN-GR-001 | **`assetlinks.json` ships with no fingerprints.** `workers/api/wrangler.toml` `[vars] ASSETLINKS_FINGERPRINTS = ""`: the repo records only the upload key's prefix (`99:CE:FF:7E:70:01:19:F5…18:41:4C:57`), and the Play App Signing key is in Play Console. Until both full SHA-256s are set and deployed, Android app-link verification fails and https links open the browser page. | ✅ Closed 2026-09-15 (PR #184). Play App Signing uses the same key as the upload key (Joe, Play Console), so the one fingerprint `99:CE:FF:7E…18:41:4C:57` covers store and sideloaded installs. Live `assetlinks.json` and Google's Digital Asset Links API both return it. |
 | IN-GR-002 | **App Store CTA still says "coming soon".** `APP_STORE_URL` / `IOS_APP_STORE_LIVE` in `workers/api/src/pageShell.ts` were not flipped: approval of the 10 Sept submission was not confirmed during S1. The smart-banner meta ships regardless (Safari shows it only once the app is live). | ⏳ Filed 2026-09-14. One-commit flip when Joe confirms the listing URL. |
 | IN-GR-003 | **Global mood rooms have no native surface.** `POST /v1/share/room` accepts `kind: 'global'`, but the app renders only anchored rooms (For You), and no native anchored-room *screen* exists either — a room card opens a representative title. The plan's "anchored room view" is the web `MoodRoomPage`, left alone by D19. Room sharing is therefore on the For You cards only. | 🅿 Parked 2026-09-14. Revisit if a native room browser is built. |
 | IN-GR-004 | **`unstable_settings.initialRouteName = '(tabs)'` changes every cold-start deep link's stack.** Added so a universal link opened cold has the tabs beneath it (Back is not a dead end). It also applies to `videx://reset-password` and `videx://detail/…` cold starts. Not device-verified. | ⏳ Filed 2026-09-14. Check in the S5 device pass (reset link cold + warm, notification cold start). |
 
 ## Counts
 
+- 2026-09-15 (Growth S1): IN-GR-001 closed ✅.
 - 2026-09-14 (Growth S1): +4 (IN-GR-001..004; family opened).
 - 2026-09-14 (pull-to-refresh): +1 (IN-UX-002), closed ✅ the same day (device-verified; no KV bypass, by decision).
 - 2026-09-14 (device check): IN-DEP-003 closed ✅ (device-verified on ad-hoc build `213af0ce`; guard removal once expo-router leaves `query-string` 7 is still watched).
