@@ -12,7 +12,7 @@ Everything in §2 was read from the working tree on 14 Sept (five parallel read-
 - **The web build is not a distribution surface.** The Vite app has no public host, no CI deploy, and its Capacitor shell was retired on 14 Sept (PR #162). The apex `videxstreaming.com` is a separate Next.js marketing repo on Vercel; the Worker owns five dashboard-registered path prefixes. Object URLs are a Worker plus Expo Router question. D5 stands (§3).
 - **Three of the eight items are net-new:** universal and app links (nothing configured), Apple and Google sign-in (email and password only), attribution (no install id, no first-open, no referrer capture, no push-open event).
 - **Rooms are shared as snapshots.** `mood_rooms.id` regenerates monthly and anchored rooms have no row, so a shared room is frozen at share time into `shared_rooms` (D2). Lists wait for the G2 entity (D3).
-- **Migrations:** three, pre-assigned 085 `shared_rooms` (S1), 086 `handle_new_user` (S3), 087 `growth_events` (S2). Next free number verified as 085.
+- **Migrations:** three, pre-assigned 088 `shared_rooms` (S1), 089 `handle_new_user` (S3), 090 `growth_events` (S2). Next free number verified as 088.
 - **Go-to-market:** all loops go live together (Joe, 14 Sept), so G0 to G2 build in sequence with no release between them; per-loop measures will be confounded at launch and that is accepted.
 
 ## 1. Answers to the three questions (task B)
@@ -56,7 +56,7 @@ Exists: email and password only. Native: `signInWithPassword`, `signUp` (with `o
 
 Missing: `signInWithOAuth` / `signInWithIdToken`, all social sign-in deps, any `returnTo` or pending-URL store. A signed-out link tap is redirected to `/auth` by `(tabs)/_layout.tsx:39` and the target is lost; `curating.tsx:104` always replaces to `/(tabs)/foryou`.
 
-Constraints: `profiles.username` is `UNIQUE NOT NULL` and `handle_new_user` inserts `raw_user_meta_data->>'username'` (`011_profiles_baseline.sql:92-100`); a provider sign-up carries no username, so the trigger would fail (migration 086, D8). App Store guideline 4.8: Google sign-in obliges Sign in with Apple. Install-time deferred linking has no first-party mechanism on iOS; Android has the Play Install Referrer API with no Expo built-in.
+Constraints: `profiles.username` is `UNIQUE NOT NULL` and `handle_new_user` inserts `raw_user_meta_data->>'username'` (`011_profiles_baseline.sql:92-100`); a provider sign-up carries no username, so the trigger would fail (migration 089, D8). App Store guideline 4.8: Google sign-in obliges Sign in with Apple. Install-time deferred linking has no first-party mechanism on iOS; Android has the Play Install Referrer API with no Expo built-in.
 
 ### Item 5. Attribution
 
@@ -101,8 +101,8 @@ Sizes S/M/L as in the roadmap. "Joe action" marks console or dashboard steps.
 | G0-2 | **Inbound link mapping and pending link.** Pure `parseInboundLink(path)` → `{ route, object, via, src }` for `/t/`, `/room/`, `/list/`, `videx://detail/…`, unknown → home; `+native-intent.tsx` runs the query guard then the mapper and writes a `pendingLink` (MMKV, 24h TTL, pattern of `onboardingDraft.ts`) when the app cannot navigate yet; consumed by `auth.tsx` after sign-in, `curating.tsx` at the end of onboarding, `(tabs)/_layout.tsx`. New `room/[id].tsx` renders a snapshot (frozen titles, availability chips for the viewer's services, share button top-right); `list/[id].tsx` is not created. | M | new `src/lib/growth/inboundLink.ts` + tests; new `native/src/pendingLink.ts`; `native/src/app/+native-intent.tsx`, `auth.tsx`, `curating.tsx`, `(tabs)/_layout.tsx`; new `native/src/app/room/[id].tsx` | S1 |
 | G0-3 | **Universal links and app links.** `ios.associatedDomains: ["applinks:videxstreaming.com"]`; `android.intentFilters` with `autoVerify: true` for paths `/t/`, `/room/`, `/list/`; Worker serves `/.well-known/apple-app-site-association` (appID `CT8F3578W8.app.videx.streaming`, the three prefixes) and `/.well-known/assetlinks.json` (package `app.videx.streaming`, upload and app-signing fingerprints). Joe action: dashboard route `videxstreaming.com/.well-known/*` (plus `/room/*`, `/list/*`, `/delete-account*` while there); rebuild both platforms. | M | `native/app.json`; new `workers/api/src/wellKnown.ts` + test; `workers/api/src/index.ts`, `README.md`; `docs/v2/launch/release-runbook.md` | S1 |
 | G0-4 | **Worker pages and install prompt.** Title page: slug canonical + 301, `apple-itunes-app` meta (`app-id=6785395342, app-argument=<canonical>`), App Store CTA when live (D12), `via` passthrough into the deep link and the Play `referrer`, query kept out of the cache key (assert). Extract `pageShell.ts`. New `roomPage.ts` for snapshots (label, poster grid, "Get Videx" CTA, deep link `videx://room/{id}`). Room snapshot creation: `POST /v1/share/room` (Supabase JWT) inserts `shared_rooms` and returns the URL; the app calls it before opening the sheet. | M | `workers/api/src/titlePage.ts`, `index.ts`; new `pageShell.ts`, `roomPage.ts`, `sharedRooms.ts` + tests; `supabase/migrations/085_shared_rooms.sql` | S1 |
-| G0-5 | **Apple and Google sign-in.** `expo-apple-authentication` (config plugin, `ios.usesAppleSignIn`) and `@react-native-google-signin/google-signin`. `auth.tsx` gains `signInWithApple()` / `signInWithGoogle()` → `signInWithIdToken`. iOS shows Apple and Google, Android shows Google only (§9b Q4). Buttons on `AuthScreen.tsx` and `StepAccount.tsx`; a provider sign-up skips the account step and continues from step 2. Migration 086 gives `handle_new_user` a placeholder username; a "Choose your name" prompt claims one on first landing (placeholder never displayed). Identity auto-linking on matching verified email allowed. | L | `native/package.json`, `app.json`; `native/src/providers/auth.tsx`; `native/src/components/auth/AuthScreen.tsx`; `native/src/components/onboarding/StepAccount.tsx`, `OnboardingFlow.tsx`; new `native/src/app/choose-username.tsx`; `supabase/migrations/086_*.sql`; `docs/legal/privacy-policy.md` | S3. Console work in §9c. |
-| G0-6 | **Attribution and growth telemetry.** Self-minted install id in MMKV. `attribution.ts` parses `via` / `src`, persists first touch. Worker `POST /v1/growth/events` (schema-validated, IP rate-limited, service-role insert) and `preview_fetched` / `preview_opened` from the page handlers via `waitUntil` with a UA class. Client emitters: `first_open`, `link_opened`, `signup_completed` with first-touch attribution (also copied into `onboarding_completed.metadata.via`). Android Play Install Referrer (D18). Migration 087 `growth_events` with `delete_own_account` / `export_user_data` updates and 12-month retention. `growth-dashboard.sql`. | L | new `src/lib/growth/attribution.ts`, `growthEvents.ts` + tests; new `native/src/installId.ts`; `native/src/app/_layout.tsx`; new `workers/api/src/growthEvents.ts`; `workers/api/src/index.ts`, `wrangler.toml`; `supabase/migrations/087_*.sql`; new `supabase/queries/growth-dashboard.sql` | S2 |
+| G0-5 | **Apple and Google sign-in.** `expo-apple-authentication` (config plugin, `ios.usesAppleSignIn`) and `@react-native-google-signin/google-signin`. `auth.tsx` gains `signInWithApple()` / `signInWithGoogle()` → `signInWithIdToken`. iOS shows Apple and Google, Android shows Google only (§9b Q4). Buttons on `AuthScreen.tsx` and `StepAccount.tsx`; a provider sign-up skips the account step and continues from step 2. Migration 089 gives `handle_new_user` a placeholder username; a "Choose your name" prompt claims one on first landing (placeholder never displayed). Identity auto-linking on matching verified email allowed. | L | `native/package.json`, `app.json`; `native/src/providers/auth.tsx`; `native/src/components/auth/AuthScreen.tsx`; `native/src/components/onboarding/StepAccount.tsx`, `OnboardingFlow.tsx`; new `native/src/app/choose-username.tsx`; `supabase/migrations/086_*.sql`; `docs/legal/privacy-policy.md` | S3. Console work in §9c. |
+| G0-6 | **Attribution and growth telemetry.** Self-minted install id in MMKV. `attribution.ts` parses `via` / `src`, persists first touch. Worker `POST /v1/growth/events` (schema-validated, IP rate-limited, service-role insert) and `preview_fetched` / `preview_opened` from the page handlers via `waitUntil` with a UA class. Client emitters: `first_open`, `link_opened`, `signup_completed` with first-touch attribution (also copied into `onboarding_completed.metadata.via`). Android Play Install Referrer (D18). Migration 090 `growth_events` with `delete_own_account` / `export_user_data` updates and 12-month retention. `growth-dashboard.sql`. | L | new `src/lib/growth/attribution.ts`, `growthEvents.ts` + tests; new `native/src/installId.ts`; `native/src/app/_layout.tsx`; new `workers/api/src/growthEvents.ts`; `workers/api/src/index.ts`, `wrangler.toml`; `supabase/migrations/087_*.sql`; new `supabase/queries/growth-dashboard.sql` | S2 |
 
 ## 5. G1 tasks
 
@@ -116,15 +116,15 @@ Sizes S/M/L as in the roadmap. "Joe action" marks console or dashboard steps.
 
 ## 6. Migrations
 
-Next free number is **085**. All additive; apply is a Joe action (Studio, never `db push`); regenerate `database.types.ts` after each.
+Next free number is **088**. All additive; apply is a Joe action (Studio, never `db push`); regenerate `database.types.ts` after each.
 
 | # | Purpose | Session |
 |---|---|---|
-| 085 | `shared_rooms` (`id uuid pk`, `created_by uuid → profiles cascade`, `kind text check ('global','anchor')`, `source_ref text` (mood_rooms id or `anchor:{type}-{id}`), `label text` (personal framing stripped, "More like X"), `description text null`, `tmdb_ids jsonb` (ordered `[{tmdb_id, media_type}]`, max 60), `created_at`); RLS on, insert-own via the Worker (service role) and public read through the Worker only (no anon policy); index `(created_by, created_at desc)`; `delete_own_account` and `export_user_data` extended. No expiry, no unshare (Joe, 14 Sept). | S1 |
-| 086 | `handle_new_user()` tolerates a missing username: placeholder `user_` + first 8 hex of the uuid, `UNIQUE NOT NULL` kept; `profiles.username_chosen boolean not null default true`, false for placeholders. | S3 |
-| 087 | `growth_events` (`id bigint identity`, `occurred_at`, `event_name` check in {`preview_fetched`, `preview_opened`, `link_opened`, `first_open`, `signup_completed`, `share_initiated`, `share_completed`, `notification_opened`}, `install_id uuid`, `user_id uuid null → profiles cascade`, `via text`, `src text`, `object_type text`, `object_id text`, `platform text`, `ua_class text`, `delivery_id uuid null`, `metadata jsonb`); RLS on, no client policies; indexes `(user_id, occurred_at)`, `(install_id)`, `(event_name, occurred_at)`; 12-month pg_cron retention registered here; `delete_own_account` and `export_user_data` extended. | S2 |
+| 088 | `shared_rooms` (`id uuid pk`, `created_by uuid → profiles cascade`, `kind text check ('global','anchor')`, `source_ref text` (mood_rooms id or `anchor:{type}-{id}`), `label text` (personal framing stripped, "More like X"), `description text null`, `tmdb_ids jsonb` (ordered `[{tmdb_id, media_type}]`, max 60), `created_at`); RLS on, insert-own via the Worker (service role) and public read through the Worker only (no anon policy); index `(created_by, created_at desc)`; `delete_own_account` and `export_user_data` extended. No expiry, no unshare (Joe, 14 Sept). | S1 |
+| 089 | `handle_new_user()` tolerates a missing username: placeholder `user_` + first 8 hex of the uuid, `UNIQUE NOT NULL` kept; `profiles.username_chosen boolean not null default true`, false for placeholders. | S3 |
+| 090 | `growth_events` (`id bigint identity`, `occurred_at`, `event_name` check in {`preview_fetched`, `preview_opened`, `link_opened`, `first_open`, `signup_completed`, `share_initiated`, `share_completed`, `notification_opened`}, `install_id uuid`, `user_id uuid null → profiles cascade`, `via text`, `src text`, `object_type text`, `object_id text`, `platform text`, `ua_class text`, `delivery_id uuid null`, `metadata jsonb`); RLS on, no client policies; indexes `(user_id, occurred_at)`, `(install_id)`, `(event_name, occurred_at)`; 12-month pg_cron retention registered here; `delete_own_account` and `export_user_data` extended. | S2 |
 
-S2 and S3 run in parallel; applying 087 before 086 is fine, they are independent.
+S2 and S3 run in parallel; applying 090 before 089 is fine, they are independent.
 
 ## 7. Test approach
 
@@ -141,7 +141,7 @@ S2 and S3 run in parallel; applying 087 before 086 is fine, they are independent
 | `.well-known` reaches Vercel, link verification silently fails | High | Dashboard route before any build; curl both files externally; assert content type. |
 | Wrong Android fingerprint (upload vs Play App Signing key) | High | List both SHA-256s; verify with `pm get-app-links`. |
 | Apple review 4.8 or a confusing account step | Medium | Apple and Google ship together; reviewer account exists. |
-| `handle_new_user` blocks every provider sign-up until 086 is applied | High | 086 applied and verified before the S3 build ships. |
+| `handle_new_user` blocks every provider sign-up until 089 is applied | High | 089 applied and verified before the S3 build ships. |
 | iOS install attribution not deterministic | Medium | Android open-to-install is the measured number; iOS reports link-opened post-install only. |
 | Crawler fetches counted as opens | Medium | UA classification with a fixture of WhatsApp, Facebook, Slack, Twitter, Apple bots; report both. |
 | Zone-level HTML caching bypasses the Worker on hits | Medium | Verify Cache Rules (§10); exclude `/t/*`, `/room/*` if present. |
@@ -197,14 +197,14 @@ S2 and S3 run in parallel; applying 087 before 086 is fine, they are independent
 | S1 | Play Console → App integrity | Play App Signing on or off; app-signing certificate SHA-256 (and confirm the upload key `99:CE:FF:7E` is listed too). |
 | S1 | App Store Connect | Whether the 10 Sept submission is approved; the public listing URL. |
 | S1 | Cloudflare dashboard → Workers routes | Add `videxstreaming.com/.well-known/*`, `/room/*`, `/list/*`, `/delete-account*` to `videx-api`. |
-| S1 | Supabase Studio | Apply 085; verify `to_regclass('public.shared_rooms')`. |
+| S1 | Supabase Studio | Apply 088; verify `to_regclass('public.shared_rooms')`. |
 | S1 | GitHub Actions | Run `ios-release.yml` (preview) and `android-release.yml` after the PR merges; confirm the Associated Domains capability appears in the EAS build log. |
-| S2 | Supabase Studio | Apply 087. |
+| S2 | Supabase Studio | Apply 090. |
 | S2 | Privacy | Approve the policy paragraph; update App Store and Play data forms (install id, attribution). |
 | S3 | Google Cloud Console (Firebase project `videx-3063b`) | OAuth clients: Web, iOS (bundle id), Android (package + both SHA-1s). |
 | S3 | Supabase dashboard → Auth → Providers | Apple: enabled, `app.videx.streaming` in Client IDs. Google: enabled, web client id as Client ID, iOS client id in authorised clients. |
 | S3 | Apple Developer portal | Sign in with Apple capability on the App ID (EAS usually syncs it; check the build log). |
-| S3 | Supabase Studio | Apply 086. |
+| S3 | Supabase Studio | Apply 089. |
 | S4 | Supabase CLI | Deploy `send-notifications` (keep `verify_jwt = true`). |
 | S5 | Devices | iPhone and an Android phone; WhatsApp, Messages, Slack installed. |
 
@@ -232,9 +232,9 @@ Slices are task groups, not decisions. Each is one fresh session from a self-con
 
 | Session | Scope | Migration | Depends on | Handoff |
 |---|---|---|---|---|
-| S1 Links | G0-1, G0-2, G0-3, G0-4 | 085 | Joe's S1 checklist (§9c) | `2026-09-14-004-handoff-growth-s1-links.md` |
-| S2 Attribution | G0-6 | 087 | S1 merged | written after S1's summary |
-| S3 Sign-in | G0-5 | 086 | S1 merged; runs in parallel with S2 (different files) | written after S1's summary |
+| S1 Links | G0-1, G0-2, G0-3, G0-4 | 088 | Joe's S1 checklist (§9c) | `2026-09-14-004-handoff-growth-s1-links.md` |
+| S2 Attribution | G0-6 | 090 | S1 merged | written after S1's summary |
+| S3 Sign-in | G0-5 | 089 | S1 merged; runs in parallel with S2 (different files) | written after S1's summary |
 | S4 Sharing | G1-1 to G1-4 | none | S2 and S3 merged | written after S2/S3 summaries |
 | S5 Verification | G1-5 | none | S4 merged; devices | written after S4's summary |
 

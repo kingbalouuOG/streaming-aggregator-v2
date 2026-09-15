@@ -58,7 +58,7 @@ Measured 2026-09-15 on a copy of `titles`: 20 ms BitmapOr over both GIN indexes,
 | Worker `/v1/foryou`, `/v1/home` | Optional `channels=a,b` (≤ 30, `^[a-z0-9_]{1,40}$`; malformed dropped, oversized → 400). Checked against the registry (isolate cache 10 min; read failure → no channels), unknown ids dropped rather than rejected so a registry addition never breaks an older Worker. Channels join the feed/home KV keys as a hash, only when present; the availids key is `v2` |
 | Onboarding step 2, Profile → Streaming Services | Shared `ServicePicker`: tiles, and chips beneath the row of a selected tile that has curated channels. Onboarding saves channels in the same all-or-nothing completion; Profile never overwrites channels it could not read |
 | Detail → Where to Watch | Held channels join tier 1 ("Watch on Shudder · via Prime Video", standalone badge when the channel is a service); the rest stay in "Via a channel". `StreamingLink.channelToken`; links cache key bumped to `links2_` |
-| Search hits, `subscription_included_titles` | Unchanged — held channels do not yet count as included there |
+| Search | Since 087: the confident-title card's best link and "Included" label count held channels, and the semantic "Free" filter passes channel tokens to `subscription_included_titles(p_tmdb_ids, p_services, p_channel_tokens)` |
 | Share page, fingerprints | Unchanged — addon rows skipped / excluded |
 | Relevance floor (`backfill-missing-titles`) | Curated channel rows count as included (20 votes); the tail stays at 200. Needs 086 applied before the function is deployed |
 | Web (`src/components`) | Not wired; defaults keep it on included-only |
@@ -69,11 +69,11 @@ Insert rows into `service_addons` — no release. A new `channel_id` is picked u
 
 ## Known limitations
 
-- **One addon row per (title, service, quality).** `idx_sa_unique_entry` does not include `addon_id`, and `sync-content.ts` dedupes on `service_id-stream_type-quality`, so a title sold through two channels on one parent keeps only one of them. A holder of the dropped channel does not see the title. IN-SC-005.
+- **One addon row per (title, service, quality) — fixed in 087.** `idx_sa_unique_entry` lacked `addon_id` and the writers deduped without it, so a title sold through two channels on one parent kept only one (4 of 93 popular titles). The key and all three writers now include the channel; the dropped rows return on the next Prime/Apple walk (2 October). IN-SC-005.
 - Standalone services count their channel rows without the parent (a user with HBO Max direct gets the few titles the vendor lists only under Prime's HBO Max channel) — deliberate.
-- Held channels are not yet "included" for search hits or the semantic search cost filter.
+- Held channels count as included in search since 087 (title card + semantic "Free" filter). The web app (`src/components`) is not wired.
 - The first picker's chip panel spanned both grid columns and opened by default, so it was unclear which tile it belonged to (IN-SC-006). Replaced by Direction B (`docs/design/service-picker-direction-b.md`): a strip inside the selected parent tile that opens a per-parent sheet, plus "I have this" on Where to Watch (adds the channel — or the service, when the channel is one — with Undo).
-- The `user_service_addons` RLS policy should use `(select auth.uid())` (IN-SC-007).
+- The `user_service_addons` RLS policy uses `(select auth.uid())` since 087 (IN-SC-007).
 
 ## Decisions (Joe, 2026-09-15)
 

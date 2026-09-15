@@ -2,7 +2,7 @@
 
 **For:** Google Play Data Safety form + Apple App Privacy labels. Copy from here; keep consistent with [privacy-policy.md](./privacy-policy.md) §2. Part of the [launch-compliance checklist](./launch-compliance-checklist.md) §E.
 
-**Last updated: 2026-09-09** — search-term logging shipped on 2026-09-08 and reached a native binary in v2.3.0. Both forms now need a search-history row, and this sheet used to assert the opposite (see the changelog at the foot). **Neither form has been re-submitted yet**; the answers below are ready to copy when v2.3.1 goes out.
+**Last updated: 2026-09-15** — v2.4.0 adds **add-on channel selections** (`user_service_addons`: which Prime Video Channels, Apple TV Channels or NOW passes a user says they hold). They are more values of a row both forms already declare — service selections — so **neither form needs a new data type**; the wording below now names them. The search-history rows (2026-09-09) were filed on both forms for v2.3.1.
 
 **Two facts that shape every answer:**
 1. **No third-party sharing.** The external APIs (TMDb, OMDb, Streaming Availability API, OpenAI) receive **no user PII** — only catalogue identifiers. Supabase + Cloudflare are **service providers / processors** acting on Videx's behalf, which both stores exclude from "sharing". So: **data is collected, not shared/sold.**
@@ -31,7 +31,7 @@ Rows marked **(H0)** land during the current cycle — include them if the featu
 | App activity → **App interactions** | thumbs, watched, watchlist, dismiss, detail views, dwell time, **click-outs (service, link type, price shown)**, impressions | App functionality, personalisation, analytics |
 | App activity → **In-app search history** | the words typed into Browse search; the preset card tapped; result count | Analytics, personalisation |
 | App activity → **Other user-generated content** | watchlist, in-app feedback (`app_feedback`) | App functionality |
-| App activity → **Other actions** | taste vector, interest centroids, genre picks, service selections, slider settings | Personalisation (recommendations) |
+| App activity → **Other actions** | taste vector, interest centroids, genre picks, service and add-on channel selections, slider settings | Personalisation (recommendations) |
 | App info & performance → **Crash logs** · **Diagnostics** **(H0)** | crash reports + device diagnostics (Sentry) | Crash prevention, diagnostics |
 | Device or other IDs → **Device or other IDs** **(H0)** | push token | Delivering notifications the user opted into |
 
@@ -52,7 +52,7 @@ Rows marked **(H0)** land during the current cycle — include them if the featu
 | **Identifiers** | Device ID **(H0)** | push token | App Functionality (notifications) |
 | **User Content** | Other User Content | watchlist, in-app feedback | App Functionality |
 | **Search History** | Search History | words typed into Browse search; preset card tapped; result count | Analytics, Product Personalization |
-| **Usage Data** | Product Interaction | thumbs, watched, watchlist, taps, **click-outs**, dwell, impressions, taste/centroid/slider/genre/service data | App Functionality, Analytics, Product Personalization |
+| **Usage Data** | Product Interaction | thumbs, watched, watchlist, taps, **click-outs**, dwell, impressions, taste/centroid/slider/genre data, service and add-on channel selections | App Functionality, Analytics, Product Personalization |
 | **Diagnostics** | Crash Data · Performance Data **(H0)** | crash reports (Sentry) | App Functionality (crash diagnostics) |
 
 **For each of the above:** *Linked to the user = Yes* (tied to their account); *Used for tracking = No*.
@@ -102,5 +102,6 @@ Worth having to hand, because both forms ask follow-up questions and the honest 
 
 ## Changelog
 
+- **2026-09-15** — Named **add-on channel selections** alongside service selections (Play *Other actions*, Apple *Product Interaction*). Shipped in migration 086 and the v2.4.0 binary; stored in `user_service_addons`, covered by *Delete my account* and the data export (export v1.2), disclosed in Privacy Policy §2. Same category, same purposes, collection required — **no form change needed**; the sheet wording now matches the data.
 - **2026-09-09 (second pass)** — Widened *What the search rows actually contain* into a full per-key table. The sheet had listed four fields where the rows carry a dozen, and omitted two that a reviewer would reasonably ask about: the `filters` blob includes the user's selected **streaming services**, and refine-chip and quick-filter rows carry their own axes and visibility counts. Nothing new is collected and nothing changes on either form — every key still falls under "in-app search history" — but the sheet now matches the rows.
 - **2026-09-09** — Added **Play: App activity → In-app search history** and **Apple: Search History**. Removed Search History from Apple's "explicitly NOT collected" list, where it had sat with the justification *"app-internal genre/taste selection is Product Interaction, not web/app search history"*. That was true when written and became false on 2026-09-08, when search-term logging shipped and began storing the text users type. Caught on 2026-09-09 while reviewing v2.3.0, the first native binary carrying the feature. Neither form has been re-submitted; both are due with v2.3.1.

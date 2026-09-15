@@ -32,5 +32,17 @@ jobs:
         working-directory: native
         run: npm run lint
 
+      # native/ has its own tsconfig and dependency tree, so the root tsc above
+      # never sees its type errors — a #176 analytics-event type slip reached
+      # main that way (found 2026-09-15). This one does need the native
+      # install; postinstall links native/src/lib to the shared tree.
+      - name: Install dependencies (native)
+        working-directory: native
+        run: npm ci
+
+      - name: Typecheck (native)
+        working-directory: native
+        run: npx tsc --noEmit
+
       - name: Test (vitest)
         run: npm test

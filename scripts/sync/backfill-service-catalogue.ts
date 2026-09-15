@@ -607,8 +607,10 @@ async function main(): Promise<void> {
         if (!includeUnknownTitles) continue;
       }
       // Dedupe on the table's unique key: (tmdb_id, media_type,
-      // service_id, stream_type, quality).
-      const rowKey = `${titleKey}:${opt.type}:${opt.quality || 'default'}`;
+      // service_id, stream_type, quality, addon_id). addon_id joined the key
+      // in migration 087 (IN-SC-005), so every channel a title is on keeps
+      // its own row.
+      const rowKey = `${titleKey}:${opt.type}:${opt.quality || 'default'}:${opt.addon?.id ?? ''}`;
       if (seen.has(rowKey)) continue;
       seen.add(rowKey);
       rows.push(buildRow(opt, tmdbId, mediaType));

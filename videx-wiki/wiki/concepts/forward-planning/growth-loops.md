@@ -61,12 +61,12 @@ Object URLs are Worker-owned on the web and Expo Router-owned on device. The Vit
 ## Decisions taken (Joe, 2026-09-14; plan §9)
 
 - Title URL `/t/{type}/{tmdbId}-{slug}`, id resolves, slug cosmetic, 301 to canonical. No slug column.
-- Rooms shared as **snapshots**: `shared_rooms` (migration 085) frozen at share time, anonymous, personal framing stripped, no expiry or unshare. Works for global and anchored rooms; recipient sees the same titles.
+- Rooms shared as **snapshots**: `shared_rooms` (migration 088) frozen at share time, anonymous, personal framing stripped, no expiry or unshare. Works for global and anchored rooms; recipient sees the same titles.
 - `/list/{id}` reserved only until the G2 `watchlists` entity.
 - PLAT-1 D5 stands (no SPA router); ADR-015 in S1. `.well-known` served by the Worker.
-- Sign-in: Apple and Google via `signInWithIdToken`; Apple button on iOS only; migration 086 gives `handle_new_user` a placeholder username claimed by a "Choose your name" prompt; auto-link on matching verified email.
+- Sign-in: Apple and Google via `signInWithIdToken`; Apple button on iOS only; migration 089 gives `handle_new_user` a placeholder username claimed by a "Choose your name" prompt; auto-link on matching verified email.
 - Deferred link: in-app pending link (MMKV) plus Android Play Install Referrer; no probabilistic iOS matching.
-- Telemetry: new `growth_events` table (migration 087) written by the Worker; `via` = URL channel, `src` = originating session; notification opens are `growth_events` rows with `delivery_id`.
+- Telemetry: new `growth_events` table (migration 090) written by the Worker; `via` = URL channel, `src` = originating session; notification opens are `growth_events` rows with `delivery_id`.
 - No feature flag. `IN-GR` parking-lot family. Install id and attribution accepted as personal data (policy and store labels in S2). Web share untouched.
 - "Tell someone" on arrival (the stronger nudge) and leaving-soon single-title pushes; nothing on bundles. Share glyph stays lucide `Share2`, top-right on detail and room screens.
 

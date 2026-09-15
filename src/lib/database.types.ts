@@ -2420,7 +2420,11 @@ export type Database = {
         Returns: boolean
       }
       subscription_included_titles: {
-        Args: { p_services?: string[]; p_tmdb_ids: number[] }
+        Args: {
+          p_channel_tokens?: string[]
+          p_services?: string[]
+          p_tmdb_ids: number[]
+        }
         Returns: {
           media_type: string
           tmdb_id: number

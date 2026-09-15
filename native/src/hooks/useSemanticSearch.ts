@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { minYearForWindow, type BrowseFilters } from '@/components/browseFilters';
+import { useChannelRegistry, useUserChannels } from '@/hooks/useChannels';
+import { channelTokensFor } from '@/lib/entitlements/channels';
 import { getFlag } from '@/lib/featureFlags';
 import { semanticSearch } from '@/lib/recommendations-v2/search/semanticRetrieval';
 import { defaultFor, type FilterState } from '@/lib/search/filterState';
@@ -50,6 +52,7 @@ async function runSemantic(
   query: string,
   filters: BrowseFilters,
   userServices: ServiceId[],
+  heldChannelTokens: string[],
 ): Promise<ContentItem[]> {
   // Taste vector drives the 25% taste-fit component; null is a neutral 0.5.
   const profile = await getV2TasteProfile().catch(() => null);
@@ -62,6 +65,8 @@ async function runSemantic(
     // win over the stack, mirroring /discover.
     subscriptionIncludedOn:
       filters.cost === 'free' ? (filters.services.length ? filters.services : userServices) : null,
+    // IN-SC-004: channels held inside that scope count as free too.
+    heldChannelTokens,
     userTasteVector: profile?.tasteVector ?? null,
     candidateLimit: 150,
     resultLimit: 60,
@@ -85,6 +90,13 @@ export function useSemanticSearch(
   userServices: ServiceId[],
 ) {
   const q = (query ?? '').trim();
+  // IN-SC-004: for "Free", a channel the user holds inside the scoped
+  // services counts as included (migration 087).
+  const { data: userChannels } = useUserChannels();
+  const { data: channelRegistry } = useChannelRegistry();
+  const freeScope = filters.services.length ? filters.services : userServices;
+  const heldChannelTokens =
+    filters.cost === 'free' ? channelTokensFor(channelRegistry ?? [], freeScope, userChannels ?? []) : [];
   return useQuery({
     queryKey: [
       'native',
@@ -100,8 +112,9 @@ export function useSemanticSearch(
       filters.cost,
       filters.cost === 'free' ? [...filters.services].sort().join(',') : '',
       filters.cost === 'free' ? [...userServices].sort().join(',') : '',
+      heldChannelTokens.join(','),
     ],
-    queryFn: () => runSemantic(q, filters, userServices),
+    queryFn: () => runSemantic(q, filters, userServices, heldChannelTokens),
     enabled: enabled && q.length > 0,
     staleTime: 10 * 60 * 1000,
     // Semantic depends on the embed-query Edge fn; a transient failure
