@@ -222,6 +222,23 @@ S2 and S3 run in parallel; applying 090 before 089 is fine, they are independent
 - Wiki ingest: `wiki/sources/growth-loops-strategy-v0-1.md`, `wiki/concepts/forward-planning/growth-loops.md`, `index.md`, `log.md`.
 - Decisions taken (§9); S1 handoff written.
 
+## 11a. S1 outcome (reviewed 15 September)
+
+Merged: #172 (S1), #183 (page cache version, types for 088), #184 (assetlinks upload-key fingerprint); session summary at `docs/v2/phase-summaries/phase-growth-s1-summary.md` (#185, which also closed IN-GR-001: Play App Signing uses the upload key). Deployed and verified on videxstreaming.com; native changes are on `main` but not in any build (rebuild held until S2 and S3 merge; device checks moved to S5).
+
+| Plan said | What happened | Consequence |
+|---|---|---|
+| Migrations 085 to 087 | 085 to 087 went to the channel-entitlements work. S1 is **088**, S3 is **089**, S2 is **090**. 088 rebuilt `delete_own_account` and `export_user_data` on 086's versions. | 090 rebuilds them again from 088; 089 must not touch them. |
+| Room screen and share on the anchored room view | No native room screen or global-room surface existed; a room card opened one title. Room sharing lives on the For You room cards; the For You payload gained `AnchorRoomPreview.titleRefs` so a snapshot holds the whole room; `kind: 'global'` is accepted by the API but unused (IN-GR-003). | Acceptable for G1. A feed cached before the change has no share button for up to 20 minutes. |
+| `(tabs)/_layout.tsx` consumes the pending link | Not needed. Detail and room screens have no sign-in guard: a signed-out recipient sees the object, meets `/auth` on Back, and the pending link resumes after sign-in. | Good for the install-to-view loop; S2's `link_opened` fires pre-auth. |
+| Cold-start stack | `unstable_settings.initialRouteName = '(tabs)'` puts the tabs under any cold-start link so Back is not a dead end; applies to reset and notification cold starts too (IN-GR-004). | S5 rechecks the reset link and a cold notification tap. |
+| Page cache | Pages cached before the deploy served old HTML. `PAGE_CACHE_VERSION` added; bump on any markup change. | S2 and S4 bump it when they touch page markup. |
+| App Store CTA | Approval not confirmed during S1; still "coming soon" (IN-GR-002). Smart banner ships regardless. | One-const flip when Joe supplies the listing URL. |
+
+§10 facts answered: the Worker runs on cached page hits (no zone cache rule), so `waitUntil` telemetry fires on hits; Vercel serves nothing at `/.well-known/`; `onboarding_events` inserts require `auth.uid() = user_id`, so pre-auth events must go through the Worker; Play App Signing uses the upload key, so one fingerprint covers both. Hosted Supabase Auth providers: not checked, S3's first step.
+
+Handed to S2: `normaliseVia` / `normaliseSrc` in `src/lib/growth/inboundLink.ts`; the pending link already stores `via`, `src`, `seenAt`; page handlers apply `withAttribution` after the cache read, so preview events go after it; the Play referrer carries `via` and `src` (S2 adds the object). Handed to S3: `auth.tsx` signs in through a focus effect (replace to `/`, push the pending route); provider sign-ups resume through `curating.tsx`; keep both. Handed to S4: `ShareButton` takes title props (canonical URL, old copy, `emitShare`) or a `url` string or async function (no event); the room share logs nothing yet.
+
 ## 12. Out of scope for G0/G1
 
 Loops 2, 3 and 4 (taste cards, households and `watchlists`, SEO page types 2 to 4), JSON-LD and sitemaps, a `/` page on the Worker, retiring the web tree's `@capacitor/*` runtime packages, `expo-updates` in-app checks, room unshare or expiry, "add all to watchlist", linking a provider to an existing email account from Profile.
@@ -232,9 +249,9 @@ Slices are task groups, not decisions. Each is one fresh session from a self-con
 
 | Session | Scope | Migration | Depends on | Handoff |
 |---|---|---|---|---|
-| S1 Links | G0-1, G0-2, G0-3, G0-4 | 088 | Joe's S1 checklist (§9c) | `2026-09-14-004-handoff-growth-s1-links.md` |
-| S2 Attribution | G0-6 | 090 | S1 merged | written after S1's summary |
-| S3 Sign-in | G0-5 | 089 | S1 merged; runs in parallel with S2 (different files) | written after S1's summary |
+| S1 Links | G0-1, G0-2, G0-3, G0-4 | 088 | Joe's S1 checklist (§9c) | **Merged 15 Sept** (#172, #183, #184); outcome in §11a |
+| S2 Attribution | G0-6 | 090 | S1 merged | `2026-09-15-001-handoffs-growth-s2-s3.md` |
+| S3 Sign-in | G0-5 | 089 | S1 merged; runs in parallel with S2 (file ownership in the handoff) | `2026-09-15-001-handoffs-growth-s2-s3.md` |
 | S4 Sharing | G1-1 to G1-4 | none | S2 and S3 merged | written after S2/S3 summaries |
 | S5 Verification | G1-5 | none | S4 merged; devices | written after S4's summary |
 
