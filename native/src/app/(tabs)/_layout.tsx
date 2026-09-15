@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, Text, View, type ColorValue } from 'react
 
 import { FeedbackHost } from '@/components/FeedbackHost';
 import { useOnboardingStatus } from '@/hooks/useOnboardingStatus';
+import { useUsernameChosen } from '@/hooks/useUsernameChosen';
 import { useWatchlist } from '@/hooks/useWatchlist';
 import { useAuth } from '@/providers/auth';
 
@@ -23,6 +24,9 @@ type IconProps = { color: ColorValue; size: number };
 export default function TabsLayout() {
   const { session, initializing } = useAuth();
   const onboarding = useOnboardingStatus(session?.user?.id);
+  // Growth S3: asked only once onboarding is done (the onboarding flow routes
+  // its own finishers to the prompt; this catches anyone who left before).
+  const usernameChosen = useUsernameChosen(onboarding.data ? session?.user?.id : undefined);
   const { data: watchlist } = useWatchlist();
   const wantCount = (watchlist ?? []).filter((i) => i.status === 'want_to_watch').length;
 
@@ -55,6 +59,16 @@ export default function TabsLayout() {
     );
   }
   if (!onboarding.data) return <Redirect href="/onboarding" />;
+  // Same stale-cache rule for the name prompt: a persisted `false` waits for
+  // the refetch rather than redirecting someone who chose on another device.
+  if (usernameChosen.isLoading || (usernameChosen.isFetching && usernameChosen.data === false)) {
+    return (
+      <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={PRIMARY} />
+      </View>
+    );
+  }
+  if (usernameChosen.data === false) return <Redirect href="/choose-username" />;
 
   return (
     <>

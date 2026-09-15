@@ -1048,6 +1048,7 @@ export type Database = {
           theme_preference: string | null
           updated_at: string | null
           username: string
+          username_chosen: boolean
           viewing_context: string | null
         }
         Insert: {
@@ -1060,6 +1061,7 @@ export type Database = {
           theme_preference?: string | null
           updated_at?: string | null
           username: string
+          username_chosen?: boolean
           viewing_context?: string | null
         }
         Update: {
@@ -1072,6 +1074,7 @@ export type Database = {
           theme_preference?: string | null
           updated_at?: string | null
           username?: string
+          username_chosen?: boolean
           viewing_context?: string | null
         }
         Relationships: []

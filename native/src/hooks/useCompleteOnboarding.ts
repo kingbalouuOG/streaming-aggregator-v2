@@ -43,15 +43,22 @@ export function useCompleteOnboarding() {
       const { data: userData } = await supabase.auth.getUser();
       const user = userData.user;
       if (!user) throw new Error('No authenticated user');
-      const email = user.email ?? '';
-      const name = ((user.user_metadata?.username as string | undefined) ?? '') || email.split('@')[0] || 'User';
+      const username = user.user_metadata?.username as string | undefined;
 
       // strict: this hook is all-or-nothing — a silent local-only write
       // would let onboarding "complete" without the profile/services
       // reaching the server (Worker then scores against nothing, local
       // copy never syncs). Rethrow lands in the outer catch → returns null
       // → OnboardingFlow shows its "Couldn't finish setup" retry Alert.
-      await saveUserProfile({ userId: user.id, name, email }, { strict: true });
+      //
+      // Growth S3: only an email sign-up has a Step 1 username to save. A
+      // provider sign-up's profiles row already holds the 089 placeholder,
+      // which "Choose your name" replaces; the old email-prefix fallback
+      // here would overwrite it, and fail on UNIQUE (blocking completion
+      // for good) whenever someone already owns that prefix.
+      if (username) {
+        await saveUserProfile({ userId: user.id, name: username, email: user.email ?? '' }, { strict: true });
+      }
 
       // Services → TMDb provider IDs for storage.
       const platforms = data.services.map((sid) => ({
