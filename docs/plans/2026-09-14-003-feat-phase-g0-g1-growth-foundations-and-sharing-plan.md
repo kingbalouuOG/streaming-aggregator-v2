@@ -224,7 +224,7 @@ S2 and S3 run in parallel; applying 090 before 089 is fine, they are independent
 
 ## 11a. S1 outcome (reviewed 15 September)
 
-Merged: #172 (S1), #183 (page cache version, types for 088), #184 (assetlinks upload-key fingerprint). Deployed and verified on videxstreaming.com; native changes are on `main` but not in any build (rebuild held until S2 and S3 merge; device checks moved to S5).
+Merged: #172 (S1), #183 (page cache version, types for 088), #184 (assetlinks upload-key fingerprint); session summary at `docs/v2/phase-summaries/phase-growth-s1-summary.md` (#185, which also closed IN-GR-001: Play App Signing uses the upload key). Deployed and verified on videxstreaming.com; native changes are on `main` but not in any build (rebuild held until S2 and S3 merge; device checks moved to S5).
 
 | Plan said | What happened | Consequence |
 |---|---|---|
