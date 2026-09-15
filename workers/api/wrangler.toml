@@ -33,7 +33,7 @@ SUPABASE_URL = "https://fmusugdcnnwiuzkbjquo.supabase.co"
 # key (99:CE:FF:7E…) and the Play App Signing key (Play Console → App
 # integrity), because a Play-installed APK is signed with the latter.
 # Public values, not secrets. A key rotation is an edit here + deploy.
-ASSETLINKS_FINGERPRINTS = ""
+ASSETLINKS_FINGERPRINTS = "99:CE:FF:7E:70:01:19:F5:21:03:8A:D5:2C:AC:C6:1A:F7:42:B6:5C:E0:0D:9E:58:E3:A0:C1:1E:18:41:4C:57"
 
 # PLAT-3 W3: per-user feed cache. Key = userId : taste_vector_updated_at
 # : sliderHash : sorted services; TTL 20 min. An interaction that moves
