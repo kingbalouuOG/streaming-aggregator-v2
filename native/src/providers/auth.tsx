@@ -1,8 +1,13 @@
+import { GoogleSignin, isCancelledResponse, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
 import type { Session } from '@supabase/supabase-js';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 import * as Linking from 'expo-linking';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
 
+import { createAppleNonce } from '@/lib/auth/appleNonce';
 import storage, { setAuthState } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import { clearPushToken } from '@/notifications/push';
@@ -32,6 +37,29 @@ import { clearQueryCache } from '@/queryPersist';
 // `videx://*`) MUST be in Authentication → URL Configuration → Redirect
 // URLs, or Supabase ignores redirectTo and the link dead-ends at the Site
 // URL. See native/README + the wiki password-reset runbook.
+//
+// Growth S3: Apple (iOS only) and Google sign-in through the native SDKs +
+// supabase.auth.signInWithIdToken. A new identity with no username gets the
+// migration-089 placeholder and a "Choose your name" prompt; a matching
+// verified email auto-links to the existing account (Supabase default).
+// Both providers must be enabled in the Supabase dashboard (release
+// runbook → Sign-in providers). Neither touches the pending link: auth.tsx
+// and curating.tsx resume it exactly as after an email sign-in / sign-up.
+
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+
+// Without the web client id there is no id token; without the iOS id the
+// build has no URL scheme (app.config.js) and GoogleSignin crashes on iOS.
+const GOOGLE_AVAILABLE =
+  Platform.OS !== 'web' && !!GOOGLE_WEB_CLIENT_ID && (Platform.OS !== 'ios' || !!GOOGLE_IOS_CLIENT_ID);
+
+/** Same shape as signIn plus the signed-in user id. A cancelled sheet is
+ *  `{ error: null, userId: null }`: callers show nothing. */
+export interface ProviderSignInResult {
+  error: string | null;
+  userId: string | null;
+}
 
 interface AuthState {
   session: Session | null;
@@ -42,6 +70,12 @@ interface AuthState {
     password: string,
     username?: string,
   ) => Promise<{ error: string | null; needsConfirmation: boolean }>;
+  signInWithApple: () => Promise<ProviderSignInResult>;
+  signInWithGoogle: () => Promise<ProviderSignInResult>;
+  /** iOS with Sign in with Apple available on the device. */
+  isAppleAvailable: boolean;
+  /** Google client ids are configured for this build. */
+  isGoogleAvailable: boolean;
   signOut: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ error: string | null }>;
   checkUsernameAvailable: (username: string) => Promise<boolean>;
@@ -49,6 +83,47 @@ interface AuthState {
 }
 
 const AuthContext = createContext<AuthState | null>(null);
+
+const CANCELLED: ProviderSignInResult = { error: null, userId: null };
+
+// The given name a provider returned on this sign-in, kept in memory only
+// (never stored) to prefill "Choose your name". Apple sends it on the very
+// first authorisation and never again, so it is captured here.
+let providerGivenName: string | null = null;
+
+export function peekProviderGivenName(): string | null {
+  return providerGivenName;
+}
+
+export function clearProviderGivenName(): void {
+  providerGivenName = null;
+}
+
+let googleConfigured = false;
+
+function configureGoogle() {
+  if (googleConfigured) return;
+  GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID, iosClientId: GOOGLE_IOS_CLIENT_ID });
+  googleConfigured = true;
+}
+
+function providerFailure(provider: 'Apple' | 'Google'): ProviderSignInResult {
+  return { error: `Couldn't sign in with ${provider}. Try again, or use your email.`, userId: null };
+}
+
+async function finishWithIdToken(
+  provider: 'apple' | 'google',
+  token: string,
+  nonce?: string,
+): Promise<ProviderSignInResult> {
+  const { data, error } = await supabase.auth.signInWithIdToken({ provider, token, nonce });
+  if (error) {
+    providerGivenName = null;
+    console.error(`[Auth] signInWithIdToken(${provider}) error:`, error);
+    return { error: error.message, userId: null };
+  }
+  return { error: null, userId: data.user?.id ?? null };
+}
 
 function syncStorageAuth(session: Session | null) {
   setAuthState(!!session, session?.user?.id ?? null);
@@ -67,12 +142,16 @@ function syncStorageAuth(session: Session | null) {
 //    can seed their taste profile from A's picks (same review).
 //  - the one-time feedback-prompt bookkeeping (device-global MMKV keys
 //    mirrored from useFeedbackPrompt.ts — kept in sync there).
+//  - Growth S3: the in-memory provider name, and Google's cached account,
+//    so the next person gets Google's account chooser, not A's account.
 async function clearLocalUserState(queryClient: QueryClient): Promise<void> {
   queryClient.clear();
   clearQueryCache();
   clearOnboardingDraft();
   // A link opened by user A must not resume into user B's session.
   clearPendingLink();
+  providerGivenName = null;
+  if (googleConfigured) await GoogleSignin.signOut().catch(() => {});
   await storage.multiRemove(['fb_prompt_shown', 'fb_fg_ms']);
 }
 
@@ -87,6 +166,7 @@ function clearPushTokenBounded(ms = 3000): Promise<unknown> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [initializing, setInitializing] = useState(true);
+  const [isAppleAvailable, setIsAppleAvailable] = useState(false);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -104,6 +184,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(nextSession);
     });
 
+    // Apple on iOS only (Joe, 14 Sept): Android shows Google alone.
+    if (Platform.OS === 'ios') {
+      AppleAuthentication.isAvailableAsync()
+        .then((available) => mounted && setIsAppleAvailable(available))
+        .catch(() => {});
+    }
+
     return () => {
       mounted = false;
       sub.subscription.unsubscribe();
@@ -114,6 +201,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       session,
       initializing,
+      isAppleAvailable,
+      isGoogleAvailable: GOOGLE_AVAILABLE,
       async signIn(email, password) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         return { error: error?.message ?? null };
@@ -129,6 +218,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // No session back on signUp ⇒ email confirmation is on.
           needsConfirmation: !error && !data.session,
         };
+      },
+      async signInWithApple() {
+        try {
+          // Apple gets SHA-256(raw); Supabase gets raw and re-hashes it.
+          const nonce = await createAppleNonce({
+            randomBytes: Crypto.getRandomBytes,
+            sha256Hex: (v) => Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, v),
+          });
+          const credential = await AppleAuthentication.signInAsync({
+            requestedScopes: [
+              AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+              AppleAuthentication.AppleAuthenticationScope.EMAIL,
+            ],
+            nonce: nonce.hashed,
+          });
+          if (!credential.identityToken) return providerFailure('Apple');
+          // Set before the session flips: routing can run as soon as it does.
+          providerGivenName = credential.fullName?.givenName ?? null;
+          return await finishWithIdToken('apple', credential.identityToken, nonce.raw);
+        } catch (e) {
+          if ((e as { code?: string } | null)?.code === 'ERR_REQUEST_CANCELED') return CANCELLED;
+          console.error('[Auth] Apple sign-in failed:', e);
+          return providerFailure('Apple');
+        }
+      },
+      async signInWithGoogle() {
+        if (!GOOGLE_AVAILABLE) return providerFailure('Google');
+        try {
+          configureGoogle();
+          await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+          const response = await GoogleSignin.signIn();
+          if (isCancelledResponse(response)) return CANCELLED;
+          const { idToken, user } = response.data;
+          if (!idToken) return providerFailure('Google');
+          providerGivenName = user.givenName;
+          return await finishWithIdToken('google', idToken);
+        } catch (e) {
+          if (isErrorWithCode(e)) {
+            if (e.code === statusCodes.SIGN_IN_CANCELLED || e.code === statusCodes.IN_PROGRESS) return CANCELLED;
+            if (e.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+              return { error: 'Google sign-in needs Google Play services. Update them, or use your email.', userId: null };
+            }
+          }
+          console.error('[Auth] Google sign-in failed:', e);
+          return providerFailure('Google');
+        }
       },
       async signOut() {
         // Delete this device's push-token row BEFORE ending the session:
@@ -161,6 +296,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return data === true;
       },
       async deleteAccount() {
+        // IN-GR-010: an Apple-linked account should also revoke its Apple
+        // token here (App Store 5.1.1(v)); not built yet.
         const { error } = await supabase.rpc('delete_own_account');
         if (error) return { error: error.message };
         // Deletion also ends the session; mirror signOut's local wipe.
@@ -169,7 +306,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: null };
       },
     }),
-    [session, initializing, queryClient],
+    [session, initializing, isAppleAvailable, queryClient],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

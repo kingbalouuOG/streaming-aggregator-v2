@@ -14,10 +14,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/providers/auth';
+import { ProviderSignIn } from './ProviderSignIn';
 
 // Native sign-in screen ("Welcome back."). NATIVE-3 W1: sign-UP moved
 // into onboarding Step 1, so this is sign-in only; "Create one" enters
-// the onboarding flow.
+// the onboarding flow. Growth S3 adds Apple/Google above the form; a new
+// person who taps one here gets an account too, and the (tabs) guard
+// sends them on to onboarding (which then starts at Connect Services).
 
 export function AuthScreen() {
   const router = useRouter();
@@ -84,8 +87,15 @@ export function AuthScreen() {
             </Text>
           </View>
 
+          {/* Growth S3: Apple (iOS) and Google above the email form. Success
+              flips the session; auth.tsx's focus effect routes on from there
+              and resumes a pending link, exactly as for an email sign-in. */}
+          <View className="mt-8">
+            <ProviderSignIn verb="signIn" disabled={busy} />
+          </View>
+
           {/* Fields */}
-          <View className="mt-8 gap-3">
+          <View className="gap-3">
             <View className="flex-row items-center gap-3 rounded-card border border-border bg-card px-4 py-3.5">
               <Mail size={18} color="rgba(245,241,232,0.62)" />
               <TextInput

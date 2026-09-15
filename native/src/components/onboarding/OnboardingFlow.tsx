@@ -7,9 +7,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useCompleteOnboarding } from '@/hooks/useCompleteOnboarding';
 import { useMarkOnboardingComplete } from '@/hooks/useOnboardingStatus';
+import { fetchUsernameChosen } from '@/hooks/useUsernameChosen';
 import { useWatchedGrid, TITLES_PER_ROUND, type WatchedGridTitle } from '@/hooks/useWatchedGrid';
 import { ONBOARDING_EVENTS } from '@/lib/analytics/events';
 import { logOnboardingEvent } from '@/lib/analytics/logger';
+import { supabase } from '@/lib/supabase';
 import { ALL_SERVICE_IDS } from '@/constants/serviceCatalog';
 import type { ServiceId } from '@/lib/types/content';
 import { DEFAULT_SLIDERS, type SliderState } from '@/lib/taste-v2/types';
@@ -59,7 +61,10 @@ export function OnboardingFlow() {
   // (step 0) is behind us, so back stops at step 1. This is the back-button
   // floor and is independent of the restored current step below.
   const floorStep = session ? 1 : 0;
-  const startStep = draft?.step ?? floorStep;
+  // Never below the floor (Growth S3): a provider sign-in on /auth arrives
+  // here signed in, and a draft left by a signed-out visit may still point at
+  // the account step. Such a person continues from Connect Services.
+  const startStep = Math.max(draft?.step ?? floorStep, floorStep);
   const [step, setStep] = useState(startStep);
 
   // Collected data (consumed by completion) — seeded from the draft if one
@@ -147,7 +152,12 @@ export function OnboardingFlow() {
       // Route through the Curating interstitial, which holds until the first
       // For You payload resolves and then lands the user on For You (beta
       // feedback 2026-07-09). It also fires first_home_view now.
-      router.replace('/curating');
+      // Growth S3: a provider sign-up still holds the 089 placeholder, so it
+      // claims a name first and the prompt continues to Curating. Doing it
+      // here, not in the (tabs) guard, keeps Curating's pending-link resume
+      // from racing the guard's redirect.
+      const nameChosen = await fetchUsernameChosen(completedUserId);
+      router.replace(nameChosen ? '/curating' : { pathname: '/choose-username', params: { next: 'curating' } });
     } else {
       // complete() already logged the cause; without this the button just
       // silently does nothing on a dead connection (review 2026-07-12).
@@ -241,6 +251,34 @@ export function OnboardingFlow() {
     next();
   };
 
+  // Growth S3: Apple/Google on Step 1. A new identity continues to Connect
+  // Services like an email sign-up (the name prompt comes after onboarding).
+  // An account that already finished onboarding (a returning user, or a
+  // provider identity auto-linked to an email account) must not go through
+  // it again, which would overwrite its taste profile: hand it back to /auth
+  // when that is beneath us (its focus effect replaces to / and resumes a
+  // pending link), else straight to the tabs.
+  const onProviderSignedIn = async (userId: string, ageRange: string | null, viewingContext: string | null) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('onboarding_completed')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) {
+      // Unknown: let the (tabs) guard decide; it has a retry state.
+      router.replace('/');
+      return;
+    }
+    if (data?.onboarding_completed) {
+      markOnboardingComplete(userId);
+      clearOnboardingDraft();
+      if (router.canDismiss()) router.dismissAll();
+      else router.replace('/');
+      return;
+    }
+    onAccountCreated(ageRange, viewingContext);
+  };
+
   const toggleService = (id: ServiceId) =>
     setServices((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
   const toggleChannel = (id: string) =>
@@ -284,7 +322,10 @@ export function OnboardingFlow() {
       {/* Step content (each step owns its scroll + CTA) */}
       <Animated.View key={step} entering={FadeIn.duration(220)} className="flex-1">
         {step === 0 ? (
-          <StepAccount onAccountCreated={onAccountCreated} />
+          <StepAccount
+            onAccountCreated={onAccountCreated}
+            onProviderSignedIn={(userId, a, v) => void onProviderSignedIn(userId, a, v)}
+          />
         ) : step === 1 ? (
           <StepServices
             selected={services}
