@@ -130,7 +130,7 @@ FROM sync_log WHERE sync_type = 'backfill' ORDER BY started_at DESC LIMIT 5;
 
 `stream_type = 'addon'` means "reachable only through a paid channel inside the parent service"; the row carries `addon_id` / `addon_name`. These rows **never** count toward `titles.available_services` (since 084). Since 086 the same trigger writes one `<service_id>:<addon_id>` token per addon row into `titles.channel_services`, and a row counts for a user only when they hold the channel — see [add-on channel entitlements](../product/addon-channel-entitlements.md). The share page skips addon rows and fingerprints exclude them.
 
-The sync writes addon rows exactly as before; nothing in ingestion reads the registry except the relevance floor, where a curated channel earns the included floor (20 votes) since 2026-09-15. When the vendor adds a channel, it appears in the tail until someone curates it:
+Since migration 087 the availability key includes `addon_id`, so a title keeps one row **per channel** (before it, a title on two Prime channels kept one): `sync-content.ts` and `backfill-service-catalogue.ts` dedupe on the channel too, and `sync-incremental` scopes an addon change's delete to its channel. Nothing in ingestion reads the registry except the relevance floor, where a curated channel earns the included floor (20 votes) since 2026-09-15. When the vendor adds a channel, it appears in the tail until someone curates it:
 
 ```sql
 -- Addon ids with the most titles that the registry does not map yet.

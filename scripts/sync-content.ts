@@ -411,10 +411,13 @@ async function stageSaApi(maxTitles: number): Promise<number> {
           last_verified_at: new Date().toISOString(),
         }));
 
-        // Deduplicate rows by (service_id, stream_type, quality) — keep first occurrence
+        // Deduplicate rows on the table's unique key — (service_id, stream_type,
+        // quality, addon_id) within this title — keeping the first occurrence.
+        // addon_id joined the key in migration 087 (IN-SC-005): before it, a
+        // title on two Prime channels kept only one of them.
         const seen = new Set<string>();
         const uniqueRows = rows.filter((r: any) => {
-          const key = `${r.service_id}-${r.stream_type}-${r.quality}`;
+          const key = `${r.service_id}-${r.stream_type}-${r.quality}-${r.addon_id ?? ''}`;
           if (seen.has(key)) return false;
           seen.add(key);
           return true;

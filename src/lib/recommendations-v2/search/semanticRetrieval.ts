@@ -62,8 +62,9 @@ export interface SemanticSearchInput {
   minReleaseYear?: number | null;
   /**
    * The `cost: 'free'` axis: keep only titles included with one of these
-   * services (subscription or genuinely free — never rent, buy or addon).
-   * Empty array means "any service", matching the RPC.
+   * services (subscription or genuinely free — never rent or buy, and addon
+   * rows only through `heldChannelTokens`). Empty array means "any service",
+   * matching the RPC.
    *
    * This one DOES cost an extra round trip. Availability is not in the
    * vector metadata and `titles.available_services` aggregates every stream
@@ -72,6 +73,13 @@ export interface SemanticSearchInput {
    * parking-lot IN-SL-002. Null/undefined skips it entirely.
    */
   subscriptionIncludedOn?: readonly ServiceId[] | null;
+  /**
+   * IN-SC-004: `channel_services` tokens the user holds. With the `free`
+   * axis, a title reachable through one of these channels counts as
+   * included too (migration 087). Ignored when `subscriptionIncludedOn` is
+   * null.
+   */
+  heldChannelTokens?: readonly string[] | null;
 }
 
 export interface SemanticSearchResult {
@@ -96,6 +104,7 @@ export async function semanticSearch(input: SemanticSearchInput): Promise<Semant
     resultLimit,
     minReleaseYear,
     subscriptionIncludedOn,
+    heldChannelTokens,
   } = input;
 
   // 1. Embed the query via the JWT-gated Edge function.
@@ -142,7 +151,7 @@ export async function semanticSearch(input: SemanticSearchInput): Promise<Semant
   );
 
   const included = needsAvailability
-    ? (await filterToSubscriptionIncluded(candidates, subscriptionIncludedOn)).slice(
+    ? (await filterToSubscriptionIncluded(candidates, subscriptionIncludedOn, heldChannelTokens ?? [])).slice(
         0,
         resultLimit ?? 40,
       )
@@ -165,6 +174,7 @@ export async function semanticSearch(input: SemanticSearchInput): Promise<Semant
 async function filterToSubscriptionIncluded(
   candidates: ScoredSemanticCandidate[],
   services: readonly ServiceId[],
+  channelTokens: readonly string[],
 ): Promise<ScoredSemanticCandidate[]> {
   if (candidates.length === 0) return candidates;
   const { data, error } = await supabase.rpc('subscription_included_titles', {
@@ -173,6 +183,9 @@ async function filterToSubscriptionIncluded(
     // drops undefined, so the argument falls to the function's own DEFAULT
     // NULL, which the RPC reads as "any service".
     p_services: services.length > 0 ? [...services] : undefined,
+    // Held channels (migration 087). Sent only when there are any, so the
+    // call shape a user without channels makes works on any database.
+    ...(channelTokens.length > 0 ? { p_channel_tokens: [...channelTokens] } : {}),
   });
   if (error || !Array.isArray(data)) return candidates;
 

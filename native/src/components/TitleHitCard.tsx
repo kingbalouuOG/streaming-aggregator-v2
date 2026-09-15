@@ -4,11 +4,13 @@ import { ExternalLink, Star } from 'lucide-react-native';
 import { useEffect } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 
+import { useChannelRegistry, useUserChannels } from '@/hooks/useChannels';
 import { useItemServices } from '@/hooks/useItemServices';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import { getStreamingLinks, type StreamingLink } from '@/lib/api/supabaseContent';
 import { contentMediaType } from '@/lib/content/documentary';
 import { getDeepLink } from '@/lib/deepLinks';
+import { channelTokensFor } from '@/lib/entitlements/channels';
 import { setCardClickContext } from '@/lib/instrumentation/clickContext';
 import { exitDwell, getCurrentDwellSeconds } from '@/lib/instrumentation/dwellTimer';
 import {
@@ -66,7 +68,14 @@ export function TitleHitCard({
   // row for this title — a card with no availability at all reads as "not
   // available", which is a different and usually wrong claim.
   const fallbackServices = useItemServices(item, 3);
-  const best = pickBestLink(links, userServices);
+  // IN-SC-004: a channel the user holds is included for them, like a service.
+  const { data: userChannels } = useUserChannels();
+  const { data: channelRegistry } = useChannelRegistry();
+  const heldTokens = channelTokensFor(channelRegistry ?? [], userServices, userChannels ?? []);
+  const best = pickBestLink(links, userServices, heldTokens);
+  const bestIsIncluded =
+    best !== null &&
+    (INCLUDED.has(best.streamType) || (best.channelToken !== undefined && heldTokens.includes(best.channelToken)));
   const shownServices = links?.length
     ? [...new Set(links.map((l) => l.serviceId))].slice(0, 3)
     : fallbackServices;
@@ -156,7 +165,7 @@ export function TitleHitCard({
                 {shownServices.map((service) => (
                   <ServiceBadge key={service} service={service} size="sm" />
                 ))}
-                {best && INCLUDED.has(best.streamType) ? (
+                {bestIsIncluded ? (
                   <Text className="ml-0.5 font-sans-medium text-meta text-success">Included</Text>
                 ) : null}
               </View>
@@ -191,19 +200,22 @@ function metaLine(item: ContentItem): string {
 /**
  * Which service the big button opens.
  *
- * Order: included on a service the user pays for → included anywhere →
- * anything at all. "On your stack and costs nothing more" is the only answer
- * that is unambiguously right, and putting a rental first would turn a
- * search result into a sales pitch.
+ * Order: included on a service the user pays for → through a channel they
+ * hold (IN-SC-004) → included anywhere → anything at all. "On your stack and
+ * costs nothing more" is the only answer that is unambiguously right, and
+ * putting a rental first would turn a search result into a sales pitch.
  */
 function pickBestLink(
   links: StreamingLink[] | undefined,
   userServices: ServiceId[],
+  heldTokens: readonly string[],
 ): StreamingLink | null {
   if (!links?.length) return null;
   const mine = new Set(userServices);
+  const held = new Set(heldTokens);
   return (
     links.find((l) => INCLUDED.has(l.streamType) && mine.has(l.serviceId)) ??
+    links.find((l) => l.channelToken !== undefined && held.has(l.channelToken)) ??
     links.find((l) => INCLUDED.has(l.streamType)) ??
     links[0]
   );

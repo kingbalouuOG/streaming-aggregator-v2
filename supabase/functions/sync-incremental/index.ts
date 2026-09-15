@@ -815,16 +815,23 @@ async function runSyncSlice(
               const saServiceId = change.service?.id || service;
               const serviceId = SA_TO_VIDEX[saServiceId] || saServiceId;
               const streamType = change.streamingOptionType as string;
+              // IN-SC-005 (migration 087): channel rows are keyed per channel,
+              // so an addon change touches only its own channel's row. An
+              // addon change that names no channel keeps the old service-wide
+              // scope rather than silently matching nothing.
+              const addonId: string | null = change.addon?.id ?? null;
 
               if (changeType === 'removed') {
                 // Capture existing rows before deletion for history
-                const { data: existingRows } = await supabase
+                let existingQuery = supabase
                   .from('streaming_availability')
                   .select('service_id, stream_type, quality, deep_link_url, price_amount, price_currency')
                   .eq('tmdb_id', tmdbId)
                   .eq('media_type', mediaType)
                   .eq('service_id', serviceId)
                   .eq('stream_type', streamType);
+                if (streamType === 'addon' && addonId) existingQuery = existingQuery.eq('addon_id', addonId);
+                const { data: existingRows } = await existingQuery;
 
                 for (const row of existingRows || []) {
                   historyEvents.push({
@@ -838,13 +845,15 @@ async function runSyncSlice(
                   });
                 }
 
-                await supabase
+                let removeQuery = supabase
                   .from('streaming_availability')
                   .delete()
                   .eq('tmdb_id', tmdbId)
                   .eq('media_type', mediaType)
                   .eq('service_id', serviceId)
                   .eq('stream_type', streamType);
+                if (streamType === 'addon' && addonId) removeQuery = removeQuery.eq('addon_id', addonId);
+                await removeQuery;
                 stats.availabilityRemoved++;
               } else {
                 // A change with no deep link cannot satisfy
@@ -880,14 +889,15 @@ async function runSyncSlice(
                 // not just 'updated'. The previous conditional pre-read both
                 // cost a query and only ran for 'updated', which is why
                 // existence could not be used for labelling.
-                const { data: deletedRows } = await supabase
+                let replaceQuery = supabase
                   .from('streaming_availability')
                   .delete()
                   .eq('tmdb_id', tmdbId)
                   .eq('media_type', mediaType)
                   .eq('service_id', serviceId)
-                  .eq('stream_type', streamType)
-                  .select('price_amount, price_currency');
+                  .eq('stream_type', streamType);
+                if (streamType === 'addon' && addonId) replaceQuery = replaceQuery.eq('addon_id', addonId);
+                const { data: deletedRows } = await replaceQuery.select('price_amount, price_currency');
 
                 const existingRow = deletedRows?.[0] ?? null;
 
