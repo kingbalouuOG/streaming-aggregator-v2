@@ -1742,3 +1742,9 @@ only thing at stake.
   - `/list/x` 404 noindex; unknown `/room/{uuid}` 404 "Room not found" noindex; `/v1/room/{uuid}` JSON 404; `POST /v1/share/room` without a token 401; `/delete-account` 200.
 - Found: titles cached before the deploy (e.g. `/t/movie/603`) still served the pre-slug page from the same cache key, until their 24h TTL. Follow-up PR adds `PAGE_CACHE_VERSION` to page cache keys and regenerates `database.types.ts` for 088 (typegen-check would otherwise fail on the next migration PR).
 - Updated: wiki/entities/codebase/migrations.md (088 applied), wiki/concepts/forward-planning/growth-loops.md (status), wiki/registers/parking-lot.md (IN-GR-001 note), wiki/concepts/techniques/inbound-deep-linking.md (cache-version gotcha)
+
+## [2026-09-15] query | Growth S1 closed: summary written, IN-GR-001 closed
+- Summary: docs/v2/phase-summaries/phase-growth-s1-summary.md (what shipped across #172, #183, #184; live verification; plan corrections; notes for the S2–S5 handoffs). Not snapshotted into raw/ (human-owned).
+- IN-GR-001 closed: Play App Signing uses the same key as the upload key (Joe checked Play Console); the live `assetlinks.json` and Google's Digital Asset Links API return the one fingerprint.
+- Rebuilds held until the other growth streams finish (Joe), so universal/app links are not active on devices yet; device checks move to S5.
+- Updated: wiki/registers/parking-lot.md (IN-GR-001 ✅, counts), wiki/concepts/forward-planning/growth-loops.md (status)
