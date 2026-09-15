@@ -62,6 +62,13 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default is "tools platform-tools". The legacy `tools`
+          # package is gone from current cmdline-tools (runner image 16.0), so
+          # `sdkmanager tools` exits 1 and the job dies before any build step —
+          # the v2.4.0 tag run (34996078580) failed exactly there. Gradle still
+          # accepts licences and downloads the platforms / build-tools it needs.
+          packages: 'platform-tools'
 
       - name: Install native deps (postinstall symlinks ../src/lib into native/)
         working-directory: native
