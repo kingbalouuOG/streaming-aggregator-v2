@@ -62,6 +62,31 @@ After install: Android `adb shell pm verify-app-links --re-verify app.videx.stre
 
 ---
 
+## Sign-in providers: Apple and Google (since Growth S3, 2026-09-15)
+
+`native/app.json` declares `ios.usesAppleSignIn: true` and the `expo-apple-authentication` plugin (entitlement `com.apple.developer.applesignin`). `native/app.config.js` adds the `@react-native-google-signin/google-signin` plugin, with `iosUrlScheme` derived from `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` (the reversed client id). Both are native config: a **store rebuild**, not an OTA update. Before the first build that carries them:
+
+1. **Migration 089 applied** (`handle_new_user` placeholder username). Without it every Apple or Google sign-up fails in the trigger ("Database error saving new user").
+2. **Google client ids, identical in all three places:**
+
+   | Variable | Value | Set in |
+   |---|---|---|
+   | `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Google Cloud (project `videx-3063b`) → Credentials → the *Web application* client | `native/.env`; GitHub secret (`android-release.yml` writes it into `.env`); EAS **production** environment, visibility plain text or sensitive (so eas-cli can read it while resolving `app.config.js`) |
+   | `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | the *iOS* client (bundle `app.videx.streaming`) | the same three |
+
+   No web id: the Google button is hidden on both platforms. No iOS id: the plugin is left out and the Google button is hidden on iOS (signing in without the URL scheme crashes). `runtimeVersion` is a fingerprint over the app config, so a value that differs between a build and an `eas update` changes the runtime version.
+3. **Google Cloud OAuth clients** (same project): *Web application*; *iOS* (bundle `app.videx.streaming`, App Store id `6785395342`, Team `CT8F3578W8`); *Android* `app.videx.streaming` with SHA-1 `A1:39:39:44:87:22:10:B7:C7:A7:A1:B1:B3:47:64:ED:68:5C:02:2B` (the upload key, which is also the Play App Signing key, IN-GR-001); optionally *Android* `com.videx.app.dev` with the Expo debug keystore SHA-1 `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` for `npm run android:dev`. OAuth consent screen published to production (Testing mode admits listed test users only). To re-derive: `keytool -printcert -jarfile <signed .aab>` (release) or `keytool -list -v -keystore android/app/debug.keystore -storepass android` (debug). `google-services.json` does not need re-downloading; the app passes `webClientId` itself.
+4. **Supabase dashboard → Authentication → Sign In / Providers.** *Apple:* enabled, Client IDs `app.videx.streaming`, no secret (the native id-token flow needs no Services ID or key). *Google:* enabled, Client IDs `<web id>,<iOS id>` with **web first**, client secret = the web client's secret, **Skip nonce check on** (Google's iOS SDK puts a nonce in the token that the app cannot read). Check from anywhere:
+   ```bash
+   curl -s https://fmusugdcnnwiuzkbjquo.supabase.co/auth/v1/settings -H "apikey: <publishable key>"
+   ```
+   Expect `"apple":true` and `"google":true` under `external`.
+5. **Apple Developer portal:** the App ID `app.videx.streaming` has *Sign In with Apple*; the EAS build log shows the capability sync. If Videx ever emails users (beyond Supabase Auth mail), register the sending domain under *Sign in with Apple for Email Communication*, or mail to Hide My Email relay addresses bounces.
+
+After install (S5 device pass): Apple on a physical iPhone (new account, returning account, Hide My Email); Google on iPhone and Android; `select provider, count(*) from auth.identities group by 1` shows the new rows; a new provider account starts onboarding at Connect Services and meets "Choose your name" before Curating. Open review risk: Apple token revocation on account deletion (IN-GR-010).
+
+---
+
 ## Promote beyond internal testing
 
 The pipeline ships to **internal testing**. To widen:
@@ -79,6 +104,7 @@ Credentials live as **GitHub repo secrets** (Settings → Secrets and variables 
 | `ANDROID_KEYSTORE_BASE64` | Android build | base64 of the `videx-release` upload keystore |
 | `VIDEX_UPLOAD_STORE_PASSWORD` / `VIDEX_UPLOAD_KEY_PASSWORD` | Android build | keystore passwords (alias `videx-key`) |
 | `EXPO_PUBLIC_SUPABASE_URL` / `_ANON_KEY` / `EXPO_PUBLIC_API_PROXY_URL` | Android build | public client config, inlined into the JS bundle |
+| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` / `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | Android build | Google Sign-In client ids (Growth S3); also set in the EAS production environment for iOS. See *Sign-in providers* above |
 | `PLAY_SERVICE_ACCOUNT_JSON` | Android submit | Google Play service‑account JSON (grant "Release to testing tracks") |
 | `EXPO_TOKEN` | iOS build + submit | Expo access token (authenticates eas‑cli in CI) |
 

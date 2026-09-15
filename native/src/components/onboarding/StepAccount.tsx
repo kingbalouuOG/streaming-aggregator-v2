@@ -11,8 +11,10 @@ import {
   View,
 } from 'react-native';
 
+import { ProviderSignIn } from '@/components/auth/ProviderSignIn';
 import { LegalSheet } from '@/components/LegalSheet';
 import { PRIVACY_POLICY_MD, TERMS_MD } from '@/legal/policyContent';
+import { isValidUsername, normaliseUsernameInput } from '@/lib/auth/username';
 import { useAuth } from '@/providers/auth';
 
 // Onboarding Step 1 — "Join VIDEX" (matches V2 Onboarding/Step 1.png).
@@ -20,6 +22,9 @@ import { useAuth } from '@/providers/auth';
 // age-range + viewing-context chips, ToS line, own Continue CTA → signUp.
 // Username availability is checked server-side (debounced username_available
 // RPC): the green tick + submit require the name to be both valid AND free.
+// Growth S3: "Continue with Apple/Google" above the form. That path skips the
+// username (the prompt claims one after onboarding) and hands back to
+// OnboardingFlow, which advances or, for an existing account, leaves.
 
 const AGE_RANGES = ['Under 18', '18–24', '25–34', '35–44', '45–54', '55+'];
 const VIEWING = [
@@ -33,8 +38,10 @@ const MUTED = 'rgba(245,241,232,0.62)';
 
 export function StepAccount({
   onAccountCreated,
+  onProviderSignedIn,
 }: {
   onAccountCreated: (ageRange: string | null, viewingContext: string | null) => void;
+  onProviderSignedIn: (userId: string, ageRange: string | null, viewingContext: string | null) => void;
 }) {
   const { signUp, checkUsernameAvailable } = useAuth();
   const [email, setEmail] = useState('');
@@ -51,8 +58,7 @@ export function StepAccount({
   const [policy, setPolicy] = useState<'privacy' | 'terms' | null>(null);
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const usernameValid =
-    username.length >= 3 && /^[a-z0-9]([a-z0-9_.]*[a-z0-9])?$/.test(username) && !/[_.]{2}/.test(username);
+  const usernameValid = isValidUsername(username);
   const pwValid = password.length >= 8 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /[^a-zA-Z0-9]/.test(password);
   const confirmValid = confirm.length > 0 && confirm === password;
   const canSubmit =
@@ -88,7 +94,7 @@ export function StepAccount({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username, usernameValid]);
 
-  const onUsername = (raw: string) => setUsername(raw.toLowerCase().replace(/\s/g, '').slice(0, 20));
+  const onUsername = (raw: string) => setUsername(normaliseUsernameInput(raw));
 
   const submit = async () => {
     if (!canSubmit || busy) return;
@@ -121,6 +127,24 @@ export function StepAccount({
             Start discovering what to watch tonight
           </Text>
         </View>
+
+        {/* Growth S3: two-tap account creation. The terms line sits under the
+            buttons because this path never reaches the one below the form. */}
+        <ProviderSignIn
+          verb="continue"
+          disabled={busy}
+          onSignedIn={(userId) => onProviderSignedIn(userId, ageRange, viewing)}>
+          <Text className="mt-3 text-center font-sans text-meta text-muted-foreground">
+            By continuing, you agree to our{' '}
+            <Text className="text-primary" onPress={() => setPolicy('terms')}>
+              Terms of Service
+            </Text>{' '}
+            and{' '}
+            <Text className="text-primary" onPress={() => setPolicy('privacy')}>
+              Privacy Policy
+            </Text>
+          </Text>
+        </ProviderSignIn>
 
         {/* Fields */}
         <View className="gap-2.5">

@@ -2,7 +2,7 @@
 
 **For:** Google Play Data Safety form + Apple App Privacy labels. Copy from here; keep consistent with [privacy-policy.md](./privacy-policy.md) §2. Part of the [launch-compliance checklist](./launch-compliance-checklist.md) §E.
 
-**Last updated: 2026-09-15** — v2.4.0 adds **add-on channel selections** (`user_service_addons`: which Prime Video Channels, Apple TV Channels or NOW passes a user says they hold). They are more values of a row both forms already declare — service selections — so **neither form needs a new data type**; the wording below now names them. The search-history rows (2026-09-09) were filed on both forms for v2.3.1.
+**Last updated: 2026-09-15 (Growth S3)** — the next build adds **Sign in with Apple** (iOS) and **Sign in with Google** (both platforms). That adds **Name** on both forms (Google passes the account name, which Supabase Auth stores with the account) and widens Email Address to provider emails, including Apple *Hide My Email* relay addresses. See the changelog. Earlier the same day: v2.4.0 adds **add-on channel selections** (`user_service_addons`: which Prime Video Channels, Apple TV Channels or NOW passes a user says they hold). They are more values of a row both forms already declare — service selections — so **neither form needs a new data type**; the wording below now names them. The search-history rows (2026-09-09) were filed on both forms for v2.3.1.
 
 **Two facts that shape every answer:**
 1. **No third-party sharing.** The external APIs (TMDb, OMDb, Streaming Availability API, OpenAI) receive **no user PII** — only catalogue identifiers. Supabase + Cloudflare are **service providers / processors** acting on Videx's behalf, which both stores exclude from "sharing". So: **data is collected, not shared/sold.**
@@ -25,7 +25,8 @@ Rows marked **(H0)** land during the current cycle — include them if the featu
 
 | Play data type | Videx data | Purpose(s) |
 |---|---|---|
-| Personal info → **Email address** | account email (Supabase Auth) | Account management, app functionality |
+| Personal info → **Name** | the name on a Google account used to sign in (stored by Supabase Auth with the account). Apple's name is used once, on the device, to suggest a username, and not stored | Account management |
+| Personal info → **Email address** | account email (Supabase Auth): typed at sign-up, or supplied by Apple or Google at sign-in (an Apple *Hide My Email* relay address if the user chose it) | Account management, app functionality |
 | Personal info → **User IDs** | username, account id | Account management, app functionality |
 | Personal info → **Other info** | UK region, viewing context, age range | App functionality, personalisation |
 | App activity → **App interactions** | thumbs, watched, watchlist, dismiss, detail views, dwell time, **click-outs (service, link type, price shown)**, impressions | App functionality, personalisation, analytics |
@@ -47,7 +48,8 @@ Rows marked **(H0)** land during the current cycle — include them if the featu
 
 | Apple category | Data type | Videx data | Purpose |
 |---|---|---|---|
-| **Contact Info** | Email Address | account email | App Functionality |
+| **Contact Info** | Name | the name on a Google account used to sign in (stored with the account). Sign in with Apple's name is used on the device to suggest a username and not stored | App Functionality |
+| **Contact Info** | Email Address | account email: typed at sign-up, or supplied by Apple or Google at sign-in (may be a *Hide My Email* relay address) | App Functionality |
 | **Identifiers** | User ID | username / account id | App Functionality |
 | **Identifiers** | Device ID **(H0)** | push token | App Functionality (notifications) |
 | **User Content** | Other User Content | watchlist, in-app feedback | App Functionality |
@@ -65,7 +67,8 @@ Rows marked **(H0)** land during the current cycle — include them if the featu
 
 - **Age rating / target audience:** general audience, **not** directed at children (13+ floor, no under-18 targeting). Answer Play's "target audience and content" and Apple's age-rating questionnaire accordingly — do **not** opt into any "designed for families / children" programme.
 - **Re-submit triggers:** turning on push notifications (adds the device-ID rows) or crash reporting (adds the diagnostics rows) changes these answers — update both forms when those ship. **Search-term logging was the third such trigger and it has fired** (2026-09-08); the rows are in the tables above and both forms are outstanding.
-- **Consistency check:** every row here must have a matching disclosure in Privacy Policy §2. If you add a data type to one, add it to the other.
+- **Consistency check:** every row here must have a matching disclosure in Privacy Policy §2. If you add a data type to one, add it to the other. *(Open: the policy does not yet name Apple and Google sign-in or the Name row — IN-GR-014.)*
+- **Apple and Google sign-in are not "sharing".** The user authenticates with Apple or Google, who return an identity token to Videx; Videx sends them nothing about the user. Neither form counts an identity provider the user chose as a recipient. Apple's *Hide My Email* relay addresses are still the user's email for both forms (declare them under Email Address; they are linked to the account).
 
 ### What the search rows actually contain
 
@@ -101,6 +104,8 @@ Worth having to hand, because both forms ask follow-up questions and the honest 
 ---
 
 ## Changelog
+
+- **2026-09-15 (Growth S3)** — Added **Name** (Play *Personal info → Name*; Apple *Contact Info → Name*, App Functionality) and widened **Email Address** for Sign in with Apple (iOS) and Sign in with Google (both platforms). What is stored: Supabase Auth keeps the provider's identity claims with the account (`auth.users.raw_user_meta_data`: for Google the account name, email and avatar URL; for Apple the email only — Apple's given name arrives on the device once and is used in memory to suggest a username). The username is still the user's own choice ("Choose your name"). Covered by *Delete my account* (the `auth.users` row cascades). **Both forms need updating with the build that ships sign-in** (Joe files them).
 
 - **2026-09-15** — Named **add-on channel selections** alongside service selections (Play *Other actions*, Apple *Product Interaction*). Shipped in migration 086 and the v2.4.0 binary; stored in `user_service_addons`, covered by *Delete my account* and the data export (export v1.2), disclosed in Privacy Policy §2. Same category, same purposes, collection required — **no form change needed**; the sheet wording now matches the data.
 - **2026-09-09 (second pass)** — Widened *What the search rows actually contain* into a full per-key table. The sheet had listed four fields where the rows carry a dozen, and omitted two that a reviewer would reasonably ask about: the `filters` blob includes the user's selected **streaming services**, and refine-chip and quick-filter rows carry their own axes and visibility counts. Nothing new is collected and nothing changes on either form — every key still falls under "in-app search history" — but the sheet now matches the rows.
