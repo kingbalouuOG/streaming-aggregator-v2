@@ -1,21 +1,24 @@
-import { Check } from 'lucide-react-native';
-import { Fragment } from 'react';
+import { Check, ChevronRight } from 'lucide-react-native';
+import { useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { ServiceBadge } from '@/components/ServiceBadge';
 import { SERVICE_CATALOG } from '@/constants/serviceCatalog';
 import { useChannelRegistry } from '@/hooks/useChannels';
 import { channelChoicesFor, type ChannelChoice } from '@/lib/entitlements/channels';
-import { SERVICE_DISPLAY_NAMES, type ServiceId } from '@/lib/types/content';
+import type { ServiceId } from '@/lib/types/content';
+import { ChannelSheet } from './ChannelSheet';
+import { channelWord, isServiceId } from './channelCopy';
 
-// Service tiles + add-on channel chips (IN-SC-004), shared by onboarding
-// Step 2 and Profile → Streaming Services so the two stay identical.
+// Service tiles + add-on channels (IN-SC-004 model, IN-SC-006 Direction B),
+// shared by onboarding step 2 and Profile → Streaming Services.
 //
-// A selected Prime / Apple / NOW tile opens a row of chips beneath its row
-// of tiles (chips, not a modal — the parent stays the anchor). One chip per
-// curated channel. A chip for a channel that is also a standalone service
-// (HBO Max, Paramount+ …) IS that service's selection: it toggles the same
-// id as the tile, so there is never a duplicate entitlement.
+// The grid is unchanged; a selected Prime Video / Apple TV+ / NOW tile gains
+// a footer strip INSIDE the tile ("Any channels inside?" / "Shudder, MGM+"),
+// so it can only belong to that tile. Nothing opens on its own: tapping the
+// strip opens that parent's channel sheet. A channel that is also a
+// standalone service (HBO Max, Paramount+ …) IS that service's selection —
+// its sheet row toggles the same id as the tile.
 
 interface ServicePickerProps {
   services: ServiceId[];
@@ -24,17 +27,25 @@ interface ServicePickerProps {
   onToggleChannel: (channelId: string) => void;
 }
 
+// Parents that sell channels. Used only to show the failed-load strip when
+// the registry itself could not be read; otherwise the registry decides.
+const CHANNEL_PARENTS: ReadonlySet<ServiceId> = new Set<ServiceId>(['prime', 'apple', 'now']);
+
 const ROWS: (typeof SERVICE_CATALOG)[] = [];
 for (let i = 0; i < SERVICE_CATALOG.length; i += 2) ROWS.push(SERVICE_CATALOG.slice(i, i + 2));
 
-function isServiceId(id: string): id is ServiceId {
-  return id in SERVICE_DISPLAY_NAMES;
-}
+const NAME_BY_ID = new Map(SERVICE_CATALOG.map((s) => [s.id, s.name]));
 
 export function ServicePicker({ services, channels, onToggleService, onToggleChannel }: ServicePickerProps) {
-  const { data: registry } = useChannelRegistry();
+  const registry = useChannelRegistry();
+  // Kept after close so the sheet can animate out with its content.
+  const [sheet, setSheet] = useState<{ parent: ServiceId; open: boolean } | null>(null);
+
   const selected = new Set(services);
   const held = new Set(channels);
+  const failed = registry.isError && !registry.data;
+
+  const choicesFor = (parent: ServiceId) => (registry.data ? channelChoicesFor(registry.data, parent) : []);
 
   const isOn = (choice: ChannelChoice) =>
     choice.standaloneServiceId && isServiceId(choice.standaloneServiceId)
@@ -47,65 +58,52 @@ export function ServicePicker({ services, channels, onToggleService, onToggleCha
       : onToggleChannel(choice.channelId);
 
   return (
-    <View className="mt-4">
+    <View className="mt-4 gap-2.5">
       {ROWS.map((row) => (
-        <Fragment key={row.map((s) => s.id).join('-')}>
-          <View className="flex-row">
-            {row.map((svc) => (
+        <View key={row.map((s) => s.id).join('-')} className="flex-row items-start gap-2.5">
+          {row.map((svc) => {
+            const isSel = selected.has(svc.id);
+            const choices = choicesFor(svc.id);
+            const showStrip = isSel && (choices.length > 0 || (failed && CHANNEL_PARENTS.has(svc.id)));
+            return (
               <ServiceTile
                 key={svc.id}
                 id={svc.id}
                 name={svc.name}
                 description={svc.description}
-                selected={selected.has(svc.id)}
+                selected={isSel}
                 onPress={() => onToggleService(svc.id)}
+                strip={
+                  showStrip ? (
+                    <ChannelStrip
+                      parent={svc.id}
+                      parentName={svc.name}
+                      heldNames={choices.filter(isOn).map((c) => c.displayName)}
+                      failed={failed}
+                      onPress={() => (failed ? void registry.refetch() : setSheet({ parent: svc.id, open: true }))}
+                    />
+                  ) : null
+                }
               />
-            ))}
-          </View>
-          {row
-            .filter((svc) => selected.has(svc.id))
-            .map((svc) => {
-              const choices = registry ? channelChoicesFor(registry, svc.id) : [];
-              if (choices.length === 0) return null;
-              return (
-                <View key={`${svc.id}-channels`} className="px-1.5 pb-1.5">
-                  <View className="rounded-card border border-border bg-card px-3 py-3">
-                    <Text className="font-sans-bold text-kicker uppercase tracking-[1.6px] text-faint-foreground">
-                      Channels through {svc.name}
-                    </Text>
-                    <View className="mt-2 flex-row flex-wrap gap-2">
-                      {choices.map((choice) => {
-                        const on = isOn(choice);
-                        return (
-                          <Pressable
-                            key={choice.channelId}
-                            onPress={() => toggle(choice)}
-                            accessibilityRole="checkbox"
-                            accessibilityState={{ checked: on }}
-                            className={
-                              on
-                                ? 'flex-row items-center gap-1.5 rounded-pill border border-primary-edge bg-primary-soft px-3 py-1.5'
-                                : 'flex-row items-center gap-1.5 rounded-pill border border-border bg-secondary px-3 py-1.5 active:opacity-80'
-                            }>
-                            {on ? <Check size={12} color="#e85d25" strokeWidth={3} /> : null}
-                            <Text
-                              className={
-                                on
-                                  ? 'font-sans-bold text-meta text-foreground'
-                                  : 'font-sans-medium text-meta text-muted-foreground'
-                              }>
-                              {choice.displayName}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </View>
-                </View>
-              );
-            })}
-        </Fragment>
+            );
+          })}
+          {row.length === 1 ? <View className="flex-1" /> : null}
+        </View>
       ))}
+
+      {sheet ? (
+        <ChannelSheet
+          open={sheet.open}
+          parent={sheet.parent}
+          parentName={NAME_BY_ID.get(sheet.parent) ?? sheet.parent}
+          choices={choicesFor(sheet.parent)}
+          failed={failed}
+          isOn={isOn}
+          onToggle={toggle}
+          onRetry={() => void registry.refetch()}
+          onClose={() => setSheet((s) => (s ? { ...s, open: false } : s))}
+        />
+      ) : null}
     </View>
   );
 }
@@ -116,28 +114,34 @@ function ServiceTile({
   description,
   selected,
   onPress,
+  strip,
 }: {
   id: ServiceId;
   name: string;
   description: string;
   selected: boolean;
   onPress: () => void;
+  strip: ReactNode;
 }) {
   return (
-    <View className="w-1/2 p-1.5">
+    <View
+      className={
+        selected
+          ? 'flex-1 overflow-hidden rounded-card border border-primary bg-primary-soft'
+          : 'flex-1 overflow-hidden rounded-card border border-border bg-card'
+      }>
       <Pressable
         onPress={onPress}
-        className={
-          selected
-            ? 'flex-row items-center gap-2.5 rounded-card border border-primary bg-primary-soft p-3'
-            : 'flex-row items-center gap-2.5 rounded-card border border-border bg-card p-3 active:bg-secondary'
-        }>
-        <ServiceBadge service={id} size="lg" />
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: selected }}
+        accessibilityLabel={name}
+        className="flex-row items-center gap-2.5 p-3 active:opacity-80">
+        <ServiceBadge service={id} size="tile" />
         <View className="flex-1">
-          <Text numberOfLines={1} className="font-sans-bold text-meta text-foreground">
+          <Text numberOfLines={2} className="font-sans-bold text-[13px] leading-4 text-foreground">
             {name}
           </Text>
-          <Text numberOfLines={1} className="font-sans text-[11px] text-muted-foreground">
+          <Text numberOfLines={1} className="mt-0.5 font-sans text-[11px] text-muted-foreground">
             {description}
           </Text>
         </View>
@@ -149,6 +153,60 @@ function ServiceTile({
           <View className="h-5 w-5 rounded-full border-2 border-border" />
         )}
       </Pressable>
+      {strip}
     </View>
+  );
+}
+
+function ChannelStrip({
+  parent,
+  parentName,
+  heldNames,
+  failed,
+  onPress,
+}: {
+  parent: ServiceId;
+  parentName: string;
+  heldNames: string[];
+  failed: boolean;
+  onPress: () => void;
+}) {
+  const n = heldNames.length;
+  const plural = channelWord(parent, 2);
+  const summary = failed ? `${plural[0].toUpperCase()}${plural.slice(1)} unavailable` : n > 0 ? heldNames.join(', ') : `Any ${plural} inside?`;
+  const label = failed ? `${parentName} ${plural} unavailable, retry` : `${parentName} ${plural}, ${n} held`;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      className="min-h-[44px] flex-row items-center gap-2 px-3 active:opacity-80"
+      style={{ borderTopWidth: 1, borderTopColor: 'rgba(232,93,37,0.42)', backgroundColor: 'rgba(10,10,15,0.35)' }}>
+      <Text
+        numberOfLines={1}
+        className={
+          failed
+            ? 'flex-1 font-sans-bold text-[12px] text-faint-foreground'
+            : 'flex-1 font-sans-bold text-[12px] text-foreground'
+        }>
+        {summary}
+      </Text>
+      {failed ? (
+        <Text className="font-sans-bold text-[11px] text-primary">Retry</Text>
+      ) : n > 0 ? (
+        <>
+          <Text className="font-sans-bold text-[11px] text-muted-foreground">
+            {n} {channelWord(parent, n)}
+          </Text>
+          <ChevronRight size={12} color="rgba(245,241,232,0.62)" />
+        </>
+      ) : (
+        <>
+          <Text className="font-sans-bold text-[11px] text-primary">Choose</Text>
+          <ChevronRight size={12} color="#e85d25" />
+        </>
+      )}
+    </Pressable>
   );
 }

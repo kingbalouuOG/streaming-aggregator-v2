@@ -1,43 +1,83 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { ExternalLink } from 'lucide-react-native';
 import { useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 
+import { isServiceId } from '@/components/services/channelCopy';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import type { ChannelOption, DetailData, RentalOption } from '@/lib/adapters/detailAdapter';
+import { serviceIdToProviderId } from '@/lib/adapters/platformAdapter';
 import { getDeepLink } from '@/lib/deepLinks';
-import { channelTokensFor, type ChannelRegistryRow } from '@/lib/entitlements/channels';
+import { channelTokensFor, registryRowForToken, type ChannelRegistryRow } from '@/lib/entitlements/channels';
 import { exitDwell, getCurrentDwellSeconds } from '@/lib/instrumentation/dwellTimer';
 import { openDeepLink } from '@/lib/openDeepLink';
+import { setUserChannels } from '@/lib/storage/serviceChannels';
+import { getUserPreferences, saveUserPreferences } from '@/lib/storage/userPreferences';
 import { SERVICE_DISPLAY_NAMES, type ServiceId } from '@/lib/types/content';
 import { classifyProviders } from '@/lib/utils/providerClassifier';
 import { ServiceBadge } from './ServiceBadge';
 import { SectionHead } from './SectionHead';
+import type { ToastState } from './Toast';
 
 // Native Where to Watch — 3-tier availability (design-system §6) with
 // live deep linking through the shared resolver + native opener
 // (openDeepLink.native → RN Linking → Android ACTION_VIEW). The whole
 // reason the core loop matters: "Watch on Netflix" fires the intent.
+//
+// Add-on channels (IN-SC-004 / IN-SC-006 Direction B): channels the user
+// holds join "On your stack"; the rest stay under "Via a channel", with an
+// "I have this" pill when the user holds the parent. The pill saves at once
+// (a channel, or the service when the channel IS one), moves the row up as
+// "just added", and asks the host for a toast with Undo.
 
 interface WhereToWatchProps {
   detail: DetailData;
   userServices?: ServiceId[];
-  /** IN-SC-004: non-standalone add-on channels the user holds. */
+  /** Non-standalone add-on channels the user holds. */
   userChannels?: string[];
   channelRegistry?: ChannelRegistryRow[];
+  /** Shows a top toast on the host screen. */
+  onToast?: (toast: ToastState) => void;
 }
 
-function isServiceId(id: string): id is ServiceId {
-  return id in SERVICE_DISPLAY_NAMES;
+const unique = <T,>(xs: T[]): T[] => [...new Set(xs)];
+
+async function saveServiceList(services: ServiceId[]): Promise<void> {
+  const existing = await getUserPreferences();
+  await saveUserPreferences(
+    {
+      region: existing?.region ?? 'GB',
+      platforms: services.map((sid) => ({
+        id: serviceIdToProviderId(sid),
+        name: SERVICE_DISPLAY_NAMES[sid],
+        selected: true,
+      })),
+      homeGenres: existing?.homeGenres,
+      selectedClusters: existing?.selectedClusters,
+    },
+    { strict: true },
+  );
 }
 
-export function WhereToWatch({ detail, userServices, userChannels, channelRegistry }: WhereToWatchProps) {
+export function WhereToWatch({ detail, userServices, userChannels, channelRegistry, onToast }: WhereToWatchProps) {
+  const qc = useQueryClient();
   const registry = channelRegistry ?? [];
+
+  // Optimistic "I have this" additions, layered on the stored selections
+  // until the refetch catches up; `justAdded` holds tokens for the sub-label.
+  const [added, setAdded] = useState<{ services: ServiceId[]; channels: string[] }>({ services: [], channels: [] });
+  const [justAdded, setJustAdded] = useState<string[]>([]);
+  const [savingToken, setSavingToken] = useState<string | null>(null);
+
+  const services = unique([...(userServices ?? []), ...added.services]);
+  const channels = unique([...(userChannels ?? []), ...added.channels]);
+
   const { tier1, tier2, tier3, heldChannels, otherChannels } = classifyProviders(
     detail.allServices,
     detail.rentalOptions,
-    userServices ?? [],
+    services,
     detail.channelOptions ?? [],
-    channelTokensFor(registry, userServices ?? [], userChannels ?? []),
+    channelTokensFor(registry, services, channels),
   );
 
   const hasAny =
@@ -48,15 +88,71 @@ export function WhereToWatch({ detail, userServices, userChannels, channelRegist
     otherChannels.length > 0;
   const hasTier1 = tier1.length > 0 || heldChannels.length > 0;
 
-  // A held channel reads as the channel ("Watch on Shudder"), badged as the
-  // standalone service when it is one, and says which parent it opens in.
-  const heldChannelView = (option: ChannelOption) => {
-    const row = registry.find((r) => `${r.parentServiceId}:${r.addonId}` === option.channelToken);
-    const standalone = row?.standaloneServiceId;
-    return {
-      name: row?.displayName ?? option.channelName,
-      badge: standalone && isServiceId(standalone) ? standalone : option.serviceKey,
-    };
+  const refreshFeeds = () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: ['native', 'userServices'] }),
+      qc.invalidateQueries({ queryKey: ['native', 'userChannels'] }),
+      qc.invalidateQueries({ queryKey: ['native', 'foryou'] }),
+      qc.invalidateQueries({ queryKey: ['native', 'home'] }),
+    ]);
+
+  const revert = (token: string, service: ServiceId | null, channelId: string) => {
+    setAdded((p) => ({
+      services: p.services.filter((s) => s !== service),
+      channels: p.channels.filter((c) => c !== channelId),
+    }));
+    setJustAdded((p) => p.filter((t) => t !== token));
+  };
+
+  const undo = async (
+    token: string,
+    service: ServiceId | null,
+    channelId: string,
+    baseServices: ServiceId[],
+    baseChannels: string[],
+  ) => {
+    revert(token, service, channelId);
+    try {
+      if (service) await saveServiceList(baseServices);
+      else await setUserChannels(baseChannels);
+      void refreshFeeds();
+    } catch (e) {
+      console.error('[WhereToWatch] undo failed:', e);
+      onToast?.({ message: "Couldn't undo. Change it in Profile → Streaming Services." });
+    }
+  };
+
+  const claim = async (option: ChannelOption) => {
+    const row = registryRowForToken(registry, option.channelToken);
+    const token = option.channelToken;
+    if (!row || !token || savingToken) return;
+    const service = row.standaloneServiceId && isServiceId(row.standaloneServiceId) ? row.standaloneServiceId : null;
+    const baseServices = userServices ?? [];
+    const baseChannels = userChannels ?? [];
+    const parentName = SERVICE_DISPLAY_NAMES[option.serviceKey] ?? option.serviceKey;
+
+    setSavingToken(token);
+    setAdded((p) =>
+      service ? { ...p, services: [...p.services, service] } : { ...p, channels: [...p.channels, row.channelId] },
+    );
+    setJustAdded((p) => [...p, token]);
+    try {
+      if (service) await saveServiceList(unique([...baseServices, service]));
+      else await setUserChannels(unique([...baseChannels, row.channelId]));
+      void refreshFeeds();
+      onToast?.({
+        message: service
+          ? `${row.displayName} added to your services. For You will include it.`
+          : `${row.displayName} added inside ${parentName}. For You will include it.`,
+        onUndo: () => void undo(token, service, row.channelId, baseServices, baseChannels),
+      });
+    } catch (e) {
+      console.error('[WhereToWatch] "I have this" failed:', e);
+      revert(token, service, row.channelId);
+      onToast?.({ message: `Couldn't add ${row.displayName}. Check your connection and try again.` });
+    } finally {
+      setSavingToken(null);
+    }
   };
 
   if (!hasAny) {
@@ -100,6 +196,9 @@ export function WhereToWatch({ detail, userServices, userChannels, channelRegist
     }
   };
 
+  const channelName = (option: ChannelOption) =>
+    registryRowForToken(registry, option.channelToken)?.displayName ?? option.channelName;
+
   return (
     <View>
       <SectionHead kicker="WHERE TO WATCH" title="On your stack." />
@@ -119,17 +218,18 @@ export function WhereToWatch({ detail, userServices, userChannels, channelRegist
             </Pressable>
           ))}
           {heldChannels.map((option) => {
-            const view = heldChannelView(option);
+            const just = option.channelToken ? justAdded.includes(option.channelToken) : false;
             return (
               <Pressable
                 key={option.channelToken ?? `${option.serviceKey}-${option.channelName}`}
                 onPress={() => open(option.serviceKey, option.deepLinkUrl ?? null)}
                 className="flex-row items-center gap-3 rounded-card border border-primary-edge bg-primary-soft px-4 py-3 active:opacity-80">
-                <ServiceBadge service={view.badge} size="md" />
+                <ServiceBadge service={option.serviceKey} size="md" />
                 <View className="flex-1">
-                  <Text className="font-sans-bold text-body text-foreground">Watch on {view.name}</Text>
+                  <Text className="font-sans-bold text-body text-foreground">Watch on {channelName(option)}</Text>
                   <Text className="font-sans text-meta text-muted-foreground">
-                    via {SERVICE_DISPLAY_NAMES[option.serviceKey] ?? option.serviceKey}
+                    via {SERVICE_DISPLAY_NAMES[option.serviceKey] ?? option.serviceKey} ·{' '}
+                    {just ? 'just added' : 'a channel you hold'}
                   </Text>
                 </View>
                 <ExternalLink size={16} color="#e85d25" />
@@ -168,7 +268,18 @@ export function WhereToWatch({ detail, userServices, userChannels, channelRegist
         <RentBuyList options={tier3} detail={detail} onOpen={open} />
       ) : null}
 
-      {otherChannels.length > 0 ? <ChannelList options={otherChannels} onOpen={open} /> : null}
+      {otherChannels.length > 0 ? (
+        <ChannelList
+          options={otherChannels}
+          nameOf={channelName}
+          canClaim={(option) =>
+            services.includes(option.serviceKey) && registryRowForToken(registry, option.channelToken) !== null
+          }
+          saving={savingToken !== null}
+          onClaim={(option) => void claim(option)}
+          onOpen={open}
+        />
+      ) : null}
     </View>
   );
 }
@@ -180,9 +291,17 @@ export function WhereToWatch({ detail, userServices, userChannels, channelRegist
 // (IN-SC-004, docs/strategy/briefs/addon-entitlements.md).
 function ChannelList({
   options,
+  nameOf,
+  canClaim,
+  saving,
+  onClaim,
   onOpen,
 }: {
   options: ChannelOption[];
+  nameOf: (option: ChannelOption) => string;
+  canClaim: (option: ChannelOption) => boolean;
+  saving: boolean;
+  onClaim: (option: ChannelOption) => void;
   onOpen: (service: ServiceId, saUrl: string | null, priceShown: string | null) => void;
 }) {
   return (
@@ -193,16 +312,27 @@ function ChannelList({
       <View className="gap-2">
         {options.map((option) => (
           <Pressable
-            key={`${option.serviceKey}-${option.channelName}`}
+            key={option.channelToken ?? `${option.serviceKey}-${option.channelName}`}
             onPress={() => onOpen(option.serviceKey, option.deepLinkUrl ?? null, null)}
-            className="flex-row items-center justify-between rounded-card bg-secondary px-3.5 py-3 active:opacity-80">
-            <View className="flex-row items-center gap-2.5">
-              <ServiceBadge service={option.serviceKey} size="sm" />
-              <Text className="font-sans-medium text-body text-foreground">{option.channelName}</Text>
+            className="flex-row items-center gap-2.5 rounded-card bg-secondary px-3.5 py-3 active:opacity-80">
+            <ServiceBadge service={option.serviceKey} size="sm" />
+            <View className="flex-1">
+              <Text className="font-sans-medium text-body text-foreground">{nameOf(option)}</Text>
+              <Text className="font-sans text-meta text-muted-foreground">
+                on {SERVICE_DISPLAY_NAMES[option.serviceKey] ?? option.serviceKey}
+              </Text>
             </View>
-            <Text className="font-sans-medium text-meta text-muted-foreground">
-              on {SERVICE_DISPLAY_NAMES[option.serviceKey] ?? option.serviceKey}
-            </Text>
+            {canClaim(option) ? (
+              <Pressable
+                onPress={() => onClaim(option)}
+                disabled={saving}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`I have ${nameOf(option)}`}
+                className="min-h-[32px] justify-center rounded-pill border border-primary-edge px-3 active:opacity-70">
+                <Text className="font-sans-bold text-[12px] text-primary">I have this</Text>
+              </Pressable>
+            ) : null}
           </Pressable>
         ))}
       </View>

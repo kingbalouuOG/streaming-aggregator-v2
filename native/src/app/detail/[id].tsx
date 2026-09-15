@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Star } from 'lucide-react-native';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -12,6 +12,7 @@ import { SectionHead } from '@/components/SectionHead';
 import { ShareButton } from '@/components/ShareButton';
 import { DetailSkeleton } from '@/components/Skeleton';
 import { WatchlistActions } from '@/components/WatchlistActions';
+import { Toast, type ToastState } from '@/components/Toast';
 import { WhereToWatch } from '@/components/WhereToWatch';
 import { useChannelRegistry, useUserChannels } from '@/hooks/useChannels';
 import { useContentDetail } from '@/hooks/useContentDetail';
@@ -39,6 +40,9 @@ export default function DetailRoute() {
     serviceIdsToProviderIds(userServices ?? []),
   );
   const [descExpanded, setDescExpanded] = useState(false);
+  // IN-SC-006: Where to Watch's "I have this" confirmation (with Undo).
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const dismissToast = useCallback(() => setToast(null), []);
 
   const heroHeight = (width * 5) / 4;
   const back = () => router.back();
@@ -101,6 +105,7 @@ export default function DetailRoute() {
 
   return (
     <View className="flex-1 bg-background">
+      <Toast toast={toast} top={insets.top + 8} onDismiss={dismissToast} />
       <ScrollView contentContainerClassName="pb-10" showsVerticalScrollIndicator={false}>
         {/* Editorial hero — 4:5 image, Fraunces title overlay */}
         <View style={{ width, height: heroHeight }} className="bg-card">
@@ -208,6 +213,7 @@ export default function DetailRoute() {
               userServices={userServices ?? []}
               userChannels={userChannels ?? []}
               channelRegistry={channelRegistry ?? []}
+              onToast={setToast}
             />
           </View>
         </View>
