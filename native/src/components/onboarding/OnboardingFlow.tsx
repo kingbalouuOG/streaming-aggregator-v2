@@ -43,7 +43,7 @@ const TOTAL_ROUNDS = 3;
 
 export function OnboardingFlow() {
   const router = useRouter();
-  const { session } = useAuth();
+  const { session, signOut } = useAuth();
 
   // Restore any in-progress draft synchronously on first render (beta
   // feedback 2026-07-09). The (tabs) guard remounts this flow whenever
@@ -187,8 +187,32 @@ export function OnboardingFlow() {
 
   const canGoBack = step > floorStep;
   const goBack = () => {
-    if (canGoBack) setStep((s) => s - 1);
-    else router.replace('/auth');
+    if (canGoBack) {
+      setStep((s) => s - 1);
+      return;
+    }
+    if (!session) {
+      router.replace('/auth');
+      return;
+    }
+    // Signed in (the account exists, so this is step 2): /auth would redirect
+    // straight back here — session → (tabs) guard → not onboarded →
+    // /onboarding, draft restores the step — which read as a dead Back
+    // button (Joe, 2026-09-15). Offer to leave instead. Signing out wipes the
+    // onboarding draft by design (clearLocalUserState — the draft is not
+    // per-user, so the next account on the phone must not inherit it), so the
+    // copy promises only what holds: the account stays, setup continues from
+    // step 2 on the next sign-in.
+    Alert.alert('Leave setup?', "You'll be signed out. Your account stays — sign in again any time to finish setting up.", [
+      { text: 'Keep going', style: 'cancel' },
+      {
+        text: 'Leave',
+        style: 'destructive',
+        onPress: () => {
+          void signOut().then(() => router.replace('/auth'));
+        },
+      },
+    ]);
   };
   const next = useCallback(() => setStep((s) => Math.min(s + 1, TOTAL - 1)), []);
 

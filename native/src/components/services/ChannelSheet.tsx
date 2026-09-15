@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ServiceBadge } from '@/components/ServiceBadge';
+import { ChannelLogo } from './ChannelLogo';
 import type { ChannelChoice } from '@/lib/entitlements/channels';
 import type { ServiceId } from '@/lib/types/content';
 import { channelWord, isServiceId } from './channelCopy';
@@ -182,7 +183,11 @@ export function ChannelSheet({
                     accessibilityLabel={`${choice.displayName}, ${channelWord(parent, 1)} in ${parentName}`}
                     className="min-h-[52px] flex-row items-center gap-3 px-3 py-2.5 active:opacity-70"
                     style={i > 0 ? { borderTopWidth: 0.5, borderTopColor: 'rgba(245,241,232,0.10)' } : undefined}>
-                    {service ? <ServiceBadge service={service} size="sm" /> : <Monogram name={choice.displayName} />}
+                    {service ? (
+                      <ServiceBadge service={service} size="sm" />
+                    ) : (
+                      <ChannelLogo channelId={choice.channelId} name={choice.displayName} />
+                    )}
                     <View className="flex-1">
                       <Text className="font-sans-bold text-[14px] text-foreground">{choice.displayName}</Text>
                       {service ? (
@@ -220,14 +225,6 @@ export function ChannelSheet({
         </Animated.View>
       </View>
     </Modal>
-  );
-}
-
-function Monogram({ name }: { name: string }) {
-  return (
-    <View className="h-7 w-7 items-center justify-center rounded-md bg-secondary">
-      <Text className="font-card text-[13px] text-foreground">{name.charAt(0).toUpperCase()}</Text>
-    </View>
   );
 }
 

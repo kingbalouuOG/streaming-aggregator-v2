@@ -78,5 +78,6 @@ Service logos in `assets/` (netflix, prime, apple, disney, bbc, itvx, channel4, 
 | Profile save: README card vs the p-5 artboard's toast on Profile home | **Card, stay on screen.** No toast on Profile home; the user leaves with Back. |
 | "I have this" on a channel that is also a service (e.g. HBO Max via Prime) | **Adds the service.** Toast "HBO Max added to your services. For You will include it." with Undo. |
 | Where to build | This session, branch `feat/service-picker-direction-b`. |
+| Channel logos (after the device check) | **Sourced.** The 10 non-service channels use their TMDb/JustWatch provider images (same source as the service logos), 200×200 RGBA in `src/assets/channels/`; NOW Entertainment reuses NOW's logo. The monogram remains the fallback for any channel added to the registry later. |
 
 Implementation notes: the sheet uses React Native core `Animated` + `PanResponder` (no `GestureHandlerRootView` is mounted in the app), so the whole change is JS-only and can ship as an OTA update.
