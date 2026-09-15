@@ -67,6 +67,7 @@ export function OnboardingFlow() {
   const [ageRange, setAgeRange] = useState<string | null>(draft?.ageRange ?? null);
   const [viewingContext, setViewingContext] = useState<string | null>(draft?.viewingContext ?? null);
   const [services, setServices] = useState<ServiceId[]>(draft?.services ?? []);
+  const [channels, setChannels] = useState<string[]>(draft?.channels ?? []);
   const [watchedKeys, setWatchedKeys] = useState<Set<string>>(
     () => new Set(draft?.watchedKeys ?? []),
   );
@@ -96,13 +97,14 @@ export function OnboardingFlow() {
       ageRange,
       viewingContext,
       services,
+      channels,
       watchedKeys: [...watchedKeys],
       watchedRound,
       watchedOffset,
       selectedClusters,
       sliders,
     });
-  }, [step, ageRange, viewingContext, services, watchedKeys, watchedRound, watchedOffset, selectedClusters, sliders]);
+  }, [step, ageRange, viewingContext, services, channels, watchedKeys, watchedRound, watchedOffset, selectedClusters, sliders]);
 
   // Fire `onboarding_started` once a session exists: immediately for a
   // resumed onboarding (session present at mount) or right after signUp
@@ -125,7 +127,7 @@ export function OnboardingFlow() {
       const [mt, id] = key.split('-');
       return { tmdbId: parseInt(id, 10), mediaType: mt as 'movie' | 'tv' };
     });
-    const completedUserId = await complete({ services, clusters: selectedClusters, watchedTitles, sliders, ageRange, viewingContext });
+    const completedUserId = await complete({ services, channels, clusters: selectedClusters, watchedTitles, sliders, ageRange, viewingContext });
     if (completedUserId) {
       void logOnboardingEvent(ONBOARDING_EVENTS.ONBOARDING_COMPLETED, {
         total_duration_seconds: Math.round((Date.now() - onboardingStartRef.current) / 1000),
@@ -197,6 +199,7 @@ export function OnboardingFlow() {
     void logOnboardingEvent(ONBOARDING_EVENTS.SERVICES_COMPLETED, {
       service_count: services.length,
       services,
+      channel_count: channels.length,
     });
     next();
   };
@@ -216,6 +219,8 @@ export function OnboardingFlow() {
 
   const toggleService = (id: ServiceId) =>
     setServices((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
+  const toggleChannel = (id: string) =>
+    setChannels((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
   const selectAllServices = () =>
     setServices((prev) =>
       prev.length === ALL_SERVICE_IDS.length ? [] : [...ALL_SERVICE_IDS],
@@ -259,7 +264,9 @@ export function OnboardingFlow() {
         ) : step === 1 ? (
           <StepServices
             selected={services}
+            channels={channels}
             onToggle={toggleService}
+            onToggleChannel={toggleChannel}
             onSelectAll={selectAllServices}
             onContinue={onServicesContinue}
           />

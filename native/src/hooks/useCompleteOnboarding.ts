@@ -9,6 +9,7 @@ import {
   saveV2TasteVector,
 } from '@/lib/taste-v2/tasteProfileV2';
 import type { SliderState } from '@/lib/taste-v2/types';
+import { setUserChannels } from '@/lib/storage/serviceChannels';
 import { saveUserPreferences, saveUserProfile } from '@/lib/storage/userPreferences';
 import { supabase } from '@/lib/supabase';
 import { SERVICE_DISPLAY_NAMES, type ServiceId } from '@/lib/types/content';
@@ -20,6 +21,8 @@ import { SERVICE_DISPLAY_NAMES, type ServiceId } from '@/lib/types/content';
 
 export interface CompleteOnboardingData {
   services: ServiceId[];
+  /** IN-SC-004: non-standalone add-on channel ids. */
+  channels: string[];
   clusters: string[];
   watchedTitles: { tmdbId: number; mediaType: 'movie' | 'tv' }[];
   sliders: SliderState;
@@ -76,6 +79,13 @@ export function useCompleteOnboarding() {
         homeGenres,
         selectedClusters: data.clusters,
       }, { strict: true });
+
+      // Channels are part of the same all-or-nothing save: a failure throws
+      // into the retry Alert like the services write above. Skipped when
+      // none were picked — a fresh account has none to clear.
+      if (data.channels.length > 0) {
+        await setUserChannels(data.channels);
+      }
 
       // Bootstrap the v2 taste vector + interest centroids from the signals.
       try {

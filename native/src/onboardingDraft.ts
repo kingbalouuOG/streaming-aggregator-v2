@@ -43,6 +43,9 @@ export interface OnboardingDraft {
   ageRange: string | null;
   viewingContext: string | null;
   services: ServiceId[];
+  /** IN-SC-004: add-on channel ids. Optional so a pre-channel draft still
+   *  restores without a VERSION bump. */
+  channels?: string[];
   /** Serialised Set<string> of watched keys ("movie-123"). */
   watchedKeys: string[];
   watchedRound: number;

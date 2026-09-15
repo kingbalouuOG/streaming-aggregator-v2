@@ -38,6 +38,7 @@ import { fetchGenreSpotlight } from '../recommendations-v2/rows/home/genreSpotli
 import { dailyPick, dailyShuffleTopN } from '../utils/dailyShuffle';
 import type { UserScope } from './userScope';
 import type { TmdbServerClient } from './tmdbServer';
+import { availabilityOrFilter } from '../entitlements/channels';
 
 // ── Tunables, mirrored from the client render ───────────────────────
 
@@ -59,6 +60,9 @@ export interface HomeRenderInput {
   /** Provider ids for FREE_UK_SERVICES, likewise resolved by the caller. */
   freeProviderIds: number[];
   selectedClusters: string[];
+  /** IN-SC-004: `channel_services` tokens the user holds, resolved by the
+   *  caller from the channel registry. Omitted = no channels. */
+  channelTokens?: string[];
 }
 
 export interface HomeRenderDeps {
@@ -222,6 +226,7 @@ async function fetchPopular(
   client: SupabaseClient,
   services: string[],
   providerIds: number[],
+  channelTokens: string[],
 ): Promise<ContentItem[]> {
   if (providerIds.length === 0) return [];
 
@@ -236,6 +241,7 @@ async function fetchPopular(
     client,
     [...movies, ...tv].map((r) => r.id),
     services,
+    channelTokens,
   );
 
   const trending = interleaveDedupe(
@@ -273,15 +279,15 @@ async function filterToAvailableServer(
   client: SupabaseClient,
   tmdbIds: number[],
   services: string[],
+  channelTokens: string[],
 ): Promise<Set<number>> {
   if (services.length === 0) return new Set(tmdbIds);
   if (tmdbIds.length === 0) return new Set();
   try {
-    const { data, error } = await client
-      .from('titles')
-      .select('tmdb_id')
-      .in('tmdb_id', tmdbIds)
-      .overlaps('available_services', services);
+    const base = client.from('titles').select('tmdb_id').in('tmdb_id', tmdbIds);
+    const { data, error } = channelTokens.length > 0
+      ? await base.or(availabilityOrFilter(services, channelTokens))
+      : await base.overlaps('available_services', services);
     if (error || !data) return new Set(tmdbIds); // fail open, as the client does
     return new Set(data.map((r) => r.tmdb_id as number));
   } catch {
@@ -296,14 +302,14 @@ export async function renderHome(
   input: HomeRenderInput,
 ): Promise<RenderedHomePayload> {
   const { client, scope, tmdb } = deps;
-  const { services, providerIds, freeProviderIds, selectedClusters } = input;
+  const { services, providerIds, freeProviderIds, selectedClusters, channelTokens = [] } = input;
 
   // One parallel window, exactly as the client render does post-B4 — no
   // row may serialise behind another.
   const [charts, recentlyAdded, popularRaw, freeTonight, paidRaw, upcoming] = await Promise.all([
     fetchPerServiceChartsScoped(client, scope, services),
     fetchRecentlyAdded(tmdb, providerIds),
-    fetchPopular(tmdb, client, services, providerIds),
+    fetchPopular(tmdb, client, services, providerIds, channelTokens),
     fetchFreeTonight(tmdb, freeProviderIds),
     fetchPaidTitlesScoped(client, services),
     fetchUpcoming(tmdb, providerIds),
@@ -356,6 +362,7 @@ export async function renderHome(
         selectedClusters,
         exclude,
         client,
+        channelTokens,
       ).catch(() => null),
     ),
   );

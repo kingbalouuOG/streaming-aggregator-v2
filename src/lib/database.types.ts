@@ -1074,6 +1074,39 @@ export type Database = {
         }
         Relationships: []
       }
+      service_addons: {
+        Row: {
+          addon_id: string
+          channel_id: string
+          created_at: string
+          curated: boolean
+          display_name: string
+          parent_service_id: string
+          sort: number
+          standalone_service_id: string | null
+        }
+        Insert: {
+          addon_id: string
+          channel_id: string
+          created_at?: string
+          curated?: boolean
+          display_name: string
+          parent_service_id: string
+          sort?: number
+          standalone_service_id?: string | null
+        }
+        Update: {
+          addon_id?: string
+          channel_id?: string
+          created_at?: string
+          curated?: boolean
+          display_name?: string
+          parent_service_id?: string
+          sort?: number
+          standalone_service_id?: string | null
+        }
+        Relationships: []
+      }
       service_fingerprints: {
         Row: {
           centroid: string
@@ -1381,6 +1414,7 @@ export type Database = {
           available_services: string[]
           backdrop_path: string | null
           cast_top_5: string[] | null
+          channel_services: string[]
           content_rating: string | null
           created_at: string | null
           director: string | null
@@ -1414,6 +1448,7 @@ export type Database = {
           available_services?: string[]
           backdrop_path?: string | null
           cast_top_5?: string[] | null
+          channel_services?: string[]
           content_rating?: string | null
           created_at?: string | null
           director?: string | null
@@ -1447,6 +1482,7 @@ export type Database = {
           available_services?: string[]
           backdrop_path?: string | null
           cast_top_5?: string[] | null
+          channel_services?: string[]
           content_rating?: string | null
           created_at?: string | null
           director?: string | null
@@ -1642,6 +1678,32 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "user_push_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_service_addons: {
+        Row: {
+          channel_id: string
+          created_at: string | null
+          user_id: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string | null
+          user_id: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_service_addons_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -2137,7 +2199,10 @@ export type Database = {
         Returns: number
       }
       export_user_data: { Args: never; Returns: Json }
-      get_available_tmdb_ids: { Args: { service_ids: string[] }; Returns: Json }
+      get_available_tmdb_ids: {
+        Args: { channel_tokens?: string[]; service_ids: string[] }
+        Returns: Json
+      }
       get_mood_room_detail: {
         Args: { available_tmdb_ids: number[]; room_id: string }
         Returns: {
@@ -2321,6 +2386,10 @@ export type Database = {
           p_parent_table?: string
         }
         Returns: undefined
+      }
+      set_own_service_addons: {
+        Args: { p_channel_ids: string[] }
+        Returns: string[]
       }
       show_partition_info: {
         Args: {

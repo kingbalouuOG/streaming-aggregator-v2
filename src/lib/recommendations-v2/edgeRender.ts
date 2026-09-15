@@ -115,6 +115,8 @@ export class WorkerRenderError extends Error {
 export async function tryRenderForYouWorker(
   providerIds: number[],
   ctx?: PipelineContext,
+  /** IN-SC-004: non-standalone add-on channel ids the user holds. */
+  channels: string[] = [],
 ): Promise<WorkerRenderPayload | null> {
   if (!PROXY_URL) return null;
 
@@ -136,6 +138,7 @@ export async function tryRenderForYouWorker(
   const params = new URLSearchParams({ services: services.join(',') });
   if (ctx?.hourOfDay != null) params.set('hour', String(ctx.hourOfDay));
   if (ctx?.dayOfWeek != null) params.set('dow', String(ctx.dayOfWeek));
+  if (channels.length > 0) params.set('channels', channels.join(','));
 
   try {
     const res = await fetch(`${PROXY_URL}/v1/foryou?${params.toString()}`, {

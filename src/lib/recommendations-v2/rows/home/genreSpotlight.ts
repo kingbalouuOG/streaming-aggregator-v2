@@ -16,6 +16,7 @@ import { titleRowToContentItem } from '../../titleAdapter';
 import { EXTENDED_TITLE_SELECT } from '../../types';
 import type { ExtendedTitleRow } from '../../types';
 import type { ContentItem } from '@/lib/types/content';
+import { availabilityOrFilter } from '../../../entitlements/channels';
 
 /**
  * Drama (18) and Comedy (35) are baseline TMDb tags applied to most
@@ -139,6 +140,8 @@ export async function fetchGenreSpotlight(
    * so every existing caller is unchanged.
    */
   db: SupabaseClient = supabase,
+  /** IN-SC-004: `channel_services` tokens the user holds. */
+  channelTokens: string[] = [],
 ): Promise<{ clusterName: string; items: ContentItem[] }> {
   const cluster = getWeeklyCluster(offset, selectedClusterIds);
   const headlineGenre = getHeadlineGenre(cluster);
@@ -164,7 +167,9 @@ export async function fetchGenreSpotlight(
     // the user has no services selected — same semantics as the old
     // `availableTmdbIds.size > 0` guard.
     if (services.length > 0) {
-      query = query.overlaps('available_services', services);
+      query = channelTokens.length > 0
+        ? query.or(availabilityOrFilter(services, channelTokens))
+        : query.overlaps('available_services', services);
     }
     const { data, error } = await query
       .order('popularity', { ascending: false })

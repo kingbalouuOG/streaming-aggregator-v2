@@ -19,6 +19,9 @@ export interface StreamingLink {
   streamType: 'subscription' | 'rent' | 'buy' | 'free' | 'addon';
   /** For `addon` rows: the paid channel inside the parent service (e.g. "HBO Max" on Prime Video). */
   addonName?: string;
+  /** For `addon` rows: `<service_id>:<addon_id>`, the token matched against a
+   *  user's held channels (IN-SC-004, entitlements/channels). */
+  channelToken?: string;
   deepLinkUrl: string;
   videoLinkUrl?: string;
   quality?: string;
@@ -35,14 +38,16 @@ export async function getStreamingLinks(
   mediaType: 'movie' | 'tv'
 ): Promise<StreamingLink[]> {
   // Check client-side cache first (24h TTL via SA prefix)
-  const cacheKey = `${CACHE_PREFIXES.SA}links_${tmdbId}_${mediaType}`;
+  // links2_: entries now carry channelToken; pre-086 entries would read back
+  // without it and hide a held channel for up to the 24h TTL.
+  const cacheKey = `${CACHE_PREFIXES.SA}links2_${tmdbId}_${mediaType}`;
   const cached = await getCachedData(cacheKey);
   if (cached) return cached as StreamingLink[];
 
   try {
     const { data, error } = await supabase
       .from('streaming_availability')
-      .select('service_id, sa_service_id, stream_type, addon_name, deep_link_url, video_link_url, quality, price_amount, price_currency, price_formatted, expires_soon')
+      .select('service_id, sa_service_id, stream_type, addon_id, addon_name, deep_link_url, video_link_url, quality, price_amount, price_currency, price_formatted, expires_soon')
       .eq('tmdb_id', tmdbId)
       .eq('media_type', mediaType)
       .order('stream_type', { ascending: true });
@@ -57,6 +62,8 @@ export async function getStreamingLinks(
           saServiceId: row.sa_service_id,
           streamType: row.stream_type as StreamingLink['streamType'],
           addonName: row.addon_name || undefined,
+          channelToken:
+            row.stream_type === 'addon' && row.addon_id ? `${row.service_id}:${row.addon_id}` : undefined,
           deepLinkUrl: row.deep_link_url,
           videoLinkUrl: row.video_link_url || undefined,
           quality: (row.quality === 'default' ? undefined : row.quality) as string | undefined,

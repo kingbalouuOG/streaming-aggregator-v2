@@ -1,5 +1,6 @@
 import { keepPreviousData, useIsRestoring, useQuery } from '@tanstack/react-query';
 
+import { useUserChannels } from '@/hooks/useChannels';
 import { useUserServices } from '@/hooks/useUserServices';
 import { serviceIdsToProviderIds } from '@/lib/adapters/platformAdapter';
 import { tryRenderForYouWorker, type WorkerRenderPayload } from '@/lib/recommendations-v2/edgeRender';
@@ -22,9 +23,9 @@ import type { ServiceId } from '@/lib/types/content';
 // empty state, not the error state. NATIVE-3 W7: scored against the
 // user's onboarding-saved services (useUserServices).
 
-async function fetchForYou(services: ServiceId[]): Promise<WorkerRenderPayload | null> {
+async function fetchForYou(services: ServiceId[], channels: string[]): Promise<WorkerRenderPayload | null> {
   const providerIds = serviceIdsToProviderIds(services);
-  return tryRenderForYouWorker(providerIds);
+  return tryRenderForYouWorker(providerIds, undefined, channels);
 }
 
 /**
@@ -52,22 +53,26 @@ async function fetchForYou(services: ServiceId[]): Promise<WorkerRenderPayload |
  */
 export function useForYou() {
   const { data: services } = useUserServices();
+  // IN-SC-004: wait for channels to settle (held or failed) so a user with
+  // channels does not render once without them and again with them.
+  const { data: channels, isError: channelsFailed } = useUserChannels();
+  const channelsReady = channels !== undefined || channelsFailed;
   const isRestoring = useIsRestoring();
 
   const query = useQuery({
-    queryKey: ['native', 'foryou', services?.join(',') ?? ''],
-    queryFn: () => fetchForYou(services ?? []),
-    enabled: !!services,
+    queryKey: ['native', 'foryou', services?.join(',') ?? '', channels?.join(',') ?? ''],
+    queryFn: () => fetchForYou(services ?? [], channels ?? []),
+    enabled: !!services && channelsReady,
     staleTime: 10 * 60 * 1000,
     placeholderData: keepPreviousData,
   });
 
   return {
     ...query,
-    /** True while the cache is still restoring or services have not
-     *  resolved — i.e. we genuinely have nothing to show yet. Screens must
-     *  branch on this BEFORE testing `data`, or a cold start renders the
-     *  failure state for a frame. */
-    isBootstrapping: isRestoring || !services,
+    /** True while the cache is still restoring or services/channels have
+     *  not resolved — i.e. we genuinely have nothing to show yet. Screens
+     *  must branch on this BEFORE testing `data`, or a cold start renders
+     *  the failure state for a frame. */
+    isBootstrapping: isRestoring || !services || !channelsReady,
   };
 }

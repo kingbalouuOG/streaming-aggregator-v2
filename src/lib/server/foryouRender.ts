@@ -93,6 +93,9 @@ import { fetchEmbeddingsForCandidates } from './titleEmbeddingCache';
 export interface RenderForYouInput {
   /** Videx service ids, already validated by the transport layer. */
   services: string[];
+  /** IN-SC-004: `channel_services` tokens the user holds, resolved by the
+   *  transport layer from the channel registry. Omitted = no channels. */
+  channelTokens?: string[];
   /** Client-local hour 0–23 (Phase 5 decision 9). UTC fallback if absent. */
   hourOfDay?: number;
   /** Client-local day 0=Sun…6=Sat, paired with hourOfDay. */
@@ -234,7 +237,7 @@ export async function renderForYou(
   // ENG-1: interest centroids fetched in parallel with filter sets —
   // 3-row PK scan, no latency cost on the critical path.
   const [filterSets, interestCentroids] = await Promise.all([
-    buildFilterSetsScoped(client, scope, input.services, deps.availableIdsCache),
+    buildFilterSetsScoped(client, scope, input.services, deps.availableIdsCache, input.channelTokens ?? []),
     getInterestCentroidsScoped(scope),
   ]);
 
