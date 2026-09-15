@@ -4,6 +4,8 @@
 
 **Last updated: 2026-09-15** — v2.4.0 adds **add-on channel selections** (`user_service_addons`: which Prime Video Channels, Apple TV Channels or NOW passes a user says they hold). They are more values of a row both forms already declare — service selections — so **neither form needs a new data type**; the wording below now names them. The search-history rows (2026-09-09) were filed on both forms for v2.3.1.
 
+**Draft 2026-09-15 (Growth S2), NOT FILED:** install and sharing attribution (`growth_events`, migration 090): an app-generated install identifier plus first launch, link opens and sign-up completion with the link that brought the install. It ships in the next native build (after the growth S2 and S3 merge). Joe approves the wording, then updates both forms when that build is submitted. Rows below are marked **(S2)**; the reasoning is in *What the attribution rows contain*.
+
 **Two facts that shape every answer:**
 1. **No third-party sharing.** The external APIs (TMDb, OMDb, Streaming Availability API, OpenAI) receive **no user PII** — only catalogue identifiers. Supabase + Cloudflare are **service providers / processors** acting on Videx's behalf, which both stores exclude from "sharing". So: **data is collected, not shared/sold.**
 2. **No tracking.** No ad networks, no cross-app/cross-site tracking, no data brokers. Apple "Tracking" = **None**.
@@ -28,12 +30,12 @@ Rows marked **(H0)** land during the current cycle — include them if the featu
 | Personal info → **Email address** | account email (Supabase Auth) | Account management, app functionality |
 | Personal info → **User IDs** | username, account id | Account management, app functionality |
 | Personal info → **Other info** | UK region, viewing context, age range | App functionality, personalisation |
-| App activity → **App interactions** | thumbs, watched, watchlist, dismiss, detail views, dwell time, **click-outs (service, link type, price shown)**, impressions | App functionality, personalisation, analytics |
+| App activity → **App interactions** | thumbs, watched, watchlist, dismiss, detail views, dwell time, **click-outs (service, link type, price shown)**, impressions; **(S2)** first launch, Videx link opens and sign-up completion, with the link's channel, the title or room it named and the Play install referrer | App functionality, personalisation, analytics |
 | App activity → **In-app search history** | the words typed into Browse search; the preset card tapped; result count | Analytics, personalisation |
 | App activity → **Other user-generated content** | watchlist, in-app feedback (`app_feedback`) | App functionality |
 | App activity → **Other actions** | taste vector, interest centroids, genre picks, service and add-on channel selections, slider settings | Personalisation (recommendations) |
 | App info & performance → **Crash logs** · **Diagnostics** **(H0)** | crash reports + device diagnostics (Sentry) | Crash prevention, diagnostics |
-| Device or other IDs → **Device or other IDs** **(H0)** | push token | Delivering notifications the user opted into |
+| Device or other IDs → **Device or other IDs** **(H0)** | push token; **(S2)** app-generated install identifier (`growth_events.install_id`) | Delivering notifications the user opted into; **(S2)** Analytics |
 
 **Not collected** (leave unticked): Location, Financial info, Health & fitness, Messages, Photos/videos, Audio, Files/docs, Calendar, Contacts, Web browsing history, and any advertising/marketing use.
 
@@ -49,10 +51,10 @@ Rows marked **(H0)** land during the current cycle — include them if the featu
 |---|---|---|---|
 | **Contact Info** | Email Address | account email | App Functionality |
 | **Identifiers** | User ID | username / account id | App Functionality |
-| **Identifiers** | Device ID **(H0)** | push token | App Functionality (notifications) |
+| **Identifiers** | Device ID **(H0)** | push token; **(S2, recommended)** app-generated install identifier | App Functionality (notifications); **(S2)** Analytics |
 | **User Content** | Other User Content | watchlist, in-app feedback | App Functionality |
 | **Search History** | Search History | words typed into Browse search; preset card tapped; result count | Analytics, Product Personalization |
-| **Usage Data** | Product Interaction | thumbs, watched, watchlist, taps, **click-outs**, dwell, impressions, taste/centroid/slider/genre data, service and add-on channel selections | App Functionality, Analytics, Product Personalization |
+| **Usage Data** | Product Interaction | thumbs, watched, watchlist, taps, **click-outs**, dwell, impressions, taste/centroid/slider/genre data, service and add-on channel selections; **(S2)** first launch, Videx link opens and sign-up completion with the link's channel and the title or room it named | App Functionality, Analytics, Product Personalization |
 | **Diagnostics** | Crash Data · Performance Data **(H0)** | crash reports (Sentry) | App Functionality (crash diagnostics) |
 
 **For each of the above:** *Linked to the user = Yes* (tied to their account); *Used for tracking = No*.
@@ -96,11 +98,28 @@ Worth having to hand, because both forms ask follow-up questions and the honest 
 
 **Impression rows** (`event_type = 'card_impression'`, a different row type, same table and the same deletion/export coverage) additionally carry `route` and `refine` for anything rendered on Browse, so a search can be joined to whether its results were actually looked at. No title-level personal data beyond the content id already recorded for every impression.
 
+### What the attribution rows contain (S2, draft)
+
+One `growth_events` row per moment, written by the videx-api Worker. Fields: `event_name`, `install_id`, `user_id` (only once signed in, from the verified session), `via` (share / push / seo / card / household), `src` (push / organic), `object_type` + `object_id` (a title such as `movie-603` or a shared room id), `platform` (ios / android), `metadata` (`touch`: link or install_referrer; `prior_install`). No IP address, no advertising ID, no hardware ID, no location.
+
+| Question | Answer |
+|---|---|
+| Which events | `first_open` (once per install), `link_opened` (a Videx link opened in the app), `signup_completed` (end of onboarding). S4 adds `share_initiated`, `share_completed`, `notification_opened` under the same rows. |
+| Is the install id a device identifier | It is **app-generated** (a random UUID in app storage), not the advertising ID, IDFV or any hardware ID; uninstalling removes it. **Play** names app-level IDs (its example is the Firebase installation ID) under *Device or other IDs*, so declare it there. **Apple's** *Device ID* is "the device's advertising identifier, or other device-level ID"; an app-instance id is arguably not device-level, but the row is already ticked for the push token, so adding Analytics to it costs nothing and removes the ambiguity (recommended). |
+| Is it linked to the user | **Yes.** `signup_completed` and every event sent while signed in carry `user_id`, and the install id joins earlier rows to it. Declare *Linked to You* on Apple. (The handoff suggested "not linked"; that would be inaccurate.) |
+| Is it tracking | **No.** It never leaves Videx and is not combined with other companies' data. |
+| Retention, deletion, export | 12 months (nightly job, migration 090). *Delete my account* removes the account's rows **and** every row of any install the account used (pre-sign-up rows included); the data export includes the same rows (export v1.3). |
+| Can the user turn it off | No in-app control; collection is required (same as the other analytics rows). |
+| Play install referrer | On Android, the referrer string Google Play recorded for the install is read once, on first launch. Only Videx's own keys are kept (`via`, `src`, `t` title, `r` room); anything else (e.g. `utm_source=google-play&utm_medium=organic`) is discarded. |
+| Web page counts | `preview_fetched` / `preview_opened` rows for the public `/t/` and `/room/` pages carry no install id, user id, IP or User-Agent: they are anonymous website counts, not app data, and need no form row. |
+
 **Why the purpose is Analytics + Personalisation and not App Functionality.** Search works with logging off — the flag defaults to off and most accounts have never had it on. The rows exist to measure the funnel (§6 of the presets recommendation, particularly the zero-result rate) and to feed the search-attribution boost in the taste vector. Claiming App Functionality would overstate the need.
 
 ---
 
 ## Changelog
+
+- **2026-09-15 (Growth S2, draft, not filed)** — Install and sharing attribution (`growth_events`, migration 090): Play *Device or other IDs* gains the app-generated install identifier (Analytics) and *App interactions* gains first launch, link opens and sign-up source; Apple *Product Interaction* gains the same events and *Device ID* gains the install identifier (Analytics, recommended). Linked to the user on both. Privacy Policy §2, §7 and §8 updated in the same PR. Needs Joe's approval, then both forms with the build that ships it.
 
 - **2026-09-15** — Named **add-on channel selections** alongside service selections (Play *Other actions*, Apple *Product Interaction*). Shipped in migration 086 and the v2.4.0 binary; stored in `user_service_addons`, covered by *Delete my account* and the data export (export v1.2), disclosed in Privacy Policy §2. Same category, same purposes, collection required — **no form change needed**; the sheet wording now matches the data.
 - **2026-09-09 (second pass)** — Widened *What the search rows actually contain* into a full per-key table. The sheet had listed four fields where the rows carry a dozen, and omitted two that a reviewer would reasonably ask about: the `filters` blob includes the user's selected **streaming services**, and refine-chip and quick-filter rows carry their own axes and visibility counts. Nothing new is collected and nothing changes on either form — every key still falls under "in-app search history" — but the sheet now matches the rows.

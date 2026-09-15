@@ -1,0 +1,21 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'app.videx.streaming'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.playinstallreferrer"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // Adds the normal-level BIND_GET_INSTALL_REFERRER_SERVICE permission via
+  // manifest merge; no runtime prompt.
+  implementation 'com.android.installreferrer:installreferrer:2.2'
+}

@@ -16,6 +16,7 @@
  * per-session state.
  */
 
+import { generateUuid } from '../growth/uuid';
 import { subscribe } from '../lifecycle/appState';
 
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
@@ -25,23 +26,6 @@ let backgroundedAt: number | null = null;
 let initialised = false;
 
 const resetCallbacks = new Set<() => void>();
-
-function generateUuid(): string {
-  // crypto.randomUUID exists in modern WebViews/Node 19+ but NOT in Hermes
-  // (React Native) — a bare `crypto` reference there is a ReferenceError.
-  // A session id needs uniqueness, not cryptographic strength, so fall back
-  // to a Math.random v4 when crypto is unavailable. Accessed via globalThis
-  // so the absence is `undefined`, not a throw.
-  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
-  if (c && typeof c.randomUUID === 'function') {
-    return c.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
-    const r = (Math.random() * 16) | 0;
-    const v = ch === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
 
 function ensureInitialised(): void {
   if (initialised) return;

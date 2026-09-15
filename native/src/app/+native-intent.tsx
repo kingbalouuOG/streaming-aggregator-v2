@@ -1,3 +1,4 @@
+import { recordInboundLink } from '@/attribution';
 import { stripMalformedQuery } from '@/lib/deepLinkQueryGuard';
 import { parseInboundLink } from '@/lib/growth/inboundLink';
 import { writePendingLink } from '@/pendingLink';
@@ -15,6 +16,8 @@ import { writePendingLink } from '@/pendingLink';
 //    src/lib/growth/inboundLink.ts).
 // 3. Records object links as the pending link so a signed-out recipient
 //    lands on the object after sign-in or onboarding (native/src/pendingLink.ts).
+// 4. Records the first touch and posts link_opened with via / src / object
+//    (Growth S2, native/src/attribution.ts). Fire-and-forget.
 export function redirectSystemPath({ path }: { path: string; initial: boolean }): string {
   try {
     const safe = stripMalformedQuery(path);
@@ -22,6 +25,7 @@ export function redirectSystemPath({ path }: { path: string; initial: boolean })
     if (__DEV__ && /^exp(\+[a-z0-9.-]+)?:\/\//i.test(safe)) return safe;
     const link = parseInboundLink(safe);
     writePendingLink(link);
+    recordInboundLink(link);
     return link.route;
   } catch {
     // Never throw here: a crash in the interceptor kills the cold start.

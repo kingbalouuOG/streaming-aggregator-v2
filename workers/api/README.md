@@ -34,6 +34,20 @@ Object URLs (Growth S1, ADR-015 — see the wiki `inbound-deep-linking` page):
 - `POST /v1/share/room` — snapshot a room (Supabase JWT, 30/min per user).
 - `GET /v1/room/:id` — snapshot JSON for the app.
 
+Growth telemetry (Growth S2, migration 090 `growth_events`):
+
+- `POST /v1/growth/events` — app events (`link_opened`, `first_open`,
+  `signup_completed`; S4 adds `share_*`, `notification_opened`). Body
+  validated in src/growthEvents.ts against the shared contract
+  (src/lib/growth/growthEvents.ts); an optional Bearer Supabase JWT sets
+  `user_id`. `GROWTH_RATELIMIT` 60/60s keyed on the install id, else
+  `cf-connecting-ip`. 204 / 400 / 413 / 429.
+- `/t/` and `/room/` pages record `preview_fetched` (crawler) or
+  `preview_opened` (person) per served GET 200 via `waitUntil`, after the
+  cache read, classified by src/uaClass.ts. Their Play link's referrer also
+  names the object (`t=movie-603` / `r={roomId}`) for the Android deferred
+  deep link. No new zone route: `/v1/*` already reaches the Worker.
+
 Page caching: 24h Cache API keyed by object id + platform bucket + `PAGE_CACHE_VERSION` (bump it when page markup changes);
 `?via=` / `?src=` are filled into the app deep link and Play referrer
 after the cache read (src/pageShell.ts `applyAttribution`).
