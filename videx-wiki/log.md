@@ -1730,3 +1730,14 @@ only thing at stake.
 - Plan corrections: the native app has no anchored-room screen and no global-room surface (sharing lives on the For You room cards; IN-GR-003); `AnchorRoomPreview` carried 4 thumbnails only, so the For You payload gained `titleRefs`; `detail/[id]` and `room/[id]` are outside the tabs auth guard, so a signed-out recipient sees the object before `/auth`; `(tabs)/_layout.tsx` needed no change.
 - Not done here: apply 088, dashboard routes, fingerprints (IN-GR-001), App Store flip (IN-GR-002), rebuilds, device checks (S5).
 - Renumbered 2026-09-15 on rebase: 085–087 merged first (included-only services, channel entitlements, channel follow-ups), so `shared_rooms` is migration 088 and its `delete_own_account` / `export_user_data` bodies are rebuilt from 086 (production matched 086 on 2026-09-15).
+
+## [2026-09-15] query | Growth S1 post-merge verification
+- PR #172 merged (41e63c4) and deployed (Deploy API Worker run 35004200254, success). Joe applied 088 and added the four dashboard routes.
+- 088 verified live: `shared_rooms` + index, RLS on, 0 policies, no anon/authenticated grants, 0 rows; `delete_own_account` / `export_user_data` cover `shared_rooms` and still cover `user_service_addons`.
+- Live curls on videxstreaming.com:
+  - `/.well-known/apple-app-site-association` 200 `application/json`, exact AASA; Apple CDN (`app-site-association.cdn-apple.com/a/v1/videxstreaming.com`) 200.
+  - `/.well-known/assetlinks.json` 200 `application/json`, `sha256_cert_fingerprints: []` (IN-GR-001 still open).
+  - `/t/movie/550?via=share` → 301 `/t/movie/550-fight-club-1999?via=share`; page has the slugged canonical, smart banner, `videx://detail/movie-550?via=share`.
+  - `/list/x` 404 noindex; unknown `/room/{uuid}` 404 "Room not found" noindex; `/v1/room/{uuid}` JSON 404; `POST /v1/share/room` without a token 401; `/delete-account` 200.
+- Found: titles cached before the deploy (e.g. `/t/movie/603`) still served the pre-slug page from the same cache key, until their 24h TTL. Follow-up PR adds `PAGE_CACHE_VERSION` to page cache keys and regenerates `database.types.ts` for 088 (typegen-check would otherwise fail on the next migration PR).
+- Updated: wiki/entities/codebase/migrations.md (088 applied), wiki/concepts/forward-planning/growth-loops.md (status), wiki/registers/parking-lot.md (IN-GR-001 note), wiki/concepts/techniques/inbound-deep-linking.md (cache-version gotcha)

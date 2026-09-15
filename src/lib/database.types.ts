@@ -1137,6 +1137,47 @@ export type Database = {
         }
         Relationships: []
       }
+      shared_rooms: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          kind: string
+          label: string
+          source_ref: string
+          tmdb_ids: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          kind: string
+          label: string
+          source_ref: string
+          tmdb_ids: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          kind?: string
+          label?: string
+          source_ref?: string
+          tmdb_ids?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_rooms_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       streaming_availability: {
         Row: {
           addon_id: string | null
