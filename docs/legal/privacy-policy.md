@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated:** 7 July 2026
+**Last updated:** 15 September 2026
 **Effective from:** 6 July 2026
 
 ## 1. Who we are
@@ -59,6 +59,21 @@ following data in the database tables listed:
   through the in-app feedback form.
 - **Feature flags** (`user_feature_flags`): per-account flags that
   turn experimental features on or off for you.
+- **Install and sharing attribution** (`growth_events`): the first
+  time you open Videx, the app creates a random install identifier.
+  Videx generates it itself: it is not your device's advertising ID
+  or any hardware identifier, and it goes away if you uninstall the
+  app. Videx records it with a few moments in your use of the app
+  (first opening the app, opening a Videx link, finishing sign-up)
+  together with the link that brought you to Videx: what kind of link
+  it was (for example a share or a notification), whether it came from
+  a notification, the title or room it pointed to, and on Android the
+  referral Google Play passes on when you install from a Videx page.
+  We also count, with no identifier at all, when a shared Videx page
+  is previewed by a chat app or opened in a browser. This is used only
+  to measure how sharing brings people to Videx. It is kept for 12
+  months, and deleting your account deletes it, including anything
+  recorded on your install before you signed up.
 
 We never collect any of: your location, anything happening in other
 apps on your device, what you actually watch on the streaming
@@ -183,6 +198,8 @@ exposed in the app:
 - **`card_impressions` rows older than 90 days are rolled up into
   daily aggregates and the original rows are deleted.** This is an
   automatic database job; nothing you do triggers it.
+- **`growth_events` rows (install and sharing attribution) are
+  deleted after 12 months**, by the same kind of automatic job.
 - All other tables described in §2 persist until you delete your
   account.
 
@@ -200,6 +217,9 @@ cookies. It does use the device's local storage for:
   This cache is cleared every time you sign out.
 - An in-memory buffer for the interaction events described in §2
   before they're flushed to the server.
+- The random install identifier and the link that first brought you
+  to Videx (see "Install and sharing attribution" in §2). Signing out
+  does not clear them; uninstalling the app does.
 
 None of these are used for tracking.
 
@@ -232,4 +252,4 @@ Commissioner's Office: <https://ico.org.uk/make-a-complaint/>.
 *Videx is operated by Joe Green as an individual data controller based
 in the United Kingdom. This page describes how the app actually handles
 your data; if that changes, we update this page and (per §10) notify
-signed-in users. Last updated 7 July 2026.*
+signed-in users. Last updated 15 September 2026.*

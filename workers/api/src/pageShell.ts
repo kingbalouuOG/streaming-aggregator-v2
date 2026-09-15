@@ -14,7 +14,8 @@
  * the cache read. Nothing query-derived is ever stored.
  */
 
-import { normaliseSrc, normaliseVia } from '../../../src/lib/growth/inboundLink';
+import { normaliseSrc, normaliseVia, type InboundObject } from '../../../src/lib/growth/inboundLink';
+import { buildPlayReferrer } from '../../../src/lib/growth/installReferrer';
 
 /** Android is live on Google Play. */
 export const PLAY_STORE_URL =
@@ -90,11 +91,17 @@ export const PLAY_REFERRER_MARK = '__VIDEX_PLAY_REFERRER__';
  * ADR-015 contract (via: share|push|seo|card|household, src: push|organic)
  * are dropped; valid ones pass through unchanged into the app deep link
  * and into the Play Install Referrer.
+ *
+ * Growth S2: the Play referrer also names the page's object (t=movie-603 or
+ * r={roomId}, src/lib/growth/installReferrer.ts), so an Android install from
+ * the page lands on that object after sign-up. The deep link already carries
+ * the object in its path.
  */
 export function applyAttribution(
   html: string,
   via: string | null | undefined,
   src: string | null | undefined,
+  object?: InboundObject | null,
 ): string {
   const pairs: string[] = [];
   const v = normaliseVia(via);
@@ -102,7 +109,8 @@ export function applyAttribution(
   if (v) pairs.push(`via=${v}`);
   if (s) pairs.push(`src=${s}`);
   const deepLinkQuery = pairs.length ? `?${pairs.join('&amp;')}` : '';
-  const playReferrer = pairs.length ? `&amp;referrer=${encodeURIComponent(pairs.join('&'))}` : '';
+  const referrer = buildPlayReferrer(via, src, object);
+  const playReferrer = referrer ? `&amp;referrer=${encodeURIComponent(referrer)}` : '';
   return html.split(DEEP_LINK_QUERY_MARK).join(deepLinkQuery).split(PLAY_REFERRER_MARK).join(playReferrer);
 }
 

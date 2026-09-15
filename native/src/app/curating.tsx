@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { emitSignupCompleted, readFirstTouch } from '@/attribution';
 import { ONBOARDING_EVENTS } from '@/lib/analytics/events';
 import { logOnboardingEvent } from '@/lib/analytics/logger';
 import { useForYou } from '@/hooks/useForYou';
@@ -97,10 +98,15 @@ export default function CuratingScreen() {
             (data.outsideYourUsual?.length ?? 0) > 0,
           ].filter(Boolean).length
         : 0;
+      // Growth S2: split the funnel by what brought this install here.
+      const touch = readFirstTouch();
       void logOnboardingEvent(ONBOARDING_EVENTS.FIRST_HOME_VIEW, {
         has_taste_vector: true,
         section_count: sectionCount,
+        via: touch?.via ?? null,
+        src: touch?.src ?? null,
       });
+      emitSignupCompleted(touch);
     }
     router.replace('/(tabs)/foryou');
     // Growth S1: a link opened before sign-up lands now, on top of For You.

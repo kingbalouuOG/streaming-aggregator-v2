@@ -21,5 +21,12 @@ export interface OnboardingEventMetadata {
   quiz_completed: { duration_seconds: number };
   quiz_skipped: { questions_answered: number };
   onboarding_completed: { total_duration_seconds: number };
-  first_home_view: { has_taste_vector: boolean; section_count: number };
+  // via / src: the install's first-touch attribution (Growth S2, native only;
+  // null when nothing brought the install in, absent on web).
+  first_home_view: {
+    has_taste_vector: boolean;
+    section_count: number;
+    via?: string | null;
+    src?: string | null;
+  };
 }

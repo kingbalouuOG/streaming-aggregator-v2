@@ -26,12 +26,16 @@
  *   POST /v1/share/room        — snapshot a room (Supabase JWT).
  *   GET /v1/room/:id           — snapshot JSON for the app.
  *
+ * Growth telemetry (Growth S2, migration 090):
+ *   POST /v1/growth/events     — app events (optional Supabase JWT sets user_id).
+ *   /t/ and /room/ pages record preview_fetched / preview_opened via waitUntil.
+ *
  * Caching: caches.default keyed on the normalised request URL; the
  * Cache-Control written by cacheControlFor() drives both the Worker
  * cache and Cloudflare's CDN tier. Failures are never cached.
  */
 
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import {
   matchTmdbPath,
@@ -67,6 +71,15 @@ import {
 } from './wellKnown';
 import { isUuid, validateShareRoomBody } from './sharedRooms';
 import { insertSharedRoom, loadSharedRoom } from './roomStore';
+import { classifyUserAgent } from './uaClass';
+import {
+  GROWTH_EVENT_BODY_MAX_BYTES,
+  previewEventRow,
+  rateLimitKey,
+  validateGrowthEventBody,
+} from './growthEvents';
+import { insertGrowthEvent } from './growthStore';
+import type { InboundObject } from '../../../src/lib/growth/inboundLink';
 import { parseTitleRef, titleRef } from '../../../src/lib/growth/slug';
 import { sharedRoomUrl, type ShareRoomResponse } from '../../../src/lib/growth/roomSnapshot';
 // Bundled as text (wrangler [[rules]] Text rule) — the single source of
@@ -111,6 +124,8 @@ type Env = {
   FORYOU_CACHE: KVNamespace;
   /** LAUNCH-1 W1 (IN-PX-60): per-user rate limiter on /v1/foryou. */
   FORYOU_RATELIMIT: RateLimit;
+  /** Growth S2: POST /v1/growth/events, keyed on install id or client IP. */
+  GROWTH_RATELIMIT: RateLimit;
   /** Growth S1: comma-separated SHA-256 cert fingerprints for assetlinks.json ([vars]). */
   ASSETLINKS_FINGERPRINTS: string;
 };
@@ -315,19 +330,49 @@ function htmlPage(html: string, status = 200, extra: Record<string, string> = {}
 /**
  * Fill the ?via= / ?src= markers AFTER the edge-cache read (pageShell.ts):
  * the cached body is query-free, the served body carries the attribution
- * into the app deep link and the Play referrer. Also strips the internal
- * canonical-ref header.
+ * into the app deep link and the Play referrer (which also names `object`,
+ * Growth S2). Also strips the internal canonical-ref header.
  */
 async function withAttribution(
   resp: Response,
   via: string | undefined,
   src: string | undefined,
+  object?: InboundObject | null,
 ): Promise<Response> {
   if (!(resp.headers.get('Content-Type') ?? '').startsWith('text/html')) return resp;
-  const out = new Response(applyAttribution(await resp.text(), via, src), resp);
+  const out = new Response(applyAttribution(await resp.text(), via, src, object), resp);
   out.headers.delete('Content-Length');
   out.headers.delete(CANONICAL_REF_HEADER);
   return out;
+}
+
+/**
+ * Growth S2: record preview_fetched (crawler) or preview_opened (person) for
+ * a page actually served. Runs after the cache read, so cache hits count too.
+ * The insert rides waitUntil and can never change the response: every
+ * failure is logged and swallowed. Only GET 200s count (not HEAD, not the
+ * slug 301, not a 404).
+ */
+function recordPreview(c: Context<{ Bindings: Env }>, resp: Response, object: InboundObject): void {
+  if (c.req.method !== 'GET' || resp.status !== 200) return;
+  try {
+    const userAgent = c.req.header('user-agent');
+    const { uaClass, agent } = classifyUserAgent(userAgent);
+    const row = previewEventRow({
+      uaClass,
+      agent,
+      platform: platformBucket(userAgent),
+      via: c.req.query('via'),
+      src: c.req.query('src'),
+      object,
+    });
+    const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
+    c.executionCtx.waitUntil(
+      insertGrowthEvent(client, row).catch((err) => console.error('[growth] preview event failed:', err)),
+    );
+  } catch (err) {
+    console.error('[growth] preview event skipped:', err);
+  }
 }
 
 // ── Public share / SEO title page (H0 Stream B — Share v1) ───────────
@@ -428,7 +473,10 @@ app.get('/t/:type/:ref', async (c) => {
       },
     });
   }
-  return withAttribution(resp, c.req.query('via'), c.req.query('src'));
+  const object: InboundObject = { type: 'title', id: `${type}-${id}` };
+  const out = await withAttribution(resp, c.req.query('via'), c.req.query('src'), object);
+  recordPreview(c, out, object);
+  return out;
 });
 
 // ── Shared room snapshots (Growth S1, migration 088) ─────────────────
@@ -471,7 +519,10 @@ app.get('/room/:id', async (c) => {
       );
       return htmlPage(html);
     });
-    return withAttribution(resp, via, src);
+    const object: InboundObject = { type: 'room', id };
+    const out = await withAttribution(resp, via, src, object);
+    recordPreview(c, out, object);
+    return out;
   } catch (err) {
     console.error('[room-page] error:', err);
     return c.text('Internal error', 500);
@@ -544,6 +595,52 @@ app.post('/v1/share/room', async (c) => {
   } catch (err) {
     // Generic body: postgrest messages can leak schema names (LOW-1).
     console.error('[share-room] insert failed:', err);
+    return c.json({ error: 'internal error' }, 500);
+  }
+});
+
+// POST /v1/growth/events — app-side growth telemetry (Growth S2, migration
+// 090). Anonymous by default: a Bearer Supabase JWT, when present and valid,
+// sets user_id; an absent or expired token records the event without one
+// rather than losing it. user_id is never read from the body. Rate limited on
+// the body's install id (GROWTH_RATELIMIT), falling back to the client IP, so
+// malformed bodies are limited too. The native app sends no Origin, so the
+// CORS allow-list above is unchanged.
+app.post('/v1/growth/events', async (c) => {
+  if (Number(c.req.header('content-length') ?? '0') > GROWTH_EVENT_BODY_MAX_BYTES) {
+    return c.json({ error: 'body too large' }, 413);
+  }
+  let body: unknown;
+  let parsed = true;
+  try {
+    const text = await c.req.text();
+    if (text.length > GROWTH_EVENT_BODY_MAX_BYTES) return c.json({ error: 'body too large' }, 413);
+    body = JSON.parse(text);
+  } catch {
+    parsed = false;
+  }
+
+  const { success: withinLimit } = await c.env.GROWTH_RATELIMIT.limit({
+    key: rateLimitKey(body, c.req.header('cf-connecting-ip')),
+  });
+  if (!withinLimit) {
+    return c.json({ error: 'rate limited' }, 429, { 'Retry-After': '60' });
+  }
+  if (!parsed) return c.json({ error: 'invalid json' }, 400);
+
+  const result = validateGrowthEventBody(body);
+  if (!result.ok) return c.json({ error: result.error }, 400);
+
+  const token = (c.req.header('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
+  const userId = token ? await verifySupabaseJwt(token, c.env.SUPABASE_URL) : null;
+
+  try {
+    const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
+    await insertGrowthEvent(client, { ...result.value, user_id: userId });
+    return c.body(null, 204);
+  } catch (err) {
+    // Generic body: postgrest messages can leak schema names (LOW-1).
+    console.error('[growth-events] insert failed:', err);
     return c.json({ error: 'internal error' }, 500);
   }
 });

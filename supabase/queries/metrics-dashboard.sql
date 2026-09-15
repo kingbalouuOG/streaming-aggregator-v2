@@ -226,3 +226,24 @@ SELECT
 FROM cohorts c
 GROUP BY c.cohort_week
 ORDER BY c.cohort_week DESC;
+
+
+-- ════════════════════════════════════════════════════════════
+-- 5. Growth loops (Growth S2) — full queries in growth-dashboard.sql
+-- ════════════════════════════════════════════════════════════
+--
+-- growth-dashboard.sql holds the growth measures: shares per WAU (§1),
+-- previews fetched vs pages opened (§2), the link_opened → first_open →
+-- signup_completed funnel by via and platform and open-to-install (§3:
+-- Android deterministic through the Play install referrer, iOS inferred),
+-- D7/D30 retention by first-touch via (§4) and onboarding reach by source
+-- (§5). Weekly headline, all traffic (test exclusions live in that file):
+SELECT
+  event_name,
+  COUNT(*)                   AS events_7d,
+  COUNT(DISTINCT install_id) AS installs_7d,
+  COUNT(DISTINCT user_id)    AS users_7d
+FROM growth_events
+WHERE occurred_at >= now() - interval '7 days'
+GROUP BY event_name
+ORDER BY event_name;
