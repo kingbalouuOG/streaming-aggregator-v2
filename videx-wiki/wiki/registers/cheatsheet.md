@@ -161,6 +161,8 @@ ENG-1 additions outside the formula: avoid-set penalty (`finalScore −= 0.15 ·
 | Daily | `embed_new_titles` | 06:45 UTC | pg_cron, defined in migration 039 |
 | Daily | `card_impression_daily_totals` rollup | (set in migration 014) | pg_cron |
 | Weekly | `refresh-service-fingerprints` | Sunday 07:00 UTC | Edge Function + pg_cron |
+| Weekly | `catalogue-walks` — 11 single-tier catalogues, `--prune --include-unknown-titles` | Monday 02:00 UTC | GitHub Actions (`catalogue-walks.yml`); ~1,050 SA requests |
+| Monthly | `catalogue-walks` — Prime + Apple | 2nd, 01:00 UTC | GitHub Actions; ~4,100 SA requests. Never weekly (quota) |
 | Weekly | "Mood Rooms for Tonight" rotation | Mondays | App-side selection from `mood_rooms` |
 | Monthly | HDBSCAN recluster | 1st of month, 03:00 UTC | GitHub Actions (`mood-rooms-recluster.yml`) |
 

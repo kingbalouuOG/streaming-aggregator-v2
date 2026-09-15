@@ -1,0 +1,161 @@
+name: Catalogue walks
+
+# Rebuilds streaming_availability from the vendor's catalogue listings and
+# keeps sa_show_map warm (IN-SY-001 plan §3.1, decided 2026-09-11/15).
+#
+# WHY A WALK AS WELL AS THE DAILY SYNC. The daily `/changes` sync only ever
+# sees deltas, and it resolves each vendor show id through sa_show_map with
+# a bounded lookup fallback (200/chain). A periodic full walk of each
+# catalogue is the reconciliation pass: it rewrites every row the vendor
+# still lists, prunes rows for titles that have left, and seeds the map
+# with every (vendor id → TMDb id) pair, 20 per request — the cheapest
+# source of that mapping there is.
+#
+# CADENCE (measured 2026-09-11, requests per full walk): netflix 429;
+# hbo/plutotv/discovery/crunchyroll/mubi ~250 together; disney 179; itvx 44;
+# all4 65; paramount 45; now 16; apple 1,504; prime 2,625. Weekly for the
+# eleven single-tier catalogues (~1,050/week), monthly for Prime and Apple
+# (~4,100/month). With the daily sync (~200/day) that is ~14,500 of the
+# 25,000-request monthly quota (R-032). Do not make Prime or Apple weekly.
+#
+# WINDOWS. Weekly runs at 02:00 UTC Monday and the monthly at 01:00 UTC on
+# the 2nd, both clear of the 04:50–07:45 UTC cron window (backfill 05:00,
+# sync 06:00, enrich 06:30, embed 07:15) and of the monthly recluster on
+# the 1st at 03:00. A Prime walk is ~45 minutes of requests plus ~15 of
+# writes; the job timeout leaves room for both catalogues and retries.
+#
+# FLAGS. `--prune` deletes a service's rows for titles the vendor no longer
+# lists — refused automatically if the walk stops at its request ceiling,
+# so a ceiling is always the safe failure. `--include-unknown-titles`
+# writes availability for catalogue entries `titles` does not hold; the
+# nightly backfill then creates the title if it clears the relevance floor
+# (20 votes if included with a subscription, 200 otherwise). Both were
+# Joe's decisions on 2026-09-11 and 2026-09-14.
+#
+# Secrets: SA_API_KEY (Movie of the Night, direct), SUPABASE_URL,
+# SUPABASE_SERVICE_ROLE_KEY. The script also accepts a repo-root .env, which
+# is how it runs locally; in CI the values come from the environment.
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'   # weekly — Monday 02:00 UTC: the eleven single-tier catalogues
+    - cron: '0 1 2 * *'   # monthly — 2nd at 01:00 UTC: Prime and Apple
+  workflow_dispatch:
+    inputs:
+      services:
+        description: 'Comma-separated vendor catalogue ids (netflix, prime, apple, disney, itvx, paramount, now, all4, hbo, plutotv, discovery, crunchyroll, mubi). Empty = the weekly set.'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Fetch and report only — write nothing, prune nothing'
+        type: boolean
+        default: false
+      max_requests:
+        description: 'Override the per-service request ceiling (empty = per-service defaults)'
+        required: false
+        default: ''
+
+# One walk at a time. A second run queues behind the first rather than
+# racing it on the same rows.
+concurrency:
+  group: catalogue-walks
+  cancel-in-progress: false
+
+jobs:
+  walk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    env:
+      SA_API_KEY: ${{ secrets.SA_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Check secrets
+        run: |
+          missing=""
+          [ -n "$SA_API_KEY" ] || missing="$missing SA_API_KEY"
+          [ -n "$SUPABASE_URL" ] || missing="$missing SUPABASE_URL"
+          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || missing="$missing SUPABASE_SERVICE_ROLE_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing"
+            exit 1
+          fi
+
+      - name: Decide which catalogues to walk
+        id: plan
+        run: |
+          WEEKLY="netflix disney itvx paramount now all4 hbo plutotv discovery crunchyroll mubi"
+          MONTHLY="prime apple"
+          if [ -n "${{ inputs.services }}" ]; then
+            SERVICES="$(echo '${{ inputs.services }}' | tr ',' ' ')"
+          elif [ "${{ github.event.schedule }}" = "0 1 2 * *" ]; then
+            SERVICES="$MONTHLY"
+          else
+            SERVICES="$WEEKLY"
+          fi
+          echo "services=$SERVICES" >> "$GITHUB_OUTPUT"
+          echo "Walking: $SERVICES"
+
+      - name: Walk
+        run: |
+          mkdir -p walk-logs
+          fail=0
+          for svc in ${{ steps.plan.outputs.services }}; do
+            case "$svc" in
+              prime) cap=3500 ;;
+              apple) cap=2500 ;;
+              netflix) cap=1000 ;;
+              *) cap=1000 ;;
+            esac
+            if [ -n "${{ inputs.max_requests }}" ]; then cap="${{ inputs.max_requests }}"; fi
+            flags="--prune --include-unknown-titles --max-requests $cap"
+            if [ "${{ inputs.dry_run }}" = "true" ]; then flags="$flags --dry-run"; fi
+            echo "::group::$svc (ceiling $cap)"
+            if npx tsx scripts/sync/backfill-service-catalogue.ts --service "$svc" $flags 2>&1 | tee "walk-logs/$svc.log" | grep -vE '^  (page|written) '; then
+              echo "$svc: ok"
+            else
+              echo "::error::$svc walk failed — see walk-logs/$svc.log"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $fail
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Catalogue walks — ${{ steps.plan.outputs.services }}"
+            echo
+            echo "| Catalogue | Requests | Entries | Rows | Pruned | Complete |"
+            echo "|---|---|---|---|---|---|"
+            for f in walk-logs/*.log; do
+              s=$(basename "$f" .log)
+              req=$(grep -oE 'vendor requests used:\s+[0-9]+' "$f" | grep -oE '[0-9]+$' || echo '?')
+              ent=$(grep -oE 'catalogue entries seen:\s+[0-9]+' "$f" | grep -oE '[0-9]+$' || echo '?')
+              rows=$(grep -oE 'availability rows to write:\s+[0-9]+' "$f" | grep -oE '[0-9]+$' || echo '?')
+              pr=$(grep -oE 'pruned [0-9]+ stale rows' "$f" | grep -oE '[0-9]+' || echo '0')
+              done_=$(grep -oE 'walk complete:\s+\S+' "$f" | awk '{print $3}' || echo '?')
+              echo "| $s | $req | $ent | $rows | $pr | $done_ |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: walk-logs-${{ github.run_id }}
+          path: walk-logs/
+          retention-days: 30

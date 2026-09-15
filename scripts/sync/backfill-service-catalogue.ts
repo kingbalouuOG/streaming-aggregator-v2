@@ -117,22 +117,31 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 
 // ── Env ──────────────────────────────────────────────────
 
+// Local runs read the repo-root .env; CI (catalogue-walks.yml) has no .env
+// and supplies the same names in the environment. The environment wins
+// where both are present. SUPABASE_URL is accepted for VITE_SUPABASE_URL
+// because that is the name the repository secret carries.
 function loadEnv(): Record<string, string> {
-  const envPath = resolve(__dirname, '..', '..', '.env');
-  const content = readFileSync(envPath, 'utf-8');
   const env: Record<string, string> = {};
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eqIdx = trimmed.indexOf('=');
-    if (eqIdx === -1) continue;
-    env[trimmed.slice(0, eqIdx)] = trimmed.slice(eqIdx + 1);
+  const envPath = resolve(__dirname, '..', '..', '.env');
+  if (existsSync(envPath)) {
+    for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      env[trimmed.slice(0, eqIdx)] = trimmed.slice(eqIdx + 1);
+    }
   }
+  for (const key of ['SA_API_KEY', 'VITE_SUPABASE_URL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']) {
+    if (process.env[key]) env[key] = process.env[key] as string;
+  }
+  if (!env.VITE_SUPABASE_URL && env.SUPABASE_URL) env.VITE_SUPABASE_URL = env.SUPABASE_URL;
   return env;
 }
 
@@ -142,7 +151,7 @@ const SUPABASE_URL = ENV.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = ENV.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SA_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('Missing env. Need SA_API_KEY, VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY');
+  console.error('Missing env. Need SA_API_KEY, VITE_SUPABASE_URL (or SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY — from .env or the environment');
   process.exit(1);
 }
 

@@ -93,7 +93,9 @@ Order actually run: skip-list prune (3.3) → walks with `--prune --include-unkn
 
 ## 3. The four decisions
 
-### 3.1 Cadence and architecture — RECOMMENDED: map + daily `/changes` + weekly walk
+### 3.1 Cadence and architecture — DONE 2026-09-15: `.github/workflows/catalogue-walks.yml`
+
+Scheduled as recommended below: weekly (Monday 02:00 UTC) for the eleven single-tier catalogues, monthly (2nd, 01:00 UTC) for Prime and Apple, both with `--prune --include-unknown-titles`. Needs the `SA_API_KEY` repository secret. Original reasoning:
 
 Three shapes were costed in the handoff. The synthesis is what shipped: `/changes` survives as the daily delta (≈121 requests/day on 13 catalogues, measured 11 Sept), resolved against the map at zero cost; misses fall back to one lookup each, bounded.
 

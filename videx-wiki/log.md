@@ -1662,3 +1662,9 @@ only thing at stake.
 - Execution: five sessions (S1 links → S2 attribution ‖ S3 sign-in → S4 sharing → S5 verification); migrations re-assigned 085 shared_rooms / 086 handle_new_user / 087 growth_events. S1 handoff: docs/plans/2026-09-14-004-handoff-growth-s1-links.md.
 - Updated: wiki/concepts/forward-planning/growth-loops.md (status locked, decisions section)
 - Still not updated: registers — `IN-GR` opens in S1; open-questions D5 row closes with ADR-015.
+
+## [2026-09-15] query | catalogue walks scheduled (plan §3.1 closed)
+- `.github/workflows/catalogue-walks.yml`: weekly Monday 02:00 UTC for netflix + the ten small catalogues (~1,050 requests), monthly on the 2nd at 01:00 UTC for Prime + Apple (~4,100). Both `--prune --include-unknown-titles` per Joe's decisions; per-service request ceilings (prime 3,500 · apple 2,500 · others 1,000) so a ceiling stop refuses the prune rather than deleting off a partial listing. `workflow_dispatch` with services / dry_run / max_requests; per-catalogue summary table; logs as an artifact; one run at a time. Clear of the 04:50–07:45 cron window and the 1st-of-month recluster. Quota: ~14,500 of 25,000/month with the daily sync.
+- Walk script now takes its env from the environment as well as `.env` (`SUPABASE_URL` accepted for `VITE_SUPABASE_URL`), which is how it runs in CI.
+- Needs Joe: the `SA_API_KEY` repository secret (the other two already exist), then one `dry_run` dispatch to prove the wiring.
+- Updated: wiki/concepts/operations/sync-pipeline.md (cron table + map seeding), wiki/registers/cheatsheet.md (schedules), docs/plans/2026-09-11-002 §3.1
