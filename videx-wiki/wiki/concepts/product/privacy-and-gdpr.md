@@ -3,7 +3,7 @@ title: Privacy and GDPR
 type: concept
 tags: [privacy, gdpr, draft, legal]
 created: 2026-04-26
-updated: 2026-09-09
+updated: 2026-09-15
 sources:
   - raw/product/privacy-policy-draft.md
   - raw/v2-strategy/Videx_v2_Detail_Page_Signal_Capture_Spec_v0.3.2.md
@@ -31,9 +31,10 @@ Required:
 
 ### Account
 
-- Email (sign-in, recovery).
-- Username.
-- Authentication credentials (hashed by Supabase).
+- Email (sign-in, recovery). With Apple sign-in this may be a *Hide My Email* relay address.
+- Username. A provider sign-up starts with a hidden placeholder (`user_` + 8 hex, migration 089) and picks its own name at "Choose your name"; the placeholder is never displayed.
+- Authentication credentials (hashed by Supabase), or none for an Apple or Google account.
+- **Sign-in providers (Growth S3, built 2026-09-15, not yet in a build):** Sign in with Apple (iOS only) and Sign in with Google (iOS and Android), native SDKs + `signInWithIdToken`. Supabase Auth stores the provider's identity claims in `auth.users.raw_user_meta_data`: for Google the account name, email and avatar URL; for Apple the email (Apple's given name reaches the device once and is used in memory only, to suggest a username). A matching verified email auto-links to the existing account. Store forms gain **Name** (`docs/legal/store-privacy-disclosures.md`); the policy text is still to follow (IN-GR-014). Open: Apple token revocation on deletion (IN-GR-010) and auto-linking while "Confirm email" is off (IN-GR-011).
 
 ### Profile
 
