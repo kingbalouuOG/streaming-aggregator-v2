@@ -72,7 +72,7 @@ Insert rows into `service_addons` — no release. A new `channel_id` is picked u
 - **One addon row per (title, service, quality).** `idx_sa_unique_entry` does not include `addon_id`, and `sync-content.ts` dedupes on `service_id-stream_type-quality`, so a title sold through two channels on one parent keeps only one of them. A holder of the dropped channel does not see the title. IN-SC-005.
 - Standalone services count their channel rows without the parent (a user with HBO Max direct gets the few titles the vendor lists only under Prime's HBO Max channel) — deliberate.
 - Held channels are not yet "included" for search hits or the semantic search cost filter.
-- The picker's chip panel spans both grid columns and opens by default, so it is unclear which tile it belongs to (IN-SC-006); redesign brief at `docs/strategy/briefs/service-picker-design-brief.md`.
+- The first picker's chip panel spanned both grid columns and opened by default, so it was unclear which tile it belonged to (IN-SC-006). Replaced by Direction B (`docs/design/service-picker-direction-b.md`): a strip inside the selected parent tile that opens a per-parent sheet, plus "I have this" on Where to Watch (adds the channel — or the service, when the channel is one — with Undo).
 - The `user_service_addons` RLS policy should use `(select auth.uid())` (IN-SC-007).
 
 ## Decisions (Joe, 2026-09-15)

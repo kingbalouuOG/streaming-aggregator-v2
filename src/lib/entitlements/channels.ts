@@ -141,6 +141,36 @@ export function channelDisplayName(
   return row?.displayName ?? null;
 }
 
+/** The curated registry row behind a `<parent>:<addon_id>` token, if any. */
+export function registryRowForToken(
+  registry: ChannelRegistryRow[],
+  token: string | null | undefined,
+): ChannelRegistryRow | null {
+  if (!token) return null;
+  return registry.find((r) => channelToken(r.parentServiceId, r.addonId) === token) ?? null;
+}
+
+/**
+ * How many non-standalone channels the user holds that count somewhere —
+ * held, and offered under at least one parent they hold. Channels that are
+ * standalone services are counted as services, not here.
+ */
+export function heldChannelCount(
+  registry: ChannelRegistryRow[],
+  services: readonly string[],
+  channels: readonly string[],
+): number {
+  const heldServices = new Set(services);
+  const heldChannels = new Set(channels);
+  const counted = new Set<string>();
+  for (const row of registry) {
+    if (row.standaloneServiceId === null && heldChannels.has(row.channelId) && heldServices.has(row.parentServiceId)) {
+      counted.add(row.channelId);
+    }
+  }
+  return counted.size;
+}
+
 /**
  * PostgREST `or` filter for "included on these services, or reachable
  * through a held channel":

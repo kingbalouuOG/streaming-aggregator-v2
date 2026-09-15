@@ -6,7 +6,9 @@ import {
   channelDisplayName,
   channelTokensFor,
   hashIdList,
+  heldChannelCount,
   knownChannelIds,
+  registryRowForToken,
   parseChannelsParam,
   type ChannelRegistryRow,
 } from '../channels';
@@ -93,6 +95,23 @@ describe('channelDisplayName', () => {
   it('names curated addon rows and returns null for the tail', () => {
     expect(channelDisplayName(REGISTRY, 'apple', 'tvs.sbd.1000482')).toBe('STUDIOCANAL Presents');
     expect(channelDisplayName(REGISTRY, 'prime', 'simplysouthchuk')).toBeNull();
+  });
+});
+
+describe('registryRowForToken', () => {
+  it('finds curated rows by token and ignores the tail', () => {
+    expect(registryRowForToken(REGISTRY, 'prime:shuddertv')?.channelId).toBe('shudder');
+    expect(registryRowForToken(REGISTRY, 'prime:simplysouthchuk')).toBeNull();
+    expect(registryRowForToken(REGISTRY, undefined)).toBeNull();
+  });
+});
+
+describe('heldChannelCount', () => {
+  it('counts held non-standalone channels once, only under a held parent', () => {
+    expect(heldChannelCount(REGISTRY, ['prime'], ['shudder', 'hayu'])).toBe(2);
+    expect(heldChannelCount(REGISTRY, ['prime', 'now'], ['hayu'])).toBe(1);
+    expect(heldChannelCount(REGISTRY, ['netflix'], ['shudder'])).toBe(0);
+    expect(heldChannelCount(REGISTRY, ['prime', 'hbo'], ['hbo'])).toBe(0);
   });
 });
 

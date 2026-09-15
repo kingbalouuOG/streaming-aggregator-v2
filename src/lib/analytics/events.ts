@@ -13,7 +13,9 @@ export type OnboardingEventName = typeof ONBOARDING_EVENTS[keyof typeof ONBOARDI
 
 export interface OnboardingEventMetadata {
   onboarding_started: Record<string, never>;
-  services_completed: { service_count: number; services: string[] };
+  // channel_count: add-on channels picked at the same step (IN-SC-004, native
+  // only — the web onboarding has no channel picker, hence optional).
+  services_completed: { service_count: number; services: string[]; channel_count?: number };
   clusters_completed: { cluster_count: number; clusters: string[] };
   quiz_started: Record<string, never>;
   quiz_completed: { duration_seconds: number };

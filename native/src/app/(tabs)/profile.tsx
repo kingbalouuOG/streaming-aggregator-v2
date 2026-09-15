@@ -7,7 +7,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FeedbackSheet } from '@/components/FeedbackSheet';
 import { GenreIconTile } from '@/components/GenreIconTile';
+import { ServiceStack } from '@/components/ServiceBadge';
+import { servicesSummary } from '@/components/services/channelCopy';
+import { useChannelRegistry, useUserChannels } from '@/hooks/useChannels';
 import { useUserServices } from '@/hooks/useUserServices';
+import { heldChannelCount } from '@/lib/entitlements/channels';
 import { useWatchlist } from '@/hooks/useWatchlist';
 import { PROFILE_GLYPHS, type GlyphName } from '@/lib/constants/genreGlyphs';
 import { getDefaultTier } from '@/lib/data/platformPricing';
@@ -28,6 +32,8 @@ export default function ProfileScreen() {
   const { session, signOut } = useAuth();
   const { data: watchlist } = useWatchlist();
   const { data: services } = useUserServices();
+  const { data: userChannels } = useUserChannels();
+  const { data: channelRegistry } = useChannelRegistry();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const email = session?.user?.email ?? '';
@@ -39,6 +45,7 @@ export default function ProfileScreen() {
   const wantCount = (watchlist ?? []).filter((i) => i.status === 'want_to_watch').length;
   const watchedCount = (watchlist ?? []).filter((i) => i.status === 'watched').length;
   const serviceCount = services?.length ?? 0;
+  const channelCount = heldChannelCount(channelRegistry ?? [], services ?? [], userChannels ?? []);
   const monthlySpend = (services ?? []).reduce((sum, s) => sum + (getDefaultTier(s)?.price ?? 0), 0);
   const taste = useQuery({ queryKey: ['native', 'tasteProfile'], queryFn: getV2TasteProfile, staleTime: 5 * 60 * 1000 });
   const tasteCount = taste.data?.selectedClusters?.length ?? 0;
@@ -79,13 +86,14 @@ export default function ProfileScreen() {
         <ActionRow
           glyph={PROFILE_GLYPHS.streaming}
           title="Streaming Services"
-          subtitle={`${serviceCount} service${serviceCount !== 1 ? 's' : ''} connected`}
+          subtitle={servicesSummary(serviceCount, channelCount)}
+          trailing={serviceCount > 0 ? <ServiceStack services={services ?? []} size="xs" max={4} /> : undefined}
           onPress={() => go('services')}
         />
         <ActionRow
           glyph={PROFILE_GLYPHS.spend}
           title="Monthly Spend"
-          subtitle={monthlySpend > 0 ? `£${monthlySpend.toFixed(2)} / month` : 'View your spend'}
+          subtitle={monthlySpend > 0 ? `£${monthlySpend.toFixed(2)} / month · services only` : 'View your spend'}
           onPress={() => go('spend')}
         />
 
@@ -168,11 +176,14 @@ function ActionRow({
   glyph,
   title,
   subtitle,
+  trailing,
   onPress,
 }: {
   glyph: GlyphName;
   title: string;
   subtitle: string;
+  /** Optional content before the chevron (e.g. the services badge stack). */
+  trailing?: ReactNode;
   onPress: () => void;
 }) {
   return (
@@ -187,6 +198,7 @@ function ActionRow({
           {subtitle}
         </Text>
       </View>
+      {trailing}
       <ChevronRight size={18} color="rgba(245,241,232,0.4)" />
     </Pressable>
   );

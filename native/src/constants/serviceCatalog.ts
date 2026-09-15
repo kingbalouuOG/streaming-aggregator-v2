@@ -5,14 +5,16 @@ import type { ServiceId } from '@/lib/types/content';
 // Services so the list + descriptions stay in one place.
 export const SERVICE_CATALOG: { id: ServiceId; name: string; description: string }[] = [
   { id: 'netflix', name: 'Netflix', description: 'Movies & Series' },
-  { id: 'prime', name: 'Prime Video', description: 'Amazon Originals' },
+  // Prime, Apple and NOW sell channels / passes inside themselves
+  // (IN-SC-006 Direction B copy).
+  { id: 'prime', name: 'Prime Video', description: 'Originals & channels' },
   { id: 'disney', name: 'Disney+', description: 'Disney, Marvel, Star Wars' },
   { id: 'bbc', name: 'BBC iPlayer', description: 'BBC Originals & Live' },
   { id: 'itvx', name: 'ITVX', description: 'ITV Originals & Live' },
   { id: 'channel4', name: 'Channel 4', description: 'Channel 4 & Film4' },
-  { id: 'now', name: 'NOW', description: 'Sky Cinema & HBO' },
+  { id: 'now', name: 'NOW', description: 'Cinema, Entertainment & Hayu passes' },
   { id: 'skygo', name: 'Sky Go', description: 'Live TV & Sky Originals' },
-  { id: 'apple', name: 'Apple TV+', description: 'Apple Originals' },
+  { id: 'apple', name: 'Apple TV+', description: 'Originals & channels' },
   { id: 'paramount', name: 'Paramount+', description: 'CBS & Paramount' },
   // Wave 1 (roadmap v1.1 item 1.5), appended so the existing ten keep the
   // running order Joe signed off; within the wave, UK reach descending.

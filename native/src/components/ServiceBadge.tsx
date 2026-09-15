@@ -25,8 +25,10 @@ const LOGOS: Record<ServiceId, number> = {
 };
 
 // Design system: standalone ServiceBadge sm 28 / md 38 / lg 48; xs 22 is the
-// in-card ServiceStack size. Radius ≈ 0.27× (spec radius-sm 10px @ md).
-const SIZES = { xs: 22, sm: 28, md: 38, lg: 48 } as const;
+// in-card ServiceStack size; tile 40 is the service picker tile (Direction B —
+// smaller than lg so service names never truncate). Radius ≈ 0.27× (spec
+// radius-sm 10px @ md).
+const SIZES = { xs: 22, sm: 28, md: 38, tile: 40, lg: 48 } as const;
 
 interface ServiceBadgeProps {
   service: ServiceId;
