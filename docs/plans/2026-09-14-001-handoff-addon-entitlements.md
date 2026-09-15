@@ -18,7 +18,7 @@ Joe, not to inherit.
 State you are starting from:
 - `streaming_availability.stream_type = 'addon'` rows carry `addon_id` and
   `addon_name` (Prime ~18k rows, Apple ~2.7k, NOW 318 — NOW is only passes).
-- Migration 084 excludes addon rows from `titles.available_services`, so
+- Migrations 084 + 085 exclude addon and rent/buy rows from `titles.available_services` (it now means "included with the subscription"), so
   today a channel-only title is on nobody's services. That is the interim
   you are replacing with a per-user answer.
 - The detail page already lists channel-only options under "Via a channel"
@@ -29,7 +29,7 @@ State you are starting from:
 
 Deliver, in this order (the Worker contract must ship before the app —
 wave-1 lesson, wiki log 2026-09-10):
-1. Migration 085: `service_addons` curated registry (parent service id,
+1. Migration 086 (085 is taken — `available_services` included-only): `service_addons` curated registry (parent service id,
    addon_id, display name, standalone service id where one exists,
    curated flag, sort) seeded with the brief's first list, and the
    per-user entitlement store (extend `user_services` or add
