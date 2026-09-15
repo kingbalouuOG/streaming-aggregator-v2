@@ -69,6 +69,16 @@ export const HTML_SECURITY_HEADERS: Record<string, string> = {
   'Content-Security-Policy': "frame-ancestors 'none'",
 };
 
+/**
+ * Folded into every page's edge-cache key. Bump it whenever page markup or
+ * the headers a route relies on change, so a deploy never serves pages
+ * rendered by the previous build: old entries are simply never read again
+ * and age out on their own 24h TTL. Growth S1 (2026-09-15) shipped without
+ * it, and titles cached before that deploy kept serving the pre-slug page
+ * (no 301, no smart banner, no attribution markers) until they expired.
+ */
+export const PAGE_CACHE_VERSION = 'v2';
+
 // ── Attribution pass-through ─────────────────────────────────────────
 /** Placed at the end of a videx:// href; becomes "?via=…&amp;src=…" or "". */
 export const DEEP_LINK_QUERY_MARK = '__VIDEX_DL_QUERY__';

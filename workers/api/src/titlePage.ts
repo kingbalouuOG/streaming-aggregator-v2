@@ -18,6 +18,7 @@ import {
   ATTRIBUTION_FOOTER,
   DEEP_LINK_QUERY_MARK,
   esc,
+  PAGE_CACHE_VERSION,
   renderDocument,
   renderNotFoundPage,
   smartBannerMeta,
@@ -62,7 +63,7 @@ export interface TitlePageData {
  * of a title reads one cached render (attribution is filled after the read).
  */
 export function titlePageCacheKey(type: string, id: number, bucket: PlatformBucket): string {
-  return `https://cache.videx/t/${type}/${id}?p=${bucket}`;
+  return `https://cache.videx/t/${type}/${id}?p=${bucket}&v=${PAGE_CACHE_VERSION}`;
 }
 
 const TITLE_CSS = `.hero{display:flex;gap:16px;align-items:flex-start}

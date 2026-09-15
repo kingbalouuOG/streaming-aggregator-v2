@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyAttribution, PLAY_STORE_URL } from '../pageShell';
+import { applyAttribution, PAGE_CACHE_VERSION, PLAY_STORE_URL } from '../pageShell';
 import {
   renderListNotFoundPage,
   renderRoomNotFoundPage,
@@ -81,8 +81,8 @@ describe('room helpers', () => {
   it('og description pluralises', () => {
     expect(roomOgDescription(1)).toBe('1 title picked for the mood, with UK availability on Videx');
   });
-  it('cache key is id + platform bucket, no query', () => {
-    expect(roomPageCacheKey(ID, 'ios')).toBe(`https://cache.videx/room/${ID}?p=ios`);
+  it('cache key is id + platform bucket + page cache version, no request query', () => {
+    expect(roomPageCacheKey(ID, 'ios')).toBe(`https://cache.videx/room/${ID}?p=ios&v=${PAGE_CACHE_VERSION}`);
   });
   it('404 pages are branded and noindex', () => {
     expect(renderRoomNotFoundPage('other')).toContain('<meta name="robots" content="noindex">');

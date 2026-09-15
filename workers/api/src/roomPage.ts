@@ -15,6 +15,7 @@ import {
   ATTRIBUTION_FOOTER,
   DEEP_LINK_QUERY_MARK,
   esc,
+  PAGE_CACHE_VERSION,
   renderDocument,
   renderNotFoundPage,
   smartBannerMeta,
@@ -34,7 +35,7 @@ export interface RoomPageData {
 }
 
 export function roomPageCacheKey(id: string, bucket: PlatformBucket): string {
-  return `https://cache.videx/room/${id}?p=${bucket}`;
+  return `https://cache.videx/room/${id}?p=${bucket}&v=${PAGE_CACHE_VERSION}`;
 }
 
 export function roomOgDescription(count: number): string {

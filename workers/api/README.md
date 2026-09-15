@@ -34,7 +34,7 @@ Object URLs (Growth S1, ADR-015 — see the wiki `inbound-deep-linking` page):
 - `POST /v1/share/room` — snapshot a room (Supabase JWT, 30/min per user).
 - `GET /v1/room/:id` — snapshot JSON for the app.
 
-Page caching: 24h Cache API keyed by object id + platform bucket only;
+Page caching: 24h Cache API keyed by object id + platform bucket + `PAGE_CACHE_VERSION` (bump it when page markup changes);
 `?via=` / `?src=` are filled into the app deep link and Play referrer
 after the cache read (src/pageShell.ts `applyAttribution`).
 

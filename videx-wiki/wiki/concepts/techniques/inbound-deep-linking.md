@@ -48,3 +48,4 @@ The For You payload's `AnchorRoomPreview` carries `titleRefs` (all room titles, 
 - `assetlinks.json` must list the **Play App Signing** key for Play installs; the upload key (`99:CE:FF:7E…`) signs only sideloaded CI APKs. Check with `adb shell pm get-app-links app.videx.streaming`.
 - The Worker runs on cached page hits (`x-videx-cache: hit` on `/t/movie/603`, 2026-09-14), so no zone Cache Rule is bypassing it; attribution fill-in depends on that.
 - `onboarding_events` RLS is on with `auth.uid() = user_id` insert policies, so null-user (pre-auth) inserts are rejected — pre-auth telemetry must go through the Worker (S2).
+- Page edge-cache keys carry `PAGE_CACHE_VERSION` (`workers/api/src/pageShell.ts`). Bump it with any page markup change: the S1 deploy (2026-09-15) reused the old title-page key, so titles cached before it served the pre-slug page (no 301, no smart banner, no `via`) until the 24h TTL ran out.

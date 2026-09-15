@@ -16,7 +16,7 @@ import {
   titlePageCacheKey,
   type TitlePageData,
 } from '../titlePage';
-import { applyAttribution, DEEP_LINK_QUERY_MARK, PLAY_REFERRER_MARK } from '../pageShell';
+import { applyAttribution, DEEP_LINK_QUERY_MARK, PAGE_CACHE_VERSION, PLAY_REFERRER_MARK } from '../pageShell';
 
 const SAMPLE: TitlePageData = {
   title: 'Predator',
@@ -159,8 +159,13 @@ describe('attribution pass-through (?via= / ?src=)', () => {
 describe('titlePageCacheKey', () => {
   // index.ts reads and writes the edge cache with this key, so a shared
   // URL's slug and ?via= / ?src= can never mint a separate cache entry.
-  it('is type + id + platform bucket only (the index.ts:281 pattern)', () => {
-    expect(titlePageCacheKey('movie', 603, 'ios')).toBe('https://cache.videx/t/movie/603?p=ios');
+  it('is type + id + platform bucket + page cache version only (the index.ts:281 pattern)', () => {
+    expect(titlePageCacheKey('movie', 603, 'ios')).toBe(
+      `https://cache.videx/t/movie/603?p=ios&v=${PAGE_CACHE_VERSION}`,
+    );
+  });
+  it('never reads entries written before page cache versioning', () => {
+    expect(titlePageCacheKey('movie', 603, 'ios')).not.toBe('https://cache.videx/t/movie/603?p=ios');
   });
   it('takes no slug or query input', () => {
     expect(titlePageCacheKey.length).toBe(3);
