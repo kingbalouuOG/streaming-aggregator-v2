@@ -46,6 +46,22 @@ Each store rejects a duplicate build number, so **every release bumps both**:
 
 ---
 
+## Universal links and app links (since Growth S1, 2026-09-14)
+
+`native/app.json` now declares `ios.associatedDomains: ["applinks:videxstreaming.com"]` and one `android.intentFilters` entry (`autoVerify`, https `videxstreaming.com` `/t/`, `/room/`, `/list/`). Both are native config, so **both platforms need a store rebuild** to pick them up; an OTA update does not. Before building:
+
+1. The Worker must already serve both association files on the real domain (dashboard routes `videxstreaming.com/.well-known/*`, `/room/*`, `/list/*` → `videx-api`):
+   ```bash
+   curl -sI https://videxstreaming.com/.well-known/apple-app-site-association
+   ```
+   Expect `200` and `content-type: application/json`, no redirect. Same for `/.well-known/assetlinks.json`.
+2. `assetlinks.json` must list the **Play App Signing** SHA-256 (Play Console → App integrity) as well as the upload key `99:CE:FF:7E…`: set `ASSETLINKS_FINGERPRINTS` in `workers/api/wrangler.toml` and merge (deploys the Worker).
+3. iOS: the EAS build log should show the Associated Domains capability being synced to the App ID.
+
+After install: Android `adb shell pm verify-app-links --re-verify app.videx.streaming` then `adb shell pm get-app-links app.videx.streaming` shows `videxstreaming.com: verified`. iOS reads the file via `https://app-site-association.cdn-apple.com/a/v1/videxstreaming.com` (Apple's CDN can lag a new file by hours).
+
+---
+
 ## Promote beyond internal testing
 
 The pipeline ships to **internal testing**. To widen:

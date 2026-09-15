@@ -7,6 +7,7 @@ import storage, { setAuthState } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import { clearPushToken } from '@/notifications/push';
 import { clearOnboardingDraft } from '@/onboardingDraft';
+import { clearPendingLink } from '@/pendingLink';
 import { clearQueryCache } from '@/queryPersist';
 
 // Native auth provider (NATIVE-2 W6). Wraps the supabase-js auth surface
@@ -70,6 +71,8 @@ async function clearLocalUserState(queryClient: QueryClient): Promise<void> {
   queryClient.clear();
   clearQueryCache();
   clearOnboardingDraft();
+  // A link opened by user A must not resume into user B's session.
+  clearPendingLink();
   await storage.multiRemove(['fb_prompt_shown', 'fb_fg_ms']);
 }
 

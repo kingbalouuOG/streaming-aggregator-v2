@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Text, View } from 'react-native';
 import Animated, {
@@ -16,6 +16,7 @@ import { ONBOARDING_EVENTS } from '@/lib/analytics/events';
 import { logOnboardingEvent } from '@/lib/analytics/logger';
 import { useForYou } from '@/hooks/useForYou';
 import { consumeJustOnboarded } from '@/onboardingSignal';
+import { consumePendingLink } from '@/pendingLink';
 
 // Post-onboarding interstitial (beta feedback 2026-07-09). After
 // completing onboarding we now land on For You (not Home/New), so this
@@ -102,6 +103,9 @@ export default function CuratingScreen() {
       });
     }
     router.replace('/(tabs)/foryou');
+    // Growth S1: a link opened before sign-up lands now, on top of For You.
+    const pending = consumePendingLink();
+    if (pending) setTimeout(() => router.push(pending.route as Href), 0);
   };
 
   // Advance as soon as the payload resolves (data present, or a definitive

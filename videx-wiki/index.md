@@ -72,6 +72,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Embeddings (text-embedding-3-small)](wiki/concepts/techniques/embeddings.md) — OpenAI 1536D, locked template, HNSW, wire format.
 - [HDBSCAN (UMAP + density-based clustering)](wiki/concepts/techniques/hdbscan.md) — Pure HDBSCAN failed; UMAP+HDBSCAN ships.
 - [RLS pattern](wiki/concepts/techniques/rls-pattern.md) — Three roles, partition RLS via event trigger.
+- [Inbound deep linking](wiki/concepts/techniques/inbound-deep-linking.md) — Universal/app links, `+native-intent` mapper, pending link, room snapshots (Growth S1).
 
 ### Domain
 
@@ -93,6 +94,8 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [ADR-011 — Edge Function shared modules duplicated into `_shared/`](wiki/concepts/decisions/adr-011-edge-function-shared-modules.md)
 - [ADR-012 — Server-side For You render via `render-foryou-rows`](wiki/concepts/decisions/adr-012-server-side-foryou-render.md)
 - [ADR-013 — Cluster-dominant bootstrap weights](wiki/concepts/decisions/adr-013-cluster-dominant-bootstrap-weights.md)
+- [ADR-014 — Single server-side engine on the videx-api Worker](wiki/concepts/decisions/adr-014-single-server-engine.md)
+- [ADR-015 — Object URLs are Worker-owned; inbound links route through Expo Router](wiki/concepts/decisions/adr-015-object-urls-and-inbound-links.md) — URL grammar, `via`/`src`, room snapshots, D5 stands.
 
 ### Operations
 
@@ -160,7 +163,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Monetisation strategy exploration v0.1](wiki/concepts/forward-planning/monetisation-strategy.md) — ⚠ superseded 2026-07-06; absorbed into Roadmap v1.0 §5.
 - [V3 Conversational Discovery & Semantic Search Strategy v0.1](wiki/concepts/forward-planning/v3-conversational-discovery.md) — ⚠ superseded 2026-07-06; absorbed into Roadmap v1.0 H3 Bet 1.
 - [Send to TV — feasibility](wiki/concepts/forward-planning/send-to-tv-feasibility.md) — parked 2026-09-11; per-platform matrix (Roku/Google TV/Samsung/LG/Apple TV/Fire TV/Sky), title-level launch proven only for LG+Netflix, Apple TV by URL, Roku+Disney+; revisit triggers.
-- [Growth loops (G-phases)](wiki/concepts/forward-planning/growth-loops.md) — shortlisted 2026-09-14; five loops, G0–G5 order, what H0 Stream B already shipped, routing position (D5 stands), 19 decisions pending in the G0/G1 plan.
+- [Growth loops (G-phases)](wiki/concepts/forward-planning/growth-loops.md) — in build; five loops, G0–G5 order, 19 decisions taken 2026-09-14, S1 links built (ADR-015, migration 088).
 
 ## Sources
 

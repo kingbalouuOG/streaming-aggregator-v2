@@ -1,11 +1,12 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, Star } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { Star } from 'lucide-react-native';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BackButton } from '@/components/BackButton';
 import { ContentRow } from '@/components/ContentRow';
 import { DetailEngagement } from '@/components/DetailEngagement';
 import { SectionHead } from '@/components/SectionHead';
@@ -19,6 +20,8 @@ import { useContentDetail } from '@/hooks/useContentDetail';
 import { useUserServices } from '@/hooks/useUserServices';
 import { serviceIdsToProviderIds } from '@/lib/adapters/platformAdapter';
 import type { ContentItem } from '@/lib/types/content';
+import { clearPendingLinkFor } from '@/pendingLink';
+import { useAuth } from '@/providers/auth';
 
 export default function DetailRoute() {
   const router = useRouter();
@@ -43,6 +46,13 @@ export default function DetailRoute() {
   // IN-SC-006: Where to Watch's "I have this" confirmation (with Undo).
   const [toast, setToast] = useState<ToastState | null>(null);
   const dismissToast = useCallback(() => setToast(null), []);
+
+  // A shared link that opened this title for a signed-in user needs no
+  // resume after a later sign-in (native/src/pendingLink.ts).
+  const { session } = useAuth();
+  useEffect(() => {
+    if (session && params.id) clearPendingLinkFor(`/detail/${params.id}`);
+  }, [session, params.id]);
 
   const heroHeight = (width * 5) / 4;
   const back = () => router.back();
@@ -275,16 +285,5 @@ export default function DetailRoute() {
         ) : null}
       </ScrollView>
     </View>
-  );
-}
-
-function BackButton({ onPress, top }: { onPress: () => void; top: number }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={{ top }}
-      className="absolute left-4 h-9 w-9 items-center justify-center rounded-md bg-[#14141c]/60 active:bg-[#14141c]">
-      <ArrowLeft size={20} color="#ffffff" />
-    </Pressable>
   );
 }
