@@ -13,6 +13,7 @@ import { ShareButton } from '@/components/ShareButton';
 import { DetailSkeleton } from '@/components/Skeleton';
 import { WatchlistActions } from '@/components/WatchlistActions';
 import { WhereToWatch } from '@/components/WhereToWatch';
+import { useChannelRegistry, useUserChannels } from '@/hooks/useChannels';
 import { useContentDetail } from '@/hooks/useContentDetail';
 import { useUserServices } from '@/hooks/useUserServices';
 import { serviceIdsToProviderIds } from '@/lib/adapters/platformAdapter';
@@ -30,6 +31,9 @@ export default function DetailRoute() {
   // Without this the section header ("On your stack.") contradicts a body
   // that lists everything as "Not connected to your account."
   const { data: userServices } = useUserServices();
+  // IN-SC-004: held add-on channels join "Watch on …" in Where to Watch.
+  const { data: userChannels } = useUserChannels();
+  const { data: channelRegistry } = useChannelRegistry();
   const { data, isLoading, isError, error } = useContentDetail(
     params.id,
     serviceIdsToProviderIds(userServices ?? []),
@@ -199,7 +203,12 @@ export default function DetailRoute() {
 
           {/* Where to Watch — the deep-link payoff */}
           <View className="mt-6">
-            <WhereToWatch detail={detail} userServices={userServices ?? []} />
+            <WhereToWatch
+              detail={detail}
+              userServices={userServices ?? []}
+              userChannels={userChannels ?? []}
+              channelRegistry={channelRegistry ?? []}
+            />
           </View>
         </View>
 

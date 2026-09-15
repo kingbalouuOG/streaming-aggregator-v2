@@ -5,6 +5,7 @@ import { Platform, Pressable, Text, View } from 'react-native';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import type { ChannelOption, DetailData, RentalOption } from '@/lib/adapters/detailAdapter';
 import { getDeepLink } from '@/lib/deepLinks';
+import { channelTokensFor, type ChannelRegistryRow } from '@/lib/entitlements/channels';
 import { exitDwell, getCurrentDwellSeconds } from '@/lib/instrumentation/dwellTimer';
 import { openDeepLink } from '@/lib/openDeepLink';
 import { SERVICE_DISPLAY_NAMES, type ServiceId } from '@/lib/types/content';
@@ -20,17 +21,43 @@ import { SectionHead } from './SectionHead';
 interface WhereToWatchProps {
   detail: DetailData;
   userServices?: ServiceId[];
+  /** IN-SC-004: non-standalone add-on channels the user holds. */
+  userChannels?: string[];
+  channelRegistry?: ChannelRegistryRow[];
 }
 
-export function WhereToWatch({ detail, userServices }: WhereToWatchProps) {
-  const { tier1, tier2, tier3 } = classifyProviders(
+function isServiceId(id: string): id is ServiceId {
+  return id in SERVICE_DISPLAY_NAMES;
+}
+
+export function WhereToWatch({ detail, userServices, userChannels, channelRegistry }: WhereToWatchProps) {
+  const registry = channelRegistry ?? [];
+  const { tier1, tier2, tier3, heldChannels, otherChannels } = classifyProviders(
     detail.allServices,
     detail.rentalOptions,
     userServices ?? [],
+    detail.channelOptions ?? [],
+    channelTokensFor(registry, userServices ?? [], userChannels ?? []),
   );
 
-  const channels = detail.channelOptions ?? [];
-  const hasAny = tier1.length > 0 || tier2.length > 0 || tier3.length > 0 || channels.length > 0;
+  const hasAny =
+    tier1.length > 0 ||
+    tier2.length > 0 ||
+    tier3.length > 0 ||
+    heldChannels.length > 0 ||
+    otherChannels.length > 0;
+  const hasTier1 = tier1.length > 0 || heldChannels.length > 0;
+
+  // A held channel reads as the channel ("Watch on Shudder"), badged as the
+  // standalone service when it is one, and says which parent it opens in.
+  const heldChannelView = (option: ChannelOption) => {
+    const row = registry.find((r) => `${r.parentServiceId}:${r.addonId}` === option.channelToken);
+    const standalone = row?.standaloneServiceId;
+    return {
+      name: row?.displayName ?? option.channelName,
+      badge: standalone && isServiceId(standalone) ? standalone : option.serviceKey,
+    };
+  };
 
   if (!hasAny) {
     return (
@@ -77,7 +104,7 @@ export function WhereToWatch({ detail, userServices }: WhereToWatchProps) {
     <View>
       <SectionHead kicker="WHERE TO WATCH" title="On your stack." />
 
-      {tier1.length > 0 ? (
+      {hasTier1 ? (
         <View className="gap-2">
           {tier1.map((service) => (
             <Pressable
@@ -91,13 +118,31 @@ export function WhereToWatch({ detail, userServices }: WhereToWatchProps) {
               <ExternalLink size={16} color="#e85d25" />
             </Pressable>
           ))}
+          {heldChannels.map((option) => {
+            const view = heldChannelView(option);
+            return (
+              <Pressable
+                key={option.channelToken ?? `${option.serviceKey}-${option.channelName}`}
+                onPress={() => open(option.serviceKey, option.deepLinkUrl ?? null)}
+                className="flex-row items-center gap-3 rounded-card border border-primary-edge bg-primary-soft px-4 py-3 active:opacity-80">
+                <ServiceBadge service={view.badge} size="md" />
+                <View className="flex-1">
+                  <Text className="font-sans-bold text-body text-foreground">Watch on {view.name}</Text>
+                  <Text className="font-sans text-meta text-muted-foreground">
+                    via {SERVICE_DISPLAY_NAMES[option.serviceKey] ?? option.serviceKey}
+                  </Text>
+                </View>
+                <ExternalLink size={16} color="#e85d25" />
+              </Pressable>
+            );
+          })}
         </View>
       ) : null}
 
       {tier2.length > 0 ? (
         <View className="mt-3">
           <Text className="mb-2 font-sans-bold text-kicker uppercase tracking-[1.6px] text-faint-foreground">
-            {tier1.length > 0 ? 'Also available on' : 'Available on'}
+            {hasTier1 ? 'Also available on' : 'Available on'}
           </Text>
           <View className="gap-2">
             {tier2.map((service) => (
@@ -123,16 +168,16 @@ export function WhereToWatch({ detail, userServices }: WhereToWatchProps) {
         <RentBuyList options={tier3} detail={detail} onOpen={open} />
       ) : null}
 
-      {channels.length > 0 ? <ChannelList options={channels} onOpen={open} /> : null}
+      {otherChannels.length > 0 ? <ChannelList options={otherChannels} onOpen={open} /> : null}
     </View>
   );
 }
 
 // Paid channels inside a parent service (Prime Video Channels, Apple TV
-// Channels, NOW passes). Shown apart from the service chips and labelled,
-// because "on Prime Video" would be wrong for a Prime subscriber without
-// the channel — interim until channels are per-user entitlements
-// (docs/strategy/briefs/addon-entitlements.md).
+// Channels, NOW passes) that the user does NOT hold. Shown apart from the
+// service chips and labelled, because "on Prime Video" would be wrong for a
+// Prime subscriber without the channel. Held channels join tier 1 above
+// (IN-SC-004, docs/strategy/briefs/addon-entitlements.md).
 function ChannelList({
   options,
   onOpen,

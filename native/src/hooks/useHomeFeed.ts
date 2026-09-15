@@ -1,6 +1,9 @@
 import { keepPreviousData, useIsRestoring, useQuery } from '@tanstack/react-query';
 
+import { useUserChannels } from '@/hooks/useChannels';
 import { useUserServices } from '@/hooks/useUserServices';
+import { channelTokensFor, type ChannelRegistryRow } from '@/lib/entitlements/channels';
+import { getChannelRegistry } from '@/lib/storage/serviceChannels';
 import { env } from '@/lib/env';
 import { readAccessToken } from '@/lib/recommendations-v2/edgeRender';
 import {
@@ -146,6 +149,7 @@ async function fetchPopularByProvider(services: ServiceId[]): Promise<ContentIte
  *  spotlight (the web reuses `home.popular`). */
 async function fetchPopular(
   services: ServiceId[],
+  channelTokens: string[],
 ): Promise<ContentItem[]> {
   const providerIds = serviceIdsToProviderIds(services);
   if (providerIds.length === 0) return [];
@@ -164,7 +168,7 @@ async function fetchPopular(
     ...((movieRes.data?.results ?? []) as TMDbContentResult[]),
     ...((tvRes.data?.results ?? []) as TMDbContentResult[]),
   ].map((r) => r.id);
-  const availableTmdbIds = await filterToAvailable(trendingIds, services);
+  const availableTmdbIds = await filterToAvailable(trendingIds, services, channelTokens);
   const onServices = (r: TMDbContentResult) => availableTmdbIds.has(r.id);
 
   const movies = ((movieRes.data?.results ?? []) as TMDbContentResult[])
@@ -268,7 +272,7 @@ async function fetchUpcoming(services: ServiceId[]): Promise<UpcomingItem[]> {
  */
 const HOME_WORKER_TIMEOUT_MS = 12_000;
 
-async function tryFetchHomeFromWorker(services: ServiceId[]): Promise<HomeFeed | null> {
+async function tryFetchHomeFromWorker(services: ServiceId[], channels: string[]): Promise<HomeFeed | null> {
   const proxyUrl = env.API_PROXY_URL;
   if (!proxyUrl || services.length === 0) return null;
 
@@ -279,6 +283,7 @@ async function tryFetchHomeFromWorker(services: ServiceId[]): Promise<HomeFeed |
   const timeoutId = setTimeout(() => controller.abort(), HOME_WORKER_TIMEOUT_MS);
   try {
     const params = new URLSearchParams({ services: services.join(',') });
+    if (channels.length > 0) params.set('channels', channels.join(','));
     const res = await fetch(`${proxyUrl}/v1/home?${params.toString()}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
       signal: controller.signal,
@@ -311,11 +316,16 @@ async function tryFetchHomeFromWorker(services: ServiceId[]): Promise<HomeFeed |
   }
 }
 
-async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
+async function fetchHomeFeed(services: ServiceId[], channels: string[]): Promise<HomeFeed> {
   // B5: one round trip when the Worker answers; the ~15-call client
   // orchestration below is now the fallback rather than the default.
-  const fromWorker = await tryFetchHomeFromWorker(services);
+  const fromWorker = await tryFetchHomeFromWorker(services, channels);
   if (fromWorker) return fromWorker;
+
+  // IN-SC-004: the Worker resolves channel tokens itself; only this
+  // fallback needs the registry. A failed read degrades to "included only".
+  const registry = await getChannelRegistry().catch((): ChannelRegistryRow[] => []);
+  const channelTokens = channelTokensFor(registry, services, channels);
 
   // B3: Home no longer fetches the availability id list at all.
   //
@@ -336,7 +346,7 @@ async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
     fetchPerServiceCharts(services),
     getV2TasteProfile(),
     fetchRecentlyAdded(services),
-    fetchPopular(services),
+    fetchPopular(services, channelTokens),
     fetchFreeTonight(),
     fetchPaidTitles(services),
     fetchUpcoming(services),
@@ -412,6 +422,8 @@ async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
         offset,
         picks,
         exclude,
+        undefined,
+        channelTokens,
       ).catch(() => null), // A spotlight failure must not blank Home.
     ),
   );
@@ -453,16 +465,19 @@ async function fetchHomeFeed(services: ServiceId[]): Promise<HomeFeed> {
  */
 export function useHomeFeed() {
   const { data: services } = useUserServices();
+  // IN-SC-004: settle channels first — same reasoning as useForYou.
+  const { data: channels, isError: channelsFailed } = useUserChannels();
+  const channelsReady = channels !== undefined || channelsFailed;
   const isRestoring = useIsRestoring();
 
   const query = useQuery({
-    queryKey: ['native', 'home', 'feed', services?.join(',') ?? ''],
-    queryFn: () => fetchHomeFeed(services ?? []),
-    enabled: !!services,
+    queryKey: ['native', 'home', 'feed', services?.join(',') ?? '', channels?.join(',') ?? ''],
+    queryFn: () => fetchHomeFeed(services ?? [], channels ?? []),
+    enabled: !!services && channelsReady,
     // 30 min was already right for SWR — left alone deliberately.
     staleTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
   });
 
-  return { ...query, isBootstrapping: isRestoring || !services };
+  return { ...query, isBootstrapping: isRestoring || !services || !channelsReady };
 }

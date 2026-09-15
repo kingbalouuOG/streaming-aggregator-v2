@@ -1,26 +1,33 @@
-import { ArrowRight, Check } from 'lucide-react-native';
+import { ArrowRight } from 'lucide-react-native';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { ServiceBadge } from '@/components/ServiceBadge';
+import { ServicePicker } from '@/components/services/ServicePicker';
 import { SERVICE_CATALOG } from '@/constants/serviceCatalog';
 import type { ServiceId } from '@/lib/types/content';
 
 // Onboarding Step 2 — "Your streaming services" (matches Step 2.png).
 // 2-col grid of service cards (logo + name + description + check),
-// orange border when selected, Select All, Continue.
-
-const SERVICES = SERVICE_CATALOG;
+// orange border when selected, add-on channel chips under a selected
+// Prime / Apple / NOW tile (IN-SC-004), Select All, Continue.
 
 interface StepServicesProps {
   selected: ServiceId[];
+  channels: string[];
   onToggle: (id: ServiceId) => void;
+  onToggleChannel: (channelId: string) => void;
   onSelectAll: () => void;
   onContinue: () => void;
 }
 
-export function StepServices({ selected, onToggle, onSelectAll, onContinue }: StepServicesProps) {
-  const selectedSet = new Set(selected);
-  const allSelected = selected.length === SERVICES.length;
+export function StepServices({
+  selected,
+  channels,
+  onToggle,
+  onToggleChannel,
+  onSelectAll,
+  onContinue,
+}: StepServicesProps) {
+  const allSelected = selected.length === SERVICE_CATALOG.length;
 
   return (
     <View className="flex-1">
@@ -32,39 +39,12 @@ export function StepServices({ selected, onToggle, onSelectAll, onContinue }: St
           Which platforms are you subscribed to?
         </Text>
 
-        <View className="mt-4 flex-row flex-wrap">
-          {SERVICES.map((svc) => {
-            const isSel = selectedSet.has(svc.id);
-            return (
-              <View key={svc.id} className="w-1/2 p-1.5">
-                <Pressable
-                  onPress={() => onToggle(svc.id)}
-                  className={
-                    isSel
-                      ? 'flex-row items-center gap-2.5 rounded-card border border-primary bg-primary-soft p-3'
-                      : 'flex-row items-center gap-2.5 rounded-card border border-border bg-card p-3 active:bg-secondary'
-                  }>
-                  <ServiceBadge service={svc.id} size="lg" />
-                  <View className="flex-1">
-                    <Text numberOfLines={1} className="font-sans-bold text-meta text-foreground">
-                      {svc.name}
-                    </Text>
-                    <Text numberOfLines={1} className="font-sans text-[11px] text-muted-foreground">
-                      {svc.description}
-                    </Text>
-                  </View>
-                  {isSel ? (
-                    <View className="h-5 w-5 items-center justify-center rounded-full bg-primary">
-                      <Check size={12} color="#ffffff" strokeWidth={3} />
-                    </View>
-                  ) : (
-                    <View className="h-5 w-5 rounded-full border-2 border-border" />
-                  )}
-                </Pressable>
-              </View>
-            );
-          })}
-        </View>
+        <ServicePicker
+          services={selected}
+          channels={channels}
+          onToggleService={onToggle}
+          onToggleChannel={onToggleChannel}
+        />
 
         <Pressable onPress={onSelectAll} className="mt-3 items-center py-2">
           <Text className="font-sans-bold text-body text-primary">

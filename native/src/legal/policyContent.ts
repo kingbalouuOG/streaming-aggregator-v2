@@ -40,6 +40,7 @@ When you create an account and use the app, Videx stores the following data in t
 - **Impression log** (card_impressions): which titles surfaced in front of you, in which row, in what position, at what time, and with what context. Rolled up to daily aggregates after 90 days; see §7.
 - **Taste profile** (taste_profiles): a 1,536-dimensional taste vector computed locally from your interaction history, plus the four slider positions (catalogue age, comfort zone, content mix, variety) you set on the For You page.
 - **Service selections** (user_services): which UK streaming services you've told Videx you subscribe to.
+- **Channel selections** (user_service_addons): which add-on channels inside those services (for example a Prime Video Channel or a NOW pass) you've told Videx you hold.
 - **Genre cluster picks** (user_genres): the taste clusters you selected at onboarding.
 - **Watchlist** (watchlist): titles you've saved to watch later.
 - **Onboarding analytics** (onboarding_events): which steps of the onboarding flow you reached, used internally to debug drop-off.

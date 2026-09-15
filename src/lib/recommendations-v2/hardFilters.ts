@@ -12,6 +12,7 @@ import { getWatchlist } from '../storage/watchlist';
 import { getDismissedIds } from '../storage/recommendations';
 import type { UserScope } from '../server/userScope';
 import type { MatchedTitle } from './types';
+import { availabilityOrFilter, hashIdList } from '../entitlements/channels';
 
 /**
  * Get IDs of titles the user has thumbs-downed.
@@ -71,7 +72,9 @@ export async function getWatchlistIds(): Promise<Set<string>> {
  * change (different sorted list). On cache hit, this function returns
  * synchronously-ish from JSON parse, no RPC.
  */
-const AVAILABLE_IDS_CACHE_PREFIX = 'videx.available_tmdb_ids.v1';
+// v2: migration 086 changed what the RPC returns (included + held channels,
+// not every stream type), so v1 entries must not be read back.
+const AVAILABLE_IDS_CACHE_PREFIX = 'videx.available_tmdb_ids.v2';
 const AVAILABLE_IDS_TTL_MS = 10 * 60 * 1000;
 
 interface AvailableIdsCacheEntry {
@@ -79,9 +82,21 @@ interface AvailableIdsCacheEntry {
   computedAt: string;
 }
 
-function buildAvailableIdsCacheKey(serviceIds: string[]): string {
+function buildAvailableIdsCacheKey(serviceIds: string[], channelTokens: string[]): string {
   const sorted = [...serviceIds].sort().join(',');
-  return `${AVAILABLE_IDS_CACHE_PREFIX}.${sorted}`;
+  const channels = channelTokens.length > 0 ? `.ch${hashIdList(channelTokens)}` : '';
+  return `${AVAILABLE_IDS_CACHE_PREFIX}.${sorted}${channels}`;
+}
+
+/**
+ * IN-SC-004: `channel_tokens` is sent only when there are any, so the call
+ * shape a user without channels makes is the one every database accepts,
+ * migration 086 applied or not.
+ */
+function availableIdsRpcArgs(serviceIds: string[], channelTokens: string[]) {
+  return channelTokens.length > 0
+    ? { service_ids: serviceIds, channel_tokens: channelTokens }
+    : { service_ids: serviceIds };
 }
 
 function readAvailableIdsCache(key: string): Set<number> | null {
@@ -131,17 +146,19 @@ const inFlightAvailableIds = new Map<string, Promise<Set<number>>>();
 
 export async function getAvailableTmdbIds(
   serviceIds: string[],
+  /** IN-SC-004: `channel_services` tokens the user holds (entitlements/channels). */
+  channelTokens: string[] = [],
 ): Promise<Set<number>> {
   if (serviceIds.length === 0) return new Set();
 
-  const cacheKey = buildAvailableIdsCacheKey(serviceIds);
+  const cacheKey = buildAvailableIdsCacheKey(serviceIds, channelTokens);
   const cached = readAvailableIdsCache(cacheKey);
   if (cached) return cached;
 
   const inFlight = inFlightAvailableIds.get(cacheKey);
   if (inFlight) return inFlight;
 
-  const request = fetchAvailableTmdbIds(serviceIds, cacheKey).finally(() => {
+  const request = fetchAvailableTmdbIds(serviceIds, channelTokens, cacheKey).finally(() => {
     inFlightAvailableIds.delete(cacheKey);
   });
   inFlightAvailableIds.set(cacheKey, request);
@@ -150,15 +167,17 @@ export async function getAvailableTmdbIds(
 
 async function fetchAvailableTmdbIds(
   serviceIds: string[],
+  channelTokens: string[],
   cacheKey: string,
 ): Promise<Set<number>> {
   try {
     // Migration 035 changed the RPC return shape from TABLE → jsonb
     // (single-row JSONB array). One round trip instead of 20 paginated
     // calls; saves ~1.5-2s on cold start over WAN.
-    const { data, error } = await supabase.rpc('get_available_tmdb_ids', {
-      service_ids: serviceIds,
-    });
+    const { data, error } = await supabase.rpc(
+      'get_available_tmdb_ids',
+      availableIdsRpcArgs(serviceIds, channelTokens),
+    );
     if (error || !data) return new Set();
 
     // Migration 035 changed get_available_tmdb_ids to return a JSONB
@@ -190,16 +209,20 @@ async function fetchAvailableTmdbIds(
 export async function filterToAvailable(
   tmdbIds: number[],
   services: string[],
+  /** IN-SC-004: `channel_services` tokens the user holds. */
+  channelTokens: string[] = [],
 ): Promise<Set<number>> {
   if (services.length === 0) return new Set(tmdbIds);
   if (tmdbIds.length === 0) return new Set();
 
   try {
-    const { data, error } = await supabase
+    const base = supabase
       .from('titles')
       .select('tmdb_id')
-      .in('tmdb_id', tmdbIds)
-      .overlaps('available_services', services);
+      .in('tmdb_id', tmdbIds);
+    const { data, error } = channelTokens.length > 0
+      ? await base.or(availabilityOrFilter(services, channelTokens))
+      : await base.overlaps('available_services', services);
     if (error || !data) return new Set(tmdbIds); // fail open, as before
     return new Set(data.map((r) => r.tmdb_id as number));
   } catch {
@@ -222,12 +245,15 @@ export interface FilterSets {
  * below are the server variants (PLAT-3) — same outputs, explicit
  * client + UserScope inputs, table reads instead of localStorage.
  */
-export async function buildFilterSets(serviceIds: string[]): Promise<FilterSets> {
+export async function buildFilterSets(
+  serviceIds: string[],
+  channelTokens: string[] = [],
+): Promise<FilterSets> {
   const [dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds] = await Promise.all([
     getDismissedIds(),
     getThumbsDownIds(),
     getWatchlistIds(),
-    getAvailableTmdbIds(serviceIds),
+    getAvailableTmdbIds(serviceIds, channelTokens),
   ]);
 
   return { dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds };
@@ -327,19 +353,26 @@ export interface TmdbIdsCache {
 }
 
 /** Cache key for a service combo — order-independent (sorted), so the
- *  same set of services shares one entry regardless of request order. */
-export function buildAvailableIdsCacheKeyScoped(serviceIds: string[]): string {
-  return `availids:v1:${[...serviceIds].sort().join(',')}`;
+ *  same set of services shares one entry regardless of request order.
+ *  v2 since migration 086 changed the RPC's answer; held channel tokens
+ *  are hashed in (a token list can exceed KV's 512-byte key limit). */
+export function buildAvailableIdsCacheKeyScoped(
+  serviceIds: string[],
+  channelTokens: string[] = [],
+): string {
+  const channels = channelTokens.length > 0 ? `:ch${hashIdList(channelTokens)}` : '';
+  return `availids:v2:${[...serviceIds].sort().join(',')}${channels}`;
 }
 
 export async function getAvailableTmdbIdsScoped(
   client: SupabaseClient,
   serviceIds: string[],
   cache?: TmdbIdsCache,
+  channelTokens: string[] = [],
 ): Promise<Set<number>> {
   if (serviceIds.length === 0) return new Set();
 
-  const cacheKey = cache ? buildAvailableIdsCacheKeyScoped(serviceIds) : null;
+  const cacheKey = cache ? buildAvailableIdsCacheKeyScoped(serviceIds, channelTokens) : null;
   if (cache && cacheKey) {
     try {
       const cached = await cache.get(cacheKey);
@@ -350,9 +383,10 @@ export async function getAvailableTmdbIdsScoped(
   }
 
   try {
-    const { data, error } = await client.rpc('get_available_tmdb_ids', {
-      service_ids: serviceIds,
-    });
+    const { data, error } = await client.rpc(
+      'get_available_tmdb_ids',
+      availableIdsRpcArgs(serviceIds, channelTokens),
+    );
     if (error || !data) return new Set();
     const ids = Array.isArray(data) ? (data as unknown as number[]) : [];
     if (cache && cacheKey && ids.length > 0) {
@@ -375,12 +409,14 @@ export async function buildFilterSetsScoped(
   scope: UserScope,
   serviceIds: string[],
   availableIdsCache?: TmdbIdsCache,
+  /** IN-SC-004: `channel_services` tokens the user holds. */
+  channelTokens: string[] = [],
 ): Promise<FilterSets> {
   const [dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds] = await Promise.all([
     getDismissedIdsScoped(scope),
     getThumbsDownIdsScoped(scope),
     getWatchlistIdsScoped(scope),
-    getAvailableTmdbIdsScoped(client, serviceIds, availableIdsCache),
+    getAvailableTmdbIdsScoped(client, serviceIds, availableIdsCache, channelTokens),
   ]);
   return { dismissedIds, thumbsDownIds, watchlistIds, availableTmdbIds };
 }

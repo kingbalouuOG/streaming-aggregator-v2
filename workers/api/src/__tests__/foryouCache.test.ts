@@ -112,4 +112,28 @@ describe('buildHomeCacheKey', () => {
   it('does not collide with the feed namespace', () => {
     expect(buildHomeCacheKey('u1', [], [])).toMatch(/^home:v1:/);
   });
+
+  it('busts when held channels change, and is unchanged without channels (IN-SC-004)', () => {
+    expect(buildHomeCacheKey('u1', ['prime'], ['a'], []))
+      .toBe(buildHomeCacheKey('u1', ['prime'], ['a']));
+    expect(buildHomeCacheKey('u1', ['prime'], ['a'], ['shudder']))
+      .not.toBe(buildHomeCacheKey('u1', ['prime'], ['a']));
+    expect(buildHomeCacheKey('u1', ['prime'], ['a'], ['shudder', 'mgm_plus']))
+      .toBe(buildHomeCacheKey('u1', ['prime'], ['a'], ['mgm_plus', 'shudder']));
+  });
+});
+
+describe('buildFeedCacheKey channels (IN-SC-004)', () => {
+  it('keeps the pre-channel key for users without channels', () => {
+    expect(buildFeedCacheKey('u1', 't', SLIDERS, ['prime'], []))
+      .toBe(buildFeedCacheKey('u1', 't', SLIDERS, ['prime']));
+  });
+
+  it('busts when held channels change, order-independently', () => {
+    const none = buildFeedCacheKey('u1', 't', SLIDERS, ['prime']);
+    const a = buildFeedCacheKey('u1', 't', SLIDERS, ['prime'], ['shudder', 'curzon']);
+    const b = buildFeedCacheKey('u1', 't', SLIDERS, ['prime'], ['curzon', 'shudder']);
+    expect(a).not.toBe(none);
+    expect(a).toBe(b);
+  });
 });

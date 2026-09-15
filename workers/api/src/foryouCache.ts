@@ -5,6 +5,14 @@
  * request lifecycle.
  */
 
+import { hashIdList } from '../../../src/lib/entitlements/channels';
+
+/** IN-SC-004: held channels join both keys as a short hash, and only when
+ *  there are any, so a user without channels keeps the exact key they had. */
+function channelsKeyPart(channels: string[]): string {
+  return channels.length > 0 ? `:ch.${hashIdList(channels)}` : '';
+}
+
 export interface FeedCacheSliders {
   catalogueAge: number;
   comfortZone: number;
@@ -30,9 +38,10 @@ export function buildFeedCacheKey(
   updatedAt: string | number | null | undefined,
   sliders: FeedCacheSliders | null | undefined,
   services: string[],
+  channels: string[] = [],
 ): string {
   const sorted = [...services].sort().join(',');
-  return `foryou:v1:${userId}:${updatedAt ?? 0}:${sliderHashOf(sliders)}:${sorted}`;
+  return `foryou:v1:${userId}:${updatedAt ?? 0}:${sliderHashOf(sliders)}:${sorted}${channelsKeyPart(channels)}`;
 }
 
 export interface CoalesceResult<T> {
@@ -92,8 +101,9 @@ export function buildHomeCacheKey(
   userId: string,
   services: string[],
   clusters: string[],
+  channels: string[] = [],
 ): string {
   const svc = [...services].sort().join(',');
   const cls = [...clusters].sort().join(',');
-  return `home:v1:${userId}:${svc}:${cls}`;
+  return `home:v1:${userId}:${svc}:${cls}${channelsKeyPart(channels)}`;
 }

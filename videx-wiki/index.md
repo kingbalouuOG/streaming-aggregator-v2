@@ -149,6 +149,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Mission and pitch](wiki/concepts/product/mission-and-pitch.md)
 - [User personas](wiki/concepts/product/user-personas.md)
 - [Privacy and GDPR](wiki/concepts/product/privacy-and-gdpr.md)
+- [Add-on channel entitlements](wiki/concepts/product/addon-channel-entitlements.md) — Prime/Apple channels and NOW passes as per-user sub-entitlements: registry, tokens, filter, picker (IN-SC-004, migration 086).
 - [Tone and voice guide](wiki/concepts/product/tone-and-voice-guide.md)
 - [Accessibility checklist](wiki/concepts/product/accessibility-checklist.md)
 - [Motion animation patterns](wiki/concepts/product/motion-animation-patterns.md)

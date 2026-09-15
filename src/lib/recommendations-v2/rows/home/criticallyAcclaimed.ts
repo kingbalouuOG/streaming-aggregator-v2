@@ -14,6 +14,7 @@ import { CRITICALLY_ACCLAIMED_ROW_ENABLED, parseRtScore } from '../../weights';
 import { EXTENDED_TITLE_SELECT } from '../../types';
 import type { ExtendedTitleRow } from '../../types';
 import type { ContentItem } from '@/lib/types/content';
+import { availabilityOrFilter } from '../../../entitlements/channels';
 
 /**
  * Fetch critically acclaimed titles for the Home surface.
@@ -24,6 +25,8 @@ export async function fetchCriticallyAcclaimed(
    *  array means no service filter (was: an empty availableTmdbIds Set). */
   services: string[],
   limit: number = 15,
+  /** IN-SC-004: `channel_services` tokens the user holds. */
+  channelTokens: string[] = [],
 ): Promise<ContentItem[]> {
   if (!CRITICALLY_ACCLAIMED_ROW_ENABLED) return [];
 
@@ -38,7 +41,9 @@ export async function fetchCriticallyAcclaimed(
       .gte('vote_count', 50);
 
     if (services.length > 0) {
-      query = query.overlaps('available_services', services);
+      query = channelTokens.length > 0
+        ? query.or(availabilityOrFilter(services, channelTokens))
+        : query.overlaps('available_services', services);
     }
 
     const { data, error } = await query

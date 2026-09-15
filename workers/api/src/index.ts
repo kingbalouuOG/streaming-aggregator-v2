@@ -65,6 +65,13 @@ import { createTmdbServerClient } from '../../../src/lib/server/tmdbServer';
 import { serviceIdsToProviderIds } from '../../../src/lib/adapters/platformAdapter';
 import type { ServiceId } from '../../../src/lib/types/content';
 import { buildFeedCacheKey, buildHomeCacheKey, coalesce } from './foryouCache';
+import {
+  channelTokensFor,
+  fetchChannelRegistry,
+  knownChannelIds,
+  parseChannelsParam,
+  type ChannelRegistryRow,
+} from '../../../src/lib/entitlements/channels';
 
 type Env = {
   TMDB_API_KEY: string;
@@ -366,6 +373,36 @@ const VALID_SERVICE_IDS = new Set([
   'skygo', 'paramount', 'bbc', 'itvx', 'channel4',
   'hbo', 'discovery', 'crunchyroll', 'mubi', 'plutotv',
 ]);
+
+// ── Add-on channels (IN-SC-004, migration 086) ───────────────────────
+// `channels=shudder,mgm_plus` carries the non-standalone channels a user
+// holds; channels that are standalone services (hbo, paramount …) arrive in
+// `services` and need no new ids above. Channel ids are data — the curated
+// `service_addons` registry, editable without a release — so they are
+// checked against the registry rather than a list here: a malformed or
+// oversized list is a 400, an id the registry does not know is dropped
+// (never keyed, never queried), so a registry addition can't break an older
+// Worker. Registry read failure fails closed to "no channels".
+const CHANNEL_REGISTRY_TTL_MS = 10 * 60 * 1000;
+const CHANNEL_REGISTRY_RETRY_MS = 60 * 1000;
+let channelRegistryCache: { rows: ChannelRegistryRow[]; expiresAt: number } | null = null;
+
+async function getChannelRegistry(
+  client: Parameters<typeof fetchChannelRegistry>[0],
+): Promise<ChannelRegistryRow[]> {
+  const now = Date.now();
+  if (channelRegistryCache && channelRegistryCache.expiresAt > now) return channelRegistryCache.rows;
+  try {
+    const rows = await fetchChannelRegistry(client);
+    channelRegistryCache = { rows, expiresAt: now + CHANNEL_REGISTRY_TTL_MS };
+    return rows;
+  } catch (err) {
+    console.error('[channels] registry read failed:', err);
+    const rows = channelRegistryCache?.rows ?? [];
+    channelRegistryCache = { rows, expiresAt: now + CHANNEL_REGISTRY_RETRY_MS };
+    return rows;
+  }
+}
 // 20 min — mid-range of the brief's 15–30. Stale-feed worst case is one
 // TTL; vector-moving interactions bust earlier via the key timestamp.
 // ⚠ C3 COUPLING: ORDERING_BUCKET_MINUTES (src/lib/recommendations-v2/
@@ -405,6 +442,10 @@ app.get('/v1/foryou', async (c) => {
   if (services.some((s) => !VALID_SERVICE_IDS.has(s))) {
     return c.json({ error: 'unknown service id' }, 400);
   }
+  const channelsRequested = parseChannelsParam(c.req.query('channels'));
+  if (channelsRequested === null) {
+    return c.json({ error: 'too many channels' }, 400);
+  }
 
   const parseBoundedInt = (raw: string | undefined, max: number): number | undefined | null => {
     if (raw == null || raw === '') return undefined;
@@ -442,8 +483,13 @@ app.get('/v1/foryou', async (c) => {
     // on a miss where the render actually needs it. On a hit (the common
     // case) we never pull the vector over the wire. An interaction that
     // moves the vector bumps updated_at and busts the entry naturally.
-    const keyFields = await getTasteProfileKeyFieldsScoped(scope);
-    const cacheKey = buildFeedCacheKey(userId, keyFields.updatedAt, keyFields.sliders, services);
+    const [keyFields, registry] = await Promise.all([
+      getTasteProfileKeyFieldsScoped(scope),
+      getChannelRegistry(client),
+    ]);
+    const channels = knownChannelIds(registry, channelsRequested);
+    const channelTokens = channelTokensFor(registry, services, channels);
+    const cacheKey = buildFeedCacheKey(userId, keyFields.updatedAt, keyFields.sliders, services, channels);
 
     const cached = await c.env.FORYOU_CACHE.get(cacheKey, 'text');
     if (cached) {
@@ -480,6 +526,7 @@ app.get('/v1/foryou', async (c) => {
         scope,
         {
           services,
+          channelTokens,
           hourOfDay,
           dayOfWeek,
           userAgent: c.req.header('user-agent'),
@@ -497,6 +544,7 @@ app.get('/v1/foryou', async (c) => {
           event: 'foryou_render',
           renderMs: payload.renderMs,
           services: services.length,
+          channels: channels.length,
           rows: payload.recommendedForYou.length,
           interleaved: payload.pool?.interleaved ?? false,
         }),
@@ -552,6 +600,10 @@ app.get('/v1/home', async (c) => {
   if (services.some((s) => !VALID_SERVICE_IDS.has(s))) {
     return c.json({ error: 'unknown service id' }, 400);
   }
+  const channelsRequested = parseChannelsParam(c.req.query('channels'));
+  if (channelsRequested === null) {
+    return c.json({ error: 'too many channels' }, 400);
+  }
 
   const token = (c.req.header('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
   const userId = await verifySupabaseJwt(token, c.env.SUPABASE_URL);
@@ -571,10 +623,15 @@ app.get('/v1/home', async (c) => {
   try {
     // Clusters are needed for the cache key AND the spotlights, so read the
     // profile before deciding on a cache hit. It is one small row.
-    const profile = await getV2TasteProfileScoped(scope);
+    const [profile, registry] = await Promise.all([
+      getV2TasteProfileScoped(scope),
+      getChannelRegistry(client),
+    ]);
     const clusters = profile?.selectedClusters ?? [];
+    const channels = knownChannelIds(registry, channelsRequested);
+    const channelTokens = channelTokensFor(registry, services, channels);
 
-    const cacheKey = buildHomeCacheKey(userId, services, clusters);
+    const cacheKey = buildHomeCacheKey(userId, services, clusters, channels);
     const cached = await c.env.FORYOU_CACHE.get(cacheKey, 'text');
     if (cached) {
       return new Response(cached, {
@@ -592,6 +649,7 @@ app.get('/v1/home', async (c) => {
           providerIds: serviceIdsToProviderIds(services as ServiceId[]),
           freeProviderIds: serviceIdsToProviderIds(FREE_UK_SERVICES as ServiceId[]),
           selectedClusters: clusters,
+          channelTokens,
         },
       );
       const body = JSON.stringify(payload);

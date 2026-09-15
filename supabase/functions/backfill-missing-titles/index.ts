@@ -39,8 +39,10 @@
  * 58,029 titles in this queue — Prime's and Apple's rent/buy long tail
  * for the most part. A title is created only if its TMDb vote count
  * clears a floor that depends on how it is reachable: INCLUDED_VOTE_FLOOR
- * when some service offers it with a subscription or for free,
- * OTHER_VOTE_FLOOR when it is rent/buy-only or paid-channel-only. Titles
+ * when some service offers it with a subscription or for free, or through
+ * a CURATED add-on channel (migration 086 registry — since 2026-09-15),
+ * OTHER_VOTE_FLOOR when it is rent/buy-only or only on an uncurated
+ * channel. Titles
  * under the floor are recorded in `backfill_skips` with reason
  * 'below_floor' so they leave the queue; delete those rows to reconsider
  * them (e.g. after lowering a floor).
@@ -112,6 +114,12 @@ const FLUSH_EVERY = 10;
 //     not.
 // Language is deliberately NOT a criterion — a third of the catalogue is
 // non-English and the UK demand for it is real.
+//
+// Curated add-on channels take the included floor (Joe, 2026-09-15). After
+// migration 086 a channel-only title reaches only users who hold that
+// channel, so the feed-dilution risk that justified 200 no longer applies,
+// and addon rows never feed fingerprints. The uncurated tail (Simply South,
+// Eros Now, Dekkoo …) stays at 200. Needs `service_addons` (086) to exist.
 const INCLUDED_VOTE_FLOOR = 20;
 const OTHER_VOTE_FLOOR = 200;
 
@@ -249,22 +257,36 @@ interface SkipRow extends MissingRow {
 
 /**
  * Which of these keys are offered with a subscription or for free by ANY
- * service. Decides which relevance floor applies. One query per media
- * type for the whole slice, so this costs two round trips per 250 rows.
+ * service, or through a curated add-on channel. Decides which relevance
+ * floor applies. One registry read plus one query per media type for the
+ * whole slice, so this costs three round trips per 250 rows.
  */
 async function includedTitles(rows: MissingRow[]): Promise<Set<string>> {
+  const { data: registry, error: registryError } = await supabase
+    .from('service_addons')
+    .select('parent_service_id, addon_id')
+    .eq('curated', true);
+  if (registryError) throw new Error(`service_addons lookup failed: ${registryError.message}`);
+  const curated = new Set(
+    (registry ?? []).map((r: { parent_service_id: string; addon_id: string }) => `${r.parent_service_id}:${r.addon_id}`),
+  );
+
   const out = new Set<string>();
   for (const mediaType of ['movie', 'tv'] as const) {
     const ids = rows.filter((r) => r.media_type === mediaType).map((r) => r.tmdb_id);
     if (ids.length === 0) continue;
     const { data, error } = await supabase
       .from('streaming_availability')
-      .select('tmdb_id')
+      .select('tmdb_id, service_id, stream_type, addon_id')
       .eq('media_type', mediaType)
-      .in('stream_type', ['subscription', 'free'])
+      .in('stream_type', ['subscription', 'free', 'addon'])
       .in('tmdb_id', ids);
     if (error) throw new Error(`included-titles lookup (${mediaType}) failed: ${error.message}`);
-    for (const r of data ?? []) out.add(`${r.tmdb_id}:${mediaType}`);
+    for (const r of (data ?? []) as { tmdb_id: number; service_id: string; stream_type: string; addon_id: string | null }[]) {
+      if (r.stream_type !== 'addon' || curated.has(`${r.service_id}:${r.addon_id}`)) {
+        out.add(`${r.tmdb_id}:${mediaType}`);
+      }
+    }
   }
   return out;
 }

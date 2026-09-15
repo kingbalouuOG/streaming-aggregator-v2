@@ -44,6 +44,9 @@ following data in the database tables listed:
   variety) you set on the For You page.
 - **Service selections** (`user_services`): which UK streaming
   services you've told Videx you subscribe to.
+- **Channel selections** (`user_service_addons`): which add-on
+  channels inside those services (for example a Prime Video Channel
+  or a NOW pass) you've told Videx you hold.
 - **Genre cluster picks** (`user_genres`): the taste clusters you
   selected at onboarding.
 - **Watchlist** (`watchlist`): titles you've saved to watch later.

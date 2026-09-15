@@ -81,15 +81,17 @@ export interface ServiceLink {
  * A title reachable through a paid channel sold inside a parent service —
  * Prime Video Channels, Apple TV Channels, NOW's passes. NOT "on" the
  * parent service for a subscriber who does not hold the channel, so these
- * never join `allServices` or `serviceLinks`; they are listed separately,
- * labelled with the channel. Interim until the entitlement model
- * (docs/strategy/briefs/addon-entitlements.md) makes them per-user.
+ * never join `allServices` or `serviceLinks`. `classifyProviders` splits
+ * them per user (IN-SC-004): channels the user holds join tier 1, the rest
+ * are listed separately, labelled with the channel.
  */
 export interface ChannelOption {
   /** The parent service the channel is bought through. */
   serviceKey: ServiceId;
   /** The vendor's channel name, e.g. "HBO Max", "Paramount+", "Hayu". */
   channelName: string;
+  /** `<service_id>:<addon_id>` — matched against the user's held tokens. */
+  channelToken?: string;
   deepLinkUrl?: string;
 }
 
@@ -304,6 +306,7 @@ export function buildDetailData(
       channelOptions.push({
         serviceKey: link.serviceId,
         channelName: link.addonName,
+        channelToken: link.channelToken,
         deepLinkUrl: link.deepLinkUrl,
       });
     }
