@@ -120,6 +120,12 @@ SELECT started_at, titles_added, chain_state->>'skipped_floor' AS skipped_floor,
 FROM sync_log WHERE sync_type = 'backfill' ORDER BY started_at DESC LIMIT 5;
 ```
 
+### What `titles.available_services` means (since 085)
+
+**Included with the subscription** — derived from `subscription` and `free` rows only. Addon-tier rows were dropped in 084, rent/buy rows in 085. It is the "on your services" filter behind For You, Home's spotlights and every `available_services && '{…}'` query, so a title you would have to rent is no longer offered as if it were included. Rent and buy are not hidden: the detail page's "Rent or buy" tier, search's "Rent from £x" label and the "New to rent or buy" row on Home and For You all read `streaming_availability` rows directly (`paid_only_titles` RPC for the row). Joe's weekend-rental use case lives there by design (2026-09-15).
+
+**Relevance floor applied retroactively (2026-09-15):** the 10,132 titles created from the post-cleanup queue on 12–14 Sept, before the floor existed, were re-checked against it; 6,975 failed (4,255 rent/buy- or channel-only) and were deleted in one transaction with `backfill_skips.reason = 'below_floor'` written first so their availability rows do not re-queue them. They carried 11 interactions, all from device testing.
+
 ### Addon-tier rows (Prime Video Channels, Apple TV Channels, NOW passes)
 
 `stream_type = 'addon'` means "reachable only through a paid channel inside the parent service"; the row carries `addon_id` / `addon_name`. Since migration 084 these rows **do not** count toward `titles.available_services`, the detail page lists them under "Via a channel", and the share page skips them. The per-user entitlement model that replaces this interim is `docs/strategy/briefs/addon-entitlements.md` (IN-SC-004).
