@@ -1662,3 +1662,10 @@ only thing at stake.
 - Execution: five sessions (S1 links → S2 attribution ‖ S3 sign-in → S4 sharing → S5 verification); migrations re-assigned 085 shared_rooms / 086 handle_new_user / 087 growth_events. S1 handoff: docs/plans/2026-09-14-004-handoff-growth-s1-links.md.
 - Updated: wiki/concepts/forward-planning/growth-loops.md (status locked, decisions section)
 - Still not updated: registers — `IN-GR` opens in S1; open-questions D5 row closes with ADR-015.
+
+## [2026-09-15] query | title queue drained; device validation; available_services = included only
+- **Drained the 45,636-title queue in a day** with `scripts/sync/drain-title-queue.ts` (PR #170 fixed two loop-pacing bugs found on the way: downstream loops burned cycles on trickles, and embed counted unembedded rather than embed-ready titles). 138 chains, 0 failed; 9,127 titles created, 38,076 held under the floor (~80% of the tail). Overnight crons then ran clean: queue 0, sync 15 unresolved / 1,759 changes, pipeline-health green once the queue was empty (it had failed only on `gap-not-growing` since the 12th).
+- **Device validation (Joe, ad-hoc iOS via OTA):** HBO Max chip + deep link on The Matrix; "Via a channel" on Léon with the Prime link opening; Prime-only For You free of channel-only titles; new Crunchyroll titles searchable; share page shows rent/buy only; New visibly refreshed. All six passed.
+- **Found on device:** rent/buy-only Prime titles (Nick and the Jade Tree, One Night Only) in New/For You with no chip. Cause: `available_services` counted rent/buy rows since 075 (24,744 "on Prime" vs 11,309 included) while card chips come from TMDb providers. **Migration 085** (awaiting Joe) narrows the column to subscription/free; every rent/buy surface reads `streaming_availability` directly and is unaffected — confirmed before writing it.
+- **Floor applied retroactively:** 6,975 of the 10,132 pre-floor titles (12–14 Sept) deleted with `below_floor` skips written first; 11 test interactions orphaned.
+- Updated: wiki/entities/codebase/migrations.md (085), wiki/concepts/operations/sync-pipeline.md (column semantics + retro floor), wiki/registers/parking-lot.md (IN-SC-004)

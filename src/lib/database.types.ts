@@ -1020,6 +1020,36 @@ export type Database = {
         }
         Relationships: []
       }
+      sa_show_map: {
+        Row: {
+          first_seen_at: string
+          last_seen_at: string
+          media_type: string
+          sa_show_id: string
+          source: string
+          title: string | null
+          tmdb_id: number
+        }
+        Insert: {
+          first_seen_at?: string
+          last_seen_at?: string
+          media_type: string
+          sa_show_id: string
+          source: string
+          title?: string | null
+          tmdb_id: number
+        }
+        Update: {
+          first_seen_at?: string
+          last_seen_at?: string
+          media_type?: string
+          sa_show_id?: string
+          source?: string
+          title?: string | null
+          tmdb_id?: number
+        }
+        Relationships: []
+      }
       search_terms_daily: {
         Row: {
           count: number
