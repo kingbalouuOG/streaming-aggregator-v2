@@ -1669,3 +1669,9 @@ only thing at stake.
 - **Found on device:** rent/buy-only Prime titles (Nick and the Jade Tree, One Night Only) in New/For You with no chip. Cause: `available_services` counted rent/buy rows since 075 (24,744 "on Prime" vs 11,309 included) while card chips come from TMDb providers. **Migration 085** (awaiting Joe) narrows the column to subscription/free; every rent/buy surface reads `streaming_availability` directly and is unaffected — confirmed before writing it.
 - **Floor applied retroactively:** 6,975 of the 10,132 pre-floor titles (12–14 Sept) deleted with `below_floor` skips written first; 11 test interactions orphaned.
 - Updated: wiki/entities/codebase/migrations.md (085), wiki/concepts/operations/sync-pipeline.md (column semantics + retro floor), wiki/registers/parking-lot.md (IN-SC-004)
+
+## [2026-09-15] query | catalogue walks scheduled (plan §3.1 closed)
+- `.github/workflows/catalogue-walks.yml`: weekly Monday 02:00 UTC for netflix + the ten small catalogues (~1,050 requests), monthly on the 2nd at 01:00 UTC for Prime + Apple (~4,100). Both `--prune --include-unknown-titles` per Joe's decisions; per-service request ceilings (prime 3,500 · apple 2,500 · others 1,000) so a ceiling stop refuses the prune rather than deleting off a partial listing. `workflow_dispatch` with services / dry_run / max_requests; per-catalogue summary table; logs as an artifact; one run at a time. Clear of the 04:50–07:45 cron window and the 1st-of-month recluster. Quota: ~14,500 of 25,000/month with the daily sync.
+- Walk script now takes its env from the environment as well as `.env` (`SUPABASE_URL` accepted for `VITE_SUPABASE_URL`), which is how it runs in CI.
+- Needs Joe: the `SA_API_KEY` repository secret (the other two already exist), then one `dry_run` dispatch to prove the wiring.
+- Updated: wiki/concepts/operations/sync-pipeline.md (cron table + map seeding), wiki/registers/cheatsheet.md (schedules), docs/plans/2026-09-11-002 §3.1

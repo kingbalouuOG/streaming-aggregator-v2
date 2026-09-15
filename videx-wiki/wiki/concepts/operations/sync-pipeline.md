@@ -58,7 +58,7 @@ pg_cron at 06:00 UTC (migration 006; timeout set in 062). Edge Function `supabas
 | Unresolved change | skipped and counted (`chain_state.stats.unresolved`, error bucket `change.unresolved`) — never written under the vendor id | change loop |
 | Map read fails (incl. table absent) | fetch failure → run `failed`, window not advanced | per-pair catch |
 
-The map is **seeded by catalogue walks**: `scripts/sync/backfill-service-catalogue.ts` upserts every entry it sees on any non-dry run (`--map-only` seeds without touching availability; `--map-out` / `--map-in` save and replay a walk so it is paid for once). A high `unresolved` count means a catalogue has not been walked — walk it rather than raising the lookup budget.
+The map is **seeded by catalogue walks**, scheduled since 2026-09-15 by `.github/workflows/catalogue-walks.yml` (weekly Monday 02:00 UTC for the eleven single-tier catalogues, monthly on the 2nd at 01:00 UTC for Prime and Apple; `workflow_dispatch` takes a service list, a dry-run flag and a ceiling override; logs are an artifact and the run summary is a per-catalogue table). It runs on GitHub Actions, not an Edge Function, because a Prime walk is ~an hour. `scripts/sync/backfill-service-catalogue.ts` upserts every entry it sees on any non-dry run (`--map-only` seeds without touching availability; `--map-out` / `--map-in` save and replay a walk so it is paid for once). A high `unresolved` count means a catalogue has not been walked — walk it rather than raising the lookup budget.
 
 ```sql
 -- Is the map warm? Misses should be a few dozen a day once the big catalogues are walked.
@@ -85,6 +85,8 @@ Manual: `supabase functions invoke sync-incremental --no-verify-jwt`.
 | 07:15 | `embed-new-titles` | daily since 069 (was 06:45) |
 | 07:00 Sun | `refresh-service-fingerprints` | weekly |
 | 08:00 | `daily-send-notifications` | daily |
+| 02:00 Mon | `catalogue-walks` (GitHub Actions) | weekly — full walk + prune of the eleven single-tier catalogues; seeds `sa_show_map` |
+| 01:00 on the 2nd | `catalogue-walks` (GitHub Actions) | monthly — Prime and Apple (buy/rent-heavy, ~4,100 requests) |
 
 Two ordering constraints hold this together:
 
