@@ -239,6 +239,33 @@ Merged: #172 (S1), #183 (page cache version, types for 088), #184 (assetlinks up
 
 Handed to S2: `normaliseVia` / `normaliseSrc` in `src/lib/growth/inboundLink.ts`; the pending link already stores `via`, `src`, `seenAt`; page handlers apply `withAttribution` after the cache read, so preview events go after it; the Play referrer carries `via` and `src` (S2 adds the object). Handed to S3: `auth.tsx` signs in through a focus effect (replace to `/`, push the pending route); provider sign-ups resume through `curating.tsx`; keep both. Handed to S4: `ShareButton` takes title props (canonical URL, old copy, `emitShare`) or a `url` string or async function (no event); the room share logs nothing yet.
 
+## 11b. S2 outcome (reviewed 16 September) and S3 status
+
+**S2 attribution: merged and live** (PR #188, merge `242d72c`; migration 090 applied and verified; Worker deployed; privacy wording approved by Joe and live on `/privacy`). App-side code is on `main`, not in a build.
+
+| Plan said | What happened | Consequence |
+|---|---|---|
+| Apple label "analytics, not linked" | `signup_completed` carries the user id, so the install id is **Linked to You**; Play needs **Device or other IDs**. | Rows drafted in `docs/legal/store-privacy-disclosures.md`; Joe files both forms with the build that ships this. |
+| Delete by `user_id` | Pre-sign-up rows carry only the install id, so 090 also deletes (and exports) by every install the account used. On a shared phone one deletion removes the other account's pre-sign-up rows (IN-GR-009). | Accepted; documented. |
+| `first_open` once per install | Existing installs that update would each mint an id and send `first_open` (and could read a stale referrer). Flagged `prior_install` when a session already exists; the funnel excludes them (IN-GR-006). | Heuristic; fine for the cohort size. |
+| Community Install Referrer package | Only runs through the legacy bridge on the new architecture, so a local Expo module (`native/modules/play-install-referrer`, Kotlin) was written. Never compiled yet (IN-GR-005). | First compile is the next `android-release.yml` run, before S5. |
+| Rate limit per install | Keyed on a client-chosen id, so id rotation escapes it; cost is table noise only (IN-GR-008). | Accepted. |
+| "Same rules as a URL query" | The query reader is private to `inboundLink.ts` (off-limits to S2), so the referrer parser copies its rules under test. | Fine. |
+
+Handed to S4: `share_initiated`, `share_completed` and `notification_opened` are already in the table CHECK, the endpoint validation and the `GrowthEvent` union; `sendGrowthEvent` in `native/src/attribution.ts` posts them; `growth-dashboard.sql` §1 marks the switch to `share_initiated`.
+
+**S3 sign-in: built as draft PR #187, not merged.** Everything in G0-5 is coded (providers via `signInWithIdToken`, `ProviderSignIn`, `choose-username`, migration 089, verification SQL, runbook). Blocked on Joe: apply 089; enable Apple and Google in hosted Supabase Auth (Google needs "Skip nonce check" for iOS); create the Google OAuth clients (release SHA-1 `A1:39:39:44…02:2B`); set `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` / `_IOS_CLIENT_ID` identically in EAS production env, GitHub secrets and `native/.env`. The branch now conflicts with `main` after S2 (`_layout.tsx`, `database.types.ts`, wiki log and registers) and needs a rebase. Follow-ups filed IN-GR-010 to 014; two are decisions (§9d).
+
+### 9d. Decisions raised by S3 (recommendations; Joe decides)
+
+| # | Question | Recommendation |
+|---|---|---|
+| IN-GR-011 | Hosted Auth has `mailer_autoconfirm = true`, so an email-and-password account is treated as verified without proving the address, and Supabase auto-links a later Google or Apple identity with the same email into it: whoever registers an address first with a password captures it. | Turn **Confirm email on** before the providers are enabled. Email sign-up then gets a confirmation step (the code already anticipates "no session after signUp"); providers become the fast path, which is the design intent. S3 adds the "check your email" state. Shipping providers with autoconfirm on is an account-takeover vector and is not recommended. |
+| IN-GR-010 | Apple requires the Apple token to be revoked when a user deletes their account (5.1.1(v)); Supabase does not do it. | Build it in S3 while the branch is open, once Joe creates a Services ID and a `.p8` key in the developer portal: an Edge Function called from the client delete path for users with an `apple` identity. Required before the App Store build that ships Apple sign-in. |
+| IN-GR-012 | A new person tapping Apple or Google on `/auth` has the pending link consumed before onboarding, so the shared title opens over onboarding and does not resume after Curating. | S3 fixes: `auth.tsx` consumes the pending link only when onboarding is complete; otherwise it is left for `curating.tsx`. |
+| IN-GR-013 | Editing a username in Profile updates only `user_metadata`, never `profiles.username` (pre-existing). | S3 fixes `ProfileAccount.tsx` to write both, profiles first, since it already does that in "Choose your name". |
+| IN-GR-014 | Privacy policy and in-app copy do not mention provider sign-in. | S3 adds the paragraph after rebasing onto S2's policy text. |
+
 ## 12. Out of scope for G0/G1
 
 Loops 2, 3 and 4 (taste cards, households and `watchlists`, SEO page types 2 to 4), JSON-LD and sitemaps, a `/` page on the Worker, retiring the web tree's `@capacitor/*` runtime packages, `expo-updates` in-app checks, room unshare or expiry, "add all to watchlist", linking a provider to an existing email account from Profile.
@@ -250,9 +277,9 @@ Slices are task groups, not decisions. Each is one fresh session from a self-con
 | Session | Scope | Migration | Depends on | Handoff |
 |---|---|---|---|---|
 | S1 Links | G0-1, G0-2, G0-3, G0-4 | 088 | Joe's S1 checklist (§9c) | **Merged 15 Sept** (#172, #183, #184); outcome in §11a |
-| S2 Attribution | G0-6 | 090 | S1 merged | `2026-09-15-001-handoffs-growth-s2-s3.md` |
-| S3 Sign-in | G0-5 | 089 | S1 merged; runs in parallel with S2 (file ownership in the handoff) | `2026-09-15-001-handoffs-growth-s2-s3.md` |
-| S4 Sharing | G1-1 to G1-4 | none | S2 and S3 merged | written after S2/S3 summaries |
-| S5 Verification | G1-5 | none | S4 merged; devices | written after S4's summary |
+| S2 Attribution | G0-6 | 090 | S1 merged | **Merged 16 Sept** (#188); outcome in §11b |
+| S3 Sign-in | G0-5 | 089 | S1 merged | Draft PR #187; rebase + Joe's console items + §9d; `2026-09-15-001-handoffs-growth-s2-s3.md` |
+| S4 Sharing | G1-1 to G1-4 | none | S2 merged; runs in parallel with S3's finish (disjoint files) | `2026-09-16-001-handoff-growth-s4-sharing.md` |
+| S5 Verification | G1-5 | none | S3 and S4 merged; one rebuild of both platforms; devices | written after S4's summary |
 
 After S5 the strategy thread plans G2 (households) the same way; S5's device pass repeats as a combined check before the all-loops release.
