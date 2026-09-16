@@ -16,7 +16,7 @@ import {
   titlePageCacheKey,
   type TitlePageData,
 } from '../titlePage';
-import { applyAttribution, DEEP_LINK_QUERY_MARK, PAGE_CACHE_VERSION, PLAY_REFERRER_MARK } from '../pageShell';
+import { APP_STORE_URL, applyAttribution, DEEP_LINK_QUERY_MARK, PAGE_CACHE_VERSION, PLAY_REFERRER_MARK } from '../pageShell';
 
 const SAMPLE: TitlePageData = {
   title: 'Predator',
@@ -67,25 +67,26 @@ describe('storeCta', () => {
     expect(html).toContain(PLAY_STORE_URL);
     expect(html).toContain('Get Videx on Android');
   });
-  it('ios → coming soon copy, no dead App Store href while TestFlight-only', () => {
+  it('ios → App Store link (listing live since the 2.4.0 approval)', () => {
     const html = storeCta('ios');
-    expect(html).toContain('Coming soon to the App Store');
+    expect(html).toContain(`href="${APP_STORE_URL}"`);
+    expect(html).toContain('Get Videx on iOS');
+    expect(html).not.toContain('Coming soon');
     expect(html).not.toContain('Get Videx on Android');
-    // No half-broken apps.apple.com link before the listing is live.
-    expect(html).not.toContain('apps.apple.com');
   });
-  it('other → neutral Get Videx (Play link) plus iOS-coming-soon hint', () => {
+  it('other → both store links, no coming-soon hint', () => {
     const html = storeCta('other');
     expect(html).toContain(PLAY_STORE_URL);
-    expect(html).toContain('>Get Videx<');
-    expect(html).toContain('iOS coming soon');
+    expect(html).toContain('Get Videx on Android');
+    expect(html).toContain(`href="${APP_STORE_URL}"`);
+    expect(html).not.toContain('coming soon');
   });
 });
 
 describe('renderTitlePage CTA by platform', () => {
   it('iOS visitor never sees the Android CTA', () => {
     const html = renderTitlePage('movie', 106, SAMPLE, 'https://x.videx', 'ios');
-    expect(html).toContain('Coming soon to the App Store');
+    expect(html).toContain('Get Videx on iOS');
     expect(html).not.toContain('Get Videx on Android');
   });
   it('Android visitor sees the Play CTA', () => {
@@ -94,8 +95,8 @@ describe('renderTitlePage CTA by platform', () => {
   });
   it('desktop visitor sees the neutral CTA', () => {
     const html = renderTitlePage('movie', 106, SAMPLE, 'https://x.videx', 'other');
-    expect(html).toContain('>Get Videx<');
-    expect(html).toContain('iOS coming soon');
+    expect(html).toContain('Get Videx on Android');
+    expect(html).toContain('Get Videx on iOS');
   });
   it('keeps the deep-link and uses the slugged canonical', () => {
     const html = renderTitlePage('movie', 106, SAMPLE, 'https://x.videx', 'android');
@@ -119,7 +120,7 @@ describe('renderTitlePage CTA by platform', () => {
 
 describe('renderTitleNotFoundPage', () => {
   it('renders the platform CTA', () => {
-    expect(renderTitleNotFoundPage('ios')).toContain('Coming soon to the App Store');
+    expect(renderTitleNotFoundPage('ios')).toContain('Get Videx on iOS');
     expect(renderTitleNotFoundPage('android')).toContain('Get Videx on Android');
   });
   it('stays noindex', () => {
