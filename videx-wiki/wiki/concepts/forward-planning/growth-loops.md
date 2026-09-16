@@ -2,10 +2,10 @@
 title: Growth loops (G-phases)
 type: concept
 tags: [forward-planning, growth, loops, sharing, deep-links, universal-links, attribution, households, seo]
-status: in build — G0/G1 plan approved 2026-09-14; S1 links merged and deployed 2026-09-15 (PRs #172, #183, #184; migration 088 applied; routes and association files live; App Store flip + rebuilds pending; summary docs/v2/phase-summaries/phase-growth-s1-summary.md); S2 attribution built 2026-09-15 (branch feat/growth-s2-attribution, migration 090 awaiting Joe); S3 sign-in in parallel; then S4 sharing, S5 verification
+status: in build — S1 links merged 2026-09-15; S2 attribution merged and live 2026-09-16 (PR #188, migration 090 applied); S3 sign-in draft PR #187 (rebase + Joe console items + decisions IN-GR-010/011); S4 sharing handoff written 2026-09-16, runs in parallel with S3; native rebuild after S3 and S4; S5 verification
 horizon: H1 onward (runs beside the user track and search track from Roadmap v1.1)
 created: 2026-09-14
-updated: 2026-09-15
+updated: 2026-09-16
 sources:
   - raw/forward-planning/Videx_Growth_Loops_Strategy_v0.1_2026-09.md
   - docs/plans/2026-09-14-003-feat-phase-g0-g1-growth-foundations-and-sharing-plan.md (repo; not snapshotted into raw/)
@@ -20,7 +20,7 @@ related:
 
 # Growth loops (G-phases)
 
-> **Status: S2 (attribution) built 2026-09-15** — `growth_events` (migration 090, awaiting Joe), Worker `POST /v1/growth/events` + `preview_fetched` / `preview_opened` on the pages, app install id + first touch + `first_open` / `link_opened` / `signup_completed`, Android Play Install Referrer as a local Expo module (`native/modules/play-install-referrer`) carrying the object for the deferred deep link, `supabase/queries/growth-dashboard.sql`, privacy + store-form drafts (not filed); see [event taxonomy](../../entities/codebase/event-taxonomy.md); follow-ups IN-GR-005..009.
+> **Status: S2 (attribution) merged and live 2026-09-16 (PR #188; migration 090 applied; privacy wording live; store forms drafted, not filed)** — `growth_events`, Worker `POST /v1/growth/events` + `preview_fetched` / `preview_opened` on the pages, app install id + first touch + `first_open` / `link_opened` / `signup_completed`, Android Play Install Referrer as a local Expo module (`native/modules/play-install-referrer`) carrying the object for the deferred deep link, `supabase/queries/growth-dashboard.sql`, privacy + store-form drafts (not filed); see [event taxonomy](../../entities/codebase/event-taxonomy.md); follow-ups IN-GR-005..009.
 >
 > **Status: S1 (links) built 2026-09-14** — [ADR-015](../decisions/adr-015-object-urls-and-inbound-links.md), [inbound deep linking](../techniques/inbound-deep-linking.md), migration 088, follow-ups IN-GR-001..004. Merged, deployed, 088 applied and routes live 2026-09-15; Android fingerprints done (IN-GR-001 closed); still pending: App Store flip (IN-GR-002), rebuilds (held until the other streams finish), device checks (S5). Summary: `docs/v2/phase-summaries/phase-growth-s1-summary.md`. **G0/G1 approved.** Strategy at `docs/strategy/Videx_Growth_Loops_Strategy_v0.1.md` (summary: [source page](../../sources/growth-loops-strategy-v0-1.md)). The G0 + G1 audit and plan is `docs/plans/2026-09-14-003-…-plan.md`; its §9 records the 19 decisions Joe took on 14 Sept and §13 the five-session execution. S1 handoff: `docs/plans/2026-09-14-004-handoff-growth-s1-links.md`. Go-to-market: all loops go live together. Update this page when a session ships.
 
@@ -75,6 +75,10 @@ Object URLs are Worker-owned on the web and Expo Router-owned on device. The Vit
 ## Shipped
 
 - **S1 links (2026-09-15, PRs #172/#183/#184; summary `docs/v2/phase-summaries/phase-growth-s1-summary.md`):** ADR-015; `/t/{type}/{tmdbId}-{slug}` with 301 to canonical and the iOS smart banner; `shared_rooms` snapshots (migration 088) with `GET /room/:id`, `GET /v1/room/:id`, `POST /v1/share/room`; `/list/:id` reserved; AASA and assetlinks.json live (IN-GR-001 closed: Play App Signing uses the upload key); `native/app.json` associated domains + intent filter; `+native-intent` mapping + pending link (24h, resumed after sign-in or onboarding); `room/[id]` screen; share on For You room cards. Not yet in a device build (rebuild held until S2 and S3 merge). Open: IN-GR-002 (App Store CTA), IN-GR-003 (no global-room surface), IN-GR-004 (cold-start stack recheck). Strategy-thread review in the plan §11a; S2/S3 handoffs: `docs/plans/2026-09-15-001-handoffs-growth-s2-s3.md`.
+
+- **S2 attribution (2026-09-16, PR #188):** `growth_events` (090) written only by the Worker with 12-month retention and delete/export coverage (also by install id); `POST /v1/growth/events`; `preview_fetched` / `preview_opened` on title and room pages (cache hits included; UA and IP not stored); Play referrer names the object (`via=share&t=movie-550`) for the Android deferred deep link; app install id, first touch, `first_open` (with `prior_install`), `link_opened`, `signup_completed`; `first_home_view` carries the source; local Expo module for the Play Install Referrer (Kotlin, not yet compiled, IN-GR-005); `growth-dashboard.sql`. Store labels: Apple Linked to You, Play Device or other IDs (to file with the next build). Follow-ups IN-GR-005..009. Strategy-thread review in the plan §11b.
+- **S3 sign-in:** draft PR #187 (not merged 2026-09-16); decisions IN-GR-010 (Apple token revocation) and IN-GR-011 (Confirm email before providers) in the plan §9d.
+- **S4 sharing:** handoff `docs/plans/2026-09-16-001-handoff-growth-s4-sharing.md`.
 
 ## Measures to stand up in G1
 

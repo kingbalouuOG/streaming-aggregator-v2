@@ -1761,3 +1761,9 @@ only thing at stake.
 - Updated: wiki/entities/codebase/event-taxonomy.md (growth_events section, first_home_view via/src), wiki/entities/codebase/migrations.md (090), wiki/concepts/forward-planning/growth-loops.md (status), wiki/registers/parking-lot.md (IN-GR-005..009)
 - Plan corrections: Apple label should be *Linked to You* (signup rows carry user_id), Play also needs *Device or other IDs* for an app-level id; deletion must reach pre-sign-up install rows; existing installs updating would each send a `first_open` (flagged `prior_install`).
 - Not done here: apply 090 + typegen (Joe), Worker deploy on merge, post-deploy curl/select checks, store forms, Kotlin compile (first CI Android build), device checks (S5).
+
+## [2026-09-16] query | Growth S2 reviewed in the strategy thread; S3 status; S4 handoff written
+- S2 summary reconciled into the plan (§11b): store labels corrected (Apple Linked to You; Play Device or other IDs), deletion by install id (IN-GR-009), prior_install heuristic (IN-GR-006), local Install Referrer module uncompiled (IN-GR-005).
+- S3 recorded as draft PR #187, conflicting with main after S2; blocked on Joe (089, providers, Google clients, env vars). Decisions IN-GR-010/011 with recommendations in plan §9d (Confirm email on before providers; build Apple token revocation in S3 once the key exists); IN-GR-012/013/014 assigned to S3.
+- New: docs/plans/2026-09-16-001-handoff-growth-s4-sharing.md (share copy with the availability line, share events, notification delivery_id + notification_opened, session origin + "Tell someone", dashboard switch; runs in parallel with S3's finish; IN-GR-015..019 reserved).
+- Updated: wiki/concepts/forward-planning/growth-loops.md (status, Shipped: S2, S3, S4 lines)
