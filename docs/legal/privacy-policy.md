@@ -62,18 +62,18 @@ following data in the database tables listed:
 - **Install and sharing attribution** (`growth_events`): the first
   time you open Videx, the app creates a random install identifier.
   Videx generates it itself: it is not your device's advertising ID
-  or any hardware identifier, and it goes away if you uninstall the
-  app. Videx records it with a few moments in your use of the app
-  (first opening the app, opening a Videx link, finishing sign-up)
-  together with the link that brought you to Videx: what kind of link
-  it was (for example a share or a notification), whether it came from
-  a notification, the title or room it pointed to, and on Android the
-  referral Google Play passes on when you install from a Videx page.
-  We also count, with no identifier at all, when a shared Videx page
-  is previewed by a chat app or opened in a browser. This is used only
-  to measure how sharing brings people to Videx. It is kept for 12
-  months, and deleting your account deletes it, including anything
-  recorded on your install before you signed up.
+  or a hardware identifier. Videx records it alongside some of the
+  things you do in the app, such as opening it for the first time,
+  opening a Videx link, finishing sign-up or sharing, together with
+  how you reached Videx: the kind of link or notification involved,
+  the title or room it pointed to, and on Android the referral Google
+  Play passes on when you install from a Videx page. We also count,
+  without any identifier, when a shared Videx page is previewed by a
+  chat app or opened in a browser. We use this to understand how
+  people find Videx and how sharing works, and to take you to the
+  title or room a link pointed to once you have signed up. It is kept
+  for up to 12 months. When you delete your account, we delete the
+  records we can connect to it.
 
 We never collect any of: your location, anything happening in other
 apps on your device, what you actually watch on the streaming
@@ -198,8 +198,8 @@ exposed in the app:
 - **`card_impressions` rows older than 90 days are rolled up into
   daily aggregates and the original rows are deleted.** This is an
   automatic database job; nothing you do triggers it.
-- **`growth_events` rows (install and sharing attribution) are
-  deleted after 12 months**, by the same kind of automatic job.
+- **`growth_events` rows (install and sharing attribution) are kept
+  for up to 12 months**, then deleted by an automatic job.
 - All other tables described in §2 persist until you delete your
   account.
 
@@ -219,7 +219,7 @@ cookies. It does use the device's local storage for:
   before they're flushed to the server.
 - The random install identifier and the link that first brought you
   to Videx (see "Install and sharing attribution" in §2). Signing out
-  does not clear them; uninstalling the app does.
+  does not clear them.
 
 None of these are used for tracking.
 
