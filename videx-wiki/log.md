@@ -1774,3 +1774,13 @@ only thing at stake.
 - Plan corrections: Google on iOS needs Supabase "Skip nonce check"; Apple's black button is not allowed on a dark UI (WHITE used); the prompt is a full-screen step, not a modal (reached by replace, nothing beneath); the prompt runs before Curating, not only from the tabs guard, so the pending link still resumes; the app displays `user_metadata.username`, not `profiles.username`; `expo prebuild --platform ios` does not run on Windows (entitlement evidence taken from `expo config --type introspect`).
 - New register rows: IN-GR-010 (Apple token revocation, decision), IN-GR-011 (auto-linking with Confirm email off, decision), IN-GR-012 (pending link consumed early on `/auth` provider sign-up), IN-GR-013 (Profile username edit skips `profiles`), IN-GR-014 (policy text).
 - Updated: wiki/registers/parking-lot.md, wiki/entities/codebase/migrations.md (089), wiki/concepts/product/privacy-and-gdpr.md (sign-in providers), wiki/concepts/forward-planning/growth-loops.md (status, Shipped)
+
+## [2026-09-16] ingest | Growth S3 follow-ups (IN-GR-010..014)
+- Built in the S3 thread after #187 merged (branch feat/growth-s3-followups).
+- IN-GR-011: Step 1 "Check your email" + `ResendConfirmation`; `AuthScreen` handles `email_not_confirmed`; Worker `/reset` bridge accepts `type=email|signup` → `videx://confirm-email` (new `confirm-email.tsx`, `verifyOtp`); `inboundLink` passes it through.
+- IN-GR-012: `app/auth.tsx` consumes the pending link only once onboarding is known complete.
+- IN-GR-013: `ProfileAccount.tsx` writes `profiles.username` then `user_metadata`.
+- IN-GR-010: `supabase/functions/revoke-apple-token` + `_shared/appleClientSecret.ts` (ES256 client secret, Web Crypto; vitest now includes `supabase/functions/_shared/__tests__`); `deleteAccount` re-authorises with Apple on iOS first.
+- IN-GR-014: privacy policy §2 "Sign-in details", §6 username wording; in-app mirror re-synced (it lacked S2's attribution paragraph).
+- New: IN-GR-020 (Android cannot revoke), IN-GR-021 (confirmation link on another device), IN-GR-022 (pre-existing `deno check` errors in `_shared/userScope.ts`).
+- Updated: wiki/registers/parking-lot.md, wiki/concepts/operations/auth-email-smtp.md (Confirm signup template), wiki/concepts/product/privacy-and-gdpr.md, wiki/concepts/forward-planning/growth-loops.md; docs/v2/launch/release-runbook.md steps 6–7

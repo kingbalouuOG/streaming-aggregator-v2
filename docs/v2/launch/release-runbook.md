@@ -83,7 +83,24 @@ After install: Android `adb shell pm verify-app-links --re-verify app.videx.stre
    Expect `"apple":true` and `"google":true` under `external`.
 5. **Apple Developer portal:** the App ID `app.videx.streaming` has *Sign In with Apple*; the EAS build log shows the capability sync. If Videx ever emails users (beyond Supabase Auth mail), register the sending domain under *Sign in with Apple for Email Communication*, or mail to Hide My Email relay addresses bounces.
 
-After install (S5 device pass): Apple on a physical iPhone (new account, returning account, Hide My Email); Google on iPhone and Android; `select provider, count(*) from auth.identities group by 1` shows the new rows; a new provider account starts onboarding at Connect Services and meets "Choose your name" before Curating. Open review risk: Apple token revocation on account deletion (IN-GR-010).
+After install (S5 device pass): Apple on a physical iPhone (new account, returning account, Hide My Email); Google on iPhone and Android; `select provider, count(*) from auth.identities group by 1` shows the new rows; a new provider account starts onboarding at Connect Services and meets "Choose your name" before Curating. The S3 follow-ups (IN-GR-010..014) add the two steps below.
+
+6. **Apple token revocation (IN-GR-010, App Store 5.1.1(v)).** Deleting an Apple-linked account on iPhone re-authorises with Apple and calls the `revoke-apple-token` Edge Function before `delete_own_account`; nothing is deleted if the revoke fails. Once, before the build ships:
+   1. Apple Developer → Keys → **+** → Sign in with Apple → Configure → primary App ID `app.videx.streaming` → download the `.p8` (downloadable once) and note the **Key ID**.
+   2. Set the secrets from Git Bash (the key file stays on your machine; never paste it into chat or commit it):
+      ```bash
+      npx supabase secrets set --project-ref fmusugdcnnwiuzkbjquo APPLE_TEAM_ID=CT8F3578W8 APPLE_CLIENT_ID=app.videx.streaming APPLE_KEY_ID=<key id> APPLE_PRIVATE_KEY="$(cat AuthKey_<key id>.p8)"
+      ```
+   3. Deploy:
+      ```bash
+      npx supabase functions deploy revoke-apple-token --project-ref fmusugdcnnwiuzkbjquo
+      ```
+   4. Check: `curl -s -X POST https://fmusugdcnnwiuzkbjquo.supabase.co/functions/v1/revoke-apple-token` returns 401 (JWT required). A real revoke needs a physical iPhone and an Apple-linked test account (S5).
+7. **Confirm email (IN-GR-011).** Auto-linking a Google/Apple identity into an email account is only safe when email accounts had to prove their address. The app handles "no session after sign-up" from this build on ("Check your email" in onboarding Step 1, a resend button, a "confirm your email first" notice on sign-in, and the `videx://confirm-email` screen). In this order:
+   1. Supabase → Authentication → Emails → **Confirm signup** template: make the button link go through the Worker bridge, exactly like the reset template: `https://videxstreaming.com/reset?token_hash={{ .TokenHash }}&type=email`. Save, then send yourself a test sign-up and check the link in the received email (template saves have silently not taken before; see the auth-email-smtp wiki runbook).
+   2. On the day the build carrying this reaches testers: Authentication → Sign In / Providers → Email → **Confirm email: on**. Before that build, keep it off: older builds advance onboarding without a session and "Finish setup" fails.
+   3. Provider sign-ins are unaffected (Apple and Google emails are already verified). Existing email accounts are already confirmed.
+   4. Check: `curl -s https://fmusugdcnnwiuzkbjquo.supabase.co/auth/v1/settings -H "apikey: <publishable key>"` shows `"mailer_autoconfirm":false`.
 
 ---
 
