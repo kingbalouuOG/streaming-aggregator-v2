@@ -2,7 +2,7 @@
 title: Growth loops (G-phases)
 type: concept
 tags: [forward-planning, growth, loops, sharing, deep-links, universal-links, attribution, households, seo]
-status: in build — S1 links merged 2026-09-15; S2 attribution merged and live 2026-09-16 (PR #188, migration 090 applied); S3 sign-in merged 2026-09-16 (PR #187; 089 applied; providers, Google clients and client-id env verified); S3 follow-ups IN-GR-010..014 built 2026-09-16 (PR open; Joe: Apple key + function deploy, Confirm signup template, policy wording); S4 sharing handoff written 2026-09-16, runs in parallel with S3; native rebuild after S3 and S4; S5 verification
+status: in build — S1 links (15 Sept), S2 attribution (16 Sept) and S3 sign-in (16 Sept, PRs #187/#190) merged; 088/089/090 applied; Confirm email off until the rebuild reaches testers; S4 sharing next (handoff 2026-09-16-001), then one rebuild of both platforms and S5 verification
 horizon: H1 onward (runs beside the user track and search track from Roadmap v1.1)
 created: 2026-09-14
 updated: 2026-09-16
