@@ -120,6 +120,7 @@ function RootLayout() {
             <Stack.Screen name="reset-password" options={{ animation: 'fade' }} />
             <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
             <Stack.Screen name="curating" options={{ animation: 'fade' }} />
+            <Stack.Screen name="choose-username" options={{ animation: 'fade', gestureEnabled: false }} />
             <Stack.Screen name="detail/[id]" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="room/[id]" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="profile/[section]" options={{ animation: 'slide_from_right' }} />
