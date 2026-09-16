@@ -1,5 +1,5 @@
 import { GoogleSignin, isCancelledResponse, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
-import type { Session } from '@supabase/supabase-js';
+import type { Session, User } from '@supabase/supabase-js';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
@@ -31,7 +31,6 @@ import { clearQueryCache } from '@/queryPersist';
 // forgotPassword sends the reset email with a redirectTo deep link back
 // into the app (videx://reset-password); the /reset-password route
 // handles the recovery session and password update (A5 / roadmap 0.8).
-// Account deletion remains deferred.
 //
 // ⚠ Supabase dashboard requirement: `videx://reset-password` (or
 // `videx://*`) MUST be in Authentication → URL Configuration → Redirect
@@ -64,12 +63,15 @@ export interface ProviderSignInResult {
 interface AuthState {
   session: Session | null;
   initializing: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  /** errorCode is Supabase's code, e.g. 'email_not_confirmed'. */
+  signIn: (email: string, password: string) => Promise<{ error: string | null; errorCode: string | null }>;
   signUp: (
     email: string,
     password: string,
     username?: string,
   ) => Promise<{ error: string | null; needsConfirmation: boolean }>;
+  /** Re-send the sign-up confirmation email (Confirm email on). */
+  resendConfirmation: (email: string) => Promise<{ error: string | null }>;
   signInWithApple: () => Promise<ProviderSignInResult>;
   signInWithGoogle: () => Promise<ProviderSignInResult>;
   /** iOS with Sign in with Apple available on the device. */
@@ -79,7 +81,8 @@ interface AuthState {
   signOut: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ error: string | null }>;
   checkUsernameAvailable: (username: string) => Promise<boolean>;
-  deleteAccount: () => Promise<{ error: string | null }>;
+  /** cancelled: the person closed Apple's confirmation sheet; nothing was deleted. */
+  deleteAccount: () => Promise<{ error: string | null; cancelled?: boolean }>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -106,6 +109,18 @@ function configureGoogle() {
   GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID, iosClientId: GOOGLE_IOS_CLIENT_ID });
   googleConfigured = true;
 }
+
+/** Whether the account has a Sign in with Apple identity (its own, or linked
+ *  to an email account by matching address). */
+export function hasAppleIdentity(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.identities?.some((i) => i.provider === 'apple')) return true;
+  const providers = user.app_metadata?.providers as string[] | undefined;
+  return Array.isArray(providers) && providers.includes('apple');
+}
+
+const APPLE_REVOKE_FAILED =
+  "We couldn't disconnect Sign in with Apple, so your account has not been deleted. Try again, or email privacy@videxstreaming.com.";
 
 function providerFailure(provider: 'Apple' | 'Google'): ProviderSignInResult {
   return { error: `Couldn't sign in with ${provider}. Try again, or use your email.`, userId: null };
@@ -205,7 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isGoogleAvailable: GOOGLE_AVAILABLE,
       async signIn(email, password) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
-        return { error: error?.message ?? null };
+        return { error: error?.message ?? null, errorCode: error?.code ?? null };
       },
       async signUp(email, password, username) {
         const { data, error } = await supabase.auth.signUp({
@@ -218,6 +233,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // No session back on signUp ⇒ email confirmation is on.
           needsConfirmation: !error && !data.session,
         };
+      },
+      async resendConfirmation(email) {
+        const { error } = await supabase.auth.resend({ type: 'signup', email });
+        return { error: error?.message ?? null };
       },
       async signInWithApple() {
         try {
@@ -296,8 +315,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return data === true;
       },
       async deleteAccount() {
-        // IN-GR-010: an Apple-linked account should also revoke its Apple
-        // token here (App Store 5.1.1(v)); not built yet.
+        // IN-GR-010 (App Store 5.1.1(v)): an Apple-linked account revokes its
+        // Apple tokens first. Videx stores none, so re-authorise with Apple for
+        // a fresh authorization code and let revoke-apple-token exchange and
+        // revoke it. Nothing is deleted unless that succeeds. Apple sign-in
+        // exists only on iOS; on Android the revoke is skipped (IN-GR-020).
+        if (hasAppleIdentity(session?.user) && isAppleAvailable) {
+          let authorizationCode: string | null = null;
+          try {
+            const credential = await AppleAuthentication.signInAsync({ requestedScopes: [] });
+            authorizationCode = credential.authorizationCode;
+          } catch (e) {
+            if ((e as { code?: string } | null)?.code === 'ERR_REQUEST_CANCELED') return { error: null, cancelled: true };
+            console.error('[Auth] Apple re-authorisation for deletion failed:', e);
+            return { error: APPLE_REVOKE_FAILED };
+          }
+          if (!authorizationCode) return { error: APPLE_REVOKE_FAILED };
+          const { error: revokeError } = await supabase.functions.invoke('revoke-apple-token', {
+            body: { authorizationCode },
+          });
+          if (revokeError) {
+            console.error('[Auth] revoke-apple-token failed:', revokeError);
+            return { error: APPLE_REVOKE_FAILED };
+          }
+        }
         const { error } = await supabase.rpc('delete_own_account');
         if (error) return { error: error.message };
         // Deletion also ends the session; mirror signOut's local wipe.

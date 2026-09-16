@@ -29,6 +29,8 @@ export default defineConfig({
       'scripts/**/__tests__/**/*.test.ts',
       // PLAT-2: the Worker's pure rules (no Workers/Hono imports there).
       'workers/api/src/**/__tests__/**/*.test.ts',
+      // Growth S3 follow-up: pure Edge Function helpers (Web Crypto only, no Deno APIs).
+      'supabase/functions/_shared/__tests__/**/*.test.ts',
     ],
     exclude: [
       '**/node_modules/**',

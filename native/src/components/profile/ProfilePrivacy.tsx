@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LegalSheet } from '@/components/LegalSheet';
 import { PRIVACY_POLICY_MD, TERMS_MD } from '@/legal/policyContent';
-import { useAuth } from '@/providers/auth';
+import { hasAppleIdentity, useAuth } from '@/providers/auth';
 import { SubScreenHeader } from './SubScreenHeader';
 
 // Profile → Privacy & Data (web PrivacyDataPage). Intro + what-Videx-learns +
@@ -32,7 +32,10 @@ const NO_TRACK = [
 ];
 
 export function ProfilePrivacy() {
-  const { session, deleteAccount } = useAuth();
+  const { session, deleteAccount, isAppleAvailable } = useAuth();
+  // Growth S3 follow-up (IN-GR-010): deleting an Apple-linked account first
+  // asks Apple to confirm, so Videx can revoke Sign in with Apple.
+  const appleLinked = isAppleAvailable && hasAppleIdentity(session?.user);
   const username =
     ((session?.user?.user_metadata?.username as string | undefined) ?? '') ||
     session?.user?.email?.split('@')[0] ||
@@ -53,6 +56,7 @@ export function ProfilePrivacy() {
     setBusy(false);
     if (e) setError(e);
     // Success ends the session → the app routes back to auth automatically.
+    // Closing Apple's sheet (cancelled) returns no error and deletes nothing.
   };
 
   return (
@@ -136,6 +140,11 @@ export function ProfilePrivacy() {
               This permanently deletes your account, preferences, watchlist, and ratings. This can&apos;t
               be undone.
             </Text>
+            {appleLinked ? (
+              <Text className="mt-2 font-sans text-meta text-muted-foreground">
+                You&apos;ll be asked to confirm with Apple, so Videx can disconnect Sign in with Apple.
+              </Text>
+            ) : null}
             <Text className="mt-4 font-sans-medium text-meta text-muted-foreground">
               Type your username to confirm
             </Text>

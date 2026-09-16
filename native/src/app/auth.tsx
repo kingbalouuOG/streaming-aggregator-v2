@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback } from 'react';
 
 import { AuthScreen } from '@/components/auth/AuthScreen';
+import { useOnboardingStatus } from '@/hooks/useOnboardingStatus';
 import { consumePendingLink } from '@/pendingLink';
 import { useAuth } from '@/providers/auth';
 
@@ -18,18 +19,29 @@ import { useAuth } from '@/providers/auth';
 // top of the tabs (so Back returns to them, not to a dead end). A focus
 // effect, like <Redirect>: this screen stays mounted beneath /onboarding
 // during sign-up, and must not navigate from there.
+//
+// Growth S3 follow-up (IN-GR-012): only an account that has finished
+// onboarding resumes the link here. A new account (Apple or Google on this
+// screen, or a confirmed email sign-up signing in) is about to be sent to
+// onboarding by the tabs guard, so the link is left for curating.tsx, which
+// resumes it once setup is done. Wait for the onboarding answer rather than
+// treating "still loading" as "not onboarded"; if the check fails, go to "/"
+// and leave the link (the guard shows its retry state).
 export default function AuthRoute() {
   const { session, initializing } = useAuth();
   const router = useRouter();
   const signedIn = !initializing && !!session;
+  const onboarding = useOnboardingStatus(signedIn ? session?.user?.id : undefined);
+  const known = signedIn && !onboarding.isLoading && !(onboarding.isFetching && !onboarding.data);
+  const onboarded = onboarding.data === true;
 
   useFocusEffect(
     useCallback(() => {
-      if (!signedIn) return;
-      const pending = consumePendingLink();
+      if (!known) return;
+      const pending = onboarded ? consumePendingLink() : null;
       router.replace('/');
       if (pending) setTimeout(() => router.push(pending.route as Href), 0);
-    }, [signedIn, router]),
+    }, [known, onboarded, router]),
   );
 
   if (signedIn) return null;

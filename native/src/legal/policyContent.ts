@@ -15,12 +15,12 @@
  * Verbatim from the .md as of the dates below.
  */
 
-export const PRIVACY_POLICY_LAST_UPDATED = '7 July 2026';
+export const PRIVACY_POLICY_LAST_UPDATED = '16 September 2026';
 export const TERMS_LAST_UPDATED = '6 July 2026';
 
 export const PRIVACY_POLICY_MD = `# Privacy Policy
 
-**Last updated:** 8 September 2026
+**Last updated:** 16 September 2026
 **Effective from:** 6 July 2026
 
 ## 1. Who we are
@@ -36,6 +36,7 @@ If you have any questions about how Videx handles your data, or you want to exer
 When you create an account and use the app, Videx stores the following data in the database tables listed:
 
 - **Account record** (profiles): your username, your UK region, your theme preference, the viewing context you picked at onboarding (solo / with partner / with family / with friends / wind down / background / focused), your age range, and whether you finished the onboarding flow.
+- **Sign-in details** (Supabase Auth): your email address and, if you sign up with one, a password, which is stored only as a secure hash. If you sign in with Apple or Google instead, Videx never sees a password: Apple or Google confirms who you are, and Supabase Auth keeps the details they send with your account. From Google that is your name, email address and profile photo link. From Apple it is your email address, which is a private relay address if you chose Hide My Email. Apple may also share your first name the first time you sign in; the app uses it only to suggest a username and does not store it. When you delete your account from the iPhone app, Videx also asks Apple to disconnect Videx from your Apple ID.
 - **Interaction history** (user_interactions): every thumbs up, thumbs down, watched mark, watchlist add, dismiss, detail-page view, and time-on-detail-page reading you do in the app — each stamped with the content's TMDb id and the time you did it. This also includes your click-outs: when you tap through to a streaming service to watch something, Videx records which service you tapped, whether it sent you to an exact title link or to a search page, and the rent or buy price (if any) that was shown on screen at the moment you tapped. It also includes your searches: when you search, the words you typed or the mood card you tapped, together with how many results came back.
 - **Impression log** (card_impressions): which titles surfaced in front of you, in which row, in what position, at what time, and with what context. Rolled up to daily aggregates after 90 days; see §7.
 - **Taste profile** (taste_profiles): a 1,536-dimensional taste vector computed locally from your interaction history, plus the four slider positions (catalogue age, comfort zone, content mix, variety) you set on the For You page.
@@ -47,6 +48,7 @@ When you create an account and use the app, Videx stores the following data in t
 - **Interest centroids** (user_interest_centroids): up to three derived "sub-taste" vectors, computed from your interaction history the same deterministic way as the main taste vector above.
 - **App feedback** (app_feedback): any feedback you choose to submit through the in-app feedback form.
 - **Feature flags** (user_feature_flags): per-account flags that turn experimental features on or off for you.
+- **Install and sharing attribution** (growth_events): the first time you open Videx, the app creates a random install identifier. Videx generates it itself: it is not your device's advertising ID or a hardware identifier. Videx records it alongside some of the things you do in the app, such as opening it for the first time, opening a Videx link, finishing sign-up or sharing, together with how you reached Videx: the kind of link or notification involved, the title or room it pointed to, and on Android the referral Google Play passes on when you install from a Videx page. We also count, without any identifier, when a shared Videx page is previewed by a chat app or opened in a browser. We use this to understand how people find Videx and how sharing works, and to take you to the title or room a link pointed to once you have signed up. It is kept for up to 12 months. When you delete your account, we delete the records we can connect to it.
 
 We never collect any of: your location, anything happening in other apps on your device, what you actually watch on the streaming services themselves, your photos, contacts, or any biometric data.
 
@@ -97,7 +99,7 @@ Under UK GDPR you have the following rights over your data. Each is exposed in t
 - **Right to access.** You can see every piece of data Videx holds about you by opening Profile → Settings → Privacy & Data → Download my data — see §6.3.
 - **Right to deletion (right to be forgotten).** Profile → Settings → Privacy & Data → Delete my account permanently removes your account record and every row of data described in §2 within seconds. The deletion is irreversible.
 - **Right to data portability.** Profile → Settings → Privacy & Data → Download my data returns a single JSON file containing every row of data described in §2, in machine-readable form. You can take this to any other recommendation service that accepts it.
-- **Right to rectification.** You can update your profile details (region, viewing context, age range) from Profile → Settings at any time. To change your username, email Joe at the address in §1.
+- **Right to rectification.** You can change your username and your profile details (region, viewing context, age range) in the app at any time: the username in Profile → Account Details, the rest in Profile → Settings.
 - **Right to restrict / object to processing.** Write to Joe at the address in §1 to discuss specific concerns — there are no automated decisions made about you within the app that produce legal effects.
 - **Right to complain to the ICO.** If you think Videx has mishandled your data, you can complain to the UK Information Commissioner's Office at https://ico.org.uk/make-a-complaint/.
 
@@ -137,7 +139,7 @@ For a regulatory complaint, contact the UK Information Commissioner's Office: ht
 
 ---
 
-Videx is operated by Joe Green as an individual data controller based in the United Kingdom. This page describes how the app actually handles your data; if that changes, we update this page and (per §10) notify signed-in users. Last updated 8 September 2026.`;
+Videx is operated by Joe Green as an individual data controller based in the United Kingdom. This page describes how the app actually handles your data; if that changes, we update this page and (per §10) notify signed-in users. Last updated 16 September 2026.`;
 
 export const TERMS_MD = `# Terms of Service
 

@@ -46,7 +46,7 @@ import {
 } from './rules';
 import { verifySupabaseJwt } from './auth';
 import { markdownToHtml, renderPolicyPage } from './policyPages';
-import { renderResetBridgePage, TOKEN_HASH_RE } from './resetBridge';
+import { bridgeAppUrl, bridgeKind, renderResetBridgePage } from './resetBridge';
 import {
   CANONICAL_REF_HEADER,
   platformBucket,
@@ -222,17 +222,15 @@ app.get('/delete-account', (c) => {
 // Security: the token is single-use + short-lived and never logged here;
 // the page is no-store; token_hash is charset-validated before being
 // interpolated (defence against attribute/JS injection via the param).
+// Growth S3 follow-up: the sign-up confirmation email uses the same route
+// with type=email and lands on videx://confirm-email (see resetBridge.ts).
 app.get('/reset', (c) => {
   c.header('Cache-Control', 'private, no-store');
   c.header('Referrer-Policy', 'no-referrer');
   htmlSecurityHeaders(c);
-  const tokenHash = c.req.query('token_hash') ?? '';
-  const type = c.req.query('type') === 'recovery' ? 'recovery' : '';
-  if (!TOKEN_HASH_RE.test(tokenHash) || !type) {
-    return c.html(renderResetBridgePage(null), 400);
-  }
-  const appUrl = `videx://reset-password?token_hash=${tokenHash}&type=${type}`;
-  return c.html(renderResetBridgePage(appUrl));
+  const type = c.req.query('type') ?? '';
+  const appUrl = bridgeAppUrl(c.req.query('token_hash') ?? '', type);
+  return c.html(renderResetBridgePage(appUrl, bridgeKind(type)), appUrl ? 200 : 400);
 });
 
 

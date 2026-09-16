@@ -16,6 +16,7 @@ import { LegalSheet } from '@/components/LegalSheet';
 import { PRIVACY_POLICY_MD, TERMS_MD } from '@/legal/policyContent';
 import { isValidUsername, normaliseUsernameInput } from '@/lib/auth/username';
 import { useAuth } from '@/providers/auth';
+import { CheckEmail } from './CheckEmail';
 
 // Onboarding Step 1 — "Join VIDEX" (matches V2 Onboarding/Step 1.png).
 // Account creation: validated email/username/password/confirm, optional
@@ -39,9 +40,16 @@ const MUTED = 'rgba(245,241,232,0.62)';
 export function StepAccount({
   onAccountCreated,
   onProviderSignedIn,
+  pendingEmail,
+  onConfirmationPending,
+  onChangeEmail,
 }: {
   onAccountCreated: (ageRange: string | null, viewingContext: string | null) => void;
   onProviderSignedIn: (userId: string, ageRange: string | null, viewingContext: string | null) => void;
+  /** Set while a confirmation email is outstanding (Confirm email on). */
+  pendingEmail: string | null;
+  onConfirmationPending: (email: string, ageRange: string | null, viewingContext: string | null) => void;
+  onChangeEmail: () => void;
 }) {
   const { signUp, checkUsernameAvailable } = useAuth();
   const [email, setEmail] = useState('');
@@ -100,11 +108,16 @@ export function StepAccount({
     if (!canSubmit || busy) return;
     setBusy(true);
     setError(null);
-    const { error: e } = await signUp(email.trim(), password, username);
+    const { error: e, needsConfirmation } = await signUp(email.trim(), password, username);
     setBusy(false);
     if (e) setError(e);
+    // Growth S3 follow-up (IN-GR-011): with Confirm email on there is no
+    // session yet, so wait for the link instead of advancing without one.
+    else if (needsConfirmation) onConfirmationPending(email.trim(), ageRange, viewing);
     else onAccountCreated(ageRange, viewing);
   };
+
+  if (pendingEmail) return <CheckEmail email={pendingEmail} onChangeEmail={onChangeEmail} />;
 
   const fieldBorder = (touched: boolean, valid: boolean) =>
     !touched ? 'border-border' : valid ? 'border-success/50' : 'border-danger/60';
