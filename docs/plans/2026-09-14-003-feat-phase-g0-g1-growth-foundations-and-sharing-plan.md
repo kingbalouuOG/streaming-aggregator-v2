@@ -284,6 +284,24 @@ Open follow-ups: IN-GR-020 (Android cannot revoke, parked), IN-GR-021 (a confirm
 
 **Consequence for S4 and S5.** S4 no longer runs in parallel with anything; it branches from a `main` that carries S1 to S3. The one rebuild of both platforms happens after S4 merges; it is also the first compile of S2's Kotlin referrer module (IN-GR-005), so a build-only run of `android-release.yml` (manual "Run workflow" without submit produces artifacts only) is worth kicking off now, while S4 runs, to surface compile errors early.
 
+## 11d. S4 outcome (reviewed 16 September)
+
+**S4 sharing: merged and deployed** (PR #192 merge `adf2882`; close-out docs PR #193; Worker deployed by CI; `send-notifications` v8 deployed by Joe with JWT checking on). No migration. App changes are on `main` and ship in the one rebuild before S5. Summary: `docs/v2/phase-summaries/phase-growth-s4-summary.md`.
+
+| Plan said | What happened | Consequence |
+|---|---|---|
+| Rent-or-buy example "Apple TV and Prime" | Contradicted the rule that labels match the Worker page; copy reads "Apple TV+ and Prime Video". Labels now live in `src/lib/growth/serviceLabels.ts`, used by both. | Fine. |
+| `notification_opened` per S2's union | Had no metadata slot; one was added. | Fine. |
+| "Single-title push" means one delivery row | A push led by one arrival can carry leaving-soon titles under the same send; payload and CTR query decide from the lead title. | Recorded in `notifications-v1.md`; IN-GR-026 for bundles. |
+| Room card logs `share_initiated` on tap | The room does not exist until its snapshot is created, so the card logs once the POST succeeds (IN-GR-024). | Undercounts failed snapshot attempts; accepted. |
+| Deno test for `composeMessage` | Followed the repo's pattern instead: a pure module tested by the root vitest, so CI runs it. | Better. |
+| Nothing said about replay | The SDK returns the most recent notification response, not only the launching one; the handled response is now cleared (IN-GR-027, device check S4-11). | Good catch. |
+| Banner under the hero title | The hero title is laid over the image, so the banner sits under the meta line. | Fine. |
+
+Also from S4: the session origin survives a session reset for 10 seconds because the waking tap can arrive before the reset; the 16 Sept Android build-only run (`386e26a`) succeeded and compiled the Kotlin referrer module (IN-GR-005 compile risk cleared; runtime is an S5 check); the "Pipeline health" workflow has been failing since 15 Sept, unrelated to growth. Follow-ups IN-GR-023 to 027.
+
+**G0 and G1 build phase complete.** Every session's summary said the same thing: nothing has run on a phone. S5 is the phase's verification and its handoff is `2026-09-16-002-handoff-growth-s5-verification.md`. The rebuild is version 2.5.0 (Joe bumps `native/app.json`), both platforms, followed by the Confirm-email flip and both store privacy forms.
+
 ## 12. Out of scope for G0/G1
 
 Loops 2, 3 and 4 (taste cards, households and `watchlists`, SEO page types 2 to 4), JSON-LD and sitemaps, a `/` page on the Worker, retiring the web tree's `@capacitor/*` runtime packages, `expo-updates` in-app checks, room unshare or expiry, "add all to watchlist", linking a provider to an existing email account from Profile.
@@ -297,7 +315,7 @@ Slices are task groups, not decisions. Each is one fresh session from a self-con
 | S1 Links | G0-1, G0-2, G0-3, G0-4 | 088 | Joe's S1 checklist (§9c) | **Merged 15 Sept** (#172, #183, #184); outcome in §11a |
 | S2 Attribution | G0-6 | 090 | S1 merged | **Merged 16 Sept** (#188); outcome in §11b |
 | S3 Sign-in | G0-5 | 089 | S1 merged | **Merged 16 Sept** (#187, #190); outcome in §11c |
-| S4 Sharing | G1-1 to G1-4 | none | S1 to S3 merged | `2026-09-16-001-handoff-growth-s4-sharing.md` |
-| S5 Verification | G1-5 | none | S4 merged; one rebuild of both platforms; Confirm email flipped once testers have it; devices | written after S4's summary |
+| S4 Sharing | G1-1 to G1-4 | none | S1 to S3 merged | **Merged 16 Sept** (#192, #193); outcome in §11d |
+| S5 Verification | G1-5 | none | 2.5.0 rebuild of both platforms; testers updated; Confirm email flipped; devices | `2026-09-16-002-handoff-growth-s5-verification.md` |
 
 After S5 the strategy thread plans G2 (households) the same way; S5's device pass repeats as a combined check before the all-loops release.

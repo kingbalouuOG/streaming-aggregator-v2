@@ -2,7 +2,7 @@
 title: Growth loops (G-phases)
 type: concept
 tags: [forward-planning, growth, loops, sharing, deep-links, universal-links, attribution, households, seo]
-status: in build — S1 links (15 Sept), S2 attribution (16 Sept) and S3 sign-in (16 Sept, PRs #187/#190) merged; 088/089/090 applied; Confirm email off until the rebuild reaches testers; S4 sharing merged and deployed 16 Sept (PR #192; send-notifications v8), then one rebuild of both platforms and S5 verification
+status: build complete, unverified on device — S1 links, S2 attribution, S3 sign-in, S4 sharing all merged and deployed by 2026-09-16 (088/089/090 applied; send-notifications v8); next: 2.5.0 rebuild of both platforms, Confirm email flip, S5 device verification (handoff docs/plans/2026-09-16-002)
 horizon: H1 onward (runs beside the user track and search track from Roadmap v1.1)
 created: 2026-09-14
 updated: 2026-09-16
@@ -84,6 +84,9 @@ Object URLs are Worker-owned on the web and Expo Router-owned on device. The Vit
 
 - **S2 attribution (2026-09-16, PR #188):** `growth_events` (090) written only by the Worker with 12-month retention and delete/export coverage (also by install id); `POST /v1/growth/events`; `preview_fetched` / `preview_opened` on title and room pages (cache hits included; UA and IP not stored); Play referrer names the object (`via=share&t=movie-550`) for the Android deferred deep link; app install id, first touch, `first_open` (with `prior_install`), `link_opened`, `signup_completed`; `first_home_view` carries the source; local Expo module for the Play Install Referrer (Kotlin, not yet compiled, IN-GR-005); `growth-dashboard.sql`. Store labels: Apple Linked to You, Play Device or other IDs (to file with the next build). Follow-ups IN-GR-005..009. Strategy-thread review in the plan §11b.
 - **S4 sharing (2026-09-16, PR #192 merged `adf2882`, `send-notifications` v8 deployed; summary `docs/v2/phase-summaries/phase-growth-s4-summary.md`; handoff `docs/plans/2026-09-16-001-handoff-growth-s4-sharing.md`):** `buildTitleShareCopy` / `buildRoomShareCopy` / `buildMomentCopy`; `SHARE_SERVICE_LABELS` moved to `src/lib/growth/serviceLabels.ts` and `neutraliseRoomLabel` to `roomSnapshot.ts` (the Worker re-exports both); URLs carry `?via=share` and `&src=push`; `ShareButton` `runShare` emits both share events (room cards after the snapshot POST); `TellSomeoneBanner`; `sessionOrigin.ts` + `useSessionOrigin`; `send-notifications/compose.ts` payload with `delivery_id`; `notification_opened` once per tap; `growth-dashboard.sql` §1 on `share_initiated`, §6a–d. Device checks S4-1..11 in `h0-device-test-checklist.md`. Follow-ups IN-GR-023..027.
+
+- **S4 sharing (2026-09-16, PRs #192/#193):** availability line in the share copy (`shareCopy.ts`, labels shared with the Worker via `serviceLabels.ts`), `share_initiated` / `share_completed` (completion iOS-only evidence), push payload `delivery_id` / `via` / `service_id` / `expires_on`, `notification_opened`, session origin with a 10-second grace over the reset, "Tell someone" button and banner, dashboard §1 switched to `share_initiated` and §6a to 6d added. Follow-ups IN-GR-023..027. Strategy-thread review in the plan §11d.
+- **Build phase complete 2026-09-16.** Nothing has run on a phone. S5 verification: `docs/plans/2026-09-16-002-handoff-growth-s5-verification.md` (2.5.0 rebuild → testers update → Confirm email on → matrix A to D → phase summary; strategy doc v0.2 draft).
 
 ## Measures to stand up in G1
 
