@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { Check, Eye, Plus } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 
@@ -8,15 +9,32 @@ import { getAuthUserId } from '@/lib/storage';
 import { useWatchlist, useWatchlistMutations } from '@/hooks/useWatchlist';
 import type { ContentItem } from '@/lib/types/content';
 import { maybePromptForPush } from '@/notifications/push';
+import { readPendingLink, writePendingLink } from '@/pendingLink';
+import { useAuth } from '@/providers/auth';
 
 // Detail-page dual action buttons (NATIVE-2 W5a): Add to / In Watchlist
 // + Mark as Watched / Watched, wired to the shared watchlist storage via
 // useWatchlistMutations. State derives from the shared watchlist query so
 // it stays in sync with the Watchlist tab.
+//
+// Signed out (a shared link opens the detail page before sign-in, S1), both
+// buttons send the person to sign in instead of writing: a local write would
+// sync into whichever account signs in next (IN-GR-028). The pending link
+// brings them back to this title after sign-in.
 
 export function WatchlistActions({ item }: { item: ContentItem }) {
   const { data: items } = useWatchlist();
   const { toggle, markWatched } = useWatchlistMutations();
+  const { session } = useAuth();
+  const router = useRouter();
+
+  const signInFirst = () => {
+    const route = `/detail/${item.id}`;
+    if (readPendingLink()?.route !== route) {
+      writePendingLink({ route, object: { type: 'title', id: item.id }, via: null, src: null });
+    }
+    router.push('/auth');
+  };
 
   const { tmdbId, mediaType } = parseContentItemId(item.id);
   const entry = items?.find((i) => i.id === tmdbId && i.type === mediaType);
@@ -28,6 +46,7 @@ export function WatchlistActions({ item }: { item: ContentItem }) {
     <View className="mt-4 flex-row gap-2.5">
       <Pressable
         onPress={() => {
+          if (!session) return signInFirst();
           if (!bookmarked) {
             setLastAction('added_to_watchlist');
             void trackTasteInteraction(meta, 'watchlist_add');
@@ -58,6 +77,7 @@ export function WatchlistActions({ item }: { item: ContentItem }) {
 
       <Pressable
         onPress={() => {
+          if (!session) return signInFirst();
           if (!watched) {
             setLastAction('marked_watched');
             void trackTasteInteraction(meta, 'watched');
