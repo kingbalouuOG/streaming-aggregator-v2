@@ -25,14 +25,12 @@ export const PLAY_STORE_URL =
 export const APP_STORE_ID = '6785395342';
 
 /**
- * iOS was submitted to the App Store on 10 Sept 2026 and is TestFlight-only
- * until approved. When the listing is live, set this to the real
- * https://apps.apple.com/... URL and flip IOS_APP_STORE_LIVE to true — the
- * iOS CTA then becomes a real link instead of the "coming soon" copy.
- * Single-const switch, no other edits.
+ * iOS App Store listing, live since the 2.4.0 approval (confirmed by Joe on
+ * 16 Sept 2026, IN-GR-002). Setting IOS_APP_STORE_LIVE back to false restores
+ * the "coming soon" copy.
  */
-export const APP_STORE_URL = ''; // TODO: set when the App Store listing is live
-export const IOS_APP_STORE_LIVE = false;
+export const APP_STORE_URL = 'https://apps.apple.com/gb/app/videx-streaming-guide/id6785395342';
+export const IOS_APP_STORE_LIVE = true;
 
 /** Coarse platform bucket for CTA rendering AND cache-key variance. */
 export type PlatformBucket = 'android' | 'ios' | 'other';
@@ -78,7 +76,7 @@ export const HTML_SECURITY_HEADERS: Record<string, string> = {
  * it, and titles cached before that deploy kept serving the pre-slug page
  * (no 301, no smart banner, no attribution markers) until they expired.
  */
-export const PAGE_CACHE_VERSION = 'v2';
+export const PAGE_CACHE_VERSION = 'v3';
 
 // ── Attribution pass-through ─────────────────────────────────────────
 /** Placed at the end of a videx:// href; becomes "?via=…&amp;src=…" or "". */
@@ -118,8 +116,9 @@ export function applyAttribution(
  * Render the store-download CTA button(s) for a platform bucket.
  *  - android: Play link.
  *  - ios: App Store link if live, else "Coming soon to the App Store".
- *  - other (desktop/unknown): neutral "Get Videx" (Play link) plus an
- *    "iOS coming soon" hint so both audiences see themselves.
+ *  - other (desktop/unknown): both store links once iOS is live, else a
+ *    neutral "Get Videx" (Play link) plus an "iOS coming soon" hint, so both
+ *    audiences see themselves.
  */
 export function storeCta(bucket: PlatformBucket): string {
   const play = `${PLAY_STORE_URL}${PLAY_REFERRER_MARK}`;
@@ -131,10 +130,13 @@ export function storeCta(bucket: PlatformBucket): string {
       ? `<a class="btn btn-ghost" href="${esc(APP_STORE_URL)}">Get Videx on iOS</a>`
       : `<span class="btn btn-ghost btn-disabled" aria-disabled="true">Coming soon to the App Store</span>`;
   }
-  return (
-    `<a class="btn btn-ghost" href="${play}">Get Videx</a>` +
-    (IOS_APP_STORE_LIVE && APP_STORE_URL ? '' : `<span class="cta-hint">iOS coming soon</span>`)
-  );
+  if (IOS_APP_STORE_LIVE && APP_STORE_URL) {
+    return (
+      `<a class="btn btn-ghost" href="${play}">Get Videx on Android</a>` +
+      `<a class="btn btn-ghost" href="${esc(APP_STORE_URL)}">Get Videx on iOS</a>`
+    );
+  }
+  return `<a class="btn btn-ghost" href="${play}">Get Videx</a><span class="cta-hint">iOS coming soon</span>`;
 }
 
 /**
