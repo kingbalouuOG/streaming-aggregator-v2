@@ -14,6 +14,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 
+import { runFirstLaunchAttribution } from '@/attribution';
 import { AuthProvider } from '@/providers/auth';
 import { NotificationsProvider } from '@/providers/notifications';
 import { QUERY_CACHE_BUSTER, queryPersister } from '@/queryPersist';
@@ -90,6 +91,12 @@ function RootLayout() {
       SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded, fontsError]);
+
+  // Growth S2: Android install referrer (once per install), then first_open
+  // (once per install id). Fire-and-forget; never blocks the splash.
+  useEffect(() => {
+    void runFirstLaunchAttribution();
+  }, []);
 
   if (!fontsLoaded && !fontsError) {
     return null; // splash stays up

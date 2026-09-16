@@ -57,6 +57,18 @@ namespace_id = "1001"
 limit = 30
 period = 60
 
+# Growth S2 (G0-6): POST /v1/growth/events. Keyed on the install id the app
+# sends (falling back to cf-connecting-ip when the body has none), so one
+# install cannot flood the table and cannot spend another install's budget
+# without knowing its id. 60 events / 60s: a real session emits a handful.
+[[ratelimits]]
+name = "GROWTH_RATELIMIT"
+namespace_id = "1002"
+
+[ratelimits.simple]
+limit = 60
+period = 60
+
 # PLAT-3 W5: nightly stale-profile recompute (taste vector replay +
 # centroid k-means), off the For You hot path. 04:00 UTC — clear of the
 # 06:00 UTC sync-incremental pg_cron.

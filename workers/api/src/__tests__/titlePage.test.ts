@@ -150,6 +150,18 @@ describe('attribution pass-through (?via= / ?src=)', () => {
     expect(html).toContain('href="videx://detail/movie-603?src=organic"');
   });
 
+  it('names the object in the Play referrer (Growth S2) without touching the deep link', () => {
+    const html = applyAttribution(page, 'share', 'push', { type: 'title', id: 'movie-603' });
+    expect(html).toContain('href="videx://detail/movie-603?via=share&amp;src=push"');
+    expect(html).toContain(`href="${PLAY_STORE_URL}&amp;referrer=via%3Dshare%26src%3Dpush%26t%3Dmovie-603"`);
+  });
+
+  it('carries the object alone when the link had no attribution', () => {
+    const html = applyAttribution(page, undefined, undefined, { type: 'title', id: 'movie-603' });
+    expect(html).toContain('href="videx://detail/movie-603"');
+    expect(html).toContain(`href="${PLAY_STORE_URL}&amp;referrer=t%3Dmovie-603"`);
+  });
+
   it('the canonical URL never carries the query', () => {
     const html = applyAttribution(page, 'share', 'push');
     expect(html).toContain('<link rel="canonical" href="https://videxstreaming.com/t/movie/603-the-matrix-1999">');

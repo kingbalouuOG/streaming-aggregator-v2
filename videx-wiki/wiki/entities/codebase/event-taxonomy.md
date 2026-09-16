@@ -3,12 +3,15 @@ title: Event Taxonomy
 type: entity
 tags: [events, instrumentation, signals, analytics]
 created: 2026-04-26
-updated: 2026-07-06
+updated: 2026-09-15
 sources:
   - raw/codebase-snapshots/event-taxonomy.md
   - raw/v2-strategy/Videx_v2_Detail_Page_Signal_Capture_Spec_v0.3.2.md
   - docs/v2/phase-summaries/phase-5-summary.md
+  - supabase/migrations/090_growth_events.sql (repo; Growth S2)
 related:
+  - wiki/concepts/forward-planning/growth-loops.md
+  - wiki/concepts/decisions/adr-015-object-urls-and-inbound-links.md
   - wiki/entities/codebase/database-schema.md
   - wiki/entities/codebase/migrations.md
   - wiki/concepts/architecture/signal-architecture.md
@@ -18,7 +21,7 @@ related:
 
 # Event Taxonomy
 
-Every event Videx emits, where it goes, and what payload it carries. Two destinations: the immutable `user_interactions` log (recommendation signals) and a separate analytics path (onboarding funnel). Impressions go to `card_impressions`.
+Every event Videx emits, where it goes, and what payload it carries. Destinations: the immutable `user_interactions` log (recommendation signals), a separate analytics path (onboarding funnel), `card_impressions` (impressions), `notification_deliveries` (sent pushes) and, from Growth S2, `growth_events` (growth-loop attribution, Worker-written).
 
 ## Onboarding events
 
@@ -33,7 +36,7 @@ Source: `lib/analytics/events.ts`. Logged via `lib/analytics/logger.ts` to a Sup
 | `quiz_completed` | `{ duration_seconds }` |
 | `quiz_skipped` | `{ questions_answered }` |
 | `onboarding_completed` | `{ total_duration_seconds }` |
-| `first_home_view` | `{ has_taste_vector, section_count }` |
+| `first_home_view` | `{ has_taste_vector, section_count, via?, src? }` — `via` / `src` are the install's first-touch attribution (native, Growth S2; null when none) |
 
 > ⚠ The `quiz_*` events refer to the legacy v1 quiz subsystem; they remain in the analytics taxonomy but are no longer emitted by v2 onboarding (Phase 3 deleted the quiz). New v2 onboarding events should be added once Step 3 (watched grid) and Step 5 (sliders) finish their analytics scope.
 
@@ -98,6 +101,27 @@ Sent pushes are logged to `notification_deliveries` (migration 057), NOT `user_i
 | `expo_ticket_id`, `push_token_id`, `delivery_status` | Expo receipt polling → dead-token pruning. |
 
 `UNIQUE (user_id, notification_type, tmdb_id, media_type)` = the "never notify twice for the same arrival" guarantee.
+
+## Growth events (separate table)
+
+`growth_events` (migration 090, Growth S2; plan D10) holds the growth loops' measures: shares per WAU, preview open rate, open-to-install, sign-up by source. **Written only by the videx-api Worker** with the service role (RLS on, no policies, anon/authenticated revoked); 12-month retention (pg_cron `growth_events_retention`, 03:30 UTC). Queries: `supabase/queries/growth-dashboard.sql`. Contract: `src/lib/growth/growthEvents.ts` (shared by the app emitter and the Worker validator).
+
+| `event_name` | Written by | When | Notable fields |
+|---|---|---|---|
+| `preview_fetched` | Worker page handler (`/t/`, `/room/`) | a crawler (chat unfurl, search bot) GETs a page, 200 only, cache hits included | `ua_class = crawler`, `metadata.agent` (`whatsapp`, `imessage`, `slack`…), `platform` = UA bucket, object, via/src from the query |
+| `preview_opened` | Worker page handler | a person GETs the page | `ua_class = human`, same fields |
+| `link_opened` | app → `POST /v1/growth/events` (`+native-intent.tsx`) | an object link (title/room/list) reaches the app, pre-auth included | object, via, src; `user_id` if signed in |
+| `first_open` | app (`_layout.tsx` → `runFirstLaunchAttribution`) | once per install id | first-touch via/src/object; `metadata.touch` (`link` \| `install_referrer` \| null), `metadata.prior_install` |
+| `signup_completed` | app (`curating.tsx`) | end of onboarding, beside `first_home_view` | first-touch via/src/object; `metadata.touch`; `user_id` |
+| `share_initiated`, `share_completed`, `notification_opened` | app (S4) | in the CHECK, not emitted yet | `notification_opened` carries `delivery_id` |
+
+Columns: `id`, `occurred_at`, `event_name`, `install_id` (app-minted UUID, null on page events), `user_id` (from the verified JWT only; never from the body), `via`, `src`, `object_type`, `object_id`, `platform`, `ua_class`, `delivery_id`, `metadata` (≤ 2 KB on ingest).
+
+- **`via`** = URL channel (`share` · `push` · `seo` · `card` · `household`); **`src`** = session a share started in (`push` · `organic`). ADR-015 contract; out-of-contract values are dropped to null, never stored.
+- **`ua_class`** = `crawler` | `human` from `workers/api/src/uaClass.ts` (named preview fetchers, headless browsers, generic bots/tools, empty UA → crawler). The raw UA and IP are never stored.
+- **Install id** — `native/src/installId.ts`, MMKV `videx` key `install_id`; not cleared on sign-out. **First touch** — `native/src/attribution.ts` (`first_touch`), written once: an inbound link, else on Android the Play Install Referrer (`t=` / `r=` in the referrer also becomes the pending link). An install that already held a Supabase session when the id was minted is an update (`prior_install`), excluded from the funnel.
+- **Deletion/export** — `delete_own_account` / `export_user_data` (v1.3) cover the account's rows and every row of any install it used.
+- `share` in `user_interactions` stays the share source until S4 emits `share_initiated`.
 
 ## Source surfaces
 
