@@ -55,6 +55,21 @@
 22. Dispatch `db-backup.yml` manually (after its 2 secrets) → download artifact → `gpg --decrypt` yields a restorable dump.
 23. Invoke `backfill-missing-titles` with service-role bearer → `{status:'ok', …}`; non-service-role → 401; `cron.job` shows both crons active.
 
+## Growth S4: sharing and push-to-share (run in S5, both platforms)
+Build carries S1 to S4. Watch rows land with `select event_name, via, src, object_id, delivery_id, platform, metadata, occurred_at from growth_events where install_id = '<this install>' order by occurred_at desc;` (install id: MMKV `install_id`, or the newest `first_open` for the test account).
+
+S4-1. Share a title streaming on a subscription service (e.g. Severance) into WhatsApp and into Messages. The message reads "Severance (2022). On Apple TV+ in the UK." then the link ending `?via=share`; the unfurl still shows. Service names match the page the link opens.
+S4-2. Share a rent-or-buy-only title: "… Rent or buy on … in the UK." Share a title with nothing in the UK: "… See where to watch in the UK on Videx." (still shares).
+S4-3. Each share: one `share_initiated` (`via=share`, `src=organic`, `metadata.surface=detail`) when the sheet opens; `share_completed` with `metadata.to_surface` and `platform_reports_completion` after sending. iOS: cancel the sheet → no `share_completed`. Android: cancel → `share_completed` still arrives (known, the dashboard counts iOS only). `user_interactions` still gets its `share` row for titles.
+S4-4. Share a room from a For You room card and from the room screen (`/room/{id}`): "More like X: N titles picked for the mood." (no "If you love"); `share_initiated` with `object_type=room`, `metadata.surface` = `room_card` / `room`; no `user_interactions` row.
+S4-5. Seed a single arrival for the test account (item 11), invoke `send-notifications` (after Joe deploys the S4 version), tap the push. `notification_opened` row carries `delivery_id` = that title's `notification_deliveries.id`, `via=push`, `src=push`, `metadata.type=arrival`. Repeat cold (app killed): exactly one `notification_opened`.
+S4-6. On the detail page the push opened: the top-right button reads "Tell someone" and the banner under the meta line reads "{Title} has just landed on {Service}. Tell someone." Share from the banner: message starts "Just landed on {Service}: …", URL ends `?via=share&src=push`, `share_initiated` has `src=push` and `metadata.moment=arrival`. Open a different title in the same session: plain share button, but its share still carries `src=push`.
+S4-7. Leaving-soon single title (seed `expires_on` within 7 days): banner "{Title} leaves {Service} on {Weekday D Month}. Tell someone."; `metadata.moment=leaving_soon`.
+S4-8. Bundle push (two titles): lands on the watchlist, `notification_opened` with `delivery_id` null and `metadata.type=bundle`; no banner on any detail page.
+S4-9. Dismiss the banner (X): it stays gone on returning to the title; the button stays "Tell someone".
+S4-10. Background the app for six minutes, return: banner and "Tell someone" gone, shares now `src=organic`.
+S4-11. Relaunch the app normally (not from a push) after a push-opened session: no new `notification_opened` and no banner (the handled response is cleared, IN-GR-027).
+
 ## iOS pass (when ready)
 Repeat 1–20; specifically re-verify push via APNs, the share sheet `url` field, cold-start notification tap, and the `videx://reset-password` scheme.
 

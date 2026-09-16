@@ -2,7 +2,7 @@
 title: Growth loops (G-phases)
 type: concept
 tags: [forward-planning, growth, loops, sharing, deep-links, universal-links, attribution, households, seo]
-status: in build — S1 links (15 Sept), S2 attribution (16 Sept) and S3 sign-in (16 Sept, PRs #187/#190) merged; 088/089/090 applied; Confirm email off until the rebuild reaches testers; S4 sharing next (handoff 2026-09-16-001), then one rebuild of both platforms and S5 verification
+status: in build — S1 links (15 Sept), S2 attribution (16 Sept) and S3 sign-in (16 Sept, PRs #187/#190) merged; 088/089/090 applied; Confirm email off until the rebuild reaches testers; S4 sharing built 16 Sept (PR open; send-notifications deploy is Joe's), then one rebuild of both platforms and S5 verification
 horizon: H1 onward (runs beside the user track and search track from Roadmap v1.1)
 created: 2026-09-14
 updated: 2026-09-16
@@ -19,6 +19,8 @@ related:
 ---
 
 # Growth loops (G-phases)
+
+> **Status: S4 (sharing) built 2026-09-16** — share copy with the UK availability line (`src/lib/growth/shareCopy.ts`, labels shared with the Worker via `serviceLabels.ts`), `share_initiated` / `share_completed` / `notification_opened` emitted, push payload `delivery_id` / `via` / `service_id` / `expires_on`, session origin and "Tell someone" on the detail page, dashboard §1 switched and §6 added. No migration, no Worker page change. Waiting on Joe: deploy `send-notifications`. Follow-ups IN-GR-023..027.
 
 > **Status: S3 (sign-in) built 2026-09-15** — PR #187: Apple (iOS) and Google sign-in via `signInWithIdToken`, migration 089 placeholder username + "Choose your name", follow-ups IN-GR-010..014. 089 applied and verified 2026-09-16. Waiting on Joe: Supabase Apple/Google providers, Google OAuth clients, EAS/GitHub client-id env, decisions IN-GR-010 (Apple token revocation) and IN-GR-011 (auto-linking with Confirm email off).
 >
@@ -81,7 +83,7 @@ Object URLs are Worker-owned on the web and Expo Router-owned on device. The Vit
 - **S3 follow-ups (2026-09-16, PR open):** email confirmation flow ("Check your email", resend, `videx://confirm-email` via the `/reset` bridge with `type=email`); pending link resumed on `/auth` only for onboarded accounts; Profile username edits write `profiles`; Apple token revocation on iPhone account deletion (`revoke-apple-token` Edge Function, no storage); privacy policy names Apple/Google sign-in and the in-app copy is re-mirrored. Follow-ups IN-GR-020..022.
 
 - **S2 attribution (2026-09-16, PR #188):** `growth_events` (090) written only by the Worker with 12-month retention and delete/export coverage (also by install id); `POST /v1/growth/events`; `preview_fetched` / `preview_opened` on title and room pages (cache hits included; UA and IP not stored); Play referrer names the object (`via=share&t=movie-550`) for the Android deferred deep link; app install id, first touch, `first_open` (with `prior_install`), `link_opened`, `signup_completed`; `first_home_view` carries the source; local Expo module for the Play Install Referrer (Kotlin, not yet compiled, IN-GR-005); `growth-dashboard.sql`. Store labels: Apple Linked to You, Play Device or other IDs (to file with the next build). Follow-ups IN-GR-005..009. Strategy-thread review in the plan §11b.
-- **S4 sharing:** handoff `docs/plans/2026-09-16-001-handoff-growth-s4-sharing.md`.
+- **S4 sharing (2026-09-16, branch `feat/growth-s4-sharing`; handoff `docs/plans/2026-09-16-001-handoff-growth-s4-sharing.md`):** `buildTitleShareCopy` / `buildRoomShareCopy` / `buildMomentCopy`; `SHARE_SERVICE_LABELS` moved to `src/lib/growth/serviceLabels.ts` and `neutraliseRoomLabel` to `roomSnapshot.ts` (the Worker re-exports both); URLs carry `?via=share` and `&src=push`; `ShareButton` `runShare` emits both share events (room cards after the snapshot POST); `TellSomeoneBanner`; `sessionOrigin.ts` + `useSessionOrigin`; `send-notifications/compose.ts` payload with `delivery_id`; `notification_opened` once per tap; `growth-dashboard.sql` §1 on `share_initiated`, §6a–d. Device checks S4-1..11 in `h0-device-test-checklist.md`. Follow-ups IN-GR-023..027.
 
 ## Measures to stand up in G1
 

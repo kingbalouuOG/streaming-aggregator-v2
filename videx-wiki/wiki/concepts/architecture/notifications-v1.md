@@ -3,7 +3,7 @@ title: Notifications v1 (arrival + leaving-soon alerts)
 type: concept
 tags: [notifications, push, expo, edge-function, cron, retention, h0, stream-b]
 created: 2026-07-06
-updated: 2026-09-10
+updated: 2026-09-16
 sources:
   - docs/strategy/briefs/h0-stream-b-notifications-share.md
   - docs/strategy/Videx_Product_Strategy_and_Roadmap_v1.0.md
@@ -70,6 +70,25 @@ Bundling into one push/day per user + dedup means a catch-up sync that adds 50 t
 - `native/src/notifications/push.ts` — token register/refresh/clear, prefs, permission (`expo-notifications`, SDK 56: `getExpoPushTokenAsync({ projectId })`, handler returns `shouldShowBanner`/`shouldShowList`). Lives OUTSIDE the `native/src/lib` junction (native-only deps).
 - `native/src/providers/notifications.tsx` — handler + Android channel + token lifecycle across auth transitions + tap routing (warm + cold via `getLastNotificationResponseAsync`).
 - Plugin: `["expo-notifications", { color }]` in `app.json`; EAS FCM v1 / APNs credentials **in place and device-verified 2026-07-13** (arrival, bundling, dedup, 20h cap, warm/cold tap routing — see `docs/strategy/briefs/h0-device-test-checklist.md`); the roadmap 0.12 release valve was never needed. *Correction 2026-09-10: this page said "blocked on credentials" for two months after they landed; as of 10 Sept there are 10 push tokens and 5 test deliveries, and no real (non-seeded) alert has been observed only because there is no cohort yet.*
+
+## Payload, opens and "Tell someone" (Growth S4)
+
+The push `data` is built in `supabase/functions/send-notifications/compose.ts` (pure, vitest-tested; `index.ts` imports it):
+
+| Field | Single title | Bundle |
+|---|---|---|
+| `url` | `videx://detail/{type}-{id}` | `videx://watchlist` |
+| `type` | `arrival` \| `leaving_soon` | `bundle` |
+| `delivery_id` | id of that title's claimed `notification_deliveries` row (the claim upsert returns ids) | `null` |
+| `via` | `push` | `push` |
+| `service_id` | the service it landed on or is leaving | omitted |
+| `expires_on` | leaving-soon only | omitted |
+
+A push is single-title when its lead group holds one title (one arrival, or no arrival and one leaving-soon); an arrival-led push can still claim leaving-soon rows under the same ticket. Dedup, cap and send logic are unchanged. Deploy is manual (`npx supabase functions deploy send-notifications`); pushes from the old deploy carry only `url` and `type`.
+
+On tap, `routeFromData` parses the URL with `parseInboundLink`, posts `notification_opened` to `growth_events` (with `delivery_id`), sets the session origin (`push`, object, type, service, expiry) and then `router.push`es (still bypassing `+native-intent`). Taps are handled once per notification identifier and the last response is cleared after handling, so the cold-start response, the listener and a later relaunch cannot double-count.
+
+The detail page the push opened shows **"Tell someone"**: the top-right share button becomes a labelled accent pill and a dismissible banner sits under the meta line, "Severance has just landed on Apple TV+. Tell someone." (arrival, the stronger nudge) or "Heat leaves Netflix on Saturday 19 September. Tell someone." (leaving soon). Sharing from it leads the message with the moment ("Just landed on Apple TV+: Severance (2022). On Apple TV+ in the UK."). Bundles show nothing. The origin ends with the session (5 minutes backgrounded); an origin set in the last 10 seconds survives a reset that races the tap that woke the app. Measures: `growth-dashboard.sql` §6c (CTR by push type) and §6d (take-up).
 
 ## Related
 

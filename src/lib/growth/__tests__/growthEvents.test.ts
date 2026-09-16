@@ -78,6 +78,22 @@ describe('buildGrowthEventBody', () => {
     expect(buildGrowthEventBody(event, CTX).delivery_id).toBe(ROOM);
   });
 
+  it('notification_opened carries its push type and src (S4)', () => {
+    const body = buildGrowthEventBody(
+      {
+        name: 'notification_opened',
+        via: 'push',
+        src: 'push',
+        object: null,
+        deliveryId: null,
+        metadata: { type: 'bundle' },
+      },
+      CTX,
+    );
+    expect(body).toMatchObject({ via: 'push', src: 'push', object_type: null, delivery_id: null });
+    expect(body.metadata).toEqual({ type: 'bundle' });
+  });
+
   it('drops a via outside the contract', () => {
     const body = buildGrowthEventBody(
       { name: 'link_opened', via: 'spam' as ViaChannel, src: null, object: { type: 'title', id: 'movie-1' } },

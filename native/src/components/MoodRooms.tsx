@@ -16,9 +16,15 @@ import { ShareButton } from './ShareButton';
 //
 // Growth S1: each card can be shared. The share button snapshots the room
 // (POST /v1/share/room — frozen titles, label de-personalised by the Worker)
-// and opens the OS sheet with https://videxstreaming.com/room/{id}.
+// and opens the OS sheet with https://videxstreaming.com/room/{id}. S4 adds
+// the room copy ("More like Heat: 24 titles picked for the mood.").
 
-type ShareRoom = () => Promise<string | null>;
+interface ShareRoom {
+  url: () => Promise<string | null>;
+  label: string;
+  /** Titles in the snapshot, which is what the recipient sees. */
+  count: number;
+}
 
 const TINTS = ['#a16ed4', '#3fb6a1', '#e3b04b', '#e16b8c', '#5b8def', '#7fb37b'];
 
@@ -84,7 +90,7 @@ function FeaturedRoom({
       onPress={onPress}
       className="mx-5 mt-3 overflow-hidden rounded-card p-4 active:opacity-90"
       style={{ backgroundColor: withAlpha(tint, 0.14), borderWidth: 0.5, borderColor: withAlpha(tint, 0.35) }}>
-      {share ? <ShareButton top={10} url={share} /> : null}
+      {share ? <ShareButton top={10} {...share} surface="room_card" /> : null}
       <View className="flex-row items-center gap-2">
         <View style={{ width: 14, height: 1.5, borderRadius: 1, backgroundColor: tint }} />
         <Text className="font-sans-bold text-[10px] uppercase tracking-[1.4px]" style={{ color: tint }}>
@@ -136,7 +142,7 @@ function GridRoom({
           <Text className="font-sans-bold text-[10px] uppercase tracking-[0.4px]" style={{ color: tint }}>
             Mood Room · {room.titleCount}
           </Text>
-          {share ? <ShareButton url={share} /> : null}
+          {share ? <ShareButton {...share} surface="room_card" /> : null}
         </View>
         <Text numberOfLines={2} className="mt-1 font-title text-body text-foreground">
           {roomLabel(room)}
@@ -164,14 +170,20 @@ export function MoodRooms({
   const shareFor = (room: AnchorRoomPreview): ShareRoom | undefined => {
     const titles = room.titleRefs;
     if (!titles || titles.length === 0) return undefined;
-    return () =>
-      createRoomShare({
-        kind: 'anchor',
-        source_ref: room.id,
-        label: roomLabel(room),
-        description: room.llmLabel?.description ?? null,
-        titles: titles.slice(0, MAX_ROOM_TITLES),
-      });
+    const snapshot = titles.slice(0, MAX_ROOM_TITLES);
+    const label = roomLabel(room);
+    return {
+      label,
+      count: snapshot.length,
+      url: () =>
+        createRoomShare({
+          kind: 'anchor',
+          source_ref: room.id,
+          label,
+          description: room.llmLabel?.description ?? null,
+          titles: snapshot,
+        }),
+    };
   };
 
   return (

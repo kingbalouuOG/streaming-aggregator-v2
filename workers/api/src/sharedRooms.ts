@@ -12,6 +12,7 @@
 
 import {
   MAX_ROOM_TITLES,
+  neutraliseRoomLabel,
   type ShareRoomRequest,
   type SharedRoomTitleRef,
 } from '../../../src/lib/growth/roomSnapshot';
@@ -21,17 +22,13 @@ export const DESCRIPTION_MAX = 500;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ANCHOR_REF_RE = /^anchor:(movie|tv)-[1-9]\d{0,9}$/;
-const PERSONAL_FRAMING_RE = /^(?:because\s+you\s+(?:liked|loved|watched)|if\s+you\s+(?:love|loved|liked))\s+(.+)$/i;
 
 export function isUuid(id: string): boolean {
   return UUID_RE.test(id);
 }
 
-export function neutraliseRoomLabel(label: string): string {
-  const trimmed = label.trim().replace(/\s+/g, ' ');
-  const m = PERSONAL_FRAMING_RE.exec(trimmed);
-  return m ? `More like ${m[1]}` : trimmed;
-}
+// Lives with the room contract so the app's share copy uses the same rule.
+export { neutraliseRoomLabel };
 
 export type ShareRoomValidation =
   | { ok: true; value: Required<ShareRoomRequest> }

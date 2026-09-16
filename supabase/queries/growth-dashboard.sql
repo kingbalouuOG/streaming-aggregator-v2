@@ -2,7 +2,8 @@
 -- Videx — Growth dashboard (Growth S2 / G0-6; plan
 -- docs/plans/2026-09-14-003 §4 G0-6, §5 G1-4)
 -- Run in the Supabase SQL Editor. Reads growth_events (migration 090),
--- user_interactions, onboarding_events and profiles.
+-- user_interactions, onboarding_events, notification_deliveries (057) and
+-- profiles. Sharing and notification measures (§1, §6) from Growth S4.
 --
 -- Conventions
 --  - Test accounts are excluded via profiles.is_test_user. growth_events
@@ -34,11 +35,10 @@
 -- 1. Shares per weekly active user (last 8 ISO weeks)
 -- ════════════════════════════════════════════════════════════
 --
--- SOURCE TODAY: user_interactions.event_type = 'share' (native ShareButton,
--- written after the share sheet resolves; on Android a dismissed sheet also
--- counts). SWITCH WHEN S4 SHIPS share_initiated: replace the `shares` CTE
--- with the growth_events version commented underneath, which fires on tap
--- on both platforms.
+-- SOURCE: growth_events.share_initiated (Growth S4), written when the share
+-- sheet opens on both platforms, titles and rooms alike. Shares made signed
+-- out carry no user id; they count as shares but not as sharing users. Test
+-- installs are excluded as in §3.
 -- WAU = any user_interactions row that week (as metrics-dashboard §3).
 WITH weeks AS (
   SELECT generate_series(
@@ -54,24 +54,34 @@ active AS (
   WHERE u.created_at >= date_trunc('week', now()) - interval '7 weeks'
   GROUP BY 1
 ),
+test_installs AS (
+  SELECT DISTINCT g.install_id
+  FROM growth_events g
+  JOIN profiles p ON p.id = g.user_id AND p.is_test_user IS TRUE
+  WHERE g.install_id IS NOT NULL
+),
 shares AS (
-  SELECT date_trunc('week', u.created_at) AS week,
+  SELECT date_trunc('week', g.occurred_at) AS week,
          COUNT(*)                  AS shares,
-         COUNT(DISTINCT u.user_id) AS sharing_users
-  FROM user_interactions u
-  JOIN profiles p ON p.id = u.user_id AND p.is_test_user IS NOT TRUE
-  WHERE u.event_type = 'share'
-    AND u.created_at >= date_trunc('week', now()) - interval '7 weeks'
+         COUNT(DISTINCT g.user_id) AS sharing_users
+  FROM growth_events g
+  WHERE g.event_name = 'share_initiated'
+    AND g.occurred_at >= date_trunc('week', now()) - interval '7 weeks'
+    AND g.install_id NOT IN (SELECT install_id FROM test_installs)
   GROUP BY 1
 )
--- S4 version of `shares`:
---   SELECT date_trunc('week', g.occurred_at) AS week,
---          COUNT(*) AS shares, COUNT(DISTINCT g.user_id) AS sharing_users
---   FROM growth_events g
---   JOIN profiles p ON p.id = g.user_id AND p.is_test_user IS NOT TRUE
---   WHERE g.event_name = 'share_initiated'
---     AND g.occurred_at >= date_trunc('week', now()) - interval '7 weeks'
---   GROUP BY 1
+-- Pre-S4 `shares`, kept while builds without share_initiated are in use
+-- (user_interactions.share fires after the sheet resolves, titles only, and
+-- on Android a dismissed sheet also counts):
+--   shares AS (
+--     SELECT date_trunc('week', u.created_at) AS week,
+--            COUNT(*) AS shares, COUNT(DISTINCT u.user_id) AS sharing_users
+--     FROM user_interactions u
+--     JOIN profiles p ON p.id = u.user_id AND p.is_test_user IS NOT TRUE
+--     WHERE u.event_type = 'share'
+--       AND u.created_at >= date_trunc('week', now()) - interval '7 weeks'
+--     GROUP BY 1
+--   )
 SELECT
   w.week,
   COALESCE(a.wau, 0)            AS weekly_active_users,
@@ -309,3 +319,171 @@ WHERE e.event_name = 'first_home_view'
   AND e.created_at >= now() - interval '30 days'
 GROUP BY 1, 2
 ORDER BY 3 DESC;
+
+
+-- ════════════════════════════════════════════════════════════
+-- 6. Sharing and notifications (Growth S4, last 30 days)
+-- ════════════════════════════════════════════════════════════
+--
+-- share_initiated: the sheet opened (metadata.surface = detail | room |
+-- room_card; metadata.moment = arrival | leaving_soon when shared from
+-- "Tell someone"). share_completed: the OS reported a share, with
+-- metadata.to_surface (iOS activity type) and platform_reports_completion.
+-- Android reports a dismissed sheet as shared, so completion is iOS only.
+-- src = push when the share happened in a session a push tap opened.
+-- notification_opened: a push tap; delivery_id is the notification_deliveries
+-- row for a single-title push, null for a bundle; metadata.type = arrival |
+-- leaving_soon | bundle. Pushes sent before the S4 function deploy carry no
+-- delivery_id, so their opens never join.
+
+-- 6a. Share completion rate, iOS only, by surface (NULL surface = all).
+WITH test_installs AS (
+  SELECT DISTINCT g.install_id
+  FROM growth_events g
+  JOIN profiles p ON p.id = g.user_id AND p.is_test_user IS TRUE
+  WHERE g.install_id IS NOT NULL
+)
+SELECT
+  g.metadata->>'surface'                                           AS surface,
+  COUNT(*) FILTER (WHERE g.event_name = 'share_initiated')         AS initiated,
+  COUNT(*) FILTER (WHERE g.event_name = 'share_completed')         AS completed,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE g.event_name = 'share_completed')
+        / NULLIF(COUNT(*) FILTER (WHERE g.event_name = 'share_initiated'), 0), 1) AS completion_pct
+FROM growth_events g
+WHERE g.event_name IN ('share_initiated', 'share_completed')
+  AND g.platform = 'ios'
+  AND g.occurred_at >= now() - interval '30 days'
+  AND g.install_id NOT IN (SELECT install_id FROM test_installs)
+GROUP BY ROLLUP (g.metadata->>'surface')
+ORDER BY surface NULLS LAST;
+
+-- 6b. Share rate by session origin: push-originated shares per notification
+-- open; organic shares per active user (distinct users with any
+-- user_interactions row in the window).
+WITH test_installs AS (
+  SELECT DISTINCT g.install_id
+  FROM growth_events g
+  JOIN profiles p ON p.id = g.user_id AND p.is_test_user IS TRUE
+  WHERE g.install_id IS NOT NULL
+),
+events AS (
+  SELECT g.event_name, g.src
+  FROM growth_events g
+  WHERE g.event_name IN ('share_initiated', 'notification_opened')
+    AND g.occurred_at >= now() - interval '30 days'
+    AND g.install_id NOT IN (SELECT install_id FROM test_installs)
+),
+active AS (
+  SELECT COUNT(DISTINCT u.user_id) AS users
+  FROM user_interactions u
+  JOIN profiles p ON p.id = u.user_id AND p.is_test_user IS NOT TRUE
+  WHERE u.created_at >= now() - interval '30 days'
+),
+counts AS (
+  SELECT
+    COUNT(*) FILTER (WHERE event_name = 'share_initiated' AND src = 'push')                      AS push_shares,
+    COUNT(*) FILTER (WHERE event_name = 'share_initiated' AND COALESCE(src, 'organic') = 'organic') AS organic_shares,
+    COUNT(*) FILTER (WHERE event_name = 'notification_opened')                                   AS push_opens
+  FROM events
+)
+SELECT 'push' AS session_origin, c.push_shares AS shares, 'notification opens' AS denominator,
+       c.push_opens AS denominator_count,
+       ROUND(c.push_shares::numeric / NULLIF(c.push_opens, 0), 3) AS shares_per_denominator
+FROM counts c
+UNION ALL
+SELECT 'organic', c.organic_shares, 'active users', a.users,
+       ROUND(c.organic_shares::numeric / NULLIF(a.users, 0), 3)
+FROM counts c, active a;
+
+-- 6c. Notification click-through by push type. One push = the delivery rows
+-- one send claimed (same user and Expo ticket). It is single-title when its
+-- lead group holds one title (one arrival, or no arrivals and one
+-- leaving-soon title), and that row's id is the payload's delivery_id;
+-- anything else went out as a bundle. Single-title CTR joins opens on
+-- delivery_id (pushes opened at least once). Bundle opens have no delivery id,
+-- so they are counted, not joined (a tap on each of two devices counts twice).
+WITH test_installs AS (
+  SELECT DISTINCT g.install_id
+  FROM growth_events g
+  JOIN profiles p ON p.id = g.user_id AND p.is_test_user IS TRUE
+  WHERE g.install_id IS NOT NULL
+),
+pushes AS (
+  SELECT
+    d.user_id,
+    d.expo_ticket_id,
+    COUNT(*) FILTER (WHERE d.notification_type = 'arrival')                  AS arrivals,
+    COUNT(*) FILTER (WHERE d.notification_type = 'leaving_soon')             AS leaving,
+    (array_agg(d.id) FILTER (WHERE d.notification_type = 'arrival'))[1]      AS arrival_id,
+    (array_agg(d.id) FILTER (WHERE d.notification_type = 'leaving_soon'))[1] AS leaving_id
+  FROM notification_deliveries d
+  JOIN profiles p ON p.id = d.user_id AND p.is_test_user IS NOT TRUE
+  WHERE d.sent_at >= now() - interval '30 days'
+    AND d.expo_ticket_id IS NOT NULL
+    AND d.delivery_status <> 'error'
+  GROUP BY 1, 2
+),
+classified AS (
+  SELECT
+    CASE WHEN arrivals = 1 THEN 'arrival'
+         WHEN arrivals = 0 AND leaving = 1 THEN 'leaving_soon'
+         ELSE 'bundle' END                                     AS push_type,
+    CASE WHEN arrivals = 1 THEN arrival_id
+         WHEN arrivals = 0 AND leaving = 1 THEN leaving_id END AS delivery_id
+  FROM pushes
+),
+opens AS (
+  SELECT g.delivery_id, g.metadata->>'type' AS push_type
+  FROM growth_events g
+  WHERE g.event_name = 'notification_opened'
+    AND g.occurred_at >= now() - interval '30 days'
+    AND g.install_id NOT IN (SELECT install_id FROM test_installs)
+),
+per_type AS (
+  SELECT
+    t.push_type,
+    (SELECT COUNT(*) FROM classified c WHERE c.push_type = t.push_type) AS pushes_sent,
+    CASE WHEN t.push_type = 'bundle'
+         THEN (SELECT COUNT(*) FROM opens o WHERE o.push_type = 'bundle')
+         ELSE (SELECT COUNT(*) FROM classified c
+               WHERE c.push_type = t.push_type
+                 AND c.delivery_id IN (SELECT delivery_id FROM opens WHERE delivery_id IS NOT NULL))
+    END                                                                 AS opened
+  FROM (VALUES ('arrival'), ('leaving_soon'), ('bundle')) AS t(push_type)
+)
+SELECT
+  push_type,
+  pushes_sent,
+  opened,
+  ROUND(100.0 * opened / NULLIF(pushes_sent, 0), 1)                       AS ctr_pct,
+  CASE WHEN push_type = 'bundle' THEN 'opens counted' ELSE 'joined on delivery_id' END AS method
+FROM per_type
+ORDER BY push_type;
+
+-- 6d. "Tell someone" take-up: single-title push opens against shares made
+-- from the moment (share_initiated with metadata.moment), by push type. A
+-- moment share comes from the top-right button or the banner.
+WITH test_installs AS (
+  SELECT DISTINCT g.install_id
+  FROM growth_events g
+  JOIN profiles p ON p.id = g.user_id AND p.is_test_user IS TRUE
+  WHERE g.install_id IS NOT NULL
+),
+events AS (
+  SELECT g.event_name, g.platform, g.metadata->>'type' AS push_type, g.metadata->>'moment' AS moment
+  FROM growth_events g
+  WHERE g.event_name IN ('notification_opened', 'share_initiated', 'share_completed')
+    AND g.occurred_at >= now() - interval '30 days'
+    AND g.install_id NOT IN (SELECT install_id FROM test_installs)
+)
+SELECT
+  t.moment,
+  (SELECT COUNT(*) FROM events e WHERE e.event_name = 'notification_opened' AND e.push_type = t.moment) AS push_opens,
+  (SELECT COUNT(*) FROM events e WHERE e.event_name = 'share_initiated' AND e.moment = t.moment)        AS moment_shares,
+  (SELECT COUNT(*) FROM events e WHERE e.event_name = 'share_completed' AND e.moment = t.moment
+                                   AND e.platform = 'ios')                                            AS moment_shares_completed_ios,
+  ROUND((SELECT COUNT(*) FROM events e WHERE e.event_name = 'share_initiated' AND e.moment = t.moment)::numeric
+        / NULLIF((SELECT COUNT(*) FROM events e WHERE e.event_name = 'notification_opened' AND e.push_type = t.moment), 0), 3)
+                                                                                                      AS shares_per_open
+FROM (VALUES ('arrival'), ('leaving_soon')) AS t(moment)
+ORDER BY t.moment;
