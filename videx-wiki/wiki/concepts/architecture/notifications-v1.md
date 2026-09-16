@@ -84,7 +84,7 @@ The push `data` is built in `supabase/functions/send-notifications/compose.ts` (
 | `service_id` | the service it landed on or is leaving | omitted |
 | `expires_on` | leaving-soon only | omitted |
 
-A push is single-title when its lead group holds one title (one arrival, or no arrival and one leaving-soon); an arrival-led push can still claim leaving-soon rows under the same ticket. Dedup, cap and send logic are unchanged. Deploy is manual (`npx supabase functions deploy send-notifications`); pushes from the old deploy carry only `url` and `type`.
+A push is single-title when its lead group holds one title (one arrival, or no arrival and one leaving-soon); an arrival-led push can still claim leaving-soon rows under the same ticket. Dedup, cap and send logic are unchanged. Deployed manually (`npx supabase functions deploy send-notifications`): version 8, 16 Sept 2026, so the 08:00 UTC run sends this payload from 17 Sept. Pushes sent before that carry only `url` and `type`.
 
 On tap, `routeFromData` parses the URL with `parseInboundLink`, posts `notification_opened` to `growth_events` (with `delivery_id`), sets the session origin (`push`, object, type, service, expiry) and then `router.push`es (still bypassing `+native-intent`). Taps are handled once per notification identifier and the last response is cleared after handling, so the cold-start response, the listener and a later relaunch cannot double-count.
 

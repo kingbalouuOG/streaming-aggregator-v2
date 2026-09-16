@@ -312,7 +312,7 @@ Family for the G-phases ([growth loops](../concepts/forward-planning/growth-loop
 
 ## Counts
 
-- 2026-09-16 (Growth S4): +5 (IN-GR-023..027).
+- 2026-09-16 (Growth S4, PR #192 merged and deployed): +5 (IN-GR-023..027; 027 mitigated, device check in S5).
 - 2026-09-16 (Growth S3 follow-up): IN-GR-010..014 built (010 and 011 wait on Joe console steps; 014 on wording approval); +3 (IN-GR-020..022).
 - 2026-09-15 (Growth S3): +5 (IN-GR-010..014).
 - 2026-09-15 (Growth S2): +5 (IN-GR-005..009).
