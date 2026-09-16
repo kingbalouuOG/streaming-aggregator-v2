@@ -1819,3 +1819,9 @@ only thing at stake.
 - Dry run 2026-09-16 15:29 UTC, before apply: 11/12, `gap-not-growing` FAIL "count_stale_missing_title_ids() does not exist — apply supabase/migrations/091_count_stale_missing_title_ids.sql in Studio", exit 1.
 - Joe: apply 091 in Studio, merge, then `gh workflow run "Pipeline health"`. The workflow stays red until both land.
 - Updated: wiki/concepts/operations/sync-pipeline.md (monitoring section), wiki/concepts/operations/risks-register.md (R-010), wiki/registers/parking-lot.md (IN-SY-002, counts), wiki/entities/codebase/migrations.md (091)
+
+## [2026-09-16] ingest | IN-SY-002 close-out (docs/in-sy-002-closeout)
+- Joe applied migration 091 in Studio; the header's verification SQL passed.
+- PR #198 merged (`f5968be`). It had no conflicts; it was held only by typegen-check, which had run before the apply and passed on re-run.
+- Manual `Pipeline health` run https://github.com/kingbalouuOG/streaming-aggregator-v2/actions/runs/35132581820: 12/12 green; `gap-not-growing` reported `stale gap 0 (no baseline within 7d yet; limit 2500); today's arrivals awaiting backfill: 39`. Heartbeat 18:09 UTC wrote `gap: 39`, `stale_gap: 0` (the first stale-gap baseline).
+- Updated: wiki/registers/parking-lot.md (IN-SY-002 closed, counts), wiki/entities/codebase/migrations.md (091 applied), wiki/concepts/operations/risks-register.md (R-010)
