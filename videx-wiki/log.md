@@ -1784,3 +1784,9 @@ only thing at stake.
 - IN-GR-014: privacy policy §2 "Sign-in details", §6 username wording; in-app mirror re-synced (it lacked S2's attribution paragraph).
 - New: IN-GR-020 (Android cannot revoke), IN-GR-021 (confirmation link on another device), IN-GR-022 (pre-existing `deno check` errors in `_shared/userScope.ts`).
 - Updated: wiki/registers/parking-lot.md, wiki/concepts/operations/auth-email-smtp.md (Confirm signup template), wiki/concepts/product/privacy-and-gdpr.md, wiki/concepts/forward-planning/growth-loops.md; docs/v2/launch/release-runbook.md steps 6–7
+
+## [2026-09-16] query | Growth S3 reviewed in the strategy thread; S4 handoff updated
+- S3 reconciled into the plan (§11c): full-screen name step, white Apple button, revocation by re-authorisation (no storage), Confirm email off until the rebuild reaches testers (S5 sequencing: rebuild → testers update → flip → provider checks), in-app policy mirror drift fixed.
+- S4 handoff header and ownership rewritten: no parallel session; main carries S1–S3; IN-GR-023..027 reserved for S4 (015–019 unused).
+- Recommendation recorded: run android-release.yml build-only now to compile S2's Kotlin referrer module (IN-GR-005) before S5.
+- Updated: wiki/concepts/forward-planning/growth-loops.md (status, Shipped: S3 line)

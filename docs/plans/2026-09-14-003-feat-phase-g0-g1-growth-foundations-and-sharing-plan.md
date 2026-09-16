@@ -266,6 +266,24 @@ Handed to S4: `share_initiated`, `share_completed` and `notification_opened` are
 | IN-GR-013 | Editing a username in Profile updates only `user_metadata`, never `profiles.username` (pre-existing). | S3 fixes `ProfileAccount.tsx` to write both, profiles first, since it already does that in "Choose your name". |
 | IN-GR-014 | Privacy policy and in-app copy do not mention provider sign-in. | S3 adds the paragraph after rebasing onto S2's policy text. |
 
+## 11c. S3 outcome (reviewed 16 September)
+
+**S3 sign-in: merged and closed** (PR #187 merge `7136848`; follow-ups PR #190 merge `cb8db35`; migration 089 applied and verified 16 Sept; `revoke-apple-token` Edge Function v1 active with four `APPLE_*` secrets; Worker `/reset` bridge extended). Not in a build yet. Live Supabase Auth: Apple on, Google on, email on, **Confirm email off by design until the new build reaches testers** (old builds have no "check your email" state and would break on sign-up).
+
+| Plan said | What happened | Consequence |
+|---|---|---|
+| Placeholder username shown only via a modal prompt | The name step is a full-screen step at the end of onboarding (before Curating) and from the tabs guard; the placeholder was never at risk of display because the app shows `user_metadata.username`. The real blocker was `useCompleteOnboarding` overwriting `profiles.username` with the email prefix, fixed. | Fine. |
+| Apple button in the black style | Apple's HIG forbids black on a dark UI; white shipped. | Fine. |
+| §9d: Confirm email on before providers | Providers are on but no build carries the buttons yet, so the auto-link hole is not reachable until the rebuild. Confirm email is flipped the day testers have the new build; the app now has "Check your email" (resend, sign in, change email) and a `videx://confirm-email` screen reached through the `/reset` bridge (`type=email\|signup`). | S5 sequencing: rebuild → testers update → flip Confirm email → provider device checks. Un-updated builds cannot create new email accounts after the flip; existing sessions are unaffected. |
+| §9d: Apple revocation needs a Services ID and stored tokens | Neither: iOS account deletion re-authorises with Apple at delete time, exchanges the code, checks the id_token subject, revokes, then deletes. No storage, no migration. Android cannot revoke (IN-GR-020) but does not offer Apple sign-in, so the rule does not apply there. | Accepted. |
+| Google on iOS | Needs Supabase "Skip nonce check" (on). | Recorded in the runbook. |
+| `expo prebuild --platform ios` as entitlement evidence | Does not run on Windows; evidence came from `expo config --type introspect`. | Fine. |
+| Policy copy | The in-app mirror had drifted: S2's attribution paragraph existed only in `docs/legal`; S3 re-mirrored it with the new "Sign-in details" section. | Add "re-mirror `native/src/legal/policyContent.ts`" to every legal change from now on. |
+
+Open follow-ups: IN-GR-020 (Android cannot revoke, parked), IN-GR-021 (a confirmation link opened on a computer stalls; watch sign-up drop-off), IN-GR-022 (pre-existing `deno check` type errors in `_shared/userScope.ts`, deploys unaffected).
+
+**Consequence for S4 and S5.** S4 no longer runs in parallel with anything; it branches from a `main` that carries S1 to S3. The one rebuild of both platforms happens after S4 merges; it is also the first compile of S2's Kotlin referrer module (IN-GR-005), so a build-only run of `android-release.yml` (manual "Run workflow" without submit produces artifacts only) is worth kicking off now, while S4 runs, to surface compile errors early.
+
 ## 12. Out of scope for G0/G1
 
 Loops 2, 3 and 4 (taste cards, households and `watchlists`, SEO page types 2 to 4), JSON-LD and sitemaps, a `/` page on the Worker, retiring the web tree's `@capacitor/*` runtime packages, `expo-updates` in-app checks, room unshare or expiry, "add all to watchlist", linking a provider to an existing email account from Profile.
@@ -278,8 +296,8 @@ Slices are task groups, not decisions. Each is one fresh session from a self-con
 |---|---|---|---|---|
 | S1 Links | G0-1, G0-2, G0-3, G0-4 | 088 | Joe's S1 checklist (§9c) | **Merged 15 Sept** (#172, #183, #184); outcome in §11a |
 | S2 Attribution | G0-6 | 090 | S1 merged | **Merged 16 Sept** (#188); outcome in §11b |
-| S3 Sign-in | G0-5 | 089 | S1 merged | Draft PR #187; rebase + Joe's console items + §9d; `2026-09-15-001-handoffs-growth-s2-s3.md` |
-| S4 Sharing | G1-1 to G1-4 | none | S2 merged; runs in parallel with S3's finish (disjoint files) | `2026-09-16-001-handoff-growth-s4-sharing.md` |
-| S5 Verification | G1-5 | none | S3 and S4 merged; one rebuild of both platforms; devices | written after S4's summary |
+| S3 Sign-in | G0-5 | 089 | S1 merged | **Merged 16 Sept** (#187, #190); outcome in §11c |
+| S4 Sharing | G1-1 to G1-4 | none | S1 to S3 merged | `2026-09-16-001-handoff-growth-s4-sharing.md` |
+| S5 Verification | G1-5 | none | S4 merged; one rebuild of both platforms; Confirm email flipped once testers have it; devices | written after S4's summary |
 
 After S5 the strategy thread plans G2 (households) the same way; S5's device pass repeats as a combined check before the all-loops release.
