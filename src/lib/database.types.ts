@@ -547,6 +547,62 @@ export type Database = {
         }
         Relationships: []
       }
+      growth_events: {
+        Row: {
+          delivery_id: string | null
+          event_name: string
+          id: number
+          install_id: string | null
+          metadata: Json
+          object_id: string | null
+          object_type: string | null
+          occurred_at: string
+          platform: string | null
+          src: string | null
+          ua_class: string | null
+          user_id: string | null
+          via: string | null
+        }
+        Insert: {
+          delivery_id?: string | null
+          event_name: string
+          id?: never
+          install_id?: string | null
+          metadata?: Json
+          object_id?: string | null
+          object_type?: string | null
+          occurred_at?: string
+          platform?: string | null
+          src?: string | null
+          ua_class?: string | null
+          user_id?: string | null
+          via?: string | null
+        }
+        Update: {
+          delivery_id?: string | null
+          event_name?: string
+          id?: never
+          install_id?: string | null
+          metadata?: Json
+          object_id?: string | null
+          object_type?: string | null
+          occurred_at?: string
+          platform?: string | null
+          src?: string | null
+          ua_class?: string | null
+          user_id?: string | null
+          via?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "growth_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mood_room_anchor_labels: {
         Row: {
           anchor_media_type: string
