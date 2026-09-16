@@ -1,0 +1,5 @@
+# Per-function config for revoke-apple-token (Growth S3 follow-up, IN-GR-010).
+# User-callable from the app's delete-account path: verify_jwt stays true
+# (checked by .github/workflows/edge-fn-jwt-guard.yml).
+
+verify_jwt = true

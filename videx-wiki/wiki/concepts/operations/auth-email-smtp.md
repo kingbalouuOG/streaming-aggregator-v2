@@ -251,3 +251,19 @@ after any URL-config edits. The native provider sets `redirectTo` via
 Toggle **Enable Custom SMTP** off in Supabase → auth email reverts to the
 built-in sender immediately. No app rebuild needed. DNS records can stay; they
 are inert without the SMTP toggle.
+
+---
+
+## Confirm signup template (Growth S3 follow-up, 2026-09-16)
+
+"Confirm email" stays off until the native build with the confirmation flow reaches testers (release runbook → Sign-in providers, step 7). The sign-up confirmation reuses the reset bridge rather than a new Worker path (no new Cloudflare dashboard route):
+
+```html
+<a href="https://videxstreaming.com/reset?token_hash={{ .TokenHash }}&type=email">Confirm your email</a>
+```
+
+- `GET /reset` accepts `type=recovery` (to `videx://reset-password`) and `type=email` or `type=signup` (to `videx://confirm-email?token_hash=…&type=email`), with confirmation copy on the page; anything else gets the 400 invalid-link page (`workers/api/src/resetBridge.ts` `bridgeAppUrl`).
+- `native/src/app/confirm-email.tsx` calls `verifyOtp({ type: 'email', token_hash })`, which confirms the address and signs the person in, then steps back to what it covered (onboarding's "Check your email" carries on to Connect Services).
+- `src/lib/growth/inboundLink.ts` passes `videx://confirm-email` through unchanged, like `reset-password`.
+- The link must be opened on the phone with Videx installed; opened on a computer it cannot reach the app (IN-GR-021).
+- Same template cautions as the reset email: check a received email after saving, and keep link tracking off.

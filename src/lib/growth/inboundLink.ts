@@ -10,7 +10,8 @@
  *   https://videxstreaming.com/room/{uuid}                    -> /room/{uuid}
  *   https://videxstreaming.com/list/{id}                      -> /list/{id} (reserved, G2)
  *   videx://detail/{type}-{id}, videx://room/{uuid}           -> same routes
- *   videx://watchlist, videx://reset-password?...             -> passed through unchanged
+ *   videx://watchlist, videx://reset-password?...,
+ *   videx://confirm-email?...                                 -> passed through unchanged
  *   anything else                                             -> '/'
  *
  * ?via= is the URL channel and ?src= the originating session of a share.
@@ -140,7 +141,7 @@ export function parseInboundLink(input: string): InboundLink {
     return { route: `/list/${list[1]}`, object: { type: 'list', id: list[1] }, via, src };
   }
 
-  if (fromApp && (path === '/watchlist' || path === '/reset-password')) {
+  if (fromApp && (path === '/watchlist' || path === '/reset-password' || path === '/confirm-email')) {
     return { route: raw, object: null, via: null, src: null };
   }
 

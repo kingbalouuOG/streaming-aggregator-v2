@@ -100,12 +100,18 @@ describe('parseInboundLink — pass-through and fallback', () => {
     expect(parseInboundLink(reset).route).toBe(reset);
   });
 
+  it('passes the sign-up confirmation bridge through unchanged, query included', () => {
+    const confirm = 'videx://confirm-email?token_hash=abc123def&type=email';
+    expect(parseInboundLink(confirm)).toEqual({ route: confirm, object: null, via: null, src: null });
+  });
+
   it.each([
     'https://videxstreaming.com/',
     'https://videxstreaming.com/privacy',
     'https://example.com/t/movie/603',
     'https://videxstreaming.com.evil.test/t/movie/603',
     'https://videxstreaming.com/reset-password',
+    'https://videxstreaming.com/confirm-email',
     'videx://',
     'videx://profile/settings',
     'mailto:hi@videxstreaming.com',

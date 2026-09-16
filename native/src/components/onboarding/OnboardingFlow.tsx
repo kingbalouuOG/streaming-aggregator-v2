@@ -80,6 +80,10 @@ export function OnboardingFlow() {
   const [watchedOffset, setWatchedOffset] = useState(draft?.watchedOffset ?? 0);
   const [selectedClusters, setSelectedClusters] = useState<string[]>(draft?.selectedClusters ?? []);
   const [sliders, setSliders] = useState<SliderState>(draft?.sliders ?? DEFAULT_SLIDERS);
+  // Growth S3 follow-up (IN-GR-011): the address a confirmation email went to,
+  // while Step 1 shows "Check your email". Memory only: a person who leaves
+  // signs in after confirming and resumes from Connect Services.
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
   const { complete, submitting } = useCompleteOnboarding();
   const markOnboardingComplete = useMarkOnboardingComplete();
@@ -123,6 +127,14 @@ export function OnboardingFlow() {
     writeOnboardingDraft({ startedLogged: true });
     void logOnboardingEvent(ONBOARDING_EVENTS.ONBOARDING_STARTED, {});
   }, [session]);
+
+  // The confirmation link (confirm-email.tsx) signs the person in while
+  // "Check your email" is showing: carry on to Connect Services.
+  useEffect(() => {
+    if (!pendingEmail || !session) return;
+    setPendingEmail(null);
+    setStep((s) => Math.max(s, 1));
+  }, [pendingEmail, session]);
 
   const toggleCluster = (id: string) =>
     setSelectedClusters((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
@@ -251,6 +263,14 @@ export function OnboardingFlow() {
     next();
   };
 
+  // Keep the Step 1 answers (they persist in the draft) while waiting for the
+  // confirmation link.
+  const onConfirmationPending = (email: string, ageRange: string | null, viewingContext: string | null) => {
+    setAgeRange(ageRange);
+    setViewingContext(viewingContext);
+    setPendingEmail(email);
+  };
+
   // Growth S3: Apple/Google on Step 1. A new identity continues to Connect
   // Services like an email sign-up (the name prompt comes after onboarding).
   // An account that already finished onboarding (a returning user, or a
@@ -325,6 +345,9 @@ export function OnboardingFlow() {
           <StepAccount
             onAccountCreated={onAccountCreated}
             onProviderSignedIn={(userId, a, v) => void onProviderSignedIn(userId, a, v)}
+            pendingEmail={pendingEmail}
+            onConfirmationPending={onConfirmationPending}
+            onChangeEmail={() => setPendingEmail(null)}
           />
         ) : step === 1 ? (
           <StepServices

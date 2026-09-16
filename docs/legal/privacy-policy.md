@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated:** 15 September 2026
+**Last updated:** 16 September 2026
 **Effective from:** 6 July 2026
 
 ## 1. Who we are
@@ -25,6 +25,17 @@ following data in the database tables listed:
   (solo / with partner / with family / with friends / wind down /
   background / focused), your age range, and whether you finished the
   onboarding flow.
+- **Sign-in details** (Supabase Auth): your email address and, if you
+  sign up with one, a password, which is stored only as a secure hash.
+  If you sign in with Apple or Google instead, Videx never sees a
+  password: Apple or Google confirms who you are, and Supabase Auth
+  keeps the details they send with your account. From Google that is
+  your name, email address and profile photo link. From Apple it is
+  your email address, which is a private relay address if you chose
+  Hide My Email. Apple may also share your first name the first time
+  you sign in; the app uses it only to suggest a username and does not
+  store it. When you delete your account from the iPhone app, Videx
+  also asks Apple to disconnect Videx from your Apple ID.
 - **Interaction history** (`user_interactions`): every thumbs up,
   thumbs down, watched mark, watchlist add, dismiss, detail-page view,
   and time-on-detail-page reading you do in the app — each stamped
@@ -181,10 +192,10 @@ exposed in the app:
   every row of data described in §2, in machine-readable form. You
   can take this to any other recommendation service that accepts
   it.
-- **Right to rectification.** You can update your profile details
-  (region, viewing context, age range) from Profile → Settings at
-  any time. To change your username, email Joe at the address in
-  §1.
+- **Right to rectification.** You can change your username and your
+  profile details (region, viewing context, age range) in the app at
+  any time: the username in Profile → Account Details, the rest in
+  Profile → Settings.
 - **Right to restrict / object to processing.** Write to Joe at the
   address in §1 to discuss specific concerns — there are no
   automated decisions made about you within the app that produce

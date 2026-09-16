@@ -1,6 +1,6 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowRight, Eye, EyeOff, Lock, Mail, Popcorn } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/providers/auth';
 import { ProviderSignIn } from './ProviderSignIn';
+import { ResendConfirmation } from './ResendConfirmation';
 
 // Native sign-in screen ("Welcome back."). NATIVE-3 W1: sign-UP moved
 // into onboarding Step 1, so this is sign-in only; "Create one" enters
@@ -25,7 +26,16 @@ import { ProviderSignIn } from './ProviderSignIn';
 export function AuthScreen() {
   const router = useRouter();
   const { signIn } = useAuth();
-  const [email, setEmail] = useState('');
+  // ?email= arrives from onboarding's "Check your email" ("Already confirmed? Sign in").
+  const params = useLocalSearchParams<{ email?: string }>();
+  const paramEmail = typeof params.email === 'string' ? params.email : '';
+  const [email, setEmail] = useState(paramEmail);
+  // Growth S3 follow-up (IN-GR-011): the address that still needs confirming.
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (paramEmail) setEmail(paramEmail);
+  }, [paramEmail]);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -45,14 +55,16 @@ export function AuthScreen() {
   const submit = async () => {
     if (busy) return;
     setError(null);
+    setUnconfirmedEmail(null);
     if (!email.trim() || !password) {
       setError('Enter your email and password.');
       return;
     }
     setBusy(true);
     try {
-      const { error: e } = await signIn(email.trim(), password);
-      if (e) setError(e);
+      const { error: e, errorCode } = await signIn(email.trim(), password);
+      if (errorCode === 'email_not_confirmed') setUnconfirmedEmail(email.trim());
+      else if (e) setError(e);
     } finally {
       setBusy(false);
     }
@@ -137,6 +149,16 @@ export function AuthScreen() {
           </Pressable>
 
           {error ? <Text className="mt-3 font-sans text-meta text-danger">{error}</Text> : null}
+
+          {unconfirmedEmail ? (
+            <View className="mt-4 rounded-card border border-border bg-card p-4">
+              <Text className="font-sans-bold text-body text-foreground">Confirm your email first</Text>
+              <Text className="mb-3 mt-1 font-sans text-meta text-muted-foreground">
+                We sent a link to {unconfirmedEmail}. Open it on this phone, then sign in.
+              </Text>
+              <ResendConfirmation email={unconfirmedEmail} />
+            </View>
+          ) : null}
 
           {/* Submit */}
           <Pressable
