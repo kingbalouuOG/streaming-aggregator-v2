@@ -104,7 +104,7 @@ export default function RoomRoute() {
         }
       />
       <BackButton onPress={back} top={top} />
-      <ShareButton top={top} url={sharedRoomUrl(data.id)} />
+      <ShareButton top={top} url={sharedRoomUrl(data.id)} label={data.label} count={count} surface="room" />
     </View>
   );
 }

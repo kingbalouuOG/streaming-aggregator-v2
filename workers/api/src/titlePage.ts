@@ -39,14 +39,8 @@ export {
 /** Response header carrying the canonical {tmdbId}-{slug} ref. Internal. */
 export const CANONICAL_REF_HEADER = 'x-videx-canonical-ref';
 
-// service_id → display label (mirrors the native SERVICE_LABELS map).
-export const SHARE_SERVICE_LABELS: Record<string, string> = {
-  netflix: 'Netflix', prime: 'Prime Video', disney: 'Disney+', apple: 'Apple TV+',
-  now: 'NOW', paramount: 'Paramount+', itvx: 'ITVX', channel4: 'Channel 4',
-  hbo: 'HBO Max', discovery: 'Discovery+', crunchyroll: 'Crunchyroll',
-  mubi: 'MUBI', plutotv: 'Pluto TV',
-  bbc: 'BBC iPlayer', skygo: 'Sky Go',
-};
+// service_id → display label; shared with the app's share copy.
+export { SHARE_SERVICE_LABELS } from '../../../src/lib/growth/serviceLabels';
 
 export interface TitlePageData {
   title: string;

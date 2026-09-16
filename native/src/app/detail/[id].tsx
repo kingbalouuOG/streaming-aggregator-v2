@@ -10,18 +10,38 @@ import { BackButton } from '@/components/BackButton';
 import { ContentRow } from '@/components/ContentRow';
 import { DetailEngagement } from '@/components/DetailEngagement';
 import { SectionHead } from '@/components/SectionHead';
-import { ShareButton } from '@/components/ShareButton';
+import { ShareButton, type ShareMomentState, type ShareTarget } from '@/components/ShareButton';
 import { DetailSkeleton } from '@/components/Skeleton';
+import { TellSomeoneBanner } from '@/components/TellSomeoneBanner';
 import { WatchlistActions } from '@/components/WatchlistActions';
 import { Toast, type ToastState } from '@/components/Toast';
 import { WhereToWatch } from '@/components/WhereToWatch';
 import { useChannelRegistry, useUserChannels } from '@/hooks/useChannels';
 import { useContentDetail } from '@/hooks/useContentDetail';
+import { useSessionOrigin } from '@/hooks/useSessionOrigin';
 import { useUserServices } from '@/hooks/useUserServices';
 import { serviceIdsToProviderIds } from '@/lib/adapters/platformAdapter';
+import { buildMomentCopy } from '@/lib/growth/shareCopy';
+import { dismissSessionBanner, type SessionOrigin } from '@/lib/instrumentation/sessionOrigin';
 import type { ContentItem } from '@/lib/types/content';
 import { clearPendingLinkFor } from '@/pendingLink';
 import { useAuth } from '@/providers/auth';
+
+// Arrival and leaving-soon pushes only; a bundle lands on the watchlist and
+// carries no title, so it never matches.
+function shareMoment(
+  origin: SessionOrigin | null,
+  contentId: string,
+  title: string,
+): { banner: string; state: ShareMomentState } | null {
+  if (origin?.object?.type !== 'title' || origin.object.id !== contentId || !origin.serviceId) return null;
+  if (origin.type !== 'arrival' && origin.type !== 'leaving_soon') return null;
+  const copy = buildMomentCopy(
+    { type: origin.type, serviceId: origin.serviceId, expiresOn: origin.expiresOn },
+    title,
+  );
+  return copy ? { banner: copy.banner, state: { type: origin.type, line: copy.line } } : null;
+}
 
 export default function DetailRoute() {
   const router = useRouter();
@@ -53,6 +73,9 @@ export default function DetailRoute() {
   useEffect(() => {
     if (session && params.id) clearPendingLinkFor(`/detail/${params.id}`);
   }, [session, params.id]);
+
+  // Growth S4: a push tap that opened this title makes it a share moment.
+  const sessionOrigin = useSessionOrigin();
 
   const heroHeight = (width * 5) / 4;
   const back = () => router.back();
@@ -113,6 +136,22 @@ export default function DetailRoute() {
     overview: detail.description,
   };
 
+  // Share copy availability (Growth S4): streaming services, then rent or buy.
+  // Add-on channels (detail.channelOptions) never count as the service
+  // (migration 084). rentalOptions already leaves out streaming services.
+  const shareTarget: ShareTarget = {
+    contentId: detail.id,
+    title: detail.title,
+    year: detail.year,
+    availability: {
+      subscriptionServices: detail.allServices,
+      rentBuyServices: detail.rentalOptions.map((o) => o.serviceKey),
+    },
+  };
+
+  // "Tell someone": the push that opened this session was about this title.
+  const moment = shareMoment(sessionOrigin, detail.id, detail.title);
+
   return (
     <View className="flex-1 bg-background">
       <Toast toast={toast} top={insets.top + 8} onDismiss={dismissToast} />
@@ -131,12 +170,7 @@ export default function DetailRoute() {
             style={{ position: 'absolute', inset: 0 }}
           />
           <BackButton onPress={back} top={insets.top + 12} />
-          <ShareButton
-            contentId={detail.id}
-            title={detail.title}
-            year={detail.year}
-            top={insets.top + 12}
-          />
+          <ShareButton {...shareTarget} moment={moment?.state} top={insets.top + 12} />
           <Text
             className="absolute inset-x-5 bottom-5 font-display-black text-white"
             style={{ fontSize: 36, lineHeight: 38, letterSpacing: -0.7 }}>
@@ -147,6 +181,14 @@ export default function DetailRoute() {
         <View className="px-5 pt-5">
           {/* Meta line */}
           <Text className="font-sans text-body text-muted-foreground">{meta.join('  ·  ')}</Text>
+
+          {moment && !sessionOrigin?.bannerDismissed ? (
+            <TellSomeoneBanner
+              text={moment.banner}
+              target={{ ...shareTarget, moment: moment.state }}
+              onDismiss={dismissSessionBanner}
+            />
+          ) : null}
 
           {/* Rating badges */}
           {detail.imdbRating > 0 || detail.rottenTomatoes > 0 ? (

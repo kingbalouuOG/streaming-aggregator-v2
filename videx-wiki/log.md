@@ -1790,3 +1790,9 @@ only thing at stake.
 - S4 handoff header and ownership rewritten: no parallel session; main carries S1–S3; IN-GR-023..027 reserved for S4 (015–019 unused).
 - Recommendation recorded: run android-release.yml build-only now to compile S2's Kotlin referrer module (IN-GR-005) before S5.
 - Updated: wiki/concepts/forward-planning/growth-loops.md (status, Shipped: S3 line)
+
+## [2026-09-16] ingest | Growth S4 sharing (feat/growth-s4-sharing)
+- Built: share copy with the UK availability line (`src/lib/growth/shareCopy.ts`), shared service labels (`serviceLabels.ts`, Worker re-exports), `neutraliseRoomLabel` moved to `roomSnapshot.ts`; `ShareButton` emits `share_initiated` / `share_completed` with surface, moment, to_surface and platform_reports_completion; `?via=share` and `&src=push` on shared URLs; `sessionOrigin.ts` + `useSessionOrigin`; "Tell someone" button state and `TellSomeoneBanner` on the detail page; `send-notifications/compose.ts` with `delivery_id`, `via`, `service_id`, `expires_on` (vitest, `deno check`); `notification_opened` once per tap; `growth-dashboard.sql` §1 on `share_initiated`, §6a–d; `metrics-dashboard.sql` growth pointer.
+- Plan corrections: the handoff's rent-or-buy example ("Apple TV and Prime") does not match the Worker labels the copy must use ("Apple TV+ and Prime Video"); `notification_opened` had no metadata field in the `GrowthEvent` union (added); an arrival-led push can claim leaving-soon rows under one ticket, so "single-title" is judged by the lead group, not row count; a room card cannot send `share_initiated` before its snapshot exists.
+- New register rows: IN-GR-023..027.
+- Updated: wiki/entities/codebase/event-taxonomy.md, wiki/concepts/architecture/notifications-v1.md, wiki/concepts/forward-planning/growth-loops.md, wiki/registers/parking-lot.md; docs/strategy/briefs/h0-device-test-checklist.md (S4-1..11)

@@ -46,6 +46,19 @@ export interface SharedRoomPayload {
   items: ContentItem[];
 }
 
+const PERSONAL_FRAMING_RE = /^(?:because\s+you\s+(?:liked|loved|watched)|if\s+you\s+(?:love|loved|liked))\s+(.+)$/i;
+
+/**
+ * Shared rooms are anonymous (Joe, 14 Sept): "Because you liked Heat" and
+ * "If you love Heat" both become "More like Heat". The Worker applies it to
+ * the snapshot and the app to the share copy.
+ */
+export function neutraliseRoomLabel(label: string): string {
+  const trimmed = label.trim().replace(/\s+/g, ' ');
+  const m = PERSONAL_FRAMING_RE.exec(trimmed);
+  return m ? `More like ${m[1]}` : trimmed;
+}
+
 export function sharedRoomUrl(id: string): string {
   return `${CANONICAL_ORIGIN}/room/${id}`;
 }

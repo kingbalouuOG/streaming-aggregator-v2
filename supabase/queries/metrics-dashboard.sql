@@ -236,8 +236,12 @@ ORDER BY c.cohort_week DESC;
 -- previews fetched vs pages opened (§2), the link_opened → first_open →
 -- signup_completed funnel by via and platform and open-to-install (§3:
 -- Android deterministic through the Play install referrer, iOS inferred),
--- D7/D30 retention by first-touch via (§4) and onboarding reach by source
--- (§5). Weekly headline, all traffic (test exclusions live in that file):
+-- D7/D30 retention by first-touch via (§4), onboarding reach by source
+-- (§5), and sharing and notifications (§6, Growth S4): iOS share completion
+-- rate by surface (6a), share rate in push-originated vs organic sessions
+-- (6b), notification click-through by push type, joined on delivery_id
+-- (6c), and "Tell someone" take-up (6d). §1 reads share_initiated since S4.
+-- Weekly headline, all traffic (test exclusions live in that file):
 SELECT
   event_name,
   COUNT(*)                   AS events_7d,

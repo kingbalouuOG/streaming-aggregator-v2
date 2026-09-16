@@ -101,7 +101,12 @@ export type GrowthEvent =
       object: InboundObject;
       metadata?: GrowthMetadata;
     })
-  | (Attributed & { name: 'notification_opened'; object: InboundObject | null; deliveryId: string | null });
+  | (Attributed & {
+      name: 'notification_opened';
+      object: InboundObject | null;
+      deliveryId: string | null;
+      metadata?: GrowthMetadata;
+    });
 
 /** The POST body. Exactly these keys; the Worker rejects any other. */
 export interface GrowthEventBody {

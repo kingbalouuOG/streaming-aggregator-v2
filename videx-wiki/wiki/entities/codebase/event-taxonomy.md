@@ -3,7 +3,7 @@ title: Event Taxonomy
 type: entity
 tags: [events, instrumentation, signals, analytics]
 created: 2026-04-26
-updated: 2026-09-15
+updated: 2026-09-16
 sources:
   - raw/codebase-snapshots/event-taxonomy.md
   - raw/v2-strategy/Videx_v2_Detail_Page_Signal_Capture_Spec_v0.3.2.md
@@ -55,7 +55,7 @@ Source: `lib/storage/interactions.ts`. Written to `user_interactions`. Always in
 | `watched` | Tap on "Mark as Watched". | `{}` |
 | `not_interested` | Detail page button (renamed from `dismiss` in Phase 0). | `{}` |
 | `report_availability` | "Report incorrect availability" submission. | `{ reported_service, reason }` |
-| `share` | Share action on the detail page (native RN `Share`). H0 Stream B. | `{ shared_url, to_surface }` |
+| `share` | Share action on the detail page (native RN `Share`). H0 Stream B. Kept after Growth S4 for the ranking-side history; titles only, written when the sheet reports a share. | `{ shared_url, to_surface }` |
 
 > ⚠ **`share` is a growth-analytics signal, NOT a ranking signal.** Added to the `user_interactions.event_type` CHECK in migration 058, and to `InteractionEventType` + `emitShare` in `lib/storage/interactions.ts`. It is deliberately absent from `INTERACTION_WEIGHTS` / `TASTE_RELEVANT_EVENTS` — a share moves no taste vector. `shared_url` is the Worker title-page smart link (`/t/:type/:tmdbId`); `to_surface` is the iOS share-target activity type when the OS reports it (null on Android).
 
@@ -113,7 +113,9 @@ Sent pushes are logged to `notification_deliveries` (migration 057), NOT `user_i
 | `link_opened` | app → `POST /v1/growth/events` (`+native-intent.tsx`) | an object link (title/room/list) reaches the app, pre-auth included | object, via, src; `user_id` if signed in |
 | `first_open` | app (`_layout.tsx` → `runFirstLaunchAttribution`) | once per install id | first-touch via/src/object; `metadata.touch` (`link` \| `install_referrer` \| null), `metadata.prior_install` |
 | `signup_completed` | app (`curating.tsx`) | end of onboarding, beside `first_home_view` | first-touch via/src/object; `metadata.touch`; `user_id` |
-| `share_initiated`, `share_completed`, `notification_opened` | app (S4) | in the CHECK, not emitted yet | `notification_opened` carries `delivery_id` |
+| `share_initiated` | app (`ShareButton.tsx` `runShare`, Growth S4) | the share sheet opens (title, room screen, room card; a room card after its snapshot POST succeeds) | object, `via=share`, `src` = session origin; `metadata.surface` (`detail` \| `room` \| `room_card`), `metadata.moment` (`arrival` \| `leaving_soon`) when shared from "Tell someone" |
+| `share_completed` | app (same) | the OS reports `sharedAction` | same as initiated plus `metadata.to_surface` (iOS activity type, else null) and `metadata.platform_reports_completion` (true on iOS only: Android reports a dismissed sheet as shared) |
+| `notification_opened` | app (`providers/notifications.tsx`, warm and cold taps, once per notification id) | a push tap | `delivery_id` (single-title push; null for bundles and pre-S4 pushes), object from the payload URL (null for bundles), `via=push`, `src=push`, `metadata.type` (`arrival` \| `leaving_soon` \| `bundle`) |
 
 Columns: `id`, `occurred_at`, `event_name`, `install_id` (app-minted UUID, null on page events), `user_id` (from the verified JWT only; never from the body), `via`, `src`, `object_type`, `object_id`, `platform`, `ua_class`, `delivery_id`, `metadata` (≤ 2 KB on ingest).
 
@@ -121,7 +123,8 @@ Columns: `id`, `occurred_at`, `event_name`, `install_id` (app-minted UUID, null 
 - **`ua_class`** = `crawler` | `human` from `workers/api/src/uaClass.ts` (named preview fetchers, headless browsers, generic bots/tools, empty UA → crawler). The raw UA and IP are never stored.
 - **Install id** — `native/src/installId.ts`, MMKV `videx` key `install_id`; not cleared on sign-out. **First touch** — `native/src/attribution.ts` (`first_touch`), written once: an inbound link, else on Android the Play Install Referrer (`t=` / `r=` in the referrer also becomes the pending link). An install that already held a Supabase session when the id was minted is an update (`prior_install`), excluded from the funnel.
 - **Deletion/export** — `delete_own_account` / `export_user_data` (v1.3) cover the account's rows and every row of any install it used.
-- `share` in `user_interactions` stays the share source until S4 emits `share_initiated`.
+- **Session origin** (S4, `src/lib/instrumentation/sessionOrigin.ts`): a push tap marks the in-memory session as push-originated until `sessionId`'s reset (5 minutes backgrounded). Every share in that session carries `src=push` on both events and in the URL (`&src=push`).
+- Shares per WAU (`growth-dashboard.sql` §1) read `share_initiated` since S4; the `user_interactions.share` source is kept commented for the transition. §6 has iOS completion, push vs organic share rate, notification CTR on `delivery_id`, and "Tell someone" take-up.
 
 ## Source surfaces
 

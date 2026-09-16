@@ -32,6 +32,14 @@
 
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+import {
+  composeMessage,
+  type Candidate,
+  type ClaimedCandidate,
+  type NotificationType,
+  type PushData,
+} from './compose.ts';
+
 // ── Config ───────────────────────────────────────────────
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -49,7 +57,6 @@ const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROL
 // The single place gating lives. Leaving-soon ships FREE in v1; making it a
 // Premium anchor later means flipping `tier: 'free'` → `tier: 'premium'` here
 // and implementing userIsPremium() — no schema/pipeline surgery.
-type NotificationType = 'arrival' | 'leaving_soon';
 const NOTIFICATION_TYPES: Record<NotificationType, { tier: 'free' | 'premium' }> = {
   arrival: { tier: 'free' }, // free forever (retention loop + taste signal), strategy §5
   leaving_soon: { tier: 'free' }, // free in v1; future Premium anchor — flip tier here
@@ -83,38 +90,14 @@ interface PushToken {
   expo_push_token: string;
   platform: string;
 }
-interface Candidate {
-  type: NotificationType;
-  tmdb_id: number;
-  media_type: 'movie' | 'tv';
-  service_id: string;
-  title: string;
-}
 interface ExpoMessage {
   to: string;
   title: string;
   body: string;
   sound: 'default';
-  data: { url: string; type: NotificationType | 'bundle' };
+  data: PushData;
   channelId?: string;
 }
-
-// Content-id format shared with the client router: `${mediaType}-${tmdbId}`
-// (memory: "movie-12345" / "tv-12345"). Deep link → videx://detail/<contentId>.
-const contentId = (mediaType: string, tmdbId: number) => `${mediaType}-${tmdbId}`;
-const detailUrl = (mediaType: string, tmdbId: number) =>
-  `videx://detail/${contentId(mediaType, tmdbId)}`;
-const watchlistUrl = () => `videx://watchlist`;
-
-// ── Service-name display map (for copy) ──────────────────
-const SERVICE_LABELS: Record<string, string> = {
-  netflix: 'Netflix', prime: 'Prime Video', disney: 'Disney+', apple: 'Apple TV+',
-  now: 'NOW', paramount: 'Paramount+', itvx: 'ITVX', channel4: 'Channel 4',
-  hbo: 'HBO Max', discovery: 'Discovery+', crunchyroll: 'Crunchyroll',
-  mubi: 'MUBI', plutotv: 'Pluto TV',
-  bbc: 'BBC iPlayer', skygo: 'Sky Go',
-};
-const serviceLabel = (id: string) => SERVICE_LABELS[id] ?? id;
 
 // ── Per-user candidate gathering ─────────────────────────
 
@@ -232,6 +215,7 @@ async function getLeavingSoonCandidates(
       media_type: row.media_type as 'movie' | 'tv',
       service_id: row.service_id,
       title: watchlist.get(key)!,
+      expires_on: row.expires_on,
     });
   }
   return out;
@@ -262,46 +246,6 @@ async function hitDailyCap(userId: string): Promise<boolean> {
     .gte('sent_at', sinceIso);
   if (error) throw error;
   return (count ?? 0) > 0;
-}
-
-// ── Copy composition (one push, bundled) ─────────────────
-function composeMessage(cands: Candidate[]): {
-  title: string;
-  body: string;
-  data: ExpoMessage['data'];
-} {
-  // Lead with arrivals (retention loop). Only fall to leaving-soon if there
-  // are no arrivals — keeps the daily push positive-first.
-  const arrivals = cands.filter((c) => c.type === 'arrival');
-  const leaving = cands.filter((c) => c.type === 'leaving_soon');
-  const lead = arrivals.length > 0 ? arrivals : leaving;
-  const isArrival = arrivals.length > 0;
-  const first = lead[0];
-  const extra = lead.length - 1;
-
-  if (isArrival) {
-    const title =
-      lead.length === 1
-        ? `${first.title} is now streaming`
-        : `${first.title} and ${extra} more just landed`;
-    const body =
-      lead.length === 1
-        ? `Now on ${serviceLabel(first.service_id)} — on your watchlist.`
-        : `New on your subscriptions. Open Videx to watch.`;
-    const url = lead.length === 1 ? detailUrl(first.media_type, first.tmdb_id) : watchlistUrl();
-    return { title, body, data: { url, type: lead.length === 1 ? 'arrival' : 'bundle' } };
-  }
-
-  const title =
-    lead.length === 1
-      ? `${first.title} is leaving soon`
-      : `${first.title} and ${extra} more are leaving soon`;
-  const body =
-    lead.length === 1
-      ? `Leaving ${serviceLabel(first.service_id)} within a week — watch it before it goes.`
-      : `Watchlist titles are expiring within a week.`;
-  const url = lead.length === 1 ? detailUrl(first.media_type, first.tmdb_id) : watchlistUrl();
-  return { title, body, data: { url, type: lead.length === 1 ? 'leaving_soon' : 'bundle' } };
 }
 
 // ── Expo push send (chunked) ─────────────────────────────
@@ -501,12 +445,16 @@ async function run(): Promise<RunReport> {
       if (claimErr) throw claimErr;
       if (!claimed || claimed.length === 0) continue; // all raced away
 
-      // Only compose from titles we actually claimed this run.
-      const claimedKeys = new Set(
-        claimed.map((r) => `${r.notification_type}:${r.media_type}-${r.tmdb_id}`),
+      // Only compose from titles we actually claimed this run, each carrying
+      // its delivery row id (a single-title push sends it as delivery_id).
+      const claimedIds = new Map(
+        claimed.map((r) => [`${r.notification_type}:${r.media_type}-${r.tmdb_id}`, r.id as string]),
       );
-      const claimedCandidates = candidates.filter((c) =>
-        claimedKeys.has(`${c.type}:${c.media_type}-${c.tmdb_id}`));
+      const claimedCandidates: ClaimedCandidate[] = [];
+      for (const c of candidates) {
+        const deliveryId = claimedIds.get(`${c.type}:${c.media_type}-${c.tmdb_id}`);
+        if (deliveryId) claimedCandidates.push({ ...c, delivery_id: deliveryId });
+      }
       const { title, body, data } = composeMessage(claimedCandidates);
 
       // Fan out to every device the user has.

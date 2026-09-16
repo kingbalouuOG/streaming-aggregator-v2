@@ -31,6 +31,8 @@ export default defineConfig({
       'workers/api/src/**/__tests__/**/*.test.ts',
       // Growth S3 follow-up: pure Edge Function helpers (Web Crypto only, no Deno APIs).
       'supabase/functions/_shared/__tests__/**/*.test.ts',
+      // Growth S4: send-notifications copy and push payload.
+      'supabase/functions/send-notifications/__tests__/**/*.test.ts',
     ],
     exclude: [
       '**/node_modules/**',
