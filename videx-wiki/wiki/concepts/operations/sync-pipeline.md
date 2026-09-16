@@ -3,7 +3,7 @@ title: Sync pipeline runbook
 type: concept
 tags: [runbook, sync, tmdb, sa-api, omdb]
 created: 2026-04-26
-updated: 2026-09-11
+updated: 2026-09-16
 sources:
   - raw/runbooks/sync-pipeline.md
 related:
@@ -380,7 +380,7 @@ that heartbeat is fresh. Only a sustained Actions outage escapes.
 | `no-failed-runs` | a chain that gave up |
 | `sync-did-work` | ran, reported success, processed nothing (the 2026-08-12..15 signature) |
 | `error-rate-sane` | a large *share* of rows failing |
-| `gap-not-growing` | the gap widening rather than draining |
+| `gap-not-growing` | the backfill falling behind: the **stale** gap (titles missing for 24h+) growing over 7 days, or above 2,500 |
 | `embed-queue-not-backed-up` | titles that exist but cannot be recommended |
 | `chains-not-chronically-resumed` | handoffs failing repeatedly |
 | `nothing-stuck-running` | the reaper or watchdog itself failing |
@@ -393,6 +393,47 @@ muted, which recreates the original problem in a more irritating form.**
 legitimately process zero once their queues drain, which is the steady
 state we want, so asserting "did work" on them would go red precisely when
 the pipeline is healthiest.
+
+### `gap-not-growing` measures the stale gap, not the whole gap (IN-SY-002)
+
+Until 2026-09-16 the check compared `count_missing_title_ids()` with the
+oldest heartbeat in the last 7 days and failed on any increase. The cron
+order makes that a coin toss: the 05:00 backfill closes the gap, the 06:00
+sync adds that morning's new titles, and those wait for **tomorrow's**
+backfill. So the check (09:00, often starting 13:00–14:00) always counted
+them, and went red whenever a morning brought more arrivals than the
+baseline day. It did on 15 Sept (2,323 vs 31) and 16 Sept (39 vs 31); all 39
+on the 16th were first written between 06:00:47 and 06:01:50 that morning.
+
+It now calls `count_stale_missing_title_ids()` (migration 091): the same
+anti-join, restricted to titles whose **oldest** availability row is more
+than 24h old, which are the ones a daily backfill has already had a chance at. That
+number is ~0 when the backfill works and grows by a day's arrivals for each
+day it stalls or slips to weekly. Two rules:
+
+- **Growth:** the stale gap must not exceed the oldest heartbeat in the last
+  7 days that recorded one (`pipeline_health.detail.stale_gap`; `detail.gap`
+  is still written for history). Pre-091 heartbeats have no `stale_gap`, so
+  the first run after apply passes with "no baseline".
+- **Ceiling:** a stale gap above 2,500 fails whatever the baseline. One
+  12-slice chain creates ~2,530 titles, so above that a single run cannot
+  clear it. It also catches a backlog that already existed when the baseline
+  was taken. Expect it to go red while a bulk catalogue walk drains, as
+  11–14 Sept did; that red is real.
+
+The detail line reports today's arrivals alongside but never judges them:
+`stale gap 0 vs 0 on 2026-09-17 (flat); today's arrivals awaiting backfill: 39`.
+If migration 091 is missing, the check fails and names the migration.
+
+**Why `created_at` is a sound age signal although it is reset.** Every
+writer of `streaming_availability` replaces rows with delete + insert, so
+`created_at` means "last rewritten". The reset only moves time forward, so
+it can hide a stale title for a day (≤0.3% of titles a day, measured) but
+can never make a new one look stale. `sa_show_map.first_seen_at` and
+`streaming_history` look like better first-seen times and are not: they
+date the title's history, not its current stint in the gap. 25 of the 16
+Sept 39 were removed on 13 Sept and re-added that morning, and both would
+have called them stale.
 
 Spot-check by hand:
 
@@ -416,6 +457,8 @@ FROM titles;
 
 -- Size of the availability-without-metadata gap (~2.3s; not per-slice).
 SELECT count_missing_title_ids();
+-- The part of it the backfill should already have closed (~0 when healthy).
+SELECT count_stale_missing_title_ids();   -- default p_min_age 24 hours
 
 -- Did the last runs actually do anything?
 SELECT * FROM sync_history;

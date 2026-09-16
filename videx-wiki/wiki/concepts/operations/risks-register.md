@@ -3,7 +3,7 @@ title: Risks register
 type: concept
 tags: [risks, mitigations, ops]
 created: 2026-04-26
-updated: 2026-09-08
+updated: 2026-09-16
 sources:
   - raw/reference/risks-register.md
   - raw/v2-strategy/Videx_Recommendation_Engine_v2_Strategy_v1.6.3.md
@@ -28,7 +28,7 @@ Living list of known risks and mitigations. Severity is engineering judgement; r
 | R-007 | HNSW recall drops as catalogue grows past 100K | Medium | Monitor in `rank-eval.ts`. Tune `ef_search`. Consider IVFFlat if recall degrades. | Eng |
 | R-008 | Pricing data drifts from reality | Medium | Quarterly review (IN-XPS-007). Consider external pricing source pre-launch. | Product |
 | R-009 | RLS misconfiguration silently leaks data | High | Pre-deploy checklist (see [RLS pattern](../techniques/rls-pattern.md)). Run Supabase linter at each phase boundary. Audit `pg_policies` for new tables. | Eng |
-| R-010 | pg_cron job fails silently | Medium | ✅ Mitigated 2026-08-26. Materialised 2026-06-07 and ran 79 days: `cron.job_run_details` was the monitored surface and only records that pg_net *queued* the request, so every run showed `succeeded` while TMDb returned 401 to every call. Fixed in two halves — **legibility** (A1, migrations 066/067/068: honest `sync_log` counts, populated `error_details`, heartbeats, watchdog) and now **alerting** (`pipeline-health` GitHub Actions workflow, daily 09:00 UTC, 10 assertions built around the ABSENCE of expected success rather than the presence of errors — an error-triggered alert would have stayed silent for all 79 days). Runs outside Supabase deliberately; see [sync-pipeline](sync-pipeline.md). Residual: a sustained GitHub Actions outage would go unnoticed. | Eng |
+| R-010 | pg_cron job fails silently | Medium | ✅ Mitigated 2026-08-26. Materialised 2026-06-07 and ran 79 days: `cron.job_run_details` was the monitored surface and only records that pg_net *queued* the request, so every run showed `succeeded` while TMDb returned 401 to every call. Fixed in two halves — **legibility** (A1, migrations 066/067/068: honest `sync_log` counts, populated `error_details`, heartbeats, watchdog) and now **alerting** (`pipeline-health` GitHub Actions workflow, daily 09:00 UTC, 10 assertions built around the ABSENCE of expected success rather than the presence of errors — an error-triggered alert would have stayed silent for all 79 days). Runs outside Supabase deliberately; see [sync-pipeline](sync-pipeline.md). **2026-09-16 (IN-SY-002, migration 091):** `gap-not-growing` cried wolf on 15–16 Sept because it counted that morning's 06:00 arrivals, which always wait for the next 05:00 backfill. It now judges only the *stale* gap (titles missing for 24h+): growth over 7 days, or above 2,500. Arrivals are reported but not judged. Residual: a sustained GitHub Actions outage would go unnoticed. | Eng |
 | R-011 | Embedding template change breaks coherence | Medium | `eval-cluster-coherence.ts` thresholds gate any template change. Maintain previous template definition for reproducibility. | Eng |
 | R-012 | Capacitor 8 plugin incompatibility on Android update | Low | Pin Capacitor + plugin versions. Test on latest Android release before Play Store update. | Eng |
 | R-013 | Onboarding drop-off reduces taste vector quality | Medium | Funnel queries flag step-by-step drop-off. Iterate copy and progress UI. | Product |
