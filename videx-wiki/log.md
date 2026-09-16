@@ -1810,3 +1810,12 @@ only thing at stake.
 - New: docs/plans/2026-09-16-002-handoff-growth-s5-verification.md (Joe's pre-steps: 2.5.0 bump, production + preview iOS builds, Android with submit, testers update, Confirm email flip, store forms; matrix A links / B attribution / C sign-in / D sharing and push; register cleanup; phase summary; strategy doc v0.2 draft; G2 readiness view).
 - Noted, unrelated: "Pipeline health" workflow failing since 2026-09-15.
 - Updated: wiki/concepts/forward-planning/growth-loops.md (status: build complete, unverified; Shipped: S4 + build-phase lines)
+
+## [2026-09-16] ingest | IN-SY-002 — pipeline-health `gap-not-growing` false alarm (fix/pipeline-health-stale-gap)
+- Cause: the check compared the whole titles gap with a 7-day baseline, but the 06:00 sync's new titles wait for the next 05:00 backfill, so the 09:00–14:00 check always counted them. 15 Sept (2,323 vs 31) and 16 Sept (39 vs 31) were false alarms; 11–14 Sept were real (IN-SY-001 walks).
+- Verified the age signal before building on it: every `streaming_availability` writer (sync-incremental, sync-content.ts, backfill-service-catalogue.ts) deletes and re-inserts, so `created_at` is "last rewritten". Kept it: the reset only moves time forward (can undercount, never overcount; 207 of 77,179 titles had min(created_at) in the last 24h). Rejected `sa_show_map.first_seen_at` and `streaming_history`: 25 of the 16 Sept 39 were removed 13 Sept and re-added that morning, so both would have called them stale.
+- New: `supabase/migrations/091_count_stale_missing_title_ids.sql` (178ms EXPLAIN ANALYZE on production; verification SQL in header), `database.types.ts` entry.
+- Changed: `scripts/health/pipeline-health.ts` check 4 judges the stale gap (growth vs oldest `detail.stale_gap` in 7 days; ceiling 2,500 = one full chain's titles); detail reports arrivals; heartbeat writes `stale_gap` next to `gap`; a missing RPC fails the check and names migration 091.
+- Dry run 2026-09-16 15:29 UTC, before apply: 11/12, `gap-not-growing` FAIL "count_stale_missing_title_ids() does not exist — apply supabase/migrations/091_count_stale_missing_title_ids.sql in Studio", exit 1.
+- Joe: apply 091 in Studio, merge, then `gh workflow run "Pipeline health"`. The workflow stays red until both land.
+- Updated: wiki/concepts/operations/sync-pipeline.md (monitoring section), wiki/concepts/operations/risks-register.md (R-010), wiki/registers/parking-lot.md (IN-SY-002, counts), wiki/entities/codebase/migrations.md (091)
