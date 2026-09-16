@@ -1803,3 +1803,10 @@ only thing at stake.
 - New: docs/v2/phase-summaries/phase-growth-s4-summary.md (for the strategy thread: what shipped, query shapes, plan corrections, S5 notes).
 - Noted: Android Release run on `386e26a` succeeded (first compile of the S2 referrer module, IN-GR-005); "Pipeline health" workflow failing since 15 Sept, unrelated to S4.
 - Updated: wiki/concepts/forward-planning/growth-loops.md (status), wiki/concepts/architecture/notifications-v1.md (deploy recorded), wiki/registers/parking-lot.md (counts)
+
+## [2026-09-16] query | Growth S4 reviewed in the strategy thread; build phase closed; S5 handoff written
+- S4 reconciled into the plan (§11d): labels shared with the Worker, lead-title rule for push payloads, room-card event after the snapshot, replay mitigation (IN-GR-027), banner placement.
+- IN-GR-005: compile proven by the 16 Sept build-only Android run (35105642503); runtime moves to S5 check B3. Register row updated.
+- New: docs/plans/2026-09-16-002-handoff-growth-s5-verification.md (Joe's pre-steps: 2.5.0 bump, production + preview iOS builds, Android with submit, testers update, Confirm email flip, store forms; matrix A links / B attribution / C sign-in / D sharing and push; register cleanup; phase summary; strategy doc v0.2 draft; G2 readiness view).
+- Noted, unrelated: "Pipeline health" workflow failing since 2026-09-15.
+- Updated: wiki/concepts/forward-planning/growth-loops.md (status: build complete, unverified; Shipped: S4 + build-phase lines)
