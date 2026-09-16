@@ -115,7 +115,7 @@ S4-1 to S4-11 above, both platforms. Push plan for `joegreenwas@gmail.com` (`1ef
 | Push | Seed | Checks |
 |---|---|---|
 | P1 arrival | Inside Man (`movie-388`) on Netflix, `streaming_history` 'added' | S4-5, S4-6, S4-9, S4-10, S4-11, A5 cold tap |
-| P2 leaving soon | The Whisper Man (`movie-860508`) on Netflix, `expires_on` = now + 4 days (restore to null after) | S4-7. **Joe first turns Leaving soon ON in Settings** (currently off). |
+| P2 leaving soon | The Whisper Man (`movie-860508`) on Netflix, `expires_on` = now + 4 days (restore to null after) | S4-7. Leaving soon turned ON by Joe in Settings (row updated 2026-09-16 15:55 UTC). |
 | P3 bundle | The Order (`movie-1082195`) on Prime + Lucky (`tv-278624`) on Apple TV+, both 'added' | S4-8 |
 
 Between pushes the cap is cleared by moving the previous delivery back 21 hours (rows kept as evidence), not by deleting it. Every write below is proposed to Joe before it runs.
@@ -150,5 +150,5 @@ set -a; . ./.env; set +a; curl -sS -X POST "$VITE_SUPABASE_URL/functions/v1/send
 Check before each invoke: `select tmdb_id, media_type, service_id, recorded_at from streaming_history where event_type='added' and stream_type in ('subscription','free') and recorded_at > now() - interval '26 hours'` joined against every token holder's watchlist, so no real account receives a seeded push.
 
 ### E. Register
-- [x] IN-GR-002: listing live (Joe, 16 Sept); PR #196 flips `APP_STORE_URL` / `IOS_APP_STORE_LIVE`, `PAGE_CACHE_VERSION` v3. Curl after deploy.
+- [x] IN-GR-002: listing live (Joe, 16 Sept); PR #196 merged, Worker deployed 15:56 UTC. Curl `/t/movie/550-fight-club-1999`: iPhone UA → "Get Videx on iOS" linking `apps.apple.com/gb/app/videx-streaming-guide/id6785395342`, no "coming soon"; desktop UA → both store links; `x-videx-cache: miss` (v3 key).
 - [ ] IN-GR-004 (A5), IN-GR-005 runtime (B3), IN-GR-012 (C3), IN-GR-021 (C4), IN-GR-027 (S4-11).
