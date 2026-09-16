@@ -1796,3 +1796,10 @@ only thing at stake.
 - Plan corrections: the handoff's rent-or-buy example ("Apple TV and Prime") does not match the Worker labels the copy must use ("Apple TV+ and Prime Video"); `notification_opened` had no metadata field in the `GrowthEvent` union (added); an arrival-led push can claim leaving-soon rows under one ticket, so "single-title" is judged by the lead group, not row count; a room card cannot send `share_initiated` before its snapshot exists.
 - New register rows: IN-GR-023..027.
 - Updated: wiki/entities/codebase/event-taxonomy.md, wiki/concepts/architecture/notifications-v1.md, wiki/concepts/forward-planning/growth-loops.md, wiki/registers/parking-lot.md; docs/strategy/briefs/h0-device-test-checklist.md (S4-1..11)
+
+## [2026-09-16] ingest | Growth S4 close-out (merged and deployed)
+- PR #192 merged (`adf2882`); CI Build, Typecheck and Deploy API Worker green; `/t/tv/95396` still 301s to the slugged URL and lists Apple TV+ under "Stream now" (moved label map live).
+- `send-notifications` deployed by Joe: version 8, active, `verify_jwt` true, deployed `index.ts` + `compose.ts` match the merge; unauthenticated POST 401.
+- New: docs/v2/phase-summaries/phase-growth-s4-summary.md (for the strategy thread: what shipped, query shapes, plan corrections, S5 notes).
+- Noted: Android Release run on `386e26a` succeeded (first compile of the S2 referrer module, IN-GR-005); "Pipeline health" workflow failing since 15 Sept, unrelated to S4.
+- Updated: wiki/concepts/forward-planning/growth-loops.md (status), wiki/concepts/architecture/notifications-v1.md (deploy recorded), wiki/registers/parking-lot.md (counts)
