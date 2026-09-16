@@ -73,7 +73,7 @@ describe('renderRoomPage', () => {
     );
     expect(one).toContain('1 title · picked on');
     expect(one).not.toContain('og:image');
-    expect(one).toContain('Coming soon to the App Store');
+    expect(one).toContain('Get Videx on iOS');
   });
 });
 
