@@ -75,3 +75,80 @@ Repeat 1–20; specifically re-verify push via APNs, the share sheet `url` field
 
 ## After a few days of shakeout
 Run `supabase/queries/metrics-dashboard.sql`: funnel populated against `onboarding_started`, WWD non-zero on first correlated click-out, crash-free ≥99% in Sentry.
+
+## Growth S5 matrix (2.5.0, started 16 Sept 2026)
+
+Build: 2.5.0 (iOS 13 ad-hoc `preview` on Joe's iPhone, TestFlight `production` for testers; Android versionCode 16, APK on Joe's phone, AAB on Play internal). Handoff: `docs/plans/2026-09-16-002-handoff-growth-s5-verification.md`. Evidence per check goes into the S5 PR; results table in `docs/v2/phase-summaries/phase-growth-g0-g1-summary.md`.
+
+**Evidence query** (run by CC after each check, read-only):
+`select event_name, via, src, object_type, object_id, delivery_id, platform, ua_class, metadata, occurred_at from growth_events where occurred_at > now() - interval '1 day' order by occurred_at;`
+Baseline before S5: one row (`preview_fetched`, 2026-09-16 14:51 UTC, the S4 Worker check). `shared_rooms` empty.
+
+**Order.** Links, attribution, sharing and push need only the installed build. Sign-in (C) waits for Joe's "Confirm email ON". B1 (fresh install) and B3 (Play install) uninstall the app, so run them first on each phone, before anything that relies on a long-lived install.
+
+### A. Links (both platforms)
+- [ ] A1 `https://videxstreaming.com/t/movie/550-fight-club-1999?via=share` from WhatsApp, Messages, Slack; cold and warm; detail opens directly, no browser flash. Android: `adb shell pm get-app-links app.videx.streaming` → `videxstreaming.com: verified`.
+- [ ] A2 bare `/t/movie/550` and stale `/t/movie/550-wrong-slug` still open Fight Club.
+- [ ] A3 share a room from For You → open the link on the other phone (same titles); open it in a desktop browser as a non-user (preview, poster grid, store CTA).
+- [ ] A4 signed out → tap link → sign in with email → land on the object; Back → tabs.
+- [ ] A5 (IN-GR-004) password-reset link cold start; cold notification tap (from D); tabs beneath both.
+- [ ] A6 paste a title link and a room link into WhatsApp, iMessage, Slack; screenshot the unfurls (poster, title, availability line).
+
+### B. Attribution
+- [ ] B1 delete app → install → launch → relaunch: exactly one `first_open` for the new install id. Tester devices updating 2.4.0 → 2.5.0: `first_open.metadata.prior_install = true`.
+- [ ] B2 A1's taps produce `link_opened` with `via=share`.
+- [ ] B3 (Android, IN-GR-005 runtime) uninstall → Chrome opens the title page → Get Videx → install from Play internal → first launch lands on Fight Club; `first_open` carries the referrer touch (`t=movie-550`).
+- [ ] B4 (after C) `signup_completed` carries the first-touch `via`; `onboarding_events` `first_home_view` metadata has `via`.
+- [ ] B5 A6's pastes: `preview_fetched` (fetcher `ua_class`) vs `preview_opened` for the taps.
+
+### C. Sign-in (after Confirm email ON)
+- [ ] C1 iPhone Apple: new account (name prefilled → choose name → Connect Services), returning account, Hide My Email.
+- [ ] C2 Google on iPhone (nonce error = Skip nonce check off) and Android.
+- [ ] C3 (IN-GR-012) signed out → shared link → provider sign-up → onboarding → Choose your name → Curating → shared title opens.
+- [ ] C4 email sign-up: "Check your email" → link opens app via `/reset` bridge → onboarding continues; resend; change email. Opened on a computer → note IN-GR-021 behaviour.
+- [ ] C5 iPhone: delete an Apple-linked account → Apple sheet → `revoke-apple-token` 200 → deleted.
+- [ ] C6 an existing pre-2.5.0 email account signs in unchanged.
+
+### D. Sharing and push
+S4-1 to S4-11 above, both platforms. Push plan for `joegreenwas@gmail.com` (`1ef0db27-…`, iOS and Android tokens on one account, so one push lands on both phones; 20h cap per account). Seed titles checked 16 Sept: on this account's watchlist, on a subscribed service, never sent, on no other token holder's watchlist.
+
+| Push | Seed | Checks |
+|---|---|---|
+| P1 arrival | Inside Man (`movie-388`) on Netflix, `streaming_history` 'added' | S4-5, S4-6, S4-9, S4-10, S4-11, A5 cold tap |
+| P2 leaving soon | The Whisper Man (`movie-860508`) on Netflix, `expires_on` = now + 4 days (restore to null after) | S4-7. **Joe first turns Leaving soon ON in Settings** (currently off). |
+| P3 bundle | The Order (`movie-1082195`) on Prime + Lucky (`tv-278624`) on Apple TV+, both 'added' | S4-8 |
+
+Between pushes the cap is cleared by moving the previous delivery back 21 hours (rows kept as evidence), not by deleting it. Every write below is proposed to Joe before it runs.
+
+```sql
+-- P1 seed (arrival)
+insert into streaming_history (tmdb_id, media_type, service_id, event_type, stream_type, sync_run_id)
+values (388, 'movie', 'netflix', 'added', 'subscription', 's5-seed-p1') returning id;
+
+-- cap clear before P2 / P3 (ids from the previous run)
+update notification_deliveries set sent_at = sent_at - interval '21 hours'
+where user_id = '1ef0db27-ba5d-4fba-aaaf-5d81702deac3' and sent_at > now() - interval '20 hours' returning id, tmdb_id, sent_at;
+
+-- P2 seed (leaving soon); restore after the check
+update streaming_availability set expires_on = now() + interval '4 days'
+where tmdb_id = 860508 and media_type = 'movie' and service_id = 'netflix' and stream_type = 'subscription' and addon_id is null
+returning id, expires_on;
+-- restore
+update streaming_availability set expires_on = null
+where tmdb_id = 860508 and media_type = 'movie' and service_id = 'netflix' and stream_type = 'subscription' and addon_id is null;
+
+-- P3 seed (bundle)
+insert into streaming_history (tmdb_id, media_type, service_id, event_type, stream_type, sync_run_id)
+values (1082195, 'movie', 'prime', 'added', 'subscription', 's5-seed-p3'),
+       (278624, 'tv', 'apple', 'added', 'subscription', 's5-seed-p3') returning id;
+```
+
+Invoke (Joe, Git Bash from the repo root; values come from `.env`):
+```bash
+set -a; . ./.env; set +a; curl -sS -X POST "$VITE_SUPABASE_URL/functions/v1/send-notifications" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Content-Type: application/json" -d '{}'
+```
+Check before each invoke: `select tmdb_id, media_type, service_id, recorded_at from streaming_history where event_type='added' and stream_type in ('subscription','free') and recorded_at > now() - interval '26 hours'` joined against every token holder's watchlist, so no real account receives a seeded push.
+
+### E. Register
+- [x] IN-GR-002: listing live (Joe, 16 Sept); PR #196 flips `APP_STORE_URL` / `IOS_APP_STORE_LIVE`, `PAGE_CACHE_VERSION` v3. Curl after deploy.
+- [ ] IN-GR-004 (A5), IN-GR-005 runtime (B3), IN-GR-012 (C3), IN-GR-021 (C4), IN-GR-027 (S4-11).
