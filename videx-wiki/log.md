@@ -1852,3 +1852,9 @@ only thing at stake.
 - Updated: wiki/sources/growth-loops-strategy-v0-1.md (now covers v0.1 → v0.2), index.md (source + concept lines)
 - Roadmap v1.1 gained §7a "Status pass 2026-09-17" (App Store live, Support URL, G-phases as the third H1 track, 2.5.0 release steps, IN-GR-034, code sweep); wiki/sources/strategy-roadmap-2026-09-v1-1.md mirrors it. The raw/ copy of the roadmap is Joe's to refresh.
 - New handoff: docs/plans/2026-09-17-003-handoff-growth-code-sweep.md (review-then-fix sweep of the G0/G1 surface, after the IN-GR-034 session).
+
+## [2026-09-17] query | Growth G0/G1 code sweep (chore/growth-code-sweep)
+- Nine reviews over the growth diff (security, data integrity, TypeScript, races, five finder angles). Fixed: export/delete cross-account install-id sweep (migration 092), /list links routed to a missing screen and pended, username check error read as "taken", username_available self-exclusion (092), provider sign-in dismissAll skipping the link resume, confirm-email late success, IN-GR-035, sign-out after delete, delete dialog Back/double-start, referrer timeout, install id CSPRNG, unbounded page-view inserts, install-id rate-limit bypass (new GROWTH_IP_RATELIMIT), body read before length, nested metadata, orphaned-token FK 500, share cap, duplicate room snapshots, push-open ordering, bridge copy, plus reuse/duplication cleanups.
+- Filed IN-GR-036..045; closed IN-GR-008, 035; IN-GR-009 scope corrected.
+- Updated: wiki/registers/parking-lot.md, wiki/entities/codebase/migrations.md (092), plan §11f, both 17 Sept handoffs. Summary: docs/v2/phase-summaries/phase-growth-code-sweep-summary.md.
+- Note: 091 was already taken by the IN-SY-002 pipeline-health fix (applied 16 Sept), so the sweep migration is 092; the pipeline-health failures flagged on 16 Sept were that false alarm, since fixed.

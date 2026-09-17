@@ -1,6 +1,6 @@
 # Handoff: G0/G1 code sweep before G2
 
-**Date:** 2026-09-17 · **Source:** strategy-thread decision after the G0/G1 close (plan §11e) · **Size:** M · **Order:** after the IN-GR-034 session merges (it touches `WatchlistActions.tsx` and `curating.tsx`, which are in this sweep's scope); G2 planning runs in parallel in the strategy thread and does not wait for this.
+**Date:** 2026-09-17 · **Status:** RUN 17 Sept in the strategy thread itself (Joe's call, ahead of IN-GR-034 and the 2.5.0 release); summary `docs/v2/phase-summaries/phase-growth-code-sweep-summary.md` · **Source:** strategy-thread decision after the G0/G1 close (plan §11e) · **Size:** M · **Order (as written):** after the IN-GR-034 session merges (it touches `WatchlistActions.tsx` and `curating.tsx`, which are in this sweep's scope); G2 planning runs in parallel in the strategy thread and does not wait for this.
 
 **Why.** Four build sessions and one device pass landed roughly 40 files in three days, reviewed PR by PR but never as one surface. The device pass found five defects; a code sweep finds the kind a phone cannot (a missing guard on a path no test walked, a Worker input that trusts the client, an RLS gap). Do it once, now, before G2 builds households on top.
 
