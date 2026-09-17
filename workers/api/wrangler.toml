@@ -91,3 +91,10 @@ crons = ["0 4 * * *"]
 
 [observability]
 enabled = true
+
+# IN-GR-042 (code sweep): the automatic per-invocation log records the request
+# URL, and /reset carries a single-use auth token in its query string.
+# console.* logs still flow to Workers Logs; only the invocation records stop.
+[observability.logs]
+enabled = true
+invocation_logs = false

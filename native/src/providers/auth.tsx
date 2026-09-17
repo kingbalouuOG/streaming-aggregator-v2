@@ -1,4 +1,5 @@
 import { GoogleSignin, isCancelledResponse, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
+import * as Sentry from '@sentry/react-native';
 import type { Session, User } from '@supabase/supabase-js';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -119,9 +120,6 @@ export function hasAppleIdentity(user: User | null | undefined): boolean {
   return Array.isArray(providers) && providers.includes('apple');
 }
 
-const APPLE_REVOKE_FAILED =
-  "We couldn't disconnect Sign in with Apple, so your account has not been deleted. Try again, or email privacy@videxstreaming.com.";
-
 function providerFailure(provider: 'Apple' | 'Google'): ProviderSignInResult {
   return { error: `Couldn't sign in with ${provider}. Try again, or use your email.`, userId: null };
 }
@@ -196,6 +194,20 @@ async function signOutEverywhere(): Promise<void> {
     if (keys.length > 0) await storage.multiRemove(keys);
   } catch {
     // Best-effort: the token expires on its own within the hour.
+  }
+}
+
+/**
+ * IN-GR-036: a failed Apple revoke no longer blocks deletion. It is recorded
+ * so the failure mode (secrets, key expiry, Apple outage) can be fixed; the
+ * token cannot be revoked later without a fresh authorisation from the user.
+ */
+function reportRevokeFailure(reason: string, detail: unknown): void {
+  console.error('[Auth] Apple revoke skipped before deletion:', reason, detail);
+  try {
+    Sentry.captureMessage(`apple revoke skipped before deletion: ${reason}`, { level: 'warning' });
+  } catch {
+    // Reporting is best-effort.
   }
 }
 
@@ -338,7 +350,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // IN-GR-010 (App Store 5.1.1(v)): an Apple-linked account revokes its
         // Apple tokens first. Videx stores none, so re-authorise with Apple for
         // a fresh authorization code and let revoke-apple-token exchange and
-        // revoke it. Nothing is deleted unless that succeeds. Apple sign-in
+        // revoke it. IN-GR-036 (decided 17 Sept): a revoke that FAILS is
+        // reported to Sentry and deletion goes ahead anyway; erasure must not
+        // depend on Apple or on the Edge Function being healthy. Closing the
+        // Apple sheet still cancels: nothing is deleted then. Apple sign-in
         // exists only on iOS; on Android the revoke is skipped (IN-GR-020).
         if (hasAppleIdentity(session?.user) && isAppleAvailable) {
           let authorizationCode: string | null = null;
@@ -347,16 +362,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             authorizationCode = credential.authorizationCode;
           } catch (e) {
             if ((e as { code?: string } | null)?.code === 'ERR_REQUEST_CANCELED') return { error: null, cancelled: true };
-            console.error('[Auth] Apple re-authorisation for deletion failed:', e);
-            return { error: APPLE_REVOKE_FAILED };
+            reportRevokeFailure('apple_reauth_failed', e);
           }
-          if (!authorizationCode) return { error: APPLE_REVOKE_FAILED };
-          const { error: revokeError } = await supabase.functions.invoke('revoke-apple-token', {
-            body: { authorizationCode },
-          });
-          if (revokeError) {
-            console.error('[Auth] revoke-apple-token failed:', revokeError);
-            return { error: APPLE_REVOKE_FAILED };
+          if (authorizationCode) {
+            const { error: revokeError } = await supabase.functions.invoke('revoke-apple-token', {
+              body: { authorizationCode },
+            });
+            if (revokeError) reportRevokeFailure('revoke_function_failed', revokeError);
+          } else {
+            reportRevokeFailure('no_authorization_code', null);
           }
         }
         const { error } = await supabase.rpc('delete_own_account');
