@@ -1825,3 +1825,10 @@ only thing at stake.
 - PR #198 merged (`f5968be`). It had no conflicts; it was held only by typegen-check, which had run before the apply and passed on re-run.
 - Manual `Pipeline health` run https://github.com/kingbalouuOG/streaming-aggregator-v2/actions/runs/35132581820: 12/12 green; `gap-not-growing` reported `stale gap 0 (no baseline within 7d yet; limit 2500); today's arrivals awaiting backfill: 39`. Heartbeat 18:09 UTC wrote `gap: 39`, `stale_gap: 0` (the first stale-gap baseline).
 - Updated: wiki/registers/parking-lot.md (IN-SY-002 closed, counts), wiki/entities/codebase/migrations.md (091 applied), wiki/concepts/operations/risks-register.md (R-010)
+
+## [2026-09-17] ingest | IN-GR-032 custom Sign in with Apple button (fix/apple-button-custom)
+- PR #200: the system `AppleAuthenticationButton` in `native/src/components/auth/ProviderSignIn.tsx` replaced with a custom `Pressable` to Apple's HIG custom-button rules (logo file from Apple Design Resources, unaltered; title wording; 43% title-to-height proportion; white style; 12pt radius; minimum size and margins; no smaller than Google). Rules recorded in the component's comment block.
+- Decision (Joe): both provider buttons 44pt with 19pt labels; the planned 56pt/18pt breaks the HIG proportion rule (App Review evaluates custom Apple buttons).
+- Device gotcha: NativeWind's native `inlineRem` is 14, so `h-11` = 38.5pt (the 44pt logo overhung the button) and `h-14` = 49pt, not the 56pt older comments assume. Fixed with `h-[44px]`.
+- Verified: native tsc + lint, root vitest 798/798; OTA to preview/ios (runs 35207493746, 35210155629) passed reachability; device check passed on Joe's iPhone (sign-in screen and onboarding Step 1).
+- Updated: wiki/registers/parking-lot.md (IN-GR-032 closed, counts)
