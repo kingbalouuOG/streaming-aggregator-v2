@@ -163,7 +163,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Monetisation strategy exploration v0.1](wiki/concepts/forward-planning/monetisation-strategy.md) — ⚠ superseded 2026-07-06; absorbed into Roadmap v1.0 §5.
 - [V3 Conversational Discovery & Semantic Search Strategy v0.1](wiki/concepts/forward-planning/v3-conversational-discovery.md) — ⚠ superseded 2026-07-06; absorbed into Roadmap v1.0 H3 Bet 1.
 - [Send to TV — feasibility](wiki/concepts/forward-planning/send-to-tv-feasibility.md) — parked 2026-09-11; per-platform matrix (Roku/Google TV/Samsung/LG/Apple TV/Fire TV/Sky), title-level launch proven only for LG+Netflix, Apple TV by URL, Roku+Disney+; revisit triggers.
-- [Growth loops (G-phases)](wiki/concepts/forward-planning/growth-loops.md) — in build; five loops, G0–G5 order, 19 decisions taken 2026-09-14, S1 links built (ADR-015, migration 088).
+- [Growth loops (G-phases)](wiki/concepts/forward-planning/growth-loops.md) — G0/G1 built and device-verified 14–17 Sept 2026 (2.5.0); ADR-015 URLs, snapshot rooms, universal/app links, Apple + Google sign-in, attribution, share copy, push-to-share; G2 households next.
 
 ## Sources
 
@@ -179,7 +179,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Project Orchestration v0.3.3](wiki/sources/project-orchestration-v0-3-3.md) — Superseded by v0.5.
 - [Detail Page Signal Capture Spec v0.3.2](wiki/sources/detail-page-signal-capture-spec-v0-3-2.md) — Signal taxonomy and capture spec.
 - [Product Strategy & Roadmap v1.1 + 10 Sept review](wiki/sources/strategy-roadmap-2026-09-v1-1.md) — Current: iOS-first release, dated H0 close-out, H1 = user track + search track (query understanding, voice, services wave 1).
-- [Growth Loops Strategy v0.1 (14 Sept 2026)](wiki/sources/growth-loops-strategy-v0-1.md) — Draft for review: five loops, five shared foundations, G0–G5 sequencing, measures; §3 audit corrections and §8 Q1/Q2 answered from the codebase.
+- [Growth Loops Strategy v0.1 → v0.2 (approved 17 Sept 2026)](wiki/sources/growth-loops-strategy-v0-1.md) — Five loops, five shared foundations, G0–G5 sequencing, measures; v0.2 corrects the audit, answers Q1/Q2 (domain, iOS), records the shipped URL grammar and the release-together decision.
 - [Home and For You Composition Hypothesis v0.4](wiki/sources/home-foryou-composition-hypothesis-v0-4.md) — Current: anchored-rooms flip on the For You row (supersedes v0.3).
 - [Home and For You Composition Hypothesis v0.3](wiki/sources/home-foryou-composition-hypothesis-v0-3.md) — Superseded by v0.4.
 - [Implementation Guide v0.2](wiki/sources/implementation-guide-v0-2.md) — CC workflow runbook.

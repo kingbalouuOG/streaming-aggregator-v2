@@ -1,6 +1,6 @@
 # Videx Growth Loops Strategy v0.1
 
-**Status:** Draft for review
+**Status:** Superseded by `Videx_Growth_Loops_Strategy_v0.2.md` (approved 17 September 2026). Kept as history; §3 here is the uncorrected audit.
 **Owner:** Joe (product), Claude (strategy)
 **Date:** 14 September 2026
 **Related:** Orchestration v0.3.3, Strategy v1.6.3, Monetisation Strategy Exploration v0.1, Notifications v1 (H0 Stream B)

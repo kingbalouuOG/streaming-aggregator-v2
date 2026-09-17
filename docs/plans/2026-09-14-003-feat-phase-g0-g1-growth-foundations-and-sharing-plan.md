@@ -1,6 +1,6 @@
 # Phase G0 + G1: growth foundations and sharing. Audit and plan
 
-**Date:** 2026-09-14 · **Workstream:** Growth (G-phases) · **Scope source:** `docs/strategy/Videx_Growth_Loops_Strategy_v0.1.md` §4 (Loop 1, Loop 5), §5, §6 · **Branch:** `docs/growth-g0-g1-plan` · **Status:** plan approved by Joe 14 Sept 2026 with every §9 decision taken (§9). Execution is five sessions (§13); the S1 handoff is `2026-09-14-004-handoff-growth-s1-links.md`. Nothing implemented or applied yet.
+**Date:** 2026-09-14 · **Workstream:** Growth (G-phases) · **Scope source:** `docs/strategy/Videx_Growth_Loops_Strategy_v0.1.md` §4 (Loop 1, Loop 5), §5, §6 · **Branch:** `docs/growth-g0-g1-plan` · **Status:** **phase complete.** Plan approved by Joe 14 Sept 2026 (§9); five sessions (§13) built and merged 15 to 16 Sept; verified on device on both platforms 17 Sept (§11e; phase summary `docs/v2/phase-summaries/phase-growth-g0-g1-summary.md`). Open: release steps and IN-GR-034 (§11e), then G2.
 
 Everything in §2 was read from the working tree on 14 Sept (five parallel read-only audits, spot-checked by hand).
 
@@ -302,6 +302,26 @@ Also from S4: the session origin survives a session reset for 10 seconds because
 
 **G0 and G1 build phase complete.** Every session's summary said the same thing: nothing has run on a phone. S5 is the phase's verification and its handoff is `2026-09-16-002-handoff-growth-s5-verification.md`. The rebuild is version 2.5.0 (Joe bumps `native/app.json`), both platforms, followed by the Confirm-email flip and both store privacy forms.
 
+## 11e. S5 outcome (reviewed 17 September): phase closed
+
+**G0 and G1 verified on device on both platforms (2.5.0)**, PR #197 merge `06271fd`, with #195 (2.5.0 bump), #196 (App Store listing on the pages), #200 (custom Apple button) and #201 (Play signing key in `assetlinks.json`). Phase summary: `docs/v2/phase-summaries/phase-growth-g0-g1-summary.md`; evidence snapshot beside it; the ticked checklist in `h0-device-test-checklist.md`. Matrix A, B, C and D all pass; S4-1 to S4-11 in full on iPhone and the push and share subset on Android.
+
+Against §5 G1-5 and §7: every item in the §7 device matrix ran except the Android room share, S4-7 to S4-10 on Android (same code, run on iPhone) and B1 `prior_install` (no tester update yet; watch item). Section 7's "one growth_events row per step" held for events but not for every source-app tap, so some link checks rest on Joe's observation. The phase summary's "what the plan got wrong" list is accepted in full; the three that change how future phases are run:
+
+| Finding | Rule from now on |
+|---|---|
+| Play App Signing uses a Google-generated key, not the upload key (IN-GR-001 reopened; app links and Google sign-in failed only on Play installs) | Anything keyed to the Android certificate lists **both** keys. Reference memory `reference_android_signing_keys`. |
+| Adding entitlements invalidates the stored EAS profiles; CI cannot regenerate them | The first iOS build after an entitlement change needs one local interactive `eas build` for credentials before the CI run. |
+| Account deletion wipes the growth rows of every install the account used (IN-GR-009) | Device plans that delete accounts use a separate install, and deletion runs last. |
+
+Also from S5: the signed-out detail screen needed its actions audited (IN-GR-028, fixed); the Confirm-email flip belongs to the public 2.5.0 release, not the tester update; notification consent asked only at the first watchlist add left fresh installs without a token (IN-GR-034, decided: ask after onboarding with an explainer; handoff `2026-09-17-002`, not yet run); the IN-GR-032 OTA from its branch replaced the S5 fixes on the iPhone preview channel, so one OTA from `main` is needed after #197.
+
+**Code review of #197 (strategy thread, 17 Sept):** `WatchlistActions.tsx`, `ProfilePrivacy.tsx`, `AuthScreen.tsx` approved. Two notes, neither blocking: (1) `WatchlistActions` reads `session` from `useAuth` but not `initializing`, so a tap during session restore on a cold link open would bounce to `/auth` although a session exists; disable the two buttons while `initializing` is true. Folded into the IN-GR-034 handoff as step 8 since that session touches the same file. (2) After `deleteAccount` succeeds, the explicit `router.replace('/auth', { notice })` races the tabs guard's own redirect once the session is gone; it works on device, but if the notice ever stops showing, that race is why.
+
+**Strategy v0.2 (D15):** accurate against the summary. Two edits applied in this PR for Joe's approval: §4 Loop 1 item 1 now states the shipped URL grammar instead of `/t/{slug}`, and §6 records the 14 Sept go-to-market decision that all loops release together, so G1's "validates preview-to-install" is a post-launch measurement rather than a gate. Approval flips the status line, adds the superseded header to v0.1 and snapshots v0.2 into `videx-wiki/raw/` (Joe's call, raw is human-owned).
+
+**Remaining for Joe (from the summary):** TestFlight production build and Android release so the S5 fixes reach the binaries; App Store submission of 2.5.0 with the S2 and S3 privacy rows filed; Confirm email on the day 2.5.0 is public; one OTA from `main`; run the IN-GR-034 session. Then G2 (households) planning in the strategy thread from the summary's readiness view.
+
 ## 12. Out of scope for G0/G1
 
 Loops 2, 3 and 4 (taste cards, households and `watchlists`, SEO page types 2 to 4), JSON-LD and sitemaps, a `/` page on the Worker, retiring the web tree's `@capacitor/*` runtime packages, `expo-updates` in-app checks, room unshare or expiry, "add all to watchlist", linking a provider to an existing email account from Profile.
@@ -316,6 +336,6 @@ Slices are task groups, not decisions. Each is one fresh session from a self-con
 | S2 Attribution | G0-6 | 090 | S1 merged | **Merged 16 Sept** (#188); outcome in §11b |
 | S3 Sign-in | G0-5 | 089 | S1 merged | **Merged 16 Sept** (#187, #190); outcome in §11c |
 | S4 Sharing | G1-1 to G1-4 | none | S1 to S3 merged | **Merged 16 Sept** (#192, #193); outcome in §11d |
-| S5 Verification | G1-5 | none | 2.5.0 rebuild of both platforms; testers updated; Confirm email flipped; devices | `2026-09-16-002-handoff-growth-s5-verification.md` |
+| S5 Verification | G1-5 | none | 2.5.0 on both platforms | **Complete 17 Sept** (#195, #196, #197, #200, #201); outcome in §11e |
 
 After S5 the strategy thread plans G2 (households) the same way; S5's device pass repeats as a combined check before the all-loops release.

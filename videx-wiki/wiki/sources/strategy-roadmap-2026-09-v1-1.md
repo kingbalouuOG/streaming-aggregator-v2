@@ -3,7 +3,7 @@ title: Product Strategy & Roadmap v1.1 + the 10 September 2026 review
 type: source
 tags: [strategy, roadmap, h1, search, voice, services, ios-first, review]
 created: 2026-09-10
-updated: 2026-09-10
+updated: 2026-09-17
 sources:
   - raw/forward-planning/Videx_Product_Strategy_and_Roadmap_v1.1_2026-09.md
   - raw/forward-planning/Videx_Roadmap_Review_2026-09-10.md
@@ -44,6 +44,10 @@ User track: 1.1 community rollout + activation read + engine pulse (written bran
 - Query understanding best practice: one small-LLM JSON call returning filters + a HyDE-style expanded synopsis, cached; hybrid FTS + vector with RRF; optional reranker. Workers AI parse ≈ $0.00003; Haiku 4.5 TTFT ≈ 0.8 s.
 - Voice: `expo-speech-recognition` (Expo 56, new-arch safe, iOS ≥16.4), on-device where supported; `@react-native-voice/voice` fails on the new architecture; no on-device Whisper in v1.
 - Vendor GB catalogue has 17 services incl. HBO Max (`hbo`), `all4`, `iplayer`; not Sky Go, Rakuten, My5, UKTV Play, STV, S4C; BritBox folded into ITVX (Apr 2024); Freevee closed (Aug 2025). JustWatch UK lists ~85–100 providers.
+
+## Status pass 2026-09-17 (roadmap §7a)
+
+App Store review approved: 2.4.0 live, iOS public quietly; Support URL live on the marketing apex; the growth workstream is now the G-phases (strategy v0.2 approved 17 Sept), with G0/G1 built and device-verified on 2.5.0 as a third H1 track beside the user and search tracks; 2.5.0 release steps, notification consent (IN-GR-034) and a code sweep precede G2 households. ICO, Play closed-test count and the weekly ritual: Joe to update.
 
 ## Corrections made alongside
 
