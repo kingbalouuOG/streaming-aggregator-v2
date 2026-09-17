@@ -20,12 +20,11 @@ import {
 export const LABEL_MAX = 120;
 export const DESCRIPTION_MAX = 500;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ANCHOR_REF_RE = /^anchor:(movie|tv)-[1-9]\d{0,9}$/;
 
-export function isUuid(id: string): boolean {
-  return UUID_RE.test(id);
-}
+// One uuid rule for the whole growth surface (sweep R2).
+import { isUuid } from '../../../src/lib/growth/uuid';
+export { isUuid };
 
 // Lives with the room contract so the app's share copy uses the same rule.
 export { neutraliseRoomLabel };
@@ -47,7 +46,7 @@ export function validateShareRoomBody(body: unknown): ShareRoomValidation {
     return { ok: false, error: "kind must be 'global' or 'anchor'" };
   }
   if (typeof sourceRef !== 'string') return { ok: false, error: 'source_ref must be a string' };
-  if (kind === 'global' ? !UUID_RE.test(sourceRef) : !ANCHOR_REF_RE.test(sourceRef)) {
+  if (kind === 'global' ? !isUuid(sourceRef) : !ANCHOR_REF_RE.test(sourceRef)) {
     return { ok: false, error: 'source_ref does not match kind' };
   }
 

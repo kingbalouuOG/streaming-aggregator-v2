@@ -1,6 +1,6 @@
 import { ChevronRight, FileText, ShieldCheck, Trash2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -61,12 +61,23 @@ export function ProfilePrivacy() {
   const [policy, setPolicy] = useState<'privacy' | 'terms' | null>(null);
   const canDelete = username.length > 0 && confirm.trim().toLowerCase() === username.trim().toLowerCase();
 
+  // A ref as well as state: two presses in one frame must not start two
+  // deletes (sweep F9).
+  const busyRef = useRef(false);
+
   const doDelete = async () => {
-    if (!canDelete || busy) return;
+    if (!canDelete || busy || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
-    const { error: e, cancelled } = await deleteAccount();
-    setBusy(false);
+    let result: Awaited<ReturnType<typeof deleteAccount>>;
+    try {
+      result = await deleteAccount();
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+    const { error: e, cancelled } = result;
     if (e) {
       setError(e);
       return;
@@ -154,7 +165,8 @@ export function ProfilePrivacy() {
         onClose={() => setPolicy(null)}
       />
 
-      <Modal visible={open} animationType="fade" transparent onRequestClose={() => setOpen(false)}>
+      {/* Android Back must not dismiss a delete in flight (sweep F3). */}
+      <Modal visible={open} animationType="fade" transparent onRequestClose={() => { if (!busy) setOpen(false); }}>
         {/* Tapping outside the card closes the keyboard (S5: the buttons sat
             under it); the card lifts above the keyboard on iOS. */}
         <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

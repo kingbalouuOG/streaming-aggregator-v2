@@ -78,6 +78,21 @@ export async function loadSharedRoom(
   };
 }
 
+/** Rooms this user has shared since `sinceIso` (the daily cap in index.ts). */
+export async function countSharedRoomsSince(
+  client: SupabaseClient,
+  userId: string,
+  sinceIso: string,
+): Promise<number> {
+  const { count, error } = await client
+    .from('shared_rooms')
+    .select('id', { count: 'exact', head: true })
+    .eq('created_by', userId)
+    .gte('created_at', sinceIso);
+  if (error) throw new Error(`shared_rooms count failed: ${error.message}`);
+  return count ?? 0;
+}
+
 export async function insertSharedRoom(
   client: SupabaseClient,
   userId: string,

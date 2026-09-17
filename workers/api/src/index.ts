@@ -70,8 +70,9 @@ import {
   WELL_KNOWN_HEADERS,
 } from './wellKnown';
 import { isUuid, validateShareRoomBody } from './sharedRooms';
-import { insertSharedRoom, loadSharedRoom } from './roomStore';
+import { countSharedRoomsSince, insertSharedRoom, loadSharedRoom } from './roomStore';
 import { classifyUserAgent } from './uaClass';
+import { GROWTH_EVENTS_PATH } from '../../../src/lib/growth/growthEvents';
 import {
   GROWTH_EVENT_BODY_MAX_BYTES,
   previewEventRow,
@@ -80,7 +81,7 @@ import {
 } from './growthEvents';
 import { insertGrowthEvent } from './growthStore';
 import type { InboundObject } from '../../../src/lib/growth/inboundLink';
-import { parseTitleRef, titleRef } from '../../../src/lib/growth/slug';
+import { parseTitleRef, titleRef, CANONICAL_ORIGIN } from '../../../src/lib/growth/slug';
 import { sharedRoomUrl, type ShareRoomResponse } from '../../../src/lib/growth/roomSnapshot';
 // Bundled as text (wrangler [[rules]] Text rule) — the single source of
 // truth for the hosted /privacy + /terms pages is docs/legal/*.md.
@@ -124,8 +125,10 @@ type Env = {
   FORYOU_CACHE: KVNamespace;
   /** LAUNCH-1 W1 (IN-PX-60): per-user rate limiter on /v1/foryou. */
   FORYOU_RATELIMIT: RateLimit;
-  /** Growth S2: POST /v1/growth/events, keyed on install id or client IP. */
+  /** Growth S2: POST /v1/growth/events, keyed on install id or client IP; also page-view events per IP. */
   GROWTH_RATELIMIT: RateLimit;
+  /** Sweep: always-on per-IP bucket for POST /v1/growth/events (a rotating install id cannot escape it). */
+  GROWTH_IP_RATELIMIT: RateLimit;
   /** Growth S1: comma-separated SHA-256 cert fingerprints for assetlinks.json ([vars]). */
   ASSETLINKS_FINGERPRINTS: string;
 };
@@ -140,7 +143,6 @@ const OMDB_BASE = 'https://www.omdbapi.com';
 
 // Public web origin for canonical/og:url on shared pages. Pinned (not
 // request-derived) so workers.dev requests canonicalise to the real domain.
-const CANONICAL_ORIGIN = 'https://videxstreaming.com';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -364,9 +366,17 @@ function recordPreview(c: Context<{ Bindings: Env }>, resp: Response, object: In
       src: c.req.query('src'),
       object,
     });
-    const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
+    // Public, unauthenticated and cache-hit inclusive, so bound it per client
+    // IP with the growth bucket before it costs an insert (sweep, security 1).
+    const ip = c.req.header('cf-connecting-ip') || 'unknown';
+    const env = c.env;
     c.executionCtx.waitUntil(
-      insertGrowthEvent(client, row).catch((err) => console.error('[growth] preview event failed:', err)),
+      (async () => {
+        const { success } = await env.GROWTH_RATELIMIT.limit({ key: `preview:${ip}` });
+        if (!success) return;
+        const client = createServiceRoleClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+        await insertGrowthEvent(client, row);
+      })().catch((err) => console.error('[growth] preview event failed:', err)),
     );
   } catch (err) {
     console.error('[growth] preview event skipped:', err);
@@ -559,6 +569,7 @@ app.get('/list/:id', (c) =>
 // The body is validated and the label de-personalised in sharedRooms.ts;
 // the insert is service-role (shared_rooms has no client policies).
 const SHARE_ROOM_BODY_MAX_BYTES = 16 * 1024;
+const SHARE_ROOM_DAILY_CAP = 200;
 
 app.post('/v1/share/room', async (c) => {
   const token = (c.req.header('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
@@ -587,6 +598,12 @@ app.post('/v1/share/room', async (c) => {
 
   try {
     const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
+    // Snapshots are permanent public pages with no unshare (D2), so cap what
+    // one account can publish per day on top of the per-minute limit.
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    if ((await countSharedRoomsSince(client, userId, since)) >= SHARE_ROOM_DAILY_CAP) {
+      return c.json({ error: 'daily share limit reached' }, 429, { 'Retry-After': '3600' });
+    }
     const id = await insertSharedRoom(client, userId, result.value);
     const payload: ShareRoomResponse = { id, url: sharedRoomUrl(id) };
     return c.json(payload, 201);
@@ -604,8 +621,12 @@ app.post('/v1/share/room', async (c) => {
 // the body's install id (GROWTH_RATELIMIT), falling back to the client IP, so
 // malformed bodies are limited too. The native app sends no Origin, so the
 // CORS allow-list above is unchanged.
-app.post('/v1/growth/events', async (c) => {
-  if (Number(c.req.header('content-length') ?? '0') > GROWTH_EVENT_BODY_MAX_BYTES) {
+app.post(GROWTH_EVENTS_PATH, async (c) => {
+  // The declared length gates the read; without one the whole body would be
+  // buffered before any check (sweep, security 3). Every app client sends it.
+  const declaredLength = c.req.header('content-length');
+  if (declaredLength === undefined) return c.json({ error: 'content-length required' }, 411);
+  if (Number(declaredLength) > GROWTH_EVENT_BODY_MAX_BYTES) {
     return c.json({ error: 'body too large' }, 413);
   }
   let body: unknown;
@@ -618,10 +639,14 @@ app.post('/v1/growth/events', async (c) => {
     parsed = false;
   }
 
-  const { success: withinLimit } = await c.env.GROWTH_RATELIMIT.limit({
-    key: rateLimitKey(body, c.req.header('cf-connecting-ip')),
-  });
-  if (!withinLimit) {
+  // Two buckets: per install (or IP when the body has no id) and, always,
+  // per IP, so rotating install ids cannot escape a budget (sweep, security 2).
+  const clientIp = c.req.header('cf-connecting-ip');
+  const [installLimit, ipLimit] = await Promise.all([
+    c.env.GROWTH_RATELIMIT.limit({ key: rateLimitKey(body, clientIp) }),
+    c.env.GROWTH_IP_RATELIMIT.limit({ key: `ip:${clientIp || 'unknown'}` }),
+  ]);
+  if (!installLimit.success || !ipLimit.success) {
     return c.json({ error: 'rate limited' }, 429, { 'Retry-After': '60' });
   }
   if (!parsed) return c.json({ error: 'invalid json' }, 400);

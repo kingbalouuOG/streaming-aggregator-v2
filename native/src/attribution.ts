@@ -39,6 +39,8 @@ import { readPendingLink, writePendingLink } from '@/pendingLink';
 
 const PLATFORM = Platform.OS === 'ios' ? 'ios' : 'android';
 const REFERRER_TIMEOUT_MS = 5_000;
+// Distinguishes "Play took too long" from "no referrer": only the latter is final.
+const REFERRER_TIMED_OUT = Symbol('referrer-timed-out');
 // Expo Router can hand the same cold-start URL to the interceptor twice.
 const LINK_DEDUPE_MS = 2_000;
 
@@ -109,7 +111,15 @@ async function readInstallReferrerOnce(): Promise<void> {
     setFlag(installStore, INSTALL_REFERRER_READ_KEY);
     return;
   }
-  const raw = await withTimeout(getReferrer(), REFERRER_TIMEOUT_MS, null);
+  const raw = await withTimeout<string | null | typeof REFERRER_TIMED_OUT>(
+    getReferrer(),
+    REFERRER_TIMEOUT_MS,
+    REFERRER_TIMED_OUT,
+  );
+  // A slow Play service on a cold first launch must not discard the only
+  // deterministic install → object path: Play keeps the referrer for 90 days,
+  // so leave the flag unset and read again next launch (sweep, TS 4).
+  if (raw === REFERRER_TIMED_OUT) return;
   // Marked after the read, so a launch killed mid-read tries again.
   setFlag(installStore, INSTALL_REFERRER_READ_KEY);
 

@@ -150,3 +150,22 @@ describe('previewEventRow', () => {
     ).toMatchObject({ event_name: 'preview_opened', ua_class: 'human', via: null, src: null, metadata: {} });
   });
 });
+
+describe('validateGrowthEventBody — metadata shape (sweep)', () => {
+  const base = {
+    event_name: 'first_open',
+    install_id: '0f5a2c1e-9b3d-4c7a-8e21-6d4f0a9b2c11',
+    platform: 'ios',
+  };
+  it('rejects nested values', () => {
+    expect(validateGrowthEventBody({ ...base, metadata: { touch: { via: 'share' } } }).ok).toBe(false);
+    expect(validateGrowthEventBody({ ...base, metadata: { list: [1, 2] } }).ok).toBe(false);
+  });
+  it('rejects more than sixteen keys', () => {
+    const metadata = Object.fromEntries(Array.from({ length: 17 }, (_, i) => [`k${i}`, i]));
+    expect(validateGrowthEventBody({ ...base, metadata }).ok).toBe(false);
+  });
+  it('accepts flat primitives', () => {
+    expect(validateGrowthEventBody({ ...base, metadata: { prior_install: false, touch: null, n: 1 } }).ok).toBe(true);
+  });
+});

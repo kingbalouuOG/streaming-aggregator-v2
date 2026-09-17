@@ -28,6 +28,7 @@ import {
   normaliseSrc,
   normaliseVia,
   parseInboundLink,
+  readQuery,
   type InboundLink,
   type InboundObject,
 } from './inboundLink';
@@ -35,11 +36,14 @@ import {
 export const REFERRER_TITLE_KEY = 't';
 export const REFERRER_ROOM_KEY = 'r';
 
-const TITLE_REF_RE = /^(movie|tv)-\d{1,15}$/;
+// A bare "movie-603" / "tv-095396" shape only (no path, no query); the
+// contract itself (positive id, at most ten digits, leading zeros dropped) is
+// applied by parseInboundLink, which normalises the id.
+const BARE_CONTENT_REF_RE = /^(movie|tv)-\d{1,15}$/;
 
 /** The title object parseInboundLink would produce for this content id, or null. */
 function titleObject(contentId: string): InboundLink | null {
-  if (!TITLE_REF_RE.test(contentId)) return null;
+  if (!BARE_CONTENT_REF_RE.test(contentId)) return null;
   const link = parseInboundLink(`videx://detail/${contentId}`);
   return link.object?.type === 'title' ? link : null;
 }
@@ -75,28 +79,6 @@ export function buildPlayReferrer(
 }
 
 /**
- * Same rules as the URL query in parseInboundLink (inboundLink.ts readQuery,
- * which is private to that module): first value per key, '+' is a space, a
- * pair whose escapes do not decode is skipped.
- */
-function readPairs(query: string): Map<string, string> {
-  const out = new Map<string, string>();
-  for (const part of query.split('&')) {
-    if (!part) continue;
-    const eq = part.indexOf('=');
-    const rawKey = eq === -1 ? part : part.slice(0, eq);
-    const rawValue = eq === -1 ? '' : part.slice(eq + 1);
-    try {
-      const key = decodeURIComponent(rawKey.replace(/\+/g, ' '));
-      if (!out.has(key)) out.set(key, decodeURIComponent(rawValue.replace(/\+/g, ' ')));
-    } catch {
-      // Malformed escapes: ignore the pair.
-    }
-  }
-  return out;
-}
-
-/**
  * The install referrer as an InboundLink, or null when it carries nothing
  * Videx wrote (organic installs, other campaigns, empty).
  */
@@ -105,7 +87,7 @@ export function parseInstallReferrer(raw: string | null | undefined): InboundLin
   const query = raw.trim().replace(/^\?/, '');
   if (!query) return null;
 
-  const params = readPairs(query);
+  const params = readQuery(query);
   const via = normaliseVia(params.get('via'));
   const src = normaliseSrc(params.get('src'));
 

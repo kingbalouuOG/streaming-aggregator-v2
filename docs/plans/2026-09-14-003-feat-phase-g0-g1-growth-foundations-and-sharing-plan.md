@@ -322,6 +322,10 @@ Also from S5: the signed-out detail screen needed its actions audited (IN-GR-028
 
 **Remaining for Joe (from the summary):** TestFlight production build and Android release so the S5 fixes reach the binaries; App Store submission of 2.5.0 with the S2 and S3 privacy rows filed; Confirm email on the day 2.5.0 is public; one OTA from `main`; run the IN-GR-034 session. Then G2 (households) planning in the strategy thread from the summary's readiness view.
 
+## 11f. Code sweep (17 September)
+
+Run in the strategy thread ahead of the 2.5.0 release (Joe). Nine reviews over the whole G0/G1 diff; 7 bugs and 12 risks fixed, 10 risks filed (IN-GR-036 to 045), migration **092** written for the one privacy bug (the export and delete functions swept another account's identified rows on a shared install) and the username self-exclusion. Full table: `docs/v2/phase-summaries/phase-growth-code-sweep-summary.md`. Joe: apply 092, merge, one OTA from `main`, decide IN-GR-036 (deletion hard-blocked on a failed Apple revoke), check IN-GR-042 (token in Worker invocation logs). The G2 readiness view stands; 092's rule (an account owns its identified rows, unattributed rows belong to the install) is the one G2 must keep.
+
 ## 12. Out of scope for G0/G1
 
 Loops 2, 3 and 4 (taste cards, households and `watchlists`, SEO page types 2 to 4), JSON-LD and sitemaps, a `/` page on the Worker, retiring the web tree's `@capacitor/*` runtime packages, `expo-updates` in-app checks, room unshare or expiry, "add all to watchlist", linking a provider to an existing email account from Profile.

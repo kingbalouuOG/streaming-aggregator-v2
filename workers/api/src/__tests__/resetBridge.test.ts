@@ -45,7 +45,9 @@ describe('bridgeKind', () => {
   it('is recovery only for recovery', () => {
     expect(bridgeKind('recovery')).toBe('recovery');
     expect(bridgeKind('email')).toBe('confirm');
-    expect(bridgeKind('')).toBe('confirm');
+    expect(bridgeKind('signup')).toBe('confirm');
+    expect(bridgeKind('')).toBe('recovery');
+    expect(bridgeKind('magiclink')).toBe('recovery');
   });
 });
 

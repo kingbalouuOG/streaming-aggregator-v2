@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
@@ -17,6 +17,7 @@ import type { ServiceId } from '@/lib/types/content';
 import { DEFAULT_SLIDERS, type SliderState } from '@/lib/taste-v2/types';
 import { useAuth } from '@/providers/auth';
 import { markJustOnboarded } from '@/onboardingSignal';
+import { consumePendingLink } from '@/pendingLink';
 import {
   clearOnboardingDraft,
   readOnboardingDraft,
@@ -231,7 +232,9 @@ export function OnboardingFlow() {
         text: 'Leave',
         style: 'destructive',
         onPress: () => {
-          void signOut().then(() => router.replace('/auth'));
+          void signOut()
+            .catch(() => {})
+            .then(() => router.replace('/auth'));
         },
       },
     ]);
@@ -275,9 +278,10 @@ export function OnboardingFlow() {
   // Services like an email sign-up (the name prompt comes after onboarding).
   // An account that already finished onboarding (a returning user, or a
   // provider identity auto-linked to an email account) must not go through
-  // it again, which would overwrite its taste profile: hand it back to /auth
-  // when that is beneath us (its focus effect replaces to / and resumes a
-  // pending link), else straight to the tabs.
+  // it again, which would overwrite its taste profile. Go to the tabs and
+  // resume a pending shared link here: /auth may not be beneath us (a cold
+  // link open stacks (tabs) → detail → auth → onboarding), so its focus
+  // effect cannot be relied on to do it (sweep, finder A 1).
   const onProviderSignedIn = async (userId: string, ageRange: string | null, viewingContext: string | null) => {
     const { data, error } = await supabase
       .from('profiles')
@@ -292,8 +296,9 @@ export function OnboardingFlow() {
     if (data?.onboarding_completed) {
       markOnboardingComplete(userId);
       clearOnboardingDraft();
-      if (router.canDismiss()) router.dismissAll();
-      else router.replace('/');
+      const pending = consumePendingLink();
+      router.replace('/');
+      if (pending) setTimeout(() => router.push(pending.route as Href), 0);
       return;
     }
     onAccountCreated(ageRange, viewingContext);

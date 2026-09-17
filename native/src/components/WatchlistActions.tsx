@@ -25,7 +25,7 @@ import { useAuth } from '@/providers/auth';
 export function WatchlistActions({ item }: { item: ContentItem }) {
   const { data: items } = useWatchlist();
   const { toggle, markWatched } = useWatchlistMutations();
-  const { session } = useAuth();
+  const { session, initializing } = useAuth();
   const router = useRouter();
 
   const signInFirst = () => {
@@ -48,6 +48,9 @@ export function WatchlistActions({ item }: { item: ContentItem }) {
     <View className="mt-4 flex-row gap-2.5">
       <Pressable
         onPress={() => {
+          // Session still being restored (a cold link open): neither write
+          // nor bounce to sign-in; the tap comes again (IN-GR-035).
+          if (initializing) return;
           if (!session) return signInFirst();
           if (!bookmarked) {
             setLastAction('added_to_watchlist');
@@ -79,6 +82,7 @@ export function WatchlistActions({ item }: { item: ContentItem }) {
 
       <Pressable
         onPress={() => {
+          if (initializing) return;
           if (!session) return signInFirst();
           if (!watched) {
             setLastAction('marked_watched');

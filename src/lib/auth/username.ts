@@ -47,7 +47,7 @@ export function suggestUsername(givenName: string | null | undefined): string {
   if (!givenName) return '';
   return givenName
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9_.]/g, '')
     .replace(/[_.]{2,}/g, '_')

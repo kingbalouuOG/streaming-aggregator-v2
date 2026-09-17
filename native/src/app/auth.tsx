@@ -1,5 +1,6 @@
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 
 import { AuthScreen } from '@/components/auth/AuthScreen';
 import { useOnboardingStatus } from '@/hooks/useOnboardingStatus';
@@ -44,6 +45,14 @@ export default function AuthRoute() {
     }, [known, onboarded, router]),
   );
 
-  if (signedIn) return null;
+  if (signedIn) {
+    // Signed in, waiting for the onboarding answer before routing on: show
+    // that something is happening rather than a blank screen (sweep F5).
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0a0a0f', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color="#ffffff" />
+      </View>
+    );
+  }
   return <AuthScreen />;
 }

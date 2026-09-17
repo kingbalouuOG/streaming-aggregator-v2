@@ -8,17 +8,21 @@
  *
  *   https://videxstreaming.com/t/{movie|tv}/{tmdbId}[-{slug}] -> /detail/{type}-{id}
  *   https://videxstreaming.com/room/{uuid}                    -> /room/{uuid}
- *   https://videxstreaming.com/list/{id}                      -> /list/{id} (reserved, G2)
+ *   https://videxstreaming.com/list/{id}                      -> '/' with a list object
+ *                                                                (reserved for G2: no screen exists yet, so the
+ *                                                                object is attributed but never routed or pended)
  *   videx://detail/{type}-{id}, videx://room/{uuid}           -> same routes
- *   videx://watchlist, videx://reset-password?...,
- *   videx://confirm-email?...                                 -> passed through unchanged
- *   anything else                                             -> '/'
+ *   any other videx:// path (watchlist, reset-password,
+ *   confirm-email, profile/…)                                 -> passed through unchanged, no object
+ *   any other https path                                      -> '/'
  *
  * ?via= is the URL channel and ?src= the originating session of a share.
  * Values outside the contract are dropped, not rewritten.
  *
  * Pure: no React Native imports, so it runs under the root vitest rig.
  */
+
+import { isUuid } from './uuid';
 
 export const VIA_CHANNELS = ['share', 'push', 'seo', 'card', 'household'] as const;
 export type ViaChannel = (typeof VIA_CHANNELS)[number];
@@ -46,12 +50,18 @@ export interface InboundLink {
   src: SrcOrigin | null;
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // The G2 watchlists entity does not exist yet; accept a conservative id.
-const LIST_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+export const LIST_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** The one content-id rule for growth objects: "movie-603" / "tv-1396", a positive TMDb id of at most 10 digits. */
+export const CONTENT_ID_RE = /^(movie|tv)-[1-9]\d{0,9}$/;
+
+export function isContentId(id: unknown): id is string {
+  return typeof id === 'string' && CONTENT_ID_RE.test(id);
+}
 
 export function isRoomId(id: string): boolean {
-  return UUID_RE.test(id);
+  return isUuid(id);
 }
 
 export function normaliseVia(raw: string | null | undefined): ViaChannel | null {
@@ -69,8 +79,8 @@ export function isPendingLinkFresh(seenAt: number, now: number): boolean {
 
 const home = (): InboundLink => ({ route: '/', object: null, via: null, src: null });
 
-/** First value per key; undecodable pairs are skipped. */
-function readQuery(query: string): Map<string, string> {
+/** First value per key; '+' is a space; undecodable pairs are skipped. Shared with the Play referrer parser. */
+export function readQuery(query: string): Map<string, string> {
   const out = new Map<string, string>();
   for (const part of query.split('&')) {
     if (!part) continue;
@@ -89,7 +99,7 @@ function readQuery(query: string): Map<string, string> {
 
 function tmdbId(digits: string): string | null {
   const n = Number(digits);
-  return Number.isSafeInteger(n) && n > 0 ? String(n) : null;
+  return Number.isSafeInteger(n) && n > 0 && String(n).length <= 10 ? String(n) : null;
 }
 
 export function parseInboundLink(input: string): InboundLink {
@@ -127,6 +137,7 @@ export function parseInboundLink(input: string): InboundLink {
     const id = tmdbId(title[2]);
     if (!id) return home();
     const contentId = `${title[1]}-${id}`;
+    if (!isContentId(contentId)) return home();
     return { route: `/detail/${contentId}`, object: { type: 'title', id: contentId }, via, src };
   }
 
@@ -138,10 +149,18 @@ export function parseInboundLink(input: string): InboundLink {
 
   const list = /^\/list\/([^/]+)$/.exec(path);
   if (list && LIST_ID_RE.test(list[1])) {
-    return { route: `/list/${list[1]}`, object: { type: 'list', id: list[1] }, via, src };
+    // Reserved grammar (ADR-015, G2): the object is attributed, but there is
+    // no list screen yet, so the route is home and the link is never pended
+    // (pendingLink skips list objects) or replayed onto a missing screen.
+    return { route: '/', object: { type: 'list', id: list[1] }, via, src };
   }
 
-  if (fromApp && (path === '/watchlist' || path === '/reset-password' || path === '/confirm-email')) {
+  // Other app-scheme paths belong to Expo Router as they are (watchlist,
+  // reset-password, confirm-email, profile/…): the query guard has already
+  // run, so hand the raw link through rather than sending it home. A
+  // malformed object link (a public-grammar prefix that did not match) and
+  // an empty path still go home.
+  if (fromApp && path !== '/' && !/^\/(t|room|list|detail)(\/|$)/.test(path)) {
     return { route: raw, object: null, via: null, src: null };
   }
 

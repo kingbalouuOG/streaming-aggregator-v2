@@ -17,7 +17,7 @@
 
 import type { FirstTouchSource } from './attribution';
 import {
-  isRoomId,
+  isContentId, isRoomId, LIST_ID_RE,
   normaliseSrc,
   normaliseVia,
   type InboundObject,
@@ -67,16 +67,23 @@ export const GROWTH_EVENTS_PATH = '/v1/growth/events';
 
 export type GrowthMetadata = Record<string, string | number | boolean | null>;
 
-// ADR-015 object shapes: title content id, room uuid, reserved list id.
-const TITLE_OBJECT_RE = /^(movie|tv)-[1-9]\d{0,9}$/;
-const LIST_OBJECT_RE = /^[A-Za-z0-9_-]{1,64}$/;
-
+// ADR-015 object shapes, one rule each, shared with the link parser.
 export function isGrowthObject(type: unknown, id: unknown): boolean {
   if (typeof id !== 'string') return false;
-  if (type === 'title') return TITLE_OBJECT_RE.test(id);
+  if (type === 'title') return isContentId(id);
   if (type === 'room') return isRoomId(id);
-  if (type === 'list') return LIST_OBJECT_RE.test(id);
+  if (type === 'list') return LIST_ID_RE.test(id);
   return false;
+}
+
+/** metadata is flat: at most this many keys, primitive values only (the Worker enforces it too). */
+export const GROWTH_METADATA_MAX_KEYS = 16;
+
+export function isFlatMetadata(value: unknown): value is GrowthMetadata {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length > GROWTH_METADATA_MAX_KEYS) return false;
+  return entries.every(([, v]) => v === null || ['string', 'number', 'boolean'].includes(typeof v));
 }
 
 interface Attributed {

@@ -46,9 +46,11 @@ export default function ConfirmEmailRoute() {
       if (router.canGoBack()) router.back();
       else router.replace('/');
     };
+    // The timeout shows the retry copy but does not abandon the request: a
+    // slow verifyOtp that succeeds afterwards must still leave, or the person
+    // sits on an error screen while already signed in (sweep, finder A 3).
     const timer = setTimeout(() => {
       if (!active) return;
-      active = false;
       attemptedRef.current = null;
       setError("We couldn't confirm your email just now. Check your connection, then tap the link in the email again.");
     }, VERIFY_TIMEOUT_MS);

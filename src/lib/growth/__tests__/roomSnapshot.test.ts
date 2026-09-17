@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatPickedDate, sharedRoomUrl } from '../roomSnapshot';
+import { formatPickedDate, sharedRoomUrl, neutraliseRoomLabel } from '../roomSnapshot';
 
 describe('sharedRoomUrl', () => {
   it('is the canonical https room URL', () => {
@@ -17,5 +17,21 @@ describe('formatPickedDate', () => {
   });
   it('returns empty for an unparseable date', () => {
     expect(formatPickedDate('not a date')).toBe('');
+  });
+});
+
+describe('neutraliseRoomLabel', () => {
+  it.each([
+    ['Because you liked Heat', 'More like Heat'],
+    ['Because you loved Heat', 'More like Heat'],
+    ['Because you watched Heat', 'More like Heat'],
+    ['If you love Heat', 'More like Heat'],
+    ['If you liked Heat', 'More like Heat'],
+  ])('strips personal framing: %s', (input, expected) => {
+    expect(neutraliseRoomLabel(input)).toBe(expected);
+  });
+
+  it('leaves a neutral label alone and collapses whitespace', () => {
+    expect(neutraliseRoomLabel("Gotham's   Gritty Legacy")).toBe("Gotham's Gritty Legacy");
   });
 });
