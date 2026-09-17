@@ -3,7 +3,7 @@ title: Inbound deep linking (universal links, app links, pending link, room snap
 type: concept
 tags: [technique, deep-links, universal-links, app-links, expo-router, workers, growth]
 created: 2026-09-14
-updated: 2026-09-14
+updated: 2026-09-17
 sources:
   - docs/plans/2026-09-14-003-feat-phase-g0-g1-growth-foundations-and-sharing-plan.md (repo)
   - docs/plans/2026-09-14-004-handoff-growth-s1-links.md (repo)
@@ -45,7 +45,10 @@ The For You payload's `AnchorRoomPreview` carries `titleRefs` (all room titles, 
 ## Gotchas
 
 - Every public prefix needs a Cloudflare dashboard route to `videx-api`, or Vercel answers 404 (verified 2026-09-14: `/.well-known/*` and `/room/*` return Vercel 404s before the routes exist).
-- `assetlinks.json` must list the **Play App Signing** key for Play installs; the upload key (`99:CE:FF:7E…`) signs only sideloaded CI APKs. Check with `adb shell pm get-app-links app.videx.streaming`.
+- `assetlinks.json` must list the **Play App Signing** key for Play installs; the upload key (`99:CE:FF:7E…`) signs only sideloaded CI APKs. **They are different keys** (verified on device 2026-09-17): Play signs with a Google-generated key, SHA-256 `09:BC:66:B5…89:81:9D`, SHA-1 `70:81:3D:08…C0:4D:E0`. Both are served since PR #201. Check with `adb shell pm get-app-links app.videx.streaming`; after a change, Google's Digital Asset Links cache can hold the old file for up to an hour (`assetlinks:check` returns `maxAge 3600s`), then `adb shell pm verify-app-links --re-verify app.videx.streaming`. State `1024` means not verified.
+- The same Play signing SHA-1 must be registered as a Google Cloud **Android OAuth client** for Google sign-in on Play installs; with only the upload-key client, sign-in fails with the app's generic "Couldn't sign in with Google" and nothing reaches Supabase.
+- A screen that needs sign-in for an action must **replace** itself with `/auth`, not push `/auth` over itself: a detail screen left mounted clears the pending link the moment the session appears (its own `clearPendingLinkFor` effect), before `auth.tsx` can resume it (IN-GR-028, found on device).
+- Device-verified 2026-09-16..17 (Growth S5): universal and app links cold and warm from WhatsApp, Messages and Slack; bare and stale slugs; room links on a second phone; pending link through sign-in and through provider sign-up and onboarding; tabs beneath reset-link and push cold starts; Play referrer carrying `movie-550` into a fresh install.
 - The Worker runs on cached page hits (`x-videx-cache: hit` on `/t/movie/603`, 2026-09-14), so no zone Cache Rule is bypassing it; attribution fill-in depends on that.
 - `onboarding_events` RLS is on with `auth.uid() = user_id` insert policies, so null-user (pre-auth) inserts are rejected — pre-auth telemetry must go through the Worker (S2).
 - Page edge-cache keys carry `PAGE_CACHE_VERSION` (`workers/api/src/pageShell.ts`). Bump it with any page markup change: the S1 deploy (2026-09-15) reused the old title-page key, so titles cached before it served the pre-slug page (no 301, no smart banner, no `via`) until the 24h TTL ran out.

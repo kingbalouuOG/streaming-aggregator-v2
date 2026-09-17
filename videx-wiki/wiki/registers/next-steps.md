@@ -3,7 +3,7 @@ title: Next steps — Roadmap v1.0 H0 "Prove it & equip it"
 type: register
 tags: [register, next-steps, roadmap, h0, launch, notifications, share, beta, quiet-release]
 created: 2026-04-26
-updated: 2026-09-10
+updated: 2026-09-17
 sources:
   - raw/forward-planning/Videx_Product_Strategy_and_Roadmap_v1.1_2026-09.md
   - raw/forward-planning/Videx_Roadmap_Review_2026-09-10.md
@@ -20,6 +20,17 @@ related:
 # Next steps
 
 **Sequencing is now owned by the approved [Product Strategy & Roadmap v1.0](../sources/strategy-roadmap-2026-07.md)** (Joe, 2026-07-06; source of truth `docs/strategy/Videx_Product_Strategy_and_Roadmap_v1.0.md`). Thesis: the engine is ahead of the audience — users are the critical path. The old "internal-testing rollout → ENG-2" framing is superseded; ENG-2 remains data-gated (≥5–10K impressions, ≥500 positives) and now lands in H2 if its gate clears.
+
+## Growth track — 17 September 2026 (G0/G1 verified)
+
+**State:** G0 foundations and G1 sharing are verified on iPhone and Android 2.5.0 (Growth S5; summary `docs/v2/phase-summaries/phase-growth-g0-g1-summary.md`, [growth loops](../concepts/forward-planning/growth-loops.md)). No real cohort yet, so the dashboard holds test rows only.
+
+**Next, in order:**
+1. Joe merges PR #197 (S5 fixes IN-GR-028/030/031/033, docs, strategy v0.2 draft for approval).
+2. Production binaries: TestFlight (`ios-release.yml` production, submit) and a new Android release carrying the fixes; testers update.
+3. Joe submits 2.5.0 to the App Store with the S2/S3 store privacy rows; on the day it is public, Confirm email goes on permanently (IN-GR-011, IN-GR-021 watch).
+4. After #197 merges: publish one iOS preview OTA from main (the IN-GR-032 OTA from PR #200 replaced the S5 fixes on Joe's iPhone); then the IN-GR-034 handoff, notification prompt after onboarding (a G2 prerequisite). IN-GR-032 custom Apple button is closed (PR #200).
+5. G2 households planning in the strategy thread, from the readiness view in the G0/G1 summary.
 
 ## Now — 10 September 2026 (roadmap v1.1)
 

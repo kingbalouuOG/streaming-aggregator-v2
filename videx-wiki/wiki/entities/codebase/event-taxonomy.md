@@ -3,7 +3,7 @@ title: Event Taxonomy
 type: entity
 tags: [events, instrumentation, signals, analytics]
 created: 2026-04-26
-updated: 2026-09-16
+updated: 2026-09-17
 sources:
   - raw/codebase-snapshots/event-taxonomy.md
   - raw/v2-strategy/Videx_v2_Detail_Page_Signal_Capture_Spec_v0.3.2.md
@@ -124,6 +124,7 @@ Columns: `id`, `occurred_at`, `event_name`, `install_id` (app-minted UUID, null 
 - **Install id** — `native/src/installId.ts`, MMKV `videx` key `install_id`; not cleared on sign-out. **First touch** — `native/src/attribution.ts` (`first_touch`), written once: an inbound link, else on Android the Play Install Referrer (`t=` / `r=` in the referrer also becomes the pending link). An install that already held a Supabase session when the id was minted is an update (`prior_install`), excluded from the funnel.
 - **Deletion/export** — `delete_own_account` / `export_user_data` (v1.3) cover the account's rows and every row of any install it used.
 - **Session origin** (S4, `src/lib/instrumentation/sessionOrigin.ts`): a push tap marks the in-memory session as push-originated until `sessionId`'s reset (5 minutes backgrounded). Every share in that session carries `src=push` on both events and in the URL (`&src=push`).
+- **Device-verified 2026-09-16..17 (Growth S5):** every `event_name` above was produced on a real phone with the documented fields: crawler agents `whatsapp`, `imessage`, `slack` on `preview_fetched`; `first_open` once per install (`touch` `link` on iOS, `install_referrer` on a Play install); `signup_completed` and `first_home_view` carrying `via=share` from the referrer; `share_completed` `platform_reports_completion` true with an activity type on iOS, false with null `to_surface` on Android; `notification_opened` with `delivery_id` for single-title pushes and null for bundles. Evidence: `docs/v2/phase-summaries/evidence/growth-s5-growth-events.md`. Note that account deletion removes the rows of every install the account used (IN-GR-009), which deleted the iPhone test trail in S5.
 - Shares per WAU (`growth-dashboard.sql` §1) read `share_initiated` since S4; the `user_interactions.share` source is kept commented for the transition. §6 has iOS completion, push vs organic share rate, notification CTR on `delivery_id`, and "Tell someone" take-up.
 
 ## Source surfaces

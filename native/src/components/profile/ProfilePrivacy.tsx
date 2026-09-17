@@ -1,6 +1,18 @@
 import { ChevronRight, FileText, ShieldCheck, Trash2 } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LegalSheet } from '@/components/LegalSheet';
@@ -41,6 +53,7 @@ export function ProfilePrivacy() {
     session?.user?.email?.split('@')[0] ||
     '';
 
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
@@ -52,11 +65,20 @@ export function ProfilePrivacy() {
     if (!canDelete || busy) return;
     setBusy(true);
     setError(null);
-    const { error: e } = await deleteAccount();
+    const { error: e, cancelled } = await deleteAccount();
     setBusy(false);
-    if (e) setError(e);
-    // Success ends the session → the app routes back to auth automatically.
-    // Closing Apple's sheet (cancelled) returns no error and deletes nothing.
+    if (e) {
+      setError(e);
+      return;
+    }
+    // Closing Apple's sheet deletes nothing: stay on the dialog.
+    if (cancelled) return;
+    // Deleted and signed out. The modal sits above the navigator, so close it
+    // and go to sign-in with a confirmation (S5: it stayed open over auth).
+    Keyboard.dismiss();
+    setOpen(false);
+    setConfirm('');
+    router.replace({ pathname: '/auth', params: { notice: 'deleted' } });
   };
 
   return (
@@ -133,8 +155,18 @@ export function ProfilePrivacy() {
       />
 
       <Modal visible={open} animationType="fade" transparent onRequestClose={() => setOpen(false)}>
-        <View className="flex-1 items-center justify-center bg-black/70 px-8">
-          <View className="w-full rounded-card p-5" style={{ backgroundColor: '#13131a' }}>
+        {/* Tapping outside the card closes the keyboard (S5: the buttons sat
+            under it); the card lifts above the keyboard on iOS. */}
+        <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <Pressable
+          onPress={Keyboard.dismiss}
+          accessible={false}
+          className="flex-1 items-center justify-center bg-black/70 px-8">
+          <Pressable
+            onPress={Keyboard.dismiss}
+            accessible={false}
+            className="w-full rounded-card p-5"
+            style={{ backgroundColor: '#13131a' }}>
             <Text className="font-display-bold text-title text-foreground">Delete account?</Text>
             <Text className="mt-2 font-sans text-body leading-relaxed text-muted-foreground">
               This permanently deletes your account, preferences, watchlist, and ratings. This can&apos;t
@@ -155,6 +187,8 @@ export function ProfilePrivacy() {
               placeholderTextColor="rgba(245,241,232,0.4)"
               autoCapitalize="none"
               autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
               className="mt-1.5 rounded-card border border-border bg-background px-3 py-2.5 font-sans text-body text-foreground"
             />
             {error ? <Text className="mt-2 font-sans text-meta text-danger">{error}</Text> : null}
@@ -180,8 +214,9 @@ export function ProfilePrivacy() {
                 )}
               </Pressable>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
