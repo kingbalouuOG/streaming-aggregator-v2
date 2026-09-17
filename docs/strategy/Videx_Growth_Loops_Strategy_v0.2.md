@@ -5,7 +5,7 @@
 **Date:** 17 September 2026 (v0.1: 14 September 2026)
 **Related:** Orchestration v0.3.3, Strategy v1.6.3, Monetisation Strategy Exploration v0.1, Notifications v1 (H0 Stream B)
 
-**Changes from v0.1:** §3 corrected against the codebase as it stood on 14 September (v0.1 undercounted what existed) and extended with the state after G0 and G1 shipped and were verified on device (17 September). §8 questions 1 and 2 answered. Sections 4 to 7 and 9 are unchanged.
+**Changes from v0.1:** §3 corrected against the codebase as it stood on 14 September (v0.1 undercounted what existed) and extended with the state after G0 and G1 shipped and were verified on device (17 September). §8 questions 1 and 2 answered. §4 Loop 1 item 1 states the shipped URL grammar; §6 records the release-together decision. Sections 5, 7 and 9 are unchanged.
 
 ---
 
@@ -70,7 +70,7 @@ Output: recipient sees a rich preview (title, poster, "on Netflix and Now in the
 Why fundamental: "what should we watch" is already a conversation UK households have daily. Videx adds the one thing a bare title name lacks, which is where it is available right now.
 
 Build requirements:
-1. URL routing: `/t/{slug}` for titles, `/room/{id}` for mood rooms, `/list/{id}` for watchlists (needed by Loop 3).
+1. URL routing: `/t/{type}/{tmdbId}-{slug}` for titles (resolved by id, slug cosmetic), `/room/{id}` for room snapshots frozen at share time, `/list/{id}` for watchlists (reserved; needed by Loop 3). Recorded in ADR-015.
 2. Server-rendered OG tags per object via the Cloudflare Worker (poster, availability, one-line hook). Crawlers from WhatsApp, iMessage and Slack read these without executing JavaScript, so this must be server-side.
 3. App links (Android) and universal links (iOS) so an installed app opens the object directly; the web fallback shows the preview and an install prompt.
 4. Share affordance on the detail page and mood room header. Use the native share sheet; avoid building a custom one.
@@ -161,6 +161,8 @@ Measures: share rate from notification-originated sessions versus organic sessio
 | G3 | Loop 2 taste card pipeline plus first three variants | Needs Loop 1 landing stack and, for the compatibility card, Loop 3 |
 | G4 | Loop 4 SEO page types 1 and 2 | Long lead time; start once title pages exist from G0 |
 | G5 | Household-aware recommendations; SEO page types 3 and 4 | Depends on G2 and G4 respectively |
+
+Release decision (Joe, 14 September): the loops go live together, not phase by phase, so G0 to G2 build in sequence with no public release between them. G1's "validates preview-to-install rate" is therefore a measurement after launch rather than a gate on G2, and per-loop measures will be confounded at launch; accepted.
 
 The order G2 before G3 is a judgement call. The counter-argument is that a taste card is cheaper and could produce buzz sooner. The reason to prefer household first: buzz without a retention mechanism produces installs that churn, and the household loop is the retention mechanism.
 

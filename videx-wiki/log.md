@@ -1841,3 +1841,8 @@ only thing at stake.
 - Updated: wiki/registers/parking-lot.md (001 reopened and fixed; 002, 004, 005, 012, 027 closed; 009 seen in practice; 021 note; +028..034), wiki/concepts/forward-planning/growth-loops.md (status: G0/G1 verified on device; S5 shipped line), wiki/concepts/techniques/inbound-deep-linking.md (two signing keys, Google OAuth SHA-1, asset links cache, replace-to-auth gotcha, verified list), wiki/concepts/architecture/notifications-v1.md (consent change IN-GR-034, device-verified block, cap-clearing test technique), wiki/entities/codebase/event-taxonomy.md (verified notes), wiki/registers/next-steps.md (growth track block).
 - Process notes: first iOS build after new entitlements needs a local interactive EAS credentials pass; Confirm email flip moves to the public 2.5.0 release because 2.4.0 is live on the App Store.
 - Strategy doc v0.2 drafted at docs/strategy/Videx_Growth_Loops_Strategy_v0.2.md for Joe's approval; not snapshotted into raw/.
+
+## [2026-09-17] query | Growth S5 reviewed in the strategy thread; G0/G1 phase closed
+- S5 reconciled into the plan (§11e): matrix coverage vs §7, three standing rules (both Android keys; interactive eas build after entitlement changes; deletion last on a separate install), code review of #197 approved with two notes (IN-GR-035 initializing guard folded into the IN-GR-034 handoff step 8; delete → /auth notice races the tabs guard).
+- Strategy v0.2: two edits applied (§4 Loop 1 URL grammar; §6 release-together decision); status stays "draft for Joe's approval" until Joe says so, then v0.1 gets the superseded header and v0.2 is snapshotted into raw/ (human-owned).
+- Next: release steps (Joe), IN-GR-034 session, then G2 households planning from the summary's readiness view.
