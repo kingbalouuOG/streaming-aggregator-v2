@@ -22,6 +22,8 @@ import {
   OBJECT_REQUIRED_EVENTS,
   PAGE_EVENT_NAMES,
   type GrowthEventName,
+  GROWTH_METADATA_MAX_KEYS,
+  isFlatMetadata,
 } from '../../../src/lib/growth/growthEvents';
 import {
   normaliseSrc,
@@ -31,12 +33,12 @@ import {
   type SrcOrigin,
   type ViaChannel,
 } from '../../../src/lib/growth/inboundLink';
+import { isUuid } from '../../../src/lib/growth/uuid';
 import type { PlatformBucket } from './pageShell';
 import type { UaClass } from './uaClass';
 
 export const GROWTH_EVENT_BODY_MAX_BYTES = 4 * 1024;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface GrowthEventRow {
   event_name: GrowthEventName;
@@ -89,7 +91,7 @@ export function validateGrowthEventBody(body: unknown): GrowthEventValidation {
   const eventName = CLIENT_EVENT_NAMES.find((n) => n === name);
   if (!eventName) return { ok: false, error: 'unknown event_name' };
 
-  if (typeof body.install_id !== 'string' || !UUID_RE.test(body.install_id)) {
+  if (typeof body.install_id !== 'string' || !isUuid(body.install_id)) {
     return { ok: false, error: 'install_id must be a uuid' };
   }
 
@@ -117,12 +119,16 @@ export function validateGrowthEventBody(body: unknown): GrowthEventValidation {
   }
 
   const deliveryId = body.delivery_id ?? null;
-  if (deliveryId !== null && (typeof deliveryId !== 'string' || !UUID_RE.test(deliveryId))) {
+  if (deliveryId !== null && (typeof deliveryId !== 'string' || !isUuid(deliveryId))) {
     return { ok: false, error: 'delivery_id must be a uuid or null' };
   }
 
   const metadata = body.metadata ?? {};
-  if (!isRecord(metadata)) return { ok: false, error: 'metadata must be an object' };
+  // Flat primitives only, capped key count: dashboards read metadata->>'key'
+  // and must not be fed nested or attacker-shaped values (sweep, security 4).
+  if (!isFlatMetadata(metadata)) {
+    return { ok: false, error: `metadata must be a flat object of at most ${GROWTH_METADATA_MAX_KEYS} primitive values` };
+  }
   if (utf8Length(JSON.stringify(metadata)) > GROWTH_METADATA_MAX_BYTES) {
     return { ok: false, error: `metadata exceeds ${GROWTH_METADATA_MAX_BYTES} bytes` };
   }
@@ -147,7 +153,7 @@ export function validateGrowthEventBody(body: unknown): GrowthEventValidation {
 /** Per install when the body names one, else per client IP. */
 export function rateLimitKey(body: unknown, ip: string | null | undefined): string {
   const installId =
-    isRecord(body) && typeof body.install_id === 'string' && UUID_RE.test(body.install_id)
+    isRecord(body) && typeof body.install_id === 'string' && isUuid(body.install_id)
       ? body.install_id.toLowerCase()
       : null;
   return installId ? `install:${installId}` : `ip:${ip || 'unknown'}`;

@@ -71,6 +71,18 @@ namespace_id = "1002"
 limit = 60
 period = 60
 
+# Sweep (2026-09-17): a second, always-applied bucket per client IP on
+# POST /v1/growth/events, so a client rotating install ids is still bounded
+# (rows carry up to 2 KB and live 12 months). Generous: many installs can
+# share a NAT.
+[[ratelimits]]
+name = "GROWTH_IP_RATELIMIT"
+namespace_id = "1003"
+
+[ratelimits.simple]
+limit = 600
+period = 60
+
 # PLAT-3 W5: nightly stale-profile recompute (taste vector replay +
 # centroid k-means), off the For You hot path. 04:00 UTC — clear of the
 # 06:00 UTC sync-incremental pg_cron.

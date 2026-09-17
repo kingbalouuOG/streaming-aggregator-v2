@@ -15,7 +15,9 @@ export const TOKEN_HASH_RE = /^[A-Za-z0-9_-]{1,256}$/;
 export type BridgeKind = 'recovery' | 'confirm';
 
 export function bridgeKind(type: string): BridgeKind {
-  return type === 'recovery' ? 'recovery' : 'confirm';
+  // A missing or truncated type is treated as a reset link: that user cannot
+  // sign in, so the recovery copy ("request a new link") is the safe default.
+  return type === 'email' || type === 'signup' ? 'confirm' : 'recovery';
 }
 
 /** The app URL for an email link, or null when the token or type is not
