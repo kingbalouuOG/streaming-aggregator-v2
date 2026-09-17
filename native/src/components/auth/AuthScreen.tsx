@@ -27,7 +27,9 @@ export function AuthScreen() {
   const router = useRouter();
   const { signIn } = useAuth();
   // ?email= arrives from onboarding's "Check your email" ("Already confirmed? Sign in").
-  const params = useLocalSearchParams<{ email?: string }>();
+  // ?notice=deleted arrives from Profile → Delete account.
+  const params = useLocalSearchParams<{ email?: string; notice?: string }>();
+  const accountDeleted = params.notice === 'deleted';
   const paramEmail = typeof params.email === 'string' ? params.email : '';
   const [email, setEmail] = useState(paramEmail);
   // Growth S3 follow-up (IN-GR-011): the address that still needs confirming.
@@ -40,6 +42,8 @@ export function AuthScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The CTA stays passive until both fields have something in them.
+  const canSubmit = email.trim().length > 0 && password.length > 0;
 
   // Forgot-password now has its own route (email field, "check your
   // email" confirmation, resend-with-cooldown) instead of firing inline
@@ -98,6 +102,14 @@ export function AuthScreen() {
               Sign in to pick up where you left off.
             </Text>
           </View>
+
+          {accountDeleted ? (
+            <View className="mt-6 rounded-card border border-border bg-card px-4 py-3">
+              <Text className="text-center font-sans text-body text-foreground">
+                Your account has been deleted.
+              </Text>
+            </View>
+          ) : null}
 
           {/* Growth S3: Apple (iOS) and Google above the email form. Success
               flips the session; auth.tsx's focus effect routes on from there
@@ -163,8 +175,13 @@ export function AuthScreen() {
           {/* Submit */}
           <Pressable
             onPress={submit}
-            disabled={busy}
-            className="mt-6 h-14 flex-row items-center justify-center gap-2 rounded-card bg-primary active:opacity-90">
+            disabled={busy || !canSubmit}
+            accessibilityState={{ disabled: busy || !canSubmit }}
+            className={
+              canSubmit || busy
+                ? 'mt-6 h-14 flex-row items-center justify-center gap-2 rounded-card bg-primary active:opacity-90'
+                : 'mt-6 h-14 flex-row items-center justify-center gap-2 rounded-card bg-primary/40'
+            }>
             {busy ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
