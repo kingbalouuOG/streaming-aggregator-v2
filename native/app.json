@@ -19,7 +19,7 @@
     "ios": {
       "icon": "./assets/images/icon-ios.png",
       "bundleIdentifier": "app.videx.streaming",
-      "buildNumber": "13",
+      "buildNumber": "14",
       "supportsTablet": false,
       "associatedDomains": ["applinks:videxstreaming.com"],
       "usesAppleSignIn": true,
@@ -30,7 +30,7 @@
     "android": {
       "package": "app.videx.streaming",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 16,
+      "versionCode": 17,
       "allowBackup": false,
       "intentFilters": [
         {

@@ -1862,3 +1862,8 @@ only thing at stake.
 ## [2026-09-17] query | Migration 092 applied and verified; sweep PR #203 merged
 - Live checks: `username_available` self-excludes (`IS DISTINCT FROM auth.uid()`), `export_user_data` and `delete_own_account` scope the install-id join to `user_id IS NULL`, explicit deletes present, SECURITY DEFINER on all three, grants intact. One test install is still shared by two accounts; its identified rows are now protected either way.
 - Updated: wiki/entities/codebase/migrations.md (092 applied).
+
+## [2026-09-17] query | IN-GR-036 and 042 closed on Joe's decision; release versions bumped
+- deleteAccount: a failed Apple revoke is reported (console + Sentry warning) and deletion goes ahead; a closed Apple sheet still cancels. Rationale: erasure must not depend on Apple or the Edge Function; a token that could not be revoked cannot be revoked later without the user anyway.
+- wrangler.toml: [observability.logs] invocation_logs = false (the /reset token_hash travels in the URL).
+- native/app.json: 2.5.0 build 14 / versionCode 17 for the release binaries (16 went to Play internal in S5).
