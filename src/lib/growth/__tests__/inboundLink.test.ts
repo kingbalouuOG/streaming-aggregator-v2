@@ -75,9 +75,9 @@ describe('parseInboundLink — rooms and lists', () => {
     expect(parseInboundLink('https://videxstreaming.com/room/<script>')).toEqual(HOME);
   });
 
-  it('maps the reserved list grammar', () => {
+  it('attributes the reserved list grammar but routes home (no list screen until G2)', () => {
     expect(parseInboundLink('https://videxstreaming.com/list/abc123?via=household')).toEqual({
-      route: '/list/abc123',
+      route: '/',
       object: { type: 'list', id: 'abc123' },
       via: 'household',
       src: null,
@@ -113,7 +113,7 @@ describe('parseInboundLink — pass-through and fallback', () => {
     'https://videxstreaming.com/reset-password',
     'https://videxstreaming.com/confirm-email',
     'videx://',
-    'videx://profile/settings',
+    'videx://t/movie/abc',
     'mailto:hi@videxstreaming.com',
     '',
     'not a url',
@@ -146,5 +146,29 @@ describe('isPendingLinkFresh', () => {
   it('rejects future and non-finite timestamps', () => {
     expect(isPendingLinkFresh(now + 1000, now)).toBe(false);
     expect(isPendingLinkFresh(Number.NaN, now)).toBe(false);
+  });
+});
+
+describe('parseInboundLink — sweep additions', () => {
+  it('passes unknown app-scheme paths through unchanged', () => {
+    expect(parseInboundLink('videx://profile/settings')).toEqual({
+      route: 'videx://profile/settings',
+      object: null,
+      via: null,
+      src: null,
+    });
+  });
+
+  it('sends unknown https paths home', () => {
+    expect(parseInboundLink('https://videxstreaming.com/about')).toEqual({ route: '/', object: null, via: null, src: null });
+  });
+
+  it('rejects a title id longer than ten digits', () => {
+    expect(parseInboundLink('https://videxstreaming.com/t/movie/12345678901').object).toBeNull();
+    expect(parseInboundLink('videx://detail/tv-00012').object).toEqual({ type: 'title', id: 'tv-12' });
+  });
+
+  it('accepts a host with an explicit port', () => {
+    expect(parseInboundLink('https://videxstreaming.com:443/t/movie/550').object).toEqual({ type: 'title', id: 'movie-550' });
   });
 });

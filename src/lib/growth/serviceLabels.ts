@@ -9,13 +9,11 @@
  * Pure, imported by the Worker and native.
  */
 
-export const SHARE_SERVICE_LABELS: Record<string, string> = {
-  netflix: 'Netflix', prime: 'Prime Video', disney: 'Disney+', apple: 'Apple TV+',
-  now: 'NOW', paramount: 'Paramount+', itvx: 'ITVX', channel4: 'Channel 4',
-  hbo: 'HBO Max', discovery: 'Discovery+', crunchyroll: 'Crunchyroll',
-  mubi: 'MUBI', plutotv: 'Pluto TV',
-  bbc: 'BBC iPlayer', skygo: 'Sky Go',
-};
+import { SERVICE_DISPLAY_NAMES } from '../types/content';
+
+// The app's own display names: one source, so a rename or a new service shows
+// the same in the picker, the share sheet and the Worker page (sweep R1).
+export const SHARE_SERVICE_LABELS: Record<string, string> = { ...SERVICE_DISPLAY_NAMES };
 
 /** The label for a service id; an unknown id is returned as given. */
 export function shareServiceLabel(serviceId: string): string {
