@@ -1858,3 +1858,7 @@ only thing at stake.
 - Filed IN-GR-036..045; closed IN-GR-008, 035; IN-GR-009 scope corrected.
 - Updated: wiki/registers/parking-lot.md, wiki/entities/codebase/migrations.md (092), plan §11f, both 17 Sept handoffs. Summary: docs/v2/phase-summaries/phase-growth-code-sweep-summary.md.
 - Note: 091 was already taken by the IN-SY-002 pipeline-health fix (applied 16 Sept), so the sweep migration is 092; the pipeline-health failures flagged on 16 Sept were that false alarm, since fixed.
+
+## [2026-09-17] query | Migration 092 applied and verified; sweep PR #203 merged
+- Live checks: `username_available` self-excludes (`IS DISTINCT FROM auth.uid()`), `export_user_data` and `delete_own_account` scope the install-id join to `user_id IS NULL`, explicit deletes present, SECURITY DEFINER on all three, grants intact. One test install is still shared by two accounts; its identified rows are now protected either way.
+- Updated: wiki/entities/codebase/migrations.md (092 applied).
