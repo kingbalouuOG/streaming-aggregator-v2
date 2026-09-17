@@ -1,10 +1,11 @@
 ---
-title: Growth Loops Strategy v0.1 (14 September 2026)
+title: Growth Loops Strategy v0.1 → v0.2 (14 and 17 September 2026)
 type: source
 tags: [strategy, growth, loops, sharing, households, seo, attribution, forward-planning]
 created: 2026-09-14
-updated: 2026-09-14
+updated: 2026-09-17
 sources:
+  - raw/forward-planning/Videx_Growth_Loops_Strategy_v0.2_2026-09.md
   - raw/forward-planning/Videx_Growth_Loops_Strategy_v0.1_2026-09.md
 related:
   - wiki/concepts/forward-planning/growth-loops.md
@@ -14,7 +15,11 @@ related:
   - wiki/registers/next-steps.md
 ---
 
-# Growth Loops Strategy v0.1 (14 September 2026)
+# Growth Loops Strategy v0.1 → v0.2
+
+> **v0.2 approved by Joe 17 September 2026** (`docs/strategy/Videx_Growth_Loops_Strategy_v0.2.md`, snapshot in `raw/`). Changes from v0.1: §3 corrected (the audit below was applied) and extended with a §3b "after G0 and G1" table; §8 Q1 and Q2 answered; §4 Loop 1 item 1 states the shipped URL grammar (`/t/{type}/{tmdbId}-{slug}`, snapshot rooms, ADR-015); §6 records the 14 Sept release-together decision. Loops, foundations, sequencing and measures are otherwise unchanged. G0 and G1 were built and device-verified 14 to 17 Sept: see [growth loops](../concepts/forward-planning/growth-loops.md) and `docs/v2/phase-summaries/phase-growth-g0-g1-summary.md`. The summary of v0.1 below still describes the loops.
+
+## v0.1 (14 September 2026)
 
 **What it is.** A draft for review (owner: Joe for product, Claude for strategy) defining the growth loops Videx will pursue after v2, the foundations they share, a G0 to G5 build order, and per-loop measures. Source of truth: `docs/strategy/Videx_Growth_Loops_Strategy_v0.1.md`. Framing is Aakash Gupta's Input → Action → Output loop model, with one test for a loop worth building: the motivation behind the Action must be fundamental to the product, not manufactured by an incentive.
 
@@ -57,9 +62,9 @@ Weekly per loop: K-factor proxy (invites per active user × conversion; above 0.
 | 5 | Data licence check for SEO republishing | Open (G4). |
 | 6 | December 2026 "Rewind" | Open. |
 
-## Corrections to the doc's §3 audit (found 2026-09-14)
+## Corrections to the v0.1 §3 audit (found 2026-09-14; applied in v0.2 §3a)
 
-The audit table predates H0 Stream B and is stale on three rows. Recorded here until the doc is bumped (plan §9 D15):
+The v0.1 audit table predated H0 Stream B and was stale on three rows:
 
 | Row | Doc says | Actual |
 |---|---|---|

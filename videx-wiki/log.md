@@ -1846,3 +1846,9 @@ only thing at stake.
 - S5 reconciled into the plan (§11e): matrix coverage vs §7, three standing rules (both Android keys; interactive eas build after entitlement changes; deletion last on a separate install), code review of #197 approved with two notes (IN-GR-035 initializing guard folded into the IN-GR-034 handoff step 8; delete → /auth notice races the tabs guard).
 - Strategy v0.2: two edits applied (§4 Loop 1 URL grammar; §6 release-together decision); status stays "draft for Joe's approval" until Joe says so, then v0.1 gets the superseded header and v0.2 is snapshotted into raw/ (human-owned).
 - Next: release steps (Joe), IN-GR-034 session, then G2 households planning from the summary's readiness view.
+
+## [2026-09-17] ingest | Videx_Growth_Loops_Strategy_v0.2_2026-09.md (approved by Joe)
+- Raw snapshot created on Joe's approval (raw/forward-planning/Videx_Growth_Loops_Strategy_v0.2_2026-09.md); v0.1 marked superseded in docs/strategy.
+- Updated: wiki/sources/growth-loops-strategy-v0-1.md (now covers v0.1 → v0.2), index.md (source + concept lines)
+- Roadmap v1.1 gained §7a "Status pass 2026-09-17" (App Store live, Support URL, G-phases as the third H1 track, 2.5.0 release steps, IN-GR-034, code sweep); wiki/sources/strategy-roadmap-2026-09-v1-1.md mirrors it. The raw/ copy of the roadmap is Joe's to refresh.
+- New handoff: docs/plans/2026-09-17-003-handoff-growth-code-sweep.md (review-then-fix sweep of the G0/G1 surface, after the IN-GR-034 session).

@@ -321,6 +321,19 @@ H0 engineering items 2–10 and 15 are ✅ (unchanged since 13 July; pg_partman 
 
 **Beyond-plan work landed July → September (for the record):** catalogue freeze repair + speed/freshness (PRs #84–#125) · SA API quota incident and vendor-direct move (#126–#130) · OTA/CI plumbing incl. the Android update channel (#101–#113, #138) · search logging, quick filters, presets, one-intent Browse, refine row, review and fixes (#131–#151) · v2.2.0, v2.3.0, v2.3.1.
 
+## 7a. Status pass 2026-09-17 (growth phase G0/G1 closed)
+
+Recorded by the growth strategy thread after the G0/G1 device pass. Items not listed are unchanged from §7; Joe updates ICO, the Play closed-test count and the weekly ritual.
+
+1. ✅ **App Store review** (0.12, was 🔶) — approved; **2.4.0 is live on the App Store** (listing `id6785395342`). iOS is public, quietly. The `/t/` and `/room/` pages link to the listing (PR #196). The App Store half of the 24 Sept tripwire is met.
+2. ✅ **Support URL** (0.12 item 5) — `videxstreaming.com` serves the marketing site at the apex (separate repo, Vercel) with the `videx-api` Worker on path routes (`/v1/*`, `/t/*`, `/room/*`, `/list/*`, `/.well-known/*`, `/reset*`, `/privacy*`, `/terms*`, `/delete-account*`). If the store listings' Support URL fields do not yet point at it, that is the remaining step.
+3. 🆕 **Growth workstream = the G-phases.** `docs/strategy/Videx_Growth_Loops_Strategy_v0.2.md` (approved 17 Sept) defines five loops and a G0–G5 order. **G0 foundations and G1 sharing are built (14–16 Sept, PRs #172–#193) and device-verified on iPhone and Android on 2.5.0 (17 Sept)**: object URLs (ADR-015), server-rendered previews for titles and room snapshots, universal and app links, Apple and Google sign-in with a deferred deep link, attribution (`growth_events`, `?via=`/`?src=`, Play Install Referrer), share copy with the UK availability line, push-to-share ("Tell someone"). Phase summary: `docs/v2/phase-summaries/phase-growth-g0-g1-summary.md`. This is a third H1 track beside the user track (1.1, 1.6, 1.7) and the search track (1.2–1.5); it does not change their scope. 0.9 and 0.10 (the loops in v1) are now superseded by G1's fuller versions.
+4. 🔶 **2.5.0, the first growth release** — TestFlight production build and Android release with the S5 fixes; App Store submission with the updated privacy forms (install id, attribution, provider sign-in); Confirm email switched on permanently the day 2.5.0 is public. Release-together decision (Joe, 14 Sept): no public release between G0, G1 and G2, so G2 households (shared watchlists, invites, nudges) builds next and the loops launch as a set.
+5. ⬜ **Notification consent** — asked only at the first watchlist add, so fresh installs rarely hold a token (IN-GR-034); decided: ask after onboarding with an explainer, handoff `docs/plans/2026-09-17-002-…`. A prerequisite for household nudges.
+6. ⬜ **G0/G1 code sweep** before G2 builds on it: `docs/plans/2026-09-17-003-handoff-growth-code-sweep.md`.
+
+**Measurement note.** All G1 measures (`supabase/queries/growth-dashboard.sql`) record end to end; every row is test data until 2.5.0 is public. §4.4's tree gains the loop measures from strategy v0.2 §7 (K-factor proxy, attributed installs by source, D7/D30 by acquisition source and household membership) once a cohort exists.
+
 ## 8. Risks & open questions
 
 | Risk | Severity | Mitigation |
