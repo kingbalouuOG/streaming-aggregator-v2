@@ -2,7 +2,7 @@
 title: Growth loops (G-phases)
 type: concept
 tags: [forward-planning, growth, loops, sharing, deep-links, universal-links, attribution, households, seo]
-status: G0/G1 verified on device (iPhone and Android, 2.5.0, 16–17 Sept 2026); S5 fixes in PR #197 reach stores with the next binaries; Confirm email goes on permanently at the public 2.5.0 release; handoffs open for IN-GR-032 (Apple button) and IN-GR-034 (notification prompt)
+status: G0/G1 verified on device (iPhone and Android, 2.5.0, 16–17 Sept 2026); S5 fixes in PR #197 reach stores with the next binaries; Confirm email goes on permanently at the public 2.5.0 release; IN-GR-032 (custom Apple button) closed in PR #200; handoff open for IN-GR-034 (notification prompt)
 horizon: H1 onward (runs beside the user track and search track from Roadmap v1.1)
 created: 2026-09-14
 updated: 2026-09-17
@@ -20,7 +20,7 @@ related:
 
 # Growth loops (G-phases)
 
-> **Status: G0/G1 verified on device 2026-09-17 (Growth S5).** Matrix A links, B attribution, C sign-in, D sharing and push run on iPhone (ad-hoc 2.5.0) and Android (Play internal 2.5.0). Found and fixed: IN-GR-001 reopened (Play signs with a Google-generated key; `assetlinks.json` and the Google Android OAuth client needed it, PR #201 and console), IN-GR-028 signed-out watchlist writes, IN-GR-030/031 delete dialog, IN-GR-033 passive Sign In (all PR #197); IN-GR-002 App Store CTA live (#196). Handed off: IN-GR-032 Apple button, IN-GR-034 ask for notifications after onboarding. Summary: `docs/v2/phase-summaries/phase-growth-g0-g1-summary.md` (includes the G2 readiness view). Strategy v0.2 draft awaits Joe.
+> **Status: G0/G1 verified on device 2026-09-17 (Growth S5).** Matrix A links, B attribution, C sign-in, D sharing and push run on iPhone (ad-hoc 2.5.0) and Android (Play internal 2.5.0). Found and fixed: IN-GR-001 reopened (Play signs with a Google-generated key; `assetlinks.json` and the Google Android OAuth client needed it, PR #201 and console), IN-GR-028 signed-out watchlist writes, IN-GR-030/031 delete dialog, IN-GR-033 passive Sign In (all PR #197); IN-GR-002 App Store CTA live (#196). IN-GR-032 Apple button handed off and closed the same day (PR #200). Handed off: IN-GR-034 ask for notifications after onboarding. Summary: `docs/v2/phase-summaries/phase-growth-g0-g1-summary.md` (includes the G2 readiness view). Strategy v0.2 draft awaits Joe.
 
 > **Status: S4 (sharing) merged and deployed 2026-09-16** — share copy with the UK availability line (`src/lib/growth/shareCopy.ts`, labels shared with the Worker via `serviceLabels.ts`), `share_initiated` / `share_completed` / `notification_opened` emitted, push payload `delivery_id` / `via` / `service_id` / `expires_on`, session origin and "Tell someone" on the detail page, dashboard §1 switched and §6 added. No migration, no Worker page change. PR #192 merged (`adf2882`); Worker deployed by CI; `send-notifications` v8 deployed by Joe. Device checks S4-1..11 in S5. Summary: `docs/v2/phase-summaries/phase-growth-s4-summary.md`. Follow-ups IN-GR-023..027.
 

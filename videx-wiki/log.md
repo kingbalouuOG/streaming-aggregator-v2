@@ -1811,10 +1811,32 @@ only thing at stake.
 - Noted, unrelated: "Pipeline health" workflow failing since 2026-09-15.
 - Updated: wiki/concepts/forward-planning/growth-loops.md (status: build complete, unverified; Shipped: S4 + build-phase lines)
 
+## [2026-09-16] ingest | IN-SY-002 — pipeline-health `gap-not-growing` false alarm (fix/pipeline-health-stale-gap)
+- Cause: the check compared the whole titles gap with a 7-day baseline, but the 06:00 sync's new titles wait for the next 05:00 backfill, so the 09:00–14:00 check always counted them. 15 Sept (2,323 vs 31) and 16 Sept (39 vs 31) were false alarms; 11–14 Sept were real (IN-SY-001 walks).
+- Verified the age signal before building on it: every `streaming_availability` writer (sync-incremental, sync-content.ts, backfill-service-catalogue.ts) deletes and re-inserts, so `created_at` is "last rewritten". Kept it: the reset only moves time forward (can undercount, never overcount; 207 of 77,179 titles had min(created_at) in the last 24h). Rejected `sa_show_map.first_seen_at` and `streaming_history`: 25 of the 16 Sept 39 were removed 13 Sept and re-added that morning, so both would have called them stale.
+- New: `supabase/migrations/091_count_stale_missing_title_ids.sql` (178ms EXPLAIN ANALYZE on production; verification SQL in header), `database.types.ts` entry.
+- Changed: `scripts/health/pipeline-health.ts` check 4 judges the stale gap (growth vs oldest `detail.stale_gap` in 7 days; ceiling 2,500 = one full chain's titles); detail reports arrivals; heartbeat writes `stale_gap` next to `gap`; a missing RPC fails the check and names migration 091.
+- Dry run 2026-09-16 15:29 UTC, before apply: 11/12, `gap-not-growing` FAIL "count_stale_missing_title_ids() does not exist — apply supabase/migrations/091_count_stale_missing_title_ids.sql in Studio", exit 1.
+- Joe: apply 091 in Studio, merge, then `gh workflow run "Pipeline health"`. The workflow stays red until both land.
+- Updated: wiki/concepts/operations/sync-pipeline.md (monitoring section), wiki/concepts/operations/risks-register.md (R-010), wiki/registers/parking-lot.md (IN-SY-002, counts), wiki/entities/codebase/migrations.md (091)
+
+## [2026-09-16] ingest | IN-SY-002 close-out (docs/in-sy-002-closeout)
+- Joe applied migration 091 in Studio; the header's verification SQL passed.
+- PR #198 merged (`f5968be`). It had no conflicts; it was held only by typegen-check, which had run before the apply and passed on re-run.
+- Manual `Pipeline health` run https://github.com/kingbalouuOG/streaming-aggregator-v2/actions/runs/35132581820: 12/12 green; `gap-not-growing` reported `stale gap 0 (no baseline within 7d yet; limit 2500); today's arrivals awaiting backfill: 39`. Heartbeat 18:09 UTC wrote `gap: 39`, `stale_gap: 0` (the first stale-gap baseline).
+- Updated: wiki/registers/parking-lot.md (IN-SY-002 closed, counts), wiki/entities/codebase/migrations.md (091 applied), wiki/concepts/operations/risks-register.md (R-010)
+
+## [2026-09-17] ingest | IN-GR-032 custom Sign in with Apple button (fix/apple-button-custom)
+- PR #200: the system `AppleAuthenticationButton` in `native/src/components/auth/ProviderSignIn.tsx` replaced with a custom `Pressable` to Apple's HIG custom-button rules (logo file from Apple Design Resources, unaltered; title wording; 43% title-to-height proportion; white style; 12pt radius; minimum size and margins; no smaller than Google). Rules recorded in the component's comment block.
+- Decision (Joe): both provider buttons 44pt with 19pt labels; the planned 56pt/18pt breaks the HIG proportion rule (App Review evaluates custom Apple buttons).
+- Device gotcha: NativeWind's native `inlineRem` is 14, so `h-11` = 38.5pt (the 44pt logo overhung the button) and `h-14` = 49pt, not the 56pt older comments assume. Fixed with `h-[44px]`.
+- Verified: native tsc + lint, root vitest 798/798; OTA to preview/ios (runs 35207493746, 35210155629) passed reachability; device check passed on Joe's iPhone (sign-in screen and onboarding Step 1).
+- Updated: wiki/registers/parking-lot.md (IN-GR-032 closed, counts)
+
 ## [2026-09-17] ingest | Growth S5 device verification: G0/G1 verified on iPhone and Android
 - Ran matrix A to D on 2.5.0 (iPhone ad-hoc, Android Play internal) with Joe; evidence from growth_events, notification_deliveries, auth and edge logs, adb; snapshot at docs/v2/phase-summaries/evidence/growth-s5-growth-events.md (C5 deletion removed the iPhone install's rows, IN-GR-009).
 - New: docs/v2/phase-summaries/phase-growth-g0-g1-summary.md (S1 to S5, matrix results, defects, plan corrections, measures, Joe's remaining steps, G2 readiness).
-- New: docs/plans/2026-09-17-001-handoff-apple-button-custom.md (IN-GR-032), docs/plans/2026-09-17-002-handoff-notification-prompt-after-onboarding.md (IN-GR-034).
+- New: docs/plans/2026-09-17-001-handoff-apple-button-custom.md (IN-GR-032, since closed in PR #200), docs/plans/2026-09-17-002-handoff-notification-prompt-after-onboarding.md (IN-GR-034).
 - Fixes: PR #196 App Store CTA live (IN-GR-002); PR #201 Play App Signing key in assetlinks.json (IN-GR-001 reopened: Play signs with a Google key, not the upload key) plus Joe's Google Android OAuth client; PR #197 IN-GR-028 (signed-out watchlist writes; replace, not push, to /auth), IN-GR-030/031 (delete dialog), IN-GR-033 (passive Sign In), OTA'd to the iPhone preview channel.
 - Updated: wiki/registers/parking-lot.md (001 reopened and fixed; 002, 004, 005, 012, 027 closed; 009 seen in practice; 021 note; +028..034), wiki/concepts/forward-planning/growth-loops.md (status: G0/G1 verified on device; S5 shipped line), wiki/concepts/techniques/inbound-deep-linking.md (two signing keys, Google OAuth SHA-1, asset links cache, replace-to-auth gotcha, verified list), wiki/concepts/architecture/notifications-v1.md (consent change IN-GR-034, device-verified block, cap-clearing test technique), wiki/entities/codebase/event-taxonomy.md (verified notes), wiki/registers/next-steps.md (growth track block).
 - Process notes: first iOS build after new entitlements needs a local interactive EAS credentials pass; Confirm email flip moves to the public 2.5.0 release because 2.4.0 is live on the App Store.

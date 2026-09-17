@@ -2,7 +2,7 @@
 
 **Dates:** 14 to 17 September 2026 · **Workstream:** Growth (G0 foundations, G1 sharing and push-to-share) · **Plan:** [2026-09-14-003](../../plans/2026-09-14-003-feat-phase-g0-g1-growth-foundations-and-sharing-plan.md) · **S5 handoff:** [2026-09-16-002](../../plans/2026-09-16-002-handoff-growth-s5-verification.md) · **Session summaries:** [S1](phase-growth-s1-summary.md), [S4](phase-growth-s4-summary.md) (S2 and S3 outcomes are in plan §11b and §11c) · **Evidence:** [growth_events snapshot](evidence/growth-s5-growth-events.md), checklist `docs/strategy/briefs/h0-device-test-checklist.md` (Growth S5 section)
 
-**Status: G0 and G1 verified on device on both platforms (2.5.0), with eight defects found. Six are fixed or configured, two are handed off, and two decisions are recorded.** The fixes that live in code (IN-GR-028, 030, 031, 033) are in PR #197 and on Joe's iPhone by OTA; they reach TestFlight and Play when the production binaries are built after #197 merges. The configuration fixes are live now (IN-GR-001 reopened and fixed in #201; Google Android OAuth client; App Store listing in #196).
+**Status: G0 and G1 verified on device on both platforms (2.5.0).** Found in S5: IN-GR-001 (reopened), 028, 029 (not reproduced), 030, 031, 032, 033, 034. All are fixed except IN-GR-029 (not reproduced) and IN-GR-034 (a decision, handed off). IN-GR-032 was handed off and closed the same day in PR #200. The fixes that live in code (IN-GR-028, 030, 031, 033) are in PR #197 and on Joe's iPhone by OTA; they reach TestFlight and Play when the production binaries are built after #197 merges. The configuration fixes are live now (IN-GR-001 reopened and fixed in #201; Google Android OAuth client; App Store listing in #196).
 
 ## What shipped across S1 to S4
 
@@ -87,7 +87,7 @@ Seeds used: `streaming_history` 115700 (P1), 115701/115702 (P3), 117068 (P4); P2
 | IN-GR-029 | A Google sign-up's services matched the previous account's exactly, and Profile appeared to show others | 🅿 Not reproduced: iPhone retest (`+confirm`) and Android fresh-account check (AN8) both saved exactly what was picked |
 | IN-GR-030 | Delete-account dialog had no way to dismiss the keyboard, which covered its buttons | ✅ Fixed in #197, iPhone-verified |
 | IN-GR-031 | After a successful delete the dialog stayed over the sign-in screen until Cancel | ✅ Fixed in #197: closes and lands on sign-in with "Your account has been deleted."; iPhone-verified |
-| IN-GR-032 | The system Apple button's label is larger than Google's and the Sign In CTA; its size cannot be set | ⏳ Handoff `docs/plans/2026-09-17-001-handoff-apple-button-custom.md` (custom button within the HIG) |
+| IN-GR-032 | The system Apple button's label is larger than Google's and the Sign In CTA; its size cannot be set | ✅ Closed 17 Sept in PR #200 (from handoff `docs/plans/2026-09-17-001-handoff-apple-button-custom.md`): custom button to the HIG, both provider buttons 44pt with 19pt labels, device-verified |
 | IN-GR-033 | Sign In CTA should be passive until email and password are filled (Joe) | ✅ Built in #197, iPhone-verified |
 | IN-GR-034 | Notification permission is only asked on the first watchlist add, so most installs never see it | ⏳ Decision (Joe, 17 Sept): ask after onboarding with an explainer. Handoff `docs/plans/2026-09-17-002-handoff-notification-prompt-after-onboarding.md` |
 | IN-GR-004, 005, 012, 027 | Cold-start stack, referrer runtime, provider sign-up resume, replay | ✅ Closed on device (A5, B3, C3, S4-11) |
@@ -114,7 +114,7 @@ All G1 measures in `growth-dashboard.sql` have real rows, all from test accounts
 2. Submit 2.5.0 to the App Store (his call after this pass), with the S2 and S3 store privacy rows filed (`docs/legal/store-privacy-disclosures.md`).
 3. On the day 2.5.0 is public: turn Confirm email on permanently.
 4. Approve the strategy doc v0.2 draft (separate commit in #197).
-5. Run the two handoffs (IN-GR-032 Apple button, IN-GR-034 notification prompt) after #197 merges, so their OTAs do not replace the S5 fixes on the iPhone.
+5. Run the IN-GR-034 handoff (notification prompt) after #197 merges. Note: the IN-GR-032 OTA (PR #200, published from its branch) replaced the S5 fixes on the iPhone preview channel; after #197 merges, publish one OTA from main so the iPhone carries both.
 
 ## G2 (households) readiness
 

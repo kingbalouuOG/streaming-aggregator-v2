@@ -29,7 +29,7 @@ related:
 1. Joe merges PR #197 (S5 fixes IN-GR-028/030/031/033, docs, strategy v0.2 draft for approval).
 2. Production binaries: TestFlight (`ios-release.yml` production, submit) and a new Android release carrying the fixes; testers update.
 3. Joe submits 2.5.0 to the App Store with the S2/S3 store privacy rows; on the day it is public, Confirm email goes on permanently (IN-GR-011, IN-GR-021 watch).
-4. Handoffs after #197 merges: IN-GR-034 notification prompt after onboarding (a G2 prerequisite), IN-GR-032 custom Apple button.
+4. After #197 merges: publish one iOS preview OTA from main (the IN-GR-032 OTA from PR #200 replaced the S5 fixes on Joe's iPhone); then the IN-GR-034 handoff, notification prompt after onboarding (a G2 prerequisite). IN-GR-032 custom Apple button is closed (PR #200).
 5. G2 households planning in the strategy thread, from the readiness view in the G0/G1 summary.
 
 ## Now — 10 September 2026 (roadmap v1.1)

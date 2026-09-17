@@ -71,6 +71,18 @@ const HEARTBEAT_STALE_HOURS = 48;   // one skipped Actions run is tolerable
 const WARMER_STALE_MINUTES = 30;    // warmer runs every 5min; 30 = 6 missed
 const WARM_DURATION_MAX_MS = 750;   // warm ~90ms, cold 1,500-4,000ms
 const GAP_LOOKBACK_DAYS = 7;
+// A gap title only counts as "stale" once the daily 05:00 backfill has had
+// a chance at it. 24h, because this check starts 09:00-14:00 and the 06:00
+// sync's arrivals are always younger than that, while yesterday's are
+// always older than today's backfill.
+const STALE_GAP_MIN_AGE = '24 hours';
+// One full 12-slice backfill chain creates ~2,530 titles (the capped runs
+// of 12-14 Sept 2026). A stale gap above that cannot be cleared by one
+// daily run, so it is a multi-day backlog whatever the baseline says —
+// and it catches a backlog that was already there when the 7-day
+// baseline was taken, which the growth rule alone cannot see.
+const STALE_GAP_MAX = 2_500;
+const STALE_GAP_MIGRATION = 'supabase/migrations/091_count_stale_missing_title_ids.sql';
 
 // Jobs that must show a sync_log row within RUN_WINDOW_HOURS. `changes`
 // and `full` are manual/legacy sync_types and are deliberately excluded.
@@ -102,6 +114,36 @@ async function check(name: string, fn: () => Promise<[boolean, string]>): Promis
 }
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+
+async function countGap(): Promise<number> {
+  const { data, error } = await supabase.rpc('count_missing_title_ids');
+  if (error) throw new Error(error.message);
+  return Number(data ?? 0);
+}
+
+/**
+ * Throws, rather than returning 0, when migration 091 has not been
+ * applied: a missing function must fail the run, or merging this before
+ * the migration lands would silently switch the check off.
+ */
+async function countStaleGap(): Promise<number> {
+  const { data, error } = await supabase.rpc('count_stale_missing_title_ids', {
+    p_min_age: STALE_GAP_MIN_AGE,
+  });
+  if (error) {
+    if (error.code === 'PGRST202') {
+      throw new Error(
+        `count_stale_missing_title_ids() does not exist — apply ${STALE_GAP_MIGRATION} in Studio (${error.message})`
+      );
+    }
+    throw new Error(error.message);
+  }
+  return Number(data ?? 0);
+}
+
+// Filled by check 4 and reused by main() for the heartbeat, so the two
+// counts are not run twice when the check succeeded.
+const gapSnapshot: { gap: number | null; staleGap: number | null } = { gap: null, staleGap: null };
 
 // ── The checks ───────────────────────────────────────────────────────
 
@@ -248,32 +290,56 @@ async function run(): Promise<void> {
     ];
   });
 
-  // 4. Is the gap closing? It was GROWING under weekly cadence (22,260 ->
-  //    22,729 in a day) and nothing said so. Compares against the oldest
-  //    heartbeat in the lookback window.
+  // 4. Is the backfill keeping up? It was not under weekly cadence (22,260
+  //    -> 22,729 in a day) and nothing said so.
+  //
+  //    Measures the STALE gap: titles still missing after the daily
+  //    backfill has had a chance at them. Not the whole gap — every title
+  //    new at the 06:00 sync waits for tomorrow's 05:00 backfill, so this
+  //    check (09:00, often 13:00-14:00) always saw that morning's arrivals
+  //    and went red whenever they outnumbered the baseline day's. It did so
+  //    on 15 Sept (2,323 vs 31) and 16 Sept (39 vs 31) with every one of
+  //    the 39 first seen at 06:00-06:02 that morning. Arrivals are reported
+  //    alongside but never judged. IN-SY-002.
   await check('gap-not-growing', async () => {
-    const { data: gapNow, error: gapErr } = await supabase.rpc('count_missing_title_ids');
-    if (gapErr) throw new Error(gapErr.message);
-    const now = Number(gapNow ?? 0);
+    gapSnapshot.gap = await countGap();
+    const stale = await countStaleGap();
+    gapSnapshot.staleGap = stale;
+    const arrivals = Math.max(gapSnapshot.gap - stale, 0);
+    const arrivalsNote = `today's arrivals awaiting backfill: ${arrivals}`;
 
+    // Oldest heartbeat in the window that actually MEASURED the stale gap.
+    // Heartbeats from before IN-SY-002 carry only `gap`, and must not be
+    // read as a baseline of the other quantity.
     const { data: prior, error: priorErr } = await supabase
       .from('pipeline_health')
       .select('ran_at, detail')
       .gte('ran_at', hoursAgo(GAP_LOOKBACK_DAYS * 24))
+      .not('detail->>stale_gap', 'is', null)
       .order('ran_at', { ascending: true })
       .limit(1);
     if (priorErr) throw new Error(priorErr.message);
 
-    const priorGap = prior?.[0]?.detail?.gap;
-    if (typeof priorGap !== 'number') {
+    if (stale > STALE_GAP_MAX) {
+      return [
+        false,
+        `stale gap ${stale} exceeds ${STALE_GAP_MAX} (more than one backfill run can clear); ${arrivalsNote}`,
+      ];
+    }
+
+    const priorStale = prior?.[0]?.detail?.stale_gap;
+    if (typeof priorStale !== 'number') {
       // No baseline yet — record today's and pass. Not a failure: the
       // check simply has nothing to compare against on first run.
-      return [true, `gap ${now} (no baseline within ${GAP_LOOKBACK_DAYS}d yet)`];
+      return [
+        true,
+        `stale gap ${stale} (no baseline within ${GAP_LOOKBACK_DAYS}d yet; limit ${STALE_GAP_MAX}); ${arrivalsNote}`,
+      ];
     }
+    const trend = stale < priorStale ? 'falling' : stale === priorStale ? 'flat' : 'GROWING';
     return [
-      now <= priorGap,
-      `gap ${now} vs ${priorGap} on ${prior[0].ran_at.slice(0, 10)} ` +
-        `(${now <= priorGap ? 'falling' : 'GROWING'})`,
+      stale <= priorStale,
+      `stale gap ${stale} vs ${priorStale} on ${prior[0].ran_at.slice(0, 10)} (${trend}); ${arrivalsNote}`,
     ];
   });
 
@@ -406,21 +472,31 @@ async function main(): Promise<void> {
   const failures = checks.filter((c) => !c.ok);
   const ok = failures.length === 0;
 
-  // Capture the gap regardless of outcome: check 4 reads it back as the
-  // baseline for the next week, so it must be written even on a red run.
-  let gap: number | null = null;
-  try {
-    const { data } = await supabase.rpc('count_missing_title_ids');
-    gap = typeof data === 'number' ? data : Number(data ?? 0);
-  } catch {
-    /* non-fatal — the baseline is simply unavailable next run */
+  // Capture both gaps regardless of outcome: check 4 reads stale_gap back
+  // as the baseline for the next week, so it must be written even on a red
+  // run. `gap` (the whole gap) is kept for history. Re-queried only if
+  // check 4 threw before measuring it.
+  let { gap, staleGap } = gapSnapshot;
+  if (gap === null) {
+    try {
+      gap = await countGap();
+    } catch {
+      /* non-fatal — history simply lacks today's number */
+    }
+  }
+  if (staleGap === null) {
+    try {
+      staleGap = await countStaleGap();
+    } catch {
+      /* non-fatal here — check 4 has already failed and said why */
+    }
   }
 
   if (!DRY_RUN) {
     const { error } = await supabase.from('pipeline_health').insert({
       ok,
       failures: failures.map((f) => f.name),
-      detail: { gap, checks },
+      detail: { gap, stale_gap: staleGap, checks },
     });
     // A heartbeat we failed to write is itself a problem: check 8 would
     // report a gap that has nothing to do with the pipeline.

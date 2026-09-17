@@ -57,7 +57,7 @@ Summary: strong loop raw material, a first share path and title page, and none o
 | Attribution | `growth_events` (Worker-written): preview fetched vs opened, link opened, first open, sign-up completed, share initiated and completed, notification opened; `via` and `src` on every row; `growth-dashboard.sql` for the section 4 and 7 measures. |
 | Loop 1 | Share titles and rooms with UK availability copy. |
 | Loop 5 | Push payloads carry a delivery id; a push-opened session shows "Tell someone" and shares carry `src=push`. |
-| Open | Notification permission asked only at the first watchlist add (moving to after onboarding); custom Apple button; no real cohort yet, so no loop numbers. |
+| Open | Notification permission asked only at the first watchlist add (moving to after onboarding); no real cohort yet, so no loop numbers. |
 
 ## 4. The loops
 

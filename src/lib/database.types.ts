@@ -2202,6 +2202,10 @@ export type Database = {
       }
       count_available_services_drift: { Args: never; Returns: number }
       count_missing_title_ids: { Args: never; Returns: number }
+      count_stale_missing_title_ids: {
+        Args: { p_min_age?: string }
+        Returns: number
+      }
       create_parent: {
         Args: {
           p_automatic_maintenance?: string
