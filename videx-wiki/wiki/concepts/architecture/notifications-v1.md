@@ -3,7 +3,7 @@ title: Notifications v1 (arrival + leaving-soon alerts)
 type: concept
 tags: [notifications, push, expo, edge-function, cron, retention, h0, stream-b]
 created: 2026-07-06
-updated: 2026-09-16
+updated: 2026-09-17
 sources:
   - docs/strategy/briefs/h0-stream-b-notifications-share.md
   - docs/strategy/Videx_Product_Strategy_and_Roadmap_v1.0.md
@@ -42,7 +42,7 @@ Migration 058 adds `share` to the `user_interactions` CHECK (Share v1, unrelated
 ## Consent (privacy-forward)
 
 - OS permission is the hard gate — no token without it, so a `user_push_tokens` row *is* the consent record.
-- The permission prompt fires at the **first value moment** (first watchlist add → `maybePromptForPush`), never at first launch.
+- The permission prompt fires at the **first value moment** (first watchlist add → `maybePromptForPush`), never at first launch. **Changing (IN-GR-034, Joe 2026-09-17):** device testing showed fresh installs rarely reach a watchlist add, so most have no token; the prompt moves to after onboarding with a one-line explainer (handoff `docs/plans/2026-09-17-002-handoff-notification-prompt-after-onboarding.md`). Until it ships, a reinstall leaves the account's old token in place and pushes go nowhere until permission is granted again in Settings.
 - Per-type toggles live under **Profile → Notifications** (`ProfileNotifications.tsx`) and are honoured **server-side** — the cron filters `notification_preferences`, not just the client.
 - Withdrawal: in-app toggle off, sign-out (clears this device's token), OS-settings revoke (next send returns `DeviceNotRegistered` → token pruned), or account deletion.
 - Data-model note for the solicitor pass: `docs/legal/notifications-data-model.md`.
@@ -89,6 +89,10 @@ A push is single-title when its lead group holds one title (one arrival, or no a
 On tap, `routeFromData` parses the URL with `parseInboundLink`, posts `notification_opened` to `growth_events` (with `delivery_id`), sets the session origin (`push`, object, type, service, expiry) and then `router.push`es (still bypassing `+native-intent`). Taps are handled once per notification identifier and the last response is cleared after handling, so the cold-start response, the listener and a later relaunch cannot double-count.
 
 The detail page the push opened shows **"Tell someone"**: the top-right share button becomes a labelled accent pill and a dismissible banner sits under the meta line, "Severance has just landed on Apple TV+. Tell someone." (arrival, the stronger nudge) or "Heat leaves Netflix on Saturday 19 September. Tell someone." (leaving soon). Sharing from it leads the message with the moment ("Just landed on Apple TV+: Severance (2022). On Apple TV+ in the UK."). Bundles show nothing. The origin ends with the session (5 minutes backgrounded); an origin set in the last 10 seconds survives a reset that races the tap that woke the app. Measures: `growth-dashboard.sql` §6c (CTR by push type) and §6d (take-up).
+
+### Device-verified (Growth S5, 2026-09-16..17)
+
+iPhone (APNs) and Android (FCM): arrival push → tap → `notification_opened` with the claimed `delivery_id` → "Tell someone" button and banner → share with `src=push` and `moment`; leaving-soon banner with the weekday and date; bundle lands on the watchlist with no banner; dismiss persists; six minutes backgrounded clears the origin; a normal relaunch does not replay (IN-GR-027). Test technique: the 20-hour cap is per account, so a test clears it by moving the previous delivery's `sent_at` back 21 hours (the row stays as evidence) and seeds titles no other token holder has watchlisted, because `send-notifications` scans every account with a token.
 
 ## Related
 
