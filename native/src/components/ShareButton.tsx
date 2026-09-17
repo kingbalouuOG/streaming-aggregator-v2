@@ -127,15 +127,15 @@ export async function runShare(target: ShareTarget): Promise<void> {
 type ShareButtonProps = { top?: number } & ShareTarget;
 
 export function ShareButton(props: ShareButtonProps) {
-  const { top, ...target } = props;
+  const { top } = props;
   const [busy, setBusy] = useState(false);
-  const moment = 'contentId' in target ? target.moment : null;
+  const moment = 'contentId' in props ? props.moment : null;
 
   const onShare = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      await runShare(target as ShareTarget);
+      await runShare(props);
     } catch {
       // User cancelled or the OS sheet failed — non-fatal.
     } finally {

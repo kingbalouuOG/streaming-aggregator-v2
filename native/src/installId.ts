@@ -13,23 +13,27 @@
  * first_open is flagged so the funnel can leave it out.
  */
 
+import * as Crypto from 'expo-crypto';
 import { createMMKV } from 'react-native-mmkv';
 
 import { resolveInstallId, type InstallIdentity, type KeyValueStore } from '@/lib/growth/attribution';
-import { generateUuid } from '@/lib/growth/uuid';
 
 export const installStore: KeyValueStore = createMMKV({ id: 'videx' });
 
 let identity: InstallIdentity | null = null;
 
+const mintUuid = (): string => Crypto.randomUUID();
+
 function ensureIdentity(): InstallIdentity {
   if (!identity) {
     try {
-      identity = resolveInstallId(installStore);
+      // Hermes has no global crypto, so the shared generator would fall back
+      // to Math.random; expo-crypto's randomUUID is a CSPRNG (sweep, TS 3).
+      identity = resolveInstallId(installStore, mintUuid);
     } catch {
       // Storage failure: an in-memory id still lets this session's events
       // join up; the next launch retries the store.
-      identity = { installId: generateUuid(), minted: true, priorInstall: false };
+      identity = { installId: mintUuid(), minted: true, priorInstall: false };
     }
   }
   return identity;

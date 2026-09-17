@@ -178,6 +178,27 @@ function clearPushTokenBounded(ms = 3000): Promise<unknown> {
   return Promise.race([clearPushToken(), new Promise((r) => setTimeout(r, ms))]);
 }
 
+/**
+ * supabase.auth.signOut() keeps the local session when the logout request
+ * fails on anything but a 401/403/404 (a dropped connection, say). After a
+ * successful delete_own_account, or when the person asked to sign out, the
+ * device must end the session regardless: fall back to a local-only sign-out
+ * and, if even that keeps it, remove the persisted token so the next launch
+ * starts signed out.
+ */
+async function signOutEverywhere(): Promise<void> {
+  const { error } = await supabase.auth.signOut();
+  if (!error) return;
+  const local = await supabase.auth.signOut({ scope: 'local' });
+  if (!local.error) return;
+  try {
+    const keys = (await storage.getAllKeys()).filter((key) => /^sb-.*-auth-token$/.test(key));
+    if (keys.length > 0) await storage.multiRemove(keys);
+  } catch {
+    // Best-effort: the token expires on its own within the hour.
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [initializing, setInitializing] = useState(true);
@@ -293,7 +314,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // effect fires on session-null, which is inherently too late — it
         // remains as local-state cleanup and no-ops the DB call.)
         await clearPushTokenBounded();
-        await supabase.auth.signOut();
+        await signOutEverywhere();
         await clearLocalUserState(queryClient);
       },
       async forgotPassword(email) {
@@ -308,10 +329,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase.rpc('username_available', {
           check_username: username,
         });
-        if (error) {
-          console.error('[Auth] checkUsername error:', error);
-          return false;
-        }
+        // A transient error must not read as "taken": callers catch and stay
+        // idle, so the name is neither blocked nor claimed (sweep, TS 2).
+        if (error) throw error;
         return data === true;
       },
       async deleteAccount() {
@@ -341,8 +361,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         const { error } = await supabase.rpc('delete_own_account');
         if (error) return { error: error.message };
-        // Deletion also ends the session; mirror signOut's local wipe.
-        await supabase.auth.signOut();
+        // Deletion also ends the session; mirror signOut's local wipe. The
+        // server user is gone, so a failed sign-out must still drop the local
+        // session or the app walks a deleted account into onboarding (sweep F2).
+        await signOutEverywhere();
         await clearLocalUserState(queryClient);
         return { error: null };
       },

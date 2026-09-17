@@ -91,12 +91,14 @@ function routeFromData(data: unknown): void {
   // videx://detail/movie-123 → /detail/movie-123 ; videx://watchlist → /watchlist
   const path = url.startsWith('videx://') ? `/${url.slice('videx://'.length)}` : url;
   if (!path.startsWith('/')) return;
-  recordPushOpen(payload, url);
   try {
     router.push(path as never);
   } catch (err) {
+    // Not opened: no notification_opened row, no push session (sweep F6).
     console.warn('[notifications] route failed for', path, (err as Error).message);
+    return;
   }
+  recordPushOpen(payload, url);
 }
 
 // The cold-start response can also reach the listener; handle each tap once,
@@ -105,7 +107,8 @@ function routeFromData(data: unknown): void {
 let lastHandledTap: string | null = null;
 
 function handleTap(response: Notifications.NotificationResponse): void {
-  const id = response.notification.request.identifier;
+  const data = response.notification.request.content.data as PushData | undefined;
+  const id = response.notification.request.identifier || str(data?.delivery_id);
   if (id && id === lastHandledTap) return;
   lastHandledTap = id;
   routeFromData(response.notification.request.content.data);

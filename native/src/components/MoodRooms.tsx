@@ -26,6 +26,11 @@ interface ShareRoom {
   count: number;
 }
 
+// A room's share URL, once resolved, is reused for the session: opening the
+// sheet, cancelling and tapping again must not mint a second permanent
+// snapshot (sweep E6).
+const roomShareUrls = new Map<string, string>();
+
 const TINTS = ['#a16ed4', '#3fb6a1', '#e3b04b', '#e16b8c', '#5b8def', '#7fb37b'];
 
 function tintFor(id: string): string {
@@ -175,14 +180,19 @@ export function MoodRooms({
     return {
       label,
       count: snapshot.length,
-      url: () =>
-        createRoomShare({
+      url: async () => {
+        const cached = roomShareUrls.get(room.id);
+        if (cached) return cached;
+        const url = await createRoomShare({
           kind: 'anchor',
           source_ref: room.id,
           label,
           description: room.llmLabel?.description ?? null,
           titles: snapshot,
-        }),
+        });
+        if (url) roomShareUrls.set(room.id, url);
+        return url;
+      },
     };
   };
 
