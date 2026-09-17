@@ -30,10 +30,12 @@ fallthrough = true
 SUPABASE_URL = "https://fmusugdcnnwiuzkbjquo.supabase.co"
 # Growth S1 (ADR-015): SHA-256 certificate fingerprints served in
 # /.well-known/assetlinks.json, comma-separated, colon-hex. Both the upload
-# key (99:CE:FF:7E…) and the Play App Signing key (Play Console → App
-# integrity), because a Play-installed APK is signed with the latter.
+# key (99:CE:FF:7E…, CI APKs) and the Play App Signing key (09:BC:66:B5…,
+# every Play install), because a Play-installed APK is signed with the latter.
+# The two keys differ: read from a Play-installed 2.5.0 on device in Growth S5
+# (apksigner, 2026-09-17), correcting IN-GR-001's closure.
 # Public values, not secrets. A key rotation is an edit here + deploy.
-ASSETLINKS_FINGERPRINTS = "99:CE:FF:7E:70:01:19:F5:21:03:8A:D5:2C:AC:C6:1A:F7:42:B6:5C:E0:0D:9E:58:E3:A0:C1:1E:18:41:4C:57"
+ASSETLINKS_FINGERPRINTS = "99:CE:FF:7E:70:01:19:F5:21:03:8A:D5:2C:AC:C6:1A:F7:42:B6:5C:E0:0D:9E:58:E3:A0:C1:1E:18:41:4C:57,09:BC:66:B5:7C:B9:47:9C:87:47:57:E3:73:A6:1C:25:3C:EB:00:18:08:FA:25:88:91:D6:50:A5:1C:89:81:9D"
 
 # PLAT-3 W3: per-user feed cache. Key = userId : taste_vector_updated_at
 # : sliderHash : sorted services; TTL 20 min. An interaction that moves
