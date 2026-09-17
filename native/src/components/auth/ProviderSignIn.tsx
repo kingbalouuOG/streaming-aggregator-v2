@@ -27,7 +27,9 @@ import { useAuth, type ProviderSignInResult } from '@/providers/auth';
 // - Proportion: whatever the font, the title is 43% of the button height, as
 //   the system button draws it: 44pt tall -> 19pt title (44 x 0.43 = 18.9).
 //   This is why both buttons are 44pt (Apple's default and recommended
-//   height) with 19pt labels rather than 56pt with 18pt.
+//   height) with 19pt labels rather than 56pt with 18pt. Heights are
+//   `h-[44px]`, not `h-11`: NativeWind's native rem is 14, so h-11 is 38.5pt
+//   and the 44pt logo file would overhang the button.
 // - Colours: white style (Videx is dark; black is ruled out on dark
 //   backgrounds). White fill, black logo, black title; no custom colours.
 // - Shape: rectangular, corner radius matching the app's buttons (12pt
@@ -92,7 +94,7 @@ export function ProviderSignIn({
             accessibilityRole="button"
             accessibilityLabel={appleLabel}
             style={{ opacity: inactive && busy !== 'apple' ? 0.5 : 1 }}
-            className="h-11 flex-row items-center justify-center rounded-card bg-white active:opacity-90">
+            className="h-[44px] flex-row items-center justify-center rounded-card bg-white active:opacity-90">
             {busy === 'apple' ? (
               <ActivityIndicator color="#000000" />
             ) : (
@@ -111,7 +113,7 @@ export function ProviderSignIn({
             accessibilityRole="button"
             accessibilityLabel={googleLabel}
             style={{ opacity: inactive && busy !== 'google' ? 0.5 : 1 }}
-            className="h-11 flex-row items-center justify-center gap-3 rounded-card border border-[#747775] bg-white active:opacity-90">
+            className="h-[44px] flex-row items-center justify-center gap-3 rounded-card border border-[#747775] bg-white active:opacity-90">
             {busy === 'google' ? (
               <ActivityIndicator color="#1f1f1f" />
             ) : (
