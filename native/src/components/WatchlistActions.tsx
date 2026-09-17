@@ -33,7 +33,9 @@ export function WatchlistActions({ item }: { item: ContentItem }) {
     if (readPendingLink()?.route !== route) {
       writePendingLink({ route, object: { type: 'title', id: item.id }, via: null, src: null });
     }
-    router.push('/auth');
+    // Replace, not push: a detail screen left mounted beneath /auth clears the
+    // pending link the moment the session appears, before auth.tsx resumes it.
+    router.replace('/auth');
   };
 
   const { tmdbId, mediaType } = parseContentItemId(item.id);
