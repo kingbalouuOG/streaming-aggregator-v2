@@ -95,6 +95,8 @@ DECLARE
   v_old    uuid;
   v_item_a uuid;
   v_item_b uuid;
+  v_item_c uuid;
+  v_wid_2  uuid;
   v_err    text;
   v_n      integer;
   v_json   jsonb;
@@ -219,7 +221,13 @@ BEGIN
   ASSERT v_n = 0, 'member C deleted B''s item';
   v_err := pg_temp.raises(format($q$UPDATE public.watchlist_items SET title = 'x' WHERE id = %L$q$, v_item_b));
   ASSERT v_err LIKE '42501%', format('item UPDATE allowed: %s', v_err);
-  RAISE NOTICE '7 ok: added_by spoof rejected by WITH CHECK; non-member cannot read or insert; members cannot delete others'' items; no UPDATE';
+  INSERT INTO public.watchlist_items (watchlist_id, tmdb_id, media_type, title, added_by)
+  VALUES (v_wid, 27205, 'movie', 'Inception', c) RETURNING id INTO v_item_c;
+  PERFORM pg_temp.act_as(a);
+  DELETE FROM public.watchlist_items WHERE id = v_item_c;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  ASSERT v_n = 1, 'owner A could not delete member C''s item';
+  RAISE NOTICE '7 ok: added_by spoof rejected by WITH CHECK; non-member cannot read or insert; members cannot delete others'' items, the owner can; no UPDATE';
 
   -- 8. Reactions: B's upsert visible to A; no reacting as someone else ------------
   PERFORM pg_temp.act_as(a);
@@ -258,8 +266,15 @@ BEGIN
   RAISE NOTICE '9 ok: owner renames, member cannot; owner_id and DELETE not granted';
 
   -- 10. Limits: 3 owned households, 10 invites per 24h -----------------------------
-  PERFORM public.create_household('Two');
+  SELECT watchlist_id INTO v_wid_2 FROM public.create_household('Two');
   PERFORM public.create_household('Three');
+  PERFORM pg_temp.act_as(b);
+  v_err := pg_temp.raises(format(
+    $q$INSERT INTO public.watchlist_items (watchlist_id, tmdb_id, media_type, title, added_by) VALUES (%L, 603, 'movie', 'The Matrix', %L)$q$,
+    v_wid_2, b));
+  ASSERT v_err LIKE '42501%', format('B wrote into A''s other household: %s', v_err);
+  ASSERT (SELECT count(*) FROM public.watchlists WHERE id = v_wid_2) = 0, 'B sees A''s other list';
+  PERFORM pg_temp.act_as(a);
   v_err := pg_temp.raises($q$SELECT public.create_household('Four')$q$);
   ASSERT v_err = 'P0001 household_limit', format('fourth household: %s', v_err);
   PERFORM pg_temp.act_as_admin();
@@ -268,7 +283,7 @@ BEGIN
   PERFORM pg_temp.act_as(a);
   v_err := pg_temp.raises(format('SELECT * FROM public.create_invite(%L)', v_hid));
   ASSERT v_err = 'P0001 rate_limited', format('eleventh invite: %s', v_err);
-  RAISE NOTICE '10 ok: household_limit at 4, rate_limited at 11 invites in 24h';
+  RAISE NOTICE '10 ok: no cross-household read or write; household_limit at 4, rate_limited at 11 invites in 24h';
 
   -- 11. leave_household as A (owner): ownership to B, the earliest joiner ----------
   PERFORM pg_temp.act_as(a);
@@ -345,12 +360,25 @@ BEGIN
   ASSERT v_err LIKE '23514%', format('unknown event name: %s', v_err);
   v_err := pg_temp.raises(format($q$UPDATE public.profiles SET username = 'Bad Name' WHERE id = %L$q$, c));
   ASSERT v_err LIKE '23514%', format('invalid username: %s', v_err);
-  v_err := pg_temp.raises(format($q$UPDATE public.profiles SET username = 'a..b' WHERE id = %L$q$, c));
-  ASSERT v_err LIKE '23514%', format('double separator: %s', v_err);
+  FOREACH v_t IN ARRAY ARRAY['a..b', 'Upper', 'ab', 'abcdefghijklmnopqrstu', '_lead', 'trail.', 'has-hyphen'] LOOP
+    v_err := pg_temp.raises(format('UPDATE public.profiles SET username = %L WHERE id = %L', v_t, c));
+    ASSERT v_err LIKE '23514%', format('username %s accepted: %s', v_t, coalesce(v_err, 'succeeded'));
+  END LOOP;
+  UPDATE public.profiles SET username = 'abcdefghijklmnopqrst' WHERE id = f;   -- 20 chars
   UPDATE public.profiles SET username = 'user_0f8fad5b' WHERE id = c;
   UPDATE public.profiles SET username = 'user_0f8fad5bd9cb469fa16570867728950e' WHERE id = d;
   UPDATE public.profiles SET username = 'ok.name_1' WHERE id = e;
   RAISE NOTICE '15 ok: household_joined accepted, unknown event refused; username CHECK refuses bad names, accepts both placeholder forms';
+
+  -- 16. An account removed outside delete_own_account (Studio, Auth admin
+  --     API) still follows D12, through the profiles BEFORE DELETE trigger.
+  DELETE FROM auth.users WHERE id = c;          -- owner of the shared household
+  ASSERT (SELECT owner_id FROM public.households WHERE id = v_hid) = d, 'shared household did not pass to D on a direct delete';
+  ASSERT (SELECT role FROM public.household_members WHERE household_id = v_hid AND user_id = d) = 'owner', 'D role not owner';
+  DELETE FROM auth.users WHERE id = a;          -- sole owner of Two and Three
+  ASSERT NOT EXISTS (SELECT 1 FROM public.households WHERE owner_id = a), 'A''s sole households survived';
+  ASSERT (SELECT count(*) FROM public.households WHERE id = v_hid) = 1, 'shared household lost';
+  RAISE NOTICE '16 ok: direct auth.users delete passes ownership (C to D) and removes sole-owner households';
 
   RAISE NOTICE 'verify-093: all checks passed';
 END $$;

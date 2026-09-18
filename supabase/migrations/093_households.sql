@@ -13,11 +13,13 @@
 --      uses, and the first membership policies in the codebase.
 --   §3 five RPCs for the edges (create_household, create_invite,
 --      join_household, leave_household, household_members_view) plus the
---      internal household_leave_internal that delete_own_account shares.
---   §4 delete_own_account() / export_user_data() re-emitted wholesale from
---      092 (IN-PX-54). Export version 1.3 → 1.4 (three new keys).
---   §5 growth_events.event_name CHECK gains 'household_joined' (D13).
---   §6 profiles.username CHECK mirroring src/lib/auth/username.ts length and
+--      internal household_leave_internal that delete_own_account shares,
+--      and a BEFORE DELETE trigger on profiles that runs the same leave
+--      logic, so D12 holds however an account is removed.
+--   §4–§5 delete_own_account() / export_user_data() re-emitted wholesale
+--      from 092 (IN-PX-54). Export version 1.3 → 1.4 (three new keys).
+--   §6 growth_events.event_name CHECK gains 'household_joined' (D13).
+--   §7 profiles.username CHECK mirroring src/lib/auth/username.ts length and
 --      charset (IN-GR-043). Live scan 2026-09-18: 0 of 18 rows violate, so
 --      the constraint is added VALID.
 --
@@ -37,7 +39,9 @@
 --   DROP TABLE public.watchlist_reactions, public.watchlist_items,
 --              public.watchlists, public.household_invites,
 --              public.household_members, public.households;
---   DROP FUNCTION the seven functions in §2–§3 and the reactions touch fn;
+--   DROP TRIGGER profiles_leave_households ON public.profiles;
+--   DROP FUNCTION the seven functions in §2–§3, profiles_leave_households()
+--   and the reactions touch fn;
 --   re-apply 092 §1–§2 (previous delete/export bodies);
 --   re-add the 090 event_name CHECK (8 names);
 --   ALTER TABLE public.profiles DROP CONSTRAINT profiles_username_format_check;
@@ -131,8 +135,8 @@ CREATE TABLE IF NOT EXISTS public.watchlist_items (
   watchlist_id  UUID NOT NULL REFERENCES public.watchlists(id) ON DELETE CASCADE,
   tmdb_id       INTEGER NOT NULL,
   media_type    TEXT NOT NULL CHECK (media_type IN ('movie', 'tv')),
-  title         TEXT NOT NULL,
-  poster_path   TEXT NULL,
+  title         TEXT NOT NULL CHECK (char_length(title) BETWEEN 1 AND 300),
+  poster_path   TEXT NULL CHECK (poster_path IS NULL OR char_length(poster_path) <= 200),
   -- Nulled when the adder leaves or deletes their account; the item stays (D12).
   added_by      UUID NULL REFERENCES public.profiles(id) ON DELETE SET NULL,
   added_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -473,12 +477,25 @@ AS $function$
 DECLARE
   v_user_id uuid := auth.uid();
   v_invite  public.household_invites%ROWTYPE;
+  v_hid     uuid;
   v_wid     uuid;
   v_count   integer;
 BEGIN
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'not_authenticated';
   END IF;
+
+  -- Lock order everywhere in 093 is household, then invites (create_invite,
+  -- household_leave_internal): read the token's household unlocked, lock the
+  -- household (this also serialises concurrent joins against the cap), then
+  -- lock the invite row.
+  SELECT i.household_id INTO v_hid
+    FROM public.household_invites i
+   WHERE i.token = p_token;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'invite_invalid';
+  END IF;
+  PERFORM 1 FROM public.households h WHERE h.id = v_hid FOR UPDATE;
 
   SELECT i.* INTO v_invite
     FROM public.household_invites i
@@ -512,8 +529,7 @@ BEGIN
     RAISE EXCEPTION 'invite_exhausted';
   END IF;
 
-  -- Lock the household so two concurrent joins cannot both pass the cap.
-  PERFORM 1 FROM public.households h WHERE h.id = v_invite.household_id FOR UPDATE;
+  -- The household row is locked above, so two joins cannot both pass the cap.
   SELECT count(*) INTO v_count
     FROM public.household_members m
    WHERE m.household_id = v_invite.household_id;
@@ -671,6 +687,39 @@ REVOKE ALL ON FUNCTION public.household_leave_internal(uuid, uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 
 REVOKE ALL ON FUNCTION public.touch_watchlist_reactions_updated_at() FROM PUBLIC, anon;
+
+-- D12 for every deletion path, not only delete_own_account(): a profiles
+-- row removed from Studio, by the Auth admin API or by the auth.users
+-- cascade would otherwise take households.owner_id's CASCADE and delete a
+-- shared household under its other members. Before the row goes, leave
+-- every household through the same logic. delete_own_account() has already
+-- left them all by the time it deletes profiles, so this finds nothing then.
+CREATE OR REPLACE FUNCTION public.profiles_leave_households()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $function$
+DECLARE
+  v_hid uuid;
+BEGIN
+  FOR v_hid IN
+    SELECT m.household_id FROM public.household_members m
+     WHERE m.user_id = OLD.id
+     ORDER BY m.joined_at
+  LOOP
+    PERFORM public.household_leave_internal(OLD.id, v_hid);
+  END LOOP;
+  RETURN OLD;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.profiles_leave_households() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS profiles_leave_households ON public.profiles;
+CREATE TRIGGER profiles_leave_households
+  BEFORE DELETE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.profiles_leave_households();
 
 COMMENT ON FUNCTION public.create_household(text) IS
   'Creates a household owned by the caller, the owner member row and its one '
@@ -836,7 +885,8 @@ BEGIN
              ))
     ), '[]'::jsonb),
     -- Growth G2 / migration 093: the caller's memberships, the shared items
-    -- they added and their reactions. Other members' rows are theirs. --
+    -- they added (with id, so reactions' item_id resolve when both are the
+    -- caller's) and their reactions. Other members' rows are theirs. --
     'households', COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
                'id', h.id, 'name', h.name, 'role', m.role, 'joined_at', m.joined_at
@@ -847,7 +897,7 @@ BEGIN
     ), '[]'::jsonb),
     'watchlist_items', COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
-               'watchlist_id', i.watchlist_id, 'tmdb_id', i.tmdb_id,
+               'id', i.id, 'watchlist_id', i.watchlist_id, 'tmdb_id', i.tmdb_id,
                'media_type', i.media_type, 'title', i.title, 'added_at', i.added_at
              ) ORDER BY i.added_at)
         FROM public.watchlist_items i
@@ -926,5 +976,7 @@ NOTIFY pgrst, 'reload schema';
 --   SELECT tablename, count(*) FROM pg_policies WHERE tablename IN (…) GROUP BY 1;
 --     households 2, household_members 1, watchlists 1, watchlist_items 3,
 --     watchlist_reactions 4, household_invites 0
+--   SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.profiles'::regclass
+--      AND tgname = 'profiles_leave_households';                   -- 1 row
 -- Then regenerate src/lib/database.types.ts.
 -- =============================================================================
