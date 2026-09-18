@@ -94,6 +94,45 @@ jobs:
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$HOME/Documents/Code/videx-release"
           test -s "$HOME/Documents/Code/videx-release" || { echo "::error::keystore empty — is ANDROID_KEYSTORE_BASE64 set?"; exit 1; }
 
+      # THE RUNTIME VERSION, COMPUTED ONCE, BEFORE ANYTHING IS GENERATED OR BUILT.
+      #
+      # Left alone, Gradle's :app:createReleaseUpdatesResources fingerprints the
+      # project IN THE MIDDLE OF THE BUILD, after Gradle has already written into
+      # node_modules — it rewrites
+      # node_modules/@react-native-masked-view/masked-view/android/src/main/AndroidManifest.xml
+      # and has transient output under
+      # node_modules/expo-updates/expo-updates-gradle-plugin while the task runs.
+      # So every AAB carried a runtime no clean checkout could reproduce, and
+      # `eas update` (which fingerprints a clean checkout) could never match it:
+      # 1c1a04ff… published vs 59c7b318… baked into versionCode 17. Prebuild and
+      # the .env are NOT the cause — measured in the diagnostic run 35368260937,
+      # the fingerprint is identical before and after prebuild, and equal to
+      # `eas fingerprint:generate`.
+      #
+      # This is exactly what EAS Build does (eas-cli build-tools
+      # builders/android.ts): resolve the runtime before the build and hand it
+      # to Gradle via EXPO_UPDATES_FINGERPRINT_OVERRIDE, which
+      # expo-updates/utils/build/createFingerprintForBuildAsync.js honours
+      # instead of re-fingerprinting. It is why iOS builds and iOS updates have
+      # always agreed.
+      #
+      # Computed AFTER native/.env is written: app.config.js adds the
+      # google-signin plugin only when EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID is set,
+      # and that plugin is part of the fingerprint. `eas update` gets the same
+      # value from the EAS "production" environment, so the GitHub secret and
+      # the EAS variable must stay identical (ota-update.yml checks this before
+      # it publishes). `managed` is what both eas-cli and Gradle resolve here
+      # (android/ is gitignored), pinned so it cannot drift.
+      - name: Resolve the runtime version (the value eas update computes)
+        id: runtime
+        working-directory: native
+        run: |
+          set -euo pipefail
+          RT="$(npx expo-updates fingerprint:generate --platform android --workflow managed | jq -r .hash)"
+          [[ "$RT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::could not resolve the Android fingerprint (got '$RT')"; exit 1; }
+          echo "runtime version: $RT"
+          echo "version=$RT" >> "$GITHUB_OUTPUT"
+
       - name: Prebuild Android (injects release signing via the config plugin)
         working-directory: native
         run: npx expo prebuild --platform android --no-install
@@ -103,6 +142,9 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_VIDEX_UPLOAD_STORE_PASSWORD: ${{ secrets.VIDEX_UPLOAD_STORE_PASSWORD }}
           ORG_GRADLE_PROJECT_VIDEX_UPLOAD_KEY_PASSWORD: ${{ secrets.VIDEX_UPLOAD_KEY_PASSWORD }}
+          # See "Resolve the runtime version" above.
+          EXPO_UPDATES_FINGERPRINT_OVERRIDE: ${{ steps.runtime.outputs.version }}
+          EXPO_UPDATES_WORKFLOW_OVERRIDE: managed
           # Sentry release sourcemap upload: the expo plugin wires a
           # SentryUpload gradle task into bundleRelease; without this token
           # sentry-cli exits 1 and FAILS the whole build (seen on the first
@@ -186,6 +228,12 @@ jobs:
             base/assets/fingerprint > /tmp/rt/fingerprint
           test -s /tmp/rt/fingerprint || { echo "::error::no fingerprint asset in the AAB"; exit 1; }
           echo "runtime version: $(cat /tmp/rt/fingerprint)"
+          # The AAB must carry the pre-build value, or Gradle ignored the
+          # override and this binary is unreachable by OTA again.
+          [ "$(tr -d '[:space:]' < /tmp/rt/fingerprint)" = "${{ steps.runtime.outputs.version }}" ] || {
+            echo "::error::AAB runtime $(cat /tmp/rt/fingerprint) != resolved runtime ${{ steps.runtime.outputs.version }} — EXPO_UPDATES_FINGERPRINT_OVERRIDE did not take effect."
+            exit 1
+          }
           {
             echo "## Android release"
             echo
@@ -228,6 +276,10 @@ jobs:
           # bundleRelease; without the token sentry-cli exits 1 and fails
           # the build. Same reasoning as the AAB step above.
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          # Same runtime as the AAB, so a sideloaded test handset takes the
+          # same OTAs as Play users.
+          EXPO_UPDATES_FINGERPRINT_OVERRIDE: ${{ steps.runtime.outputs.version }}
+          EXPO_UPDATES_WORKFLOW_OVERRIDE: managed
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
       # NOT keytool: `-printcert -jarfile` reads only a v1 (JAR) signature,

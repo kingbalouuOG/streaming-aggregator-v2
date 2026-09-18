@@ -3,7 +3,7 @@ title: Component Inventory
 type: entity
 tags: [components, react, frontend]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-09-18
 sources:
   - raw/codebase-snapshots/component-inventory.md
 related:
@@ -70,6 +70,20 @@ Every React component in `src/components/`, grouped by role.
 | `ErrorBoundary` | Top-level error boundary. |
 | `platformLogos.ts` | Platform metadata + logo asset map. |
 | `icons.tsx` | Custom SVG icons (`TickIcon`, `EyeIcon`). |
+
+## Household (Growth G2, native)
+
+The household loop's surfaces in the RN app (H2, 2026-09-18). Data flows through the [household hooks](hooks.md#household-hooks-growth-g2-h2) and `src/lib/household/`; the RPC contract is in the [RPC catalogue](rpcs.md#households-growth-g2-migration-093).
+
+| Piece | Where | What |
+|---|---|---|
+| List screen | `native/src/app/list/[id].tsx` | `/list/{listId}?invite={token}`. Member: header (list name, household, members and titles, tap to Profile → Household), `SharedListView`, Invite (owner) or Share (member) top right. With `?invite=` and a session: `join_household` at once; success clears the pending link and, on a first join, emits `household_joined` and toasts "You're in."; an error shows its copy with Back and keeps the pending link. Signed out: the public preview (H3's `GET /v1/list/:id/preview`, fetched by `src/lib/household/listPreview.ts`) with Join → `/auth`. Not a member, no invite: the preview and "Ask someone in it for an invite link". |
+| `SharedListView` | `native/src/components/household/` | A "Tonight?" poster strip (anything with a tonight reaction), then every item newest first. Empty: "Nothing here yet. Add a title from any detail page." Long-press removes (adder or owner, confirm). |
+| `SharedListItemRow` | same | Poster, title, "Added by {username}" (you / a former member when `added_by` is null), three reaction toggles with counts, own one highlighted. |
+| `AddToHousehold` | same; rendered by `WatchlistActions` | "Add to {household}" under the personal pair (one household), "Add to a shared list" with a picker (several). "On {household}" once added; tapping then opens the list. Same initialising and signed-out guards as the personal add. |
+| Watchlist tab picker | `native/src/app/(tabs)/watchlist.tsx` | "Mine" plus one chip per household above the status segments; a household chip renders `SharedListView` inline (sort, view and status controls hide). No household: one quiet row, "Watch together. Create a household and share one list." → Profile → Household. The personal list is unchanged. |
+| Profile → Household | `native/src/components/profile/ProfileHousehold.tsx` (`profile/[section]` = `household`; a row on the Profile landing) | Create (name 1 to 40); per household: members (username, role, joined date; Remove for the owner), Invite by link and Revoke invite link (owner), Share the list (member), Leave (confirm; the copy says what happens to your items and reactions, ownership hand-over, or deletion when alone). |
+| Share, list arm | `native/src/components/ShareButton.tsx` | `ShareTarget` gains `{ listId, listName, householdName, count, householdId, isOwner }`. Owner: `create_invite` then `https://videxstreaming.com/list/{id}?invite={token}&via=household`; member: the plain list URL with `via=household`. Copy from `buildListShareCopy`: "{household}: {n} titles to pick from together." `share_initiated` / `share_completed` with object `list`, `via=household`, `metadata.surface = list`. |
 
 ## Patterns
 

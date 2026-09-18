@@ -3,7 +3,7 @@ title: Hook Inventory
 type: entity
 tags: [hooks, react, frontend]
 created: 2026-04-26
-updated: 2026-06-18
+updated: 2026-09-18
 sources:
   - raw/codebase-snapshots/hook-inventory.md
   - native/src/hooks/
@@ -58,5 +58,16 @@ Hooks in `native/src/hooks/` (RN/Expo, the live app post-NATIVE-4). Unlike the w
 | `useFeedbackPrompt()` | `{ visible, dismiss }`. | App root (one-time FeedbackSheet trigger). | One-time timed prompt for the in-app feedback loop (047 `app_feedback` / FeedbackSheet). Accumulates **cumulative signed-in foreground time** across sessions (banked to MMKV on background, ticked every 15s while active); crosses ~5 min → opens the sheet **once**. `fb_prompt_shown` MMKV flag makes it never auto-fire again; manual Profile → Send feedback stays available. Assumes "already shown" until storage loads, to avoid a premature fire. |
 | `useHomeFeed()` | `useQuery` of `HomeFeed` (`hero`, `recentlyAdded`, `popular`, `freeTonight`, `upcoming`, per-service `rows`, genre `spotlights`). | Native Home screen. | Calls the **same** `src/lib/recommendations-v2/rows/home/` builders as web Home (`fetchPerServiceCharts`, `fetchGenreSpotlight`). Scoped to the user's onboarding services (`useUserServices`). Discover-backed rows (Recently Added / Free Tonight / Upcoming) filter by **provider server-side** because the old client filter on `item.services` (empty) always produced nothing. Hero = first row's lead title pulled OUT of its row; spotlights cross-row-dedup vs charts. |
 | `useForYou()` | `useQuery` of `WorkerRenderPayload \| null`. | Native For You screen. | Renders via the **videx-api Worker only** (`tryRenderForYouWorker`, NATIVE-2 W5c) — the localStorage-bound client fallback pipeline is **deliberately not ported**; a Worker miss shows a retry state. Returns `null` (= "not ready") when: no proxy configured, signed out (no access token), no taste profile yet, or Worker error. Scoped to the user's services. |
+
+### Household hooks (Growth G2, H2)
+
+Signed out, every one is disabled and makes no request. Sign-out clears the whole query cache (`providers/auth.tsx`), so nothing carries between two accounts on one device.
+
+| Hook | Returns | Primary callers | Notes |
+|---|---|---|---|
+| `useHousehold()` (`useHousehold.ts`) | `useQuery` of `Household[]` (`src/lib/household/households.ts`): id, name, owner, `isOwner`, the one `watchlistId` and `listName`, `memberCount`, the caller's `joinedAt`. | Watchlist tab picker, detail-page `AddToHousehold`, list screen, Profile → Household, Profile landing row. | Two reads under the membership RLS, no filter: `households` (with embedded `watchlists`) and `household_members` (every member row of the caller's households, so counts come free). Key `['native','household', userId]`. |
+| `useHouseholdActions()` | `{ create, join, leave, invite, revoke, remove }` mutations over `src/lib/household/rpc.ts`. | Profile → Household, list screen (join). | Membership changes invalidate the `['native','household']`, `['native','householdMembers']` and `['native','sharedList']` prefixes together. `invite` (create_invite) and `revoke` (094) change no cached data. |
+| `useHouseholdMembers(householdId)` / `useMemberNames` (`useHouseholdMembers.ts`) | `useQuery` of `household_members_view` rows; a `userId → username` map. | Profile → Household member list; "added by {username}" on the shared list. | `not_member` is final and not retried (removed, or left on another device). |
+| `useSharedList(listId)` / `useSharedListMutations()` (`useHouseholdList.ts`) | `useQuery` of `SharedItem[]` (items with reaction counts and the caller's own reaction); `{ add, remove, react }`. | `SharedListView`, `AddToHousehold`, Profile card counts. | Key `['native','sharedList', listId]`. No Realtime in v1: refetches when its screen regains focus (not on the first focus). Reactions are optimistic with rollback; add and remove wait for the server; every write invalidates the list (and the household key for counts). Tapping your current reaction again removes it. |
 
 Supporting native hooks (not detailed above): `useUsernameSave` (debounced `username_available` check plus the profiles-then-metadata save, shared by `choose-username` and Profile → Account Details; IN-GR-045), `useUserServices` (onboarding-saved service stack, retired `DEV_SERVICES`), `useContentDetail`, `useSearch` (text search + as-you-type), `useWatchlist`, `useWatchedGrid`, `useCompleteOnboarding` (mirrors web `completeOnboarding` → identical Supabase rows), `useOnboardingStatus`.
