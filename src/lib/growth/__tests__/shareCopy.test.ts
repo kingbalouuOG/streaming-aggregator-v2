@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildListShareCopy,
   buildMomentCopy,
   buildRoomShareCopy,
   buildTitleShareCopy,
@@ -142,6 +143,26 @@ describe('withShareAttribution', () => {
   });
   it('appends to an existing query', () => {
     expect(withShareAttribution(`${canonical}?x=1`, 'organic')).toBe(`${canonical}?x=1&via=share`);
+  });
+  it('takes a via channel (household for a shared list)', () => {
+    const list = 'https://videxstreaming.com/list/L1?invite=tok';
+    expect(withShareAttribution(list, 'organic', 'household')).toBe(`${list}&via=household`);
+    expect(withShareAttribution(list, 'push', 'household')).toBe(`${list}&via=household&src=push`);
+  });
+});
+
+describe('buildListShareCopy', () => {
+  const listUrl = 'https://videxstreaming.com/list/L1?invite=tok&via=household';
+  it('names the household and counts the titles', () => {
+    expect(buildListShareCopy({ householdName: 'The Flat', count: 12, url: listUrl })).toEqual({
+      message: `The Flat: 12 titles to pick from together.\n${listUrl}`,
+      url: listUrl,
+    });
+  });
+  it('uses the singular for one title and trims the name', () => {
+    expect(buildListShareCopy({ householdName: ' Sofa ', count: 1, url: listUrl }).message).toBe(
+      `Sofa: 1 title to pick from together.\n${listUrl}`,
+    );
   });
 });
 

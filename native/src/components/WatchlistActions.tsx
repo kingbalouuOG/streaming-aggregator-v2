@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { Check, Eye, Plus } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 
+import { AddToHousehold } from '@/components/household/AddToHousehold';
 import { trackTasteInteraction } from '@/instrumentation/trackInteraction';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import { setLastAction } from '@/lib/instrumentation/dwellTimer';
@@ -19,6 +20,9 @@ import { useAuth } from '@/providers/auth';
 // buttons send the person to sign in instead of writing: a local write would
 // sync into whichever account signs in next (IN-GR-028). The pending link
 // brings them back to this title after sign-in.
+//
+// Growth G2: "Add to {household}" sits under the pair for someone in a
+// household (AddToHousehold), behind the same two guards.
 
 export function WatchlistActions({ item }: { item: ContentItem }) {
   const { data: items } = useWatchlist();
@@ -36,6 +40,17 @@ export function WatchlistActions({ item }: { item: ContentItem }) {
     router.replace('/auth');
   };
 
+  // The personal add's guards, shared with "Add to {household}": true when
+  // the tap may write.
+  const mayWrite = () => {
+    if (initializing) return false;
+    if (!session) {
+      signInFirst();
+      return false;
+    }
+    return true;
+  };
+
   const { tmdbId, mediaType } = parseContentItemId(item.id);
   const entry = items?.find((i) => i.id === tmdbId && i.type === mediaType);
   const bookmarked = !!entry;
@@ -43,67 +58,70 @@ export function WatchlistActions({ item }: { item: ContentItem }) {
   const meta = { contentId: tmdbId, contentType: mediaType, title: item.title, genreIds: item.genreIds };
 
   return (
-    <View className="mt-4 flex-row gap-2.5">
-      <Pressable
-        onPress={() => {
-          // Session still being restored (a cold link open): neither write
-          // nor bounce to sign-in; the tap comes again (IN-GR-035).
-          if (initializing) return;
-          if (!session) return signInFirst();
-          if (!bookmarked) {
-            setLastAction('added_to_watchlist');
-            void trackTasteInteraction(meta, 'watchlist_add');
-          }
-          toggle.mutate(item);
-        }}
-        className={
-          bookmarked
-            ? 'flex-1 flex-row items-center justify-center gap-2 rounded-card bg-primary py-3 active:opacity-90'
-            : 'flex-1 flex-row items-center justify-center gap-2 rounded-card border border-border bg-card py-3 active:bg-secondary'
-        }>
-        {bookmarked ? (
-          <Check size={16} color="#ffffff" />
-        ) : (
-          <Plus size={16} color="#f5f1e8" />
-        )}
-        <Text
+    <>
+      <View className="mt-4 flex-row gap-2.5">
+        <Pressable
+          onPress={() => {
+            // Session still being restored (a cold link open): neither write
+            // nor bounce to sign-in; the tap comes again (IN-GR-035).
+            if (initializing) return;
+            if (!session) return signInFirst();
+            if (!bookmarked) {
+              setLastAction('added_to_watchlist');
+              void trackTasteInteraction(meta, 'watchlist_add');
+            }
+            toggle.mutate(item);
+          }}
           className={
             bookmarked
-              ? 'font-sans-bold text-body text-white'
-              : 'font-sans-medium text-body text-foreground'
+              ? 'flex-1 flex-row items-center justify-center gap-2 rounded-card bg-primary py-3 active:opacity-90'
+              : 'flex-1 flex-row items-center justify-center gap-2 rounded-card border border-border bg-card py-3 active:bg-secondary'
           }>
-          {bookmarked ? 'In Watchlist' : 'Add to Watchlist'}
-        </Text>
-      </Pressable>
+          {bookmarked ? (
+            <Check size={16} color="#ffffff" />
+          ) : (
+            <Plus size={16} color="#f5f1e8" />
+          )}
+          <Text
+            className={
+              bookmarked
+                ? 'font-sans-bold text-body text-white'
+                : 'font-sans-medium text-body text-foreground'
+            }>
+            {bookmarked ? 'In Watchlist' : 'Add to Watchlist'}
+          </Text>
+        </Pressable>
 
-      <Pressable
-        onPress={() => {
-          if (initializing) return;
-          if (!session) return signInFirst();
-          if (!watched) {
-            setLastAction('marked_watched');
-            void trackTasteInteraction(meta, 'watched');
-          }
-          // Single idempotent write — upserts the row as watched (adding it
-          // if unlisted). No second mutation racing an update against a
-          // not-yet-inserted row, so the status actually sticks.
-          markWatched.mutate({ item, watched });
-        }}
-        className={
-          watched
-            ? 'flex-1 flex-row items-center justify-center gap-2 rounded-card bg-success py-3 active:opacity-90'
-            : 'flex-1 flex-row items-center justify-center gap-2 rounded-card border border-border bg-card py-3 active:bg-secondary'
-        }>
-        <Eye size={16} color={watched ? '#ffffff' : '#f5f1e8'} />
-        <Text
+        <Pressable
+          onPress={() => {
+            if (initializing) return;
+            if (!session) return signInFirst();
+            if (!watched) {
+              setLastAction('marked_watched');
+              void trackTasteInteraction(meta, 'watched');
+            }
+            // Single idempotent write — upserts the row as watched (adding it
+            // if unlisted). No second mutation racing an update against a
+            // not-yet-inserted row, so the status actually sticks.
+            markWatched.mutate({ item, watched });
+          }}
           className={
             watched
-              ? 'font-sans-bold text-body text-white'
-              : 'font-sans-medium text-body text-foreground'
+              ? 'flex-1 flex-row items-center justify-center gap-2 rounded-card bg-success py-3 active:opacity-90'
+              : 'flex-1 flex-row items-center justify-center gap-2 rounded-card border border-border bg-card py-3 active:bg-secondary'
           }>
-          {watched ? 'Watched' : 'Mark as Watched'}
-        </Text>
-      </Pressable>
-    </View>
+          <Eye size={16} color={watched ? '#ffffff' : '#f5f1e8'} />
+          <Text
+            className={
+              watched
+                ? 'font-sans-bold text-body text-white'
+                : 'font-sans-medium text-body text-foreground'
+            }>
+            {watched ? 'Watched' : 'Mark as Watched'}
+          </Text>
+        </Pressable>
+      </View>
+      <AddToHousehold item={item} guard={mayWrite} />
+    </>
   );
 }

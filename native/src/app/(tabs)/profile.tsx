@@ -10,6 +10,7 @@ import { GenreIconTile } from '@/components/GenreIconTile';
 import { ServiceStack } from '@/components/ServiceBadge';
 import { servicesSummary } from '@/components/services/channelCopy';
 import { useChannelRegistry, useUserChannels } from '@/hooks/useChannels';
+import { useHousehold } from '@/hooks/useHousehold';
 import { useUserServices } from '@/hooks/useUserServices';
 import { heldChannelCount } from '@/lib/entitlements/channels';
 import { useWatchlist } from '@/hooks/useWatchlist';
@@ -31,6 +32,8 @@ export default function ProfileScreen() {
   const { data: userChannels } = useUserChannels();
   const { data: channelRegistry } = useChannelRegistry();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const { data: households } = useHousehold();
+  const householdNames = (households ?? []).map((h) => h.name).join(', ');
 
   const email = session?.user?.email ?? '';
   const name = ((session?.user?.user_metadata?.username as string | undefined) ?? '') || email.split('@')[0] || 'You';
@@ -76,6 +79,12 @@ export default function ProfileScreen() {
         {/* Account */}
         <SectionLabel>Account</SectionLabel>
         <ActionRow glyph={PROFILE_GLYPHS.account} title="Account Details" subtitle={email} onPress={() => go('account')} />
+        <ActionRow
+          glyph="users"
+          title="Household"
+          subtitle={householdNames || 'Share one list with the people you watch with'}
+          onPress={() => go('household')}
+        />
 
         {/* Subscriptions */}
         <SectionLabel>Subscriptions</SectionLabel>
