@@ -817,13 +817,16 @@ export type Database = {
           error_detail: string | null
           expo_ticket_id: string | null
           id: string
-          media_type: string
+          list_id: string | null
+          media_type: string | null
           notification_type: string
+          nudge_window: string | null
+          push_id: string | null
           push_token_id: string | null
           sent_at: string
           service_id: string | null
           title: string | null
-          tmdb_id: number
+          tmdb_id: number | null
           user_id: string
         }
         Insert: {
@@ -831,13 +834,16 @@ export type Database = {
           error_detail?: string | null
           expo_ticket_id?: string | null
           id?: string
-          media_type: string
+          list_id?: string | null
+          media_type?: string | null
           notification_type: string
+          nudge_window?: string | null
+          push_id?: string | null
           push_token_id?: string | null
           sent_at?: string
           service_id?: string | null
           title?: string | null
-          tmdb_id: number
+          tmdb_id?: number | null
           user_id: string
         }
         Update: {
@@ -845,16 +851,26 @@ export type Database = {
           error_detail?: string | null
           expo_ticket_id?: string | null
           id?: string
-          media_type?: string
+          list_id?: string | null
+          media_type?: string | null
           notification_type?: string
+          nudge_window?: string | null
+          push_id?: string | null
           push_token_id?: string | null
           sent_at?: string
           service_id?: string | null
           title?: string | null
-          tmdb_id?: number
+          tmdb_id?: number | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notification_deliveries_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "watchlists"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notification_deliveries_push_token_id_fkey"
             columns: ["push_token_id"]

@@ -130,7 +130,7 @@ See [RLS pattern](../../concepts/techniques/rls-pattern.md) and the [authenticat
 
 ### Notifications (056–059, 095)
 
-`user_push_tokens`, `notification_preferences` (type CHECK `arrival`, `leaving_soon`, `household_nudge` since 095; absent row = enabled) and `notification_deliveries`. 095 made `tmdb_id` / `media_type` nullable and added `list_id` (→ `watchlists`, set null), `nudge_window`, `push_id` and `notification_deliveries_shape_check` (title rows: title columns, no list columns; nudge rows: `nudge_window`, no title columns), a second unique key `uq_notification_deliveries_nudge (user_id, notification_type, list_id, nudge_window)` and `idx_notification_deliveries_list`. Detail in [notifications-v1](../../concepts/architecture/notifications-v1.md). **095 status: written, apply pending (Joe); see [migrations](migrations.md).**
+`user_push_tokens`, `notification_preferences` (type CHECK `arrival`, `leaving_soon`, `household_nudge` since 095; absent row = enabled) and `notification_deliveries`. 095 made `tmdb_id` / `media_type` nullable and added `list_id` (→ `watchlists`, set null), `nudge_window`, `push_id` and `notification_deliveries_shape_check` (title rows: title columns, no list columns; nudge rows: `nudge_window`, no title columns), a second unique key `uq_notification_deliveries_nudge (user_id, notification_type, list_id, nudge_window)` and `idx_notification_deliveries_list`. Detail in [notifications-v1](../../concepts/architecture/notifications-v1.md). **095 applied and verified 2026-09-18; see [migrations](migrations.md).**
 
 ## Deviations and gaps
 
