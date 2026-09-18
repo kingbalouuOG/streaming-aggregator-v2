@@ -75,6 +75,42 @@ describe('parseInstallReferrer', () => {
     expect(parseInstallReferrer('via=share&t=movie-0')?.object).toBeNull();
   });
 
+  // IN-GR-045: the check runs on the parsed fields instead of a videx:// round
+  // trip; these pin every branch to what parseInboundLink accepts.
+  it.each([
+    ['movie-603', 'movie-603'],
+    ['tv-1', 'tv-1'],
+    ['movie-9999999999', 'movie-9999999999'],
+    ['movie-000000000000603', 'movie-603'],
+  ])('accepts title %s as %s, the same object the deep link parses to', (raw, id) => {
+    expect(parseInstallReferrer(`t=${raw}`)?.object).toEqual({ type: 'title', id });
+    expect(parseInstallReferrer(`t=${raw}`)?.object).toEqual(parseInboundLink(`videx://detail/${raw}`).object);
+    expect(parseInstallReferrer(`t=${raw}`)?.route).toBe(`/detail/${id}`);
+  });
+
+  it.each([
+    'movie-10000000000', // 11 digits
+    'movie-0000000000000603', // 16 digits: over the bare shape
+    'movie-000', // zero
+    'MOVIE-603', // type is case-sensitive
+    'episode-603',
+    'movie-',
+    'movie-60a',
+    ' movie-603',
+  ])('refuses title %j', (raw) => {
+    expect(parseInstallReferrer(`via=share&t=${encodeURIComponent(raw)}`)?.object).toBeNull();
+    expect(buildPlayReferrer(null, null, { type: 'title', id: raw })).toBe('');
+  });
+
+  it('a title key wins over a room key, even when the title is refused', () => {
+    expect(parseInstallReferrer(`t=movie-603&r=${ROOM}`)?.object).toEqual({ type: 'title', id: 'movie-603' });
+    expect(parseInstallReferrer(`via=share&t=movie-0&r=${ROOM}`)?.object).toBeNull();
+  });
+
+  it('routes a room to its screen', () => {
+    expect(parseInstallReferrer(`r=${ROOM}`)?.route).toBe(`/room/${ROOM}`);
+  });
+
   it('lower-cases a room id and refuses a non-uuid', () => {
     expect(parseInstallReferrer(`r=${ROOM.toUpperCase()}`)?.object).toEqual({ type: 'room', id: ROOM });
     expect(parseInstallReferrer('via=share&r=abc')?.object).toBeNull();

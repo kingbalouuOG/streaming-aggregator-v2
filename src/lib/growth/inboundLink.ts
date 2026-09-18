@@ -97,7 +97,8 @@ export function readQuery(query: string): Map<string, string> {
   return out;
 }
 
-function tmdbId(digits: string): string | null {
+/** A TMDb id from its digits with leading zeros dropped, or null unless positive and at most 10 digits. */
+export function tmdbId(digits: string): string | null {
   const n = Number(digits);
   return Number.isSafeInteger(n) && n > 0 && String(n).length <= 10 ? String(n) : null;
 }
