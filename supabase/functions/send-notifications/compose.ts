@@ -57,7 +57,10 @@ export const detailUrl = (mediaType: string, tmdbId: number) =>
 export const watchlistUrl = () => `videx://watchlist`;
 
 // ── Service-name display map (for copy) ──────────────────
-const SERVICE_LABELS: Record<string, string> = {
+// A local copy of src/lib/growth/serviceLabels.ts SHARE_SERVICE_LABELS: this
+// Deno function cannot import src/lib. __tests__/compose.test.ts asserts the
+// two maps match key for key, so a rename on one side fails CI (IN-GR-025).
+export const SERVICE_LABELS: Record<string, string> = {
   netflix: 'Netflix', prime: 'Prime Video', disney: 'Disney+', apple: 'Apple TV+',
   now: 'NOW', paramount: 'Paramount+', itvx: 'ITVX', channel4: 'Channel 4',
   hbo: 'HBO Max', discovery: 'Discovery+', crunchyroll: 'Crunchyroll',
@@ -104,7 +107,7 @@ export function composeMessage(cands: ClaimedCandidate[]): ComposedMessage {
         : `${first.title} and ${extra} more just landed`;
     const body =
       lead.length === 1
-        ? `Now on ${serviceLabel(first.service_id)} — on your watchlist.`
+        ? `Now on ${serviceLabel(first.service_id)}, from your watchlist.`
         : `New on your subscriptions. Open Videx to watch.`;
     return { title, body, data };
   }
@@ -115,7 +118,7 @@ export function composeMessage(cands: ClaimedCandidate[]): ComposedMessage {
       : `${first.title} and ${extra} more are leaving soon`;
   const body =
     lead.length === 1
-      ? `Leaving ${serviceLabel(first.service_id)} within a week — watch it before it goes.`
+      ? `Leaving ${serviceLabel(first.service_id)} within a week. Watch it before it goes.`
       : `Watchlist titles are expiring within a week.`;
   return { title, body, data };
 }

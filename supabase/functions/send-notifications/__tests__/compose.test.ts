@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import { composeMessage, type ClaimedCandidate } from '../compose';
+import { SHARE_SERVICE_LABELS } from '../../../../src/lib/growth/serviceLabels';
+import { composeMessage, SERVICE_LABELS, type ClaimedCandidate } from '../compose';
 
 const arrival = (n: number, over: Partial<ClaimedCandidate> = {}): ClaimedCandidate => ({
   type: 'arrival',
@@ -67,5 +68,53 @@ describe('composeMessage', () => {
     const msg = composeMessage([leaving(1), arrival(0)]);
     expect(msg.data.type).toBe('arrival');
     expect(msg.data.delivery_id).toBe('00000000-0000-4000-8000-000000000000');
+  });
+});
+
+describe('push copy', () => {
+  it('single arrival', () => {
+    expect(composeMessage([arrival(0)])).toMatchObject({
+      title: 'Severance is now streaming',
+      body: 'Now on Apple TV+, from your watchlist.',
+    });
+  });
+
+  it('single leaving-soon', () => {
+    expect(composeMessage([leaving(0)])).toMatchObject({
+      title: 'Severance is leaving soon',
+      body: 'Leaving Netflix within a week. Watch it before it goes.',
+    });
+  });
+
+  it('arrival bundle', () => {
+    expect(composeMessage([arrival(0), arrival(1)])).toMatchObject({
+      title: 'Severance and 1 more just landed',
+      body: 'New on your subscriptions. Open Videx to watch.',
+    });
+  });
+
+  it('leaving-soon bundle', () => {
+    expect(composeMessage([leaving(0), leaving(1), leaving(2)])).toMatchObject({
+      title: 'Severance and 2 more are leaving soon',
+      body: 'Watchlist titles are expiring within a week.',
+    });
+  });
+
+  it('no template uses an em or en dash (tone guide)', () => {
+    const all = [
+      composeMessage([arrival(0)]),
+      composeMessage([leaving(0)]),
+      composeMessage([arrival(0), arrival(1)]),
+      composeMessage([leaving(0), leaving(1)]),
+    ];
+    for (const m of all) expect(`${m.title} ${m.body}`).not.toMatch(/[–—]/);
+  });
+});
+
+describe('SERVICE_LABELS (IN-GR-025)', () => {
+  // The Deno function keeps its own copy because it cannot import src/lib;
+  // this keeps the push and the share copy naming services the same way.
+  it('matches SHARE_SERVICE_LABELS key for key', () => {
+    expect(SERVICE_LABELS).toEqual(SHARE_SERVICE_LABELS);
   });
 });
