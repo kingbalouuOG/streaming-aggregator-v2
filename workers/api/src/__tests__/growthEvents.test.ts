@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildGrowthEventBody } from '../../../../src/lib/growth/growthEvents';
 import {
+  checkPushOpen,
   GROWTH_EVENT_BODY_MAX_BYTES,
   previewEventRow,
   rateLimitKey,
@@ -176,5 +177,54 @@ describe('validateGrowthEventBody — metadata shape (sweep)', () => {
   });
   it('accepts flat primitives', () => {
     expect(validateGrowthEventBody({ ...base, metadata: { prior_install: false, touch: null, n: 1 } }).ok).toBe(true);
+  });
+});
+
+describe('checkPushOpen (IN-GR-041)', () => {
+  const USER = '6a1f0c2e-3b4d-4e5f-8a9b-0c1d2e3f4a5b';
+  const DELIVERY = '00000000-0000-4000-8000-000000000001';
+  const opened = { event_name: 'notification_opened' as const, delivery_id: DELIVERY };
+  const lookups: string[] = [];
+  const owns = (answer: boolean) => async (id: string, uid: string) => {
+    lookups.push(`${id}:${uid}`);
+    return answer;
+  };
+
+  it('refuses notification_opened without a verified user (401), before any lookup', async () => {
+    lookups.length = 0;
+    expect(await checkPushOpen(opened, null, owns(true))).toEqual({
+      ok: false,
+      status: 401,
+      error: 'notification_opened needs a signed-in user',
+    });
+    expect(lookups).toEqual([]);
+  });
+
+  it("refuses someone else's delivery, or a missing one (403)", async () => {
+    expect(await checkPushOpen(opened, USER, owns(false))).toEqual({
+      ok: false,
+      status: 403,
+      error: 'delivery does not belong to this user',
+    });
+  });
+
+  it('accepts the owner, looking the delivery up by id and user', async () => {
+    lookups.length = 0;
+    expect(await checkPushOpen(opened, USER, owns(true))).toEqual({ ok: true });
+    expect(lookups).toEqual([`${DELIVERY}:${USER}`]);
+  });
+
+  it('accepts a signed-in open with no delivery id (a bundle) without a lookup', async () => {
+    lookups.length = 0;
+    expect(await checkPushOpen({ ...opened, delivery_id: null }, USER, owns(false))).toEqual({ ok: true });
+    expect(lookups).toEqual([]);
+  });
+
+  it('leaves every other event alone, anonymous or not', async () => {
+    lookups.length = 0;
+    for (const event_name of ['link_opened', 'first_open', 'share_initiated'] as const) {
+      expect(await checkPushOpen({ event_name, delivery_id: null }, null, owns(false))).toEqual({ ok: true });
+    }
+    expect(lookups).toEqual([]);
   });
 });

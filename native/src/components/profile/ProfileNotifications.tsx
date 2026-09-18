@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BellRing, CalendarClock } from 'lucide-react-native';
+import { BellRing, CalendarClock, Users } from 'lucide-react-native';
 
 import {
   DEFAULT_PREFERENCES,
@@ -15,12 +15,13 @@ import { useAuth } from '@/providers/auth';
 import { SubScreenHeader } from './SubScreenHeader';
 
 // Profile → Notifications (H0 Stream B). Per-type opt-in toggles honoured
-// server-side by the daily send-notifications Edge Function. When OS
+// server-side by the daily send-notifications Edge Function and, for
+// household activity, the 15-minute send-nudges function (Growth G2 H4). When OS
 // permission isn't granted, a CTA obtains it (or routes to OS settings if
 // blocked). Toggles persist regardless — flipping one back on Just Works
 // once permission is restored.
 
-const ROWS: { type: NotificationType; label: string; hint: string; icon: 'arrival' | 'leaving' }[] = [
+const ROWS: { type: NotificationType; label: string; hint: string; icon: 'arrival' | 'leaving' | 'household' }[] = [
   {
     type: 'arrival',
     label: 'New arrivals',
@@ -32,6 +33,12 @@ const ROWS: { type: NotificationType; label: string; hint: string; icon: 'arriva
     label: 'Leaving soon',
     hint: 'When a watchlist title is about to expire (~7 days out).',
     icon: 'leaving',
+  },
+  {
+    type: 'household_nudge',
+    label: 'Household activity',
+    hint: 'When someone adds to a shared list',
+    icon: 'household',
   },
 ];
 
@@ -87,7 +94,7 @@ export function ProfileNotifications() {
             className="mb-4 rounded-card border border-primary bg-primary-soft px-4 py-3.5 active:opacity-80">
             <Text className="font-sans-bold text-body text-foreground">Turn on notifications</Text>
             <Text className="mt-1 font-sans text-meta text-muted-foreground">
-              Allow Videx to notify you so arrival and leaving-soon alerts can reach you.
+              Allow Videx to notify you so these alerts can reach you.
             </Text>
           </Pressable>
         ) : null}
@@ -99,6 +106,8 @@ export function ProfileNotifications() {
               className="flex-row items-center gap-3 rounded-card border border-border bg-card px-4 py-3.5">
               {row.icon === 'arrival' ? (
                 <BellRing size={18} color="#ff8d5a" />
+              ) : row.icon === 'household' ? (
+                <Users size={18} color="rgba(245,241,232,0.62)" />
               ) : (
                 <CalendarClock size={18} color="rgba(245,241,232,0.62)" />
               )}
@@ -118,8 +127,9 @@ export function ProfileNotifications() {
         </View>
 
         <Text className="mt-4 font-sans text-meta leading-5 text-faint-foreground">
-          Alerts are free and sent at most about once a day. Arrival alerts are always free;
-          they only cover titles on your watchlist and the services you've connected.
+          Alerts are free and sent at most about once a day of each kind, never between 10pm and
+          8am for household activity. Arrival alerts are always free; they only cover titles on
+          your watchlist and the services you've connected.
         </Text>
       </View>
     </SafeAreaView>

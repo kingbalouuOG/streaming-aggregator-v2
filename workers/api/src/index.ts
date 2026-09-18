@@ -28,7 +28,8 @@
  *   GET /v1/list/:id/preview   — public list preview JSON (G2 H3), 60s cache.
  *
  * Growth telemetry (Growth S2, migration 090):
- *   POST /v1/growth/events     — app events (optional Supabase JWT sets user_id).
+ *   POST /v1/growth/events     — app events (optional Supabase JWT sets user_id;
+ *                                required for notification_opened, IN-GR-041).
  *   /t/, /room/ and /list/ pages record preview_fetched / preview_opened via waitUntil.
  *
  * Caching: caches.default keyed on the normalised request URL; the
@@ -79,12 +80,13 @@ import { countSharedRoomsSince, insertSharedRoom, loadSharedRoom } from './roomS
 import { classifyUserAgent } from './uaClass';
 import { GROWTH_EVENTS_PATH } from '../../../src/lib/growth/growthEvents';
 import {
+  checkPushOpen,
   GROWTH_EVENT_BODY_MAX_BYTES,
   previewEventRow,
   rateLimitKey,
   validateGrowthEventBody,
 } from './growthEvents';
-import { insertGrowthEvent } from './growthStore';
+import { deliveryBelongsTo, insertGrowthEvent } from './growthStore';
 import type { InboundObject } from '../../../src/lib/growth/inboundLink';
 import { parseTitleRef, titleRef, CANONICAL_ORIGIN } from '../../../src/lib/growth/slug';
 import { sharedRoomUrl, type ShareRoomResponse } from '../../../src/lib/growth/roomSnapshot';
@@ -629,9 +631,12 @@ app.post('/v1/share/room', async (c) => {
 // POST /v1/growth/events — app-side growth telemetry (Growth S2, migration
 // 090). Anonymous by default: a Bearer Supabase JWT, when present and valid,
 // sets user_id; an absent or expired token records the event without one
-// rather than losing it. user_id is never read from the body. Rate limited on
-// the body's install id (GROWTH_RATELIMIT), falling back to the client IP, so
-// malformed bodies are limited too. The native app sends no Origin, so the
+// rather than losing it. The exception is notification_opened (IN-GR-041,
+// G2 H4): it needs a verified JWT (401) and, when it names a delivery_id,
+// that delivery must be the user's (403, a missing row included). user_id is
+// never read from the body. Rate limited on the body's install id
+// (GROWTH_RATELIMIT), falling back to the client IP, so malformed bodies are
+// limited too. The native app sends no Origin, so the
 // CORS allow-list above is unchanged.
 app.post(GROWTH_EVENTS_PATH, async (c) => {
   // The declared length gates the read; without one the whole body would be
@@ -661,6 +666,9 @@ app.post(GROWTH_EVENTS_PATH, async (c) => {
 
   try {
     const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
+    // IN-GR-041: notification_opened only from its recipient (other events: no-op).
+    const pushOpen = await checkPushOpen(result.value, userId, (id, uid) => deliveryBelongsTo(client, id, uid));
+    if (!pushOpen.ok) return c.json({ error: pushOpen.error }, pushOpen.status);
     await insertGrowthEvent(client, { ...result.value, user_id: userId });
     return c.body(null, 204);
   } catch (err) {

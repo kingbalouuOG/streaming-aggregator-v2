@@ -2,8 +2,9 @@
 -- Videx — Growth dashboard (Growth S2 / G0-6; plan
 -- docs/plans/2026-09-14-003 §4 G0-6, §5 G1-4)
 -- Run in the Supabase SQL Editor. Reads growth_events (migration 090),
--- user_interactions, onboarding_events, notification_deliveries (057) and
--- profiles. Sharing and notification measures (§1, §6) from Growth S4.
+-- user_interactions, onboarding_events, notification_deliveries (057, 095),
+-- profiles and the household tables (093). Sharing and notification measures
+-- (§1, §6) from Growth S4; the household loop (§7) from Growth G2 H4.
 --
 -- Conventions
 --  - Test accounts are excluded via profiles.is_test_user. growth_events
@@ -332,9 +333,13 @@ ORDER BY 3 DESC;
 -- Android reports a dismissed sheet as shared, so completion is iOS only.
 -- src = push when the share happened in a session a push tap opened.
 -- notification_opened: a push tap; delivery_id is the notification_deliveries
--- row for a single-title push, null for a bundle; metadata.type = arrival |
--- leaving_soon | bundle. Pushes sent before the S4 function deploy carry no
--- delivery_id, so their opens never join.
+-- row for a single-title push or a household nudge, null for a bundle;
+-- metadata.type = arrival | leaving_soon | bundle | household_nudge;
+-- metadata.push_id (095, G2 H4) names the push; a nudge adds metadata.kind =
+-- 'household_nudge'. Pushes sent before the S4 function deploy carry no
+-- delivery_id, so their opens never join. Since G2 H4 the Worker refuses a
+-- notification_opened without a verified user, or naming a delivery that is
+-- not theirs (IN-GR-041).
 
 -- 6a. Share completion rate, iOS only, by surface (NULL surface = all).
 WITH test_installs AS (
@@ -396,12 +401,14 @@ SELECT 'organic', c.organic_shares, 'active users', a.users,
 FROM counts c, active a;
 
 -- 6c. Notification click-through by push type. One push = the delivery rows
--- one send claimed (same user and Expo ticket). It is single-title when its
--- lead group holds one title (one arrival, or no arrivals and one
--- leaving-soon title), and that row's id is the payload's delivery_id;
--- anything else went out as a bundle. Single-title CTR joins opens on
--- delivery_id (pushes opened at least once). Bundle opens have no delivery id,
--- so they are counted, not joined (a tap on each of two devices counts twice).
+-- one send claimed: rows sharing a push_id (migration 095, G2 H4), or before
+-- 095 the same user and Expo ticket. It is single-title when its lead group
+-- holds one title (one arrival, or no arrivals and one leaving-soon title),
+-- and that row's id is the payload's delivery_id; a household nudge is one
+-- row per push; anything else went out as a bundle. A push counts as opened
+-- when an open carries its push_id (metadata.push_id) or its delivery_id, so
+-- a bundle opened on two devices counts once (IN-GR-026). Bundle opens from
+-- before 095 carry neither and are counted, not joined.
 WITH test_installs AS (
   SELECT DISTINCT g.install_id
   FROM growth_events g
@@ -410,30 +417,35 @@ WITH test_installs AS (
 ),
 pushes AS (
   SELECT
-    d.user_id,
-    d.expo_ticket_id,
-    COUNT(*) FILTER (WHERE d.notification_type = 'arrival')                  AS arrivals,
-    COUNT(*) FILTER (WHERE d.notification_type = 'leaving_soon')             AS leaving,
-    (array_agg(d.id) FILTER (WHERE d.notification_type = 'arrival'))[1]      AS arrival_id,
-    (array_agg(d.id) FILTER (WHERE d.notification_type = 'leaving_soon'))[1] AS leaving_id
+    COALESCE(d.push_id::text, d.user_id::text || ':' || d.expo_ticket_id)       AS push_key,
+    (array_agg(d.push_id::text))[1]                                            AS push_id,
+    COUNT(*) FILTER (WHERE d.notification_type = 'arrival')                    AS arrivals,
+    COUNT(*) FILTER (WHERE d.notification_type = 'leaving_soon')               AS leaving,
+    COUNT(*) FILTER (WHERE d.notification_type = 'household_nudge')            AS nudges,
+    (array_agg(d.id) FILTER (WHERE d.notification_type = 'arrival'))[1]        AS arrival_id,
+    (array_agg(d.id) FILTER (WHERE d.notification_type = 'leaving_soon'))[1]   AS leaving_id,
+    (array_agg(d.id) FILTER (WHERE d.notification_type = 'household_nudge'))[1] AS nudge_id
   FROM notification_deliveries d
   JOIN profiles p ON p.id = d.user_id AND p.is_test_user IS NOT TRUE
   WHERE d.sent_at >= now() - interval '30 days'
     AND d.expo_ticket_id IS NOT NULL
     AND d.delivery_status <> 'error'
-  GROUP BY 1, 2
+  GROUP BY 1
 ),
 classified AS (
   SELECT
-    CASE WHEN arrivals = 1 THEN 'arrival'
+    push_id,
+    CASE WHEN nudges > 0 THEN 'household_nudge'
+         WHEN arrivals = 1 THEN 'arrival'
          WHEN arrivals = 0 AND leaving = 1 THEN 'leaving_soon'
          ELSE 'bundle' END                                     AS push_type,
-    CASE WHEN arrivals = 1 THEN arrival_id
+    CASE WHEN nudges > 0 THEN nudge_id
+         WHEN arrivals = 1 THEN arrival_id
          WHEN arrivals = 0 AND leaving = 1 THEN leaving_id END AS delivery_id
   FROM pushes
 ),
 opens AS (
-  SELECT g.delivery_id, g.metadata->>'type' AS push_type
+  SELECT g.delivery_id, g.metadata->>'type' AS push_type, g.metadata->>'push_id' AS push_id
   FROM growth_events g
   WHERE g.event_name = 'notification_opened'
     AND g.occurred_at >= now() - interval '30 days'
@@ -443,26 +455,30 @@ per_type AS (
   SELECT
     t.push_type,
     (SELECT COUNT(*) FROM classified c WHERE c.push_type = t.push_type) AS pushes_sent,
-    CASE WHEN t.push_type = 'bundle'
-         THEN (SELECT COUNT(*) FROM opens o WHERE o.push_type = 'bundle')
-         ELSE (SELECT COUNT(*) FROM classified c
-               WHERE c.push_type = t.push_type
-                 AND c.delivery_id IN (SELECT delivery_id FROM opens WHERE delivery_id IS NOT NULL))
-    END                                                                 AS opened
-  FROM (VALUES ('arrival'), ('leaving_soon'), ('bundle')) AS t(push_type)
+    (SELECT COUNT(*) FROM classified c
+      WHERE c.push_type = t.push_type
+        AND (c.push_id IN (SELECT push_id FROM opens WHERE push_id IS NOT NULL)
+             OR c.delivery_id IN (SELECT delivery_id FROM opens WHERE delivery_id IS NOT NULL)))
+    + CASE WHEN t.push_type = 'bundle'
+           THEN (SELECT COUNT(*) FROM opens o WHERE o.push_type = 'bundle' AND o.push_id IS NULL)
+           ELSE 0 END                                                   AS opened
+  FROM (VALUES ('arrival'), ('leaving_soon'), ('bundle'), ('household_nudge')) AS t(push_type)
 )
 SELECT
   push_type,
   pushes_sent,
   opened,
   ROUND(100.0 * opened / NULLIF(pushes_sent, 0), 1)                       AS ctr_pct,
-  CASE WHEN push_type = 'bundle' THEN 'opens counted' ELSE 'joined on delivery_id' END AS method
+  CASE WHEN push_type = 'bundle' THEN 'joined on push_id; pre-095 opens counted'
+       ELSE 'joined on push_id or delivery_id' END                        AS method
 FROM per_type
 ORDER BY push_type;
 
 -- 6d. "Tell someone" take-up: single-title push opens against shares made
 -- from the moment (share_initiated with metadata.moment), by push type. A
--- moment share comes from the top-right button or the banner.
+-- moment share comes from the top-right button or the banner. The
+-- household_nudge row has no moment yet (the list "reply" moment is filed,
+-- not built), so its shares read 0 until one ships; its opens are the baseline.
 WITH test_installs AS (
   SELECT DISTINCT g.install_id
   FROM growth_events g
@@ -485,5 +501,179 @@ SELECT
   ROUND((SELECT COUNT(*) FROM events e WHERE e.event_name = 'share_initiated' AND e.moment = t.moment)::numeric
         / NULLIF((SELECT COUNT(*) FROM events e WHERE e.event_name = 'notification_opened' AND e.push_type = t.moment), 0), 3)
                                                                                                       AS shares_per_open
-FROM (VALUES ('arrival'), ('leaving_soon')) AS t(moment)
+FROM (VALUES ('arrival'), ('leaving_soon'), ('household_nudge')) AS t(moment)
 ORDER BY t.moment;
+
+
+-- ════════════════════════════════════════════════════════════
+-- 7. Household loop (Growth G2 H4; plan §1 item 5)
+-- ════════════════════════════════════════════════════════════
+--
+-- Tables from 093: households, household_members, watchlists (one shared
+-- list per household in v1), watchlist_items (added_by, added_at),
+-- watchlist_reactions (user_id, updated_at). A test household is one whose
+-- owner is a test user. A member is ACTIVE in a window when they added an
+-- item to, or reacted to an item on, that household's list, and is still a
+-- member. Nudges: notification_deliveries rows with notification_type =
+-- 'household_nudge' (095); opened = a notification_opened event with
+-- metadata.kind = 'household_nudge'.
+
+-- 7a. Households created per 100 sign-ups, by ISO week (last 8 weeks).
+-- Sign-ups = non-test profiles created that week.
+WITH weeks AS (
+  SELECT generate_series(date_trunc('week', now()) - interval '7 weeks',
+                         date_trunc('week', now()), interval '1 week') AS week
+),
+signups AS (
+  SELECT date_trunc('week', p.created_at) AS week, COUNT(*) AS n
+  FROM profiles p
+  WHERE p.is_test_user IS NOT TRUE
+    AND p.created_at >= date_trunc('week', now()) - interval '7 weeks'
+  GROUP BY 1
+),
+created AS (
+  SELECT date_trunc('week', h.created_at) AS week, COUNT(*) AS n
+  FROM households h
+  JOIN profiles o ON o.id = h.owner_id AND o.is_test_user IS NOT TRUE
+  WHERE h.created_at >= date_trunc('week', now()) - interval '7 weeks'
+  GROUP BY 1
+)
+SELECT
+  to_char(w.week, 'IYYY-"W"IW')                                 AS iso_week,
+  COALESCE(s.n, 0)                                              AS signups,
+  COALESCE(c.n, 0)                                              AS households_created,
+  ROUND(100.0 * COALESCE(c.n, 0) / NULLIF(s.n, 0), 1)           AS households_per_100_signups
+FROM weeks w
+LEFT JOIN signups s ON s.week = w.week
+LEFT JOIN created c ON c.week = w.week
+ORDER BY w.week;
+
+-- 7b. Members per household (distribution, current non-test households).
+WITH sizes AS (
+  SELECT h.id, COUNT(m.user_id) AS members
+  FROM households h
+  JOIN profiles o ON o.id = h.owner_id AND o.is_test_user IS NOT TRUE
+  LEFT JOIN household_members m ON m.household_id = h.id
+  GROUP BY h.id
+)
+SELECT members, COUNT(*) AS households,
+       ROUND(100.0 * COUNT(*) / NULLIF(SUM(COUNT(*)) OVER (), 0), 1) AS pct
+FROM sizes
+GROUP BY members
+ORDER BY members;
+
+-- 7c. Households with two or more members active in the last 30 days (the
+-- loop's health line), against households with two or more members at all.
+WITH live AS (
+  SELECT h.id
+  FROM households h
+  JOIN profiles o ON o.id = h.owner_id AND o.is_test_user IS NOT TRUE
+),
+activity AS (
+  SELECT w.household_id, i.added_by AS user_id
+  FROM watchlist_items i
+  JOIN watchlists w ON w.id = i.watchlist_id
+  WHERE i.added_at >= now() - interval '30 days' AND i.added_by IS NOT NULL
+  UNION
+  SELECT w.household_id, r.user_id
+  FROM watchlist_reactions r
+  JOIN watchlist_items i ON i.id = r.item_id
+  JOIN watchlists w ON w.id = i.watchlist_id
+  WHERE r.updated_at >= now() - interval '30 days'
+),
+active_members AS (
+  SELECT a.household_id, COUNT(DISTINCT a.user_id) AS active
+  FROM activity a
+  JOIN household_members m ON m.household_id = a.household_id AND m.user_id = a.user_id
+  GROUP BY a.household_id
+),
+multi AS (
+  SELECT m.household_id
+  FROM household_members m
+  GROUP BY m.household_id
+  HAVING COUNT(*) >= 2
+),
+counts AS (
+  SELECT
+    (SELECT COUNT(*) FROM live)                                            AS households,
+    (SELECT COUNT(*) FROM live l JOIN multi mu ON mu.household_id = l.id)  AS with_2plus_members,
+    (SELECT COUNT(*) FROM live l JOIN active_members am ON am.household_id = l.id
+      WHERE am.active >= 2)                                                AS with_2plus_active_30d
+)
+SELECT households, with_2plus_members, with_2plus_active_30d,
+       ROUND(100.0 * with_2plus_active_30d / NULLIF(with_2plus_members, 0), 1) AS pct_of_multi_member
+FROM counts;
+
+-- 7d. Shared-list adds per household per week (last 8 ISO weeks). Per
+-- household = over households that existed by the end of the week; per
+-- adding household = over households with at least one add that week.
+WITH weeks AS (
+  SELECT generate_series(date_trunc('week', now()) - interval '7 weeks',
+                         date_trunc('week', now()), interval '1 week') AS week
+),
+live AS (
+  SELECT h.id, h.created_at
+  FROM households h
+  JOIN profiles o ON o.id = h.owner_id AND o.is_test_user IS NOT TRUE
+),
+adds AS (
+  SELECT date_trunc('week', i.added_at) AS week, w.household_id
+  FROM watchlist_items i
+  JOIN watchlists w ON w.id = i.watchlist_id
+  JOIN live l ON l.id = w.household_id
+  WHERE i.added_at >= date_trunc('week', now()) - interval '7 weeks'
+),
+per_week AS (
+  SELECT
+    wk.week,
+    (SELECT COUNT(*) FROM adds a WHERE a.week = wk.week)                           AS adds,
+    (SELECT COUNT(*) FROM live l WHERE l.created_at < wk.week + interval '1 week')  AS households,
+    (SELECT COUNT(DISTINCT a.household_id) FROM adds a WHERE a.week = wk.week)     AS adding_households
+  FROM weeks wk
+)
+SELECT
+  to_char(week, 'IYYY-"W"IW')                                  AS iso_week,
+  adds,
+  households,
+  adding_households,
+  ROUND(adds::numeric / NULLIF(households, 0), 2)              AS adds_per_household,
+  ROUND(adds::numeric / NULLIF(adding_households, 0), 2)       AS adds_per_adding_household
+FROM per_week
+ORDER BY week;
+
+-- 7e. Nudge-to-open rate (last 30 days): nudges delivered (not errored)
+-- against distinct nudges opened (metadata.kind = 'household_nudge', joined
+-- on push_id, else delivery_id, so a tap on two devices counts once).
+WITH test_installs AS (
+  SELECT DISTINCT g.install_id
+  FROM growth_events g
+  JOIN profiles p ON p.id = g.user_id AND p.is_test_user IS TRUE
+  WHERE g.install_id IS NOT NULL
+),
+nudges AS (
+  SELECT d.id, d.push_id::text AS push_id
+  FROM notification_deliveries d
+  JOIN profiles p ON p.id = d.user_id AND p.is_test_user IS NOT TRUE
+  WHERE d.notification_type = 'household_nudge'
+    AND d.sent_at >= now() - interval '30 days'
+    AND d.expo_ticket_id IS NOT NULL
+    AND d.delivery_status <> 'error'
+),
+opens AS (
+  SELECT g.delivery_id, g.metadata->>'push_id' AS push_id
+  FROM growth_events g
+  WHERE g.event_name = 'notification_opened'
+    AND g.metadata->>'kind' = 'household_nudge'
+    AND g.occurred_at >= now() - interval '30 days'
+    AND g.install_id NOT IN (SELECT install_id FROM test_installs)
+),
+counts AS (
+  SELECT
+    (SELECT COUNT(*) FROM nudges) AS sent,
+    (SELECT COUNT(*) FROM nudges n
+      WHERE n.push_id IN (SELECT push_id FROM opens WHERE push_id IS NOT NULL)
+         OR n.id IN (SELECT delivery_id FROM opens WHERE delivery_id IS NOT NULL)) AS opened
+)
+SELECT sent AS nudges_sent, opened AS nudges_opened,
+       ROUND(100.0 * opened / NULLIF(sent, 0), 1) AS nudge_to_open_pct
+FROM counts;

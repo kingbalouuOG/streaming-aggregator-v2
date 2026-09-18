@@ -23,11 +23,11 @@ import { onSessionReset } from './sessionId';
 
 export const RESET_GRACE_MS = 10_000;
 
-export type PushOriginType = 'arrival' | 'leaving_soon' | 'bundle';
+export type PushOriginType = 'arrival' | 'leaving_soon' | 'bundle' | 'household_nudge';
 
 export interface SessionOrigin {
   origin: 'push';
-  /** The title the push opened; null for a bundle (it lands on the watchlist). */
+  /** The title (or, for a household nudge, the list) the push opened; null for a bundle (it lands on the watchlist). */
   object: InboundObject | null;
   type: PushOriginType;
   serviceId?: string | null;

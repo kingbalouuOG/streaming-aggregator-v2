@@ -12,6 +12,8 @@
  *                bundle (it covers several rows). Lands on growth_events.delivery_id
  *                when the push is opened, which is how push CTR is measured.
  *   via          'push', the URL channel (plan D13)
+ *   push_id      one id per push, shared by every claimed row (095, IN-GR-026);
+ *                index.ts adds it after composing, so these tests never see it
  *   service_id   one title only: the service it landed on or is leaving
  *   expires_on   leaving-soon only: streaming_availability.expires_on
  * service_id and expires_on feed the app's "Tell someone" copy.
@@ -39,6 +41,7 @@ export interface PushData {
   type: NotificationType | 'bundle';
   delivery_id: string | null;
   via: 'push';
+  push_id?: string;
   service_id?: string;
   expires_on?: string;
 }

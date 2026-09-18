@@ -28,12 +28,14 @@ import {
 import storage from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 
-export type NotificationType = 'arrival' | 'leaving_soon';
+export type NotificationType = 'arrival' | 'leaving_soon' | 'household_nudge';
 
-// Default-on: matches the DB's "absent pref row = enabled" contract (migration 056).
+// Default-on: matches the DB's "absent pref row = enabled" contract (migration
+// 056; household_nudge added in 095, Growth G2 H4).
 export const DEFAULT_PREFERENCES: Record<NotificationType, boolean> = {
   arrival: true,
   leaving_soon: true,
+  household_nudge: true,
 };
 
 const ANDROID_CHANNEL_ID = 'default';

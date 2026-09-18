@@ -119,12 +119,18 @@ See [RLS pattern](../../concepts/techniques/rls-pattern.md) and the [authenticat
 - `card_impressions` partition event trigger (016) → RLS on new partitions.
 - `updated_at` touch triggers on `user_feature_flags` (041), `user_interest_centroids` (044) and `watchlist_reactions` (093).
 - `profiles_leave_households` (093) BEFORE DELETE on `profiles` → `household_leave_internal` for each membership, so D12 (ownership hand-over, sole-owner household deleted) holds however an account is removed.
+- `notification_deliveries_nudge_list` (095) BEFORE INSERT on `notification_deliveries`: a `household_nudge` row must carry `list_id` (a CHECK could not require it, because `list_id` is `ON DELETE SET NULL`).
 
 ## Scheduled jobs (registrations live in migration 039 — `supabase/cron/` is intentionally empty)
 
 - Daily 06:00 `daily-content-sync` · 06:30 `enrich-new-titles` · 06:45 `embed-new-titles` · weekly Sun 07:00 `refresh-service-fingerprints` (pg_cron + pg_net, Vault JWTs).
 - Monthly HDBSCAN recluster via GitHub Actions (psycopg2 direct connection).
 - `card_impressions_rollup` + `pg_partman_maintenance` (014).
+- Daily 08:00 UTC `daily-send-notifications` (059) and, from 095, `send-nudges-15m` every 15 minutes (`send-nudges` Edge Function; quiet 22:00 to 08:00 Europe/London). Both use the Vault `service_role_key`.
+
+### Notifications (056–059, 095)
+
+`user_push_tokens`, `notification_preferences` (type CHECK `arrival`, `leaving_soon`, `household_nudge` since 095; absent row = enabled) and `notification_deliveries`. 095 made `tmdb_id` / `media_type` nullable and added `list_id` (→ `watchlists`, set null), `nudge_window`, `push_id` and `notification_deliveries_shape_check` (title rows: title columns, no list columns; nudge rows: `nudge_window`, no title columns), a second unique key `uq_notification_deliveries_nudge (user_id, notification_type, list_id, nudge_window)` and `idx_notification_deliveries_list`. Detail in [notifications-v1](../../concepts/architecture/notifications-v1.md). **095 status: written, apply pending (Joe); see [migrations](migrations.md).**
 
 ## Deviations and gaps
 

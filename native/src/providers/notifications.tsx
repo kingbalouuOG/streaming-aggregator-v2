@@ -3,8 +3,8 @@ import * as Notifications from 'expo-notifications';
 import { useEffect, useRef, type ReactNode } from 'react';
 
 import { sendGrowthEvent } from '@/attribution';
-import { parseInboundLink } from '@/lib/growth/inboundLink';
-import { setSessionOrigin, type PushOriginType } from '@/lib/instrumentation/sessionOrigin';
+import { setSessionOrigin } from '@/lib/instrumentation/sessionOrigin';
+import { pushOpen, pushOriginType, pushRoute, str, type PushPayload } from '@/lib/notifications/pushTap';
 import { clearPushToken, ensureAndroidChannel, registerPushToken } from '@/notifications/push';
 import { useAuth } from '@/providers/auth';
 
@@ -15,9 +15,12 @@ import { useAuth } from '@/providers/auth';
 //   - token register on sign-in / app start (silent — the automatic ask
 //     lives on For You, not here)
 //   - token clear on sign-out
-//   - tap → deep-link to the title detail page (warm + cold start)
+//   - tap → deep-link to the title detail page, the watchlist, or (for a
+//     household nudge, G2 H4) the shared list (warm + cold start)
 //   - tap → notification_opened growth event and a push session origin
-//     (Growth S4: push CTR by delivery_id, src=push shares, "Tell someone")
+//     (Growth S4: push CTR by delivery_id, src=push shares, "Tell someone";
+//     push_id and metadata.kind since G2 H4). The pure half is
+//     src/lib/notifications/pushTap.ts.
 //
 // The consent PROMPT is deliberately NOT here. Rule (IN-GR-034, Joe
 // 2026-09-17): ask after onboarding, never at cold launch, with an in-app
@@ -38,43 +41,27 @@ Notifications.setNotificationHandler({
   }),
 });
 
-/** The push `data` written by send-notifications (supabase/functions/send-notifications/compose.ts). */
-interface PushData {
-  url?: unknown;
-  type?: unknown;
-  delivery_id?: unknown;
-  service_id?: unknown;
-  expires_on?: unknown;
-}
-
-const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
-
-function pushOriginType(type: string | null): PushOriginType {
-  return type === 'arrival' || type === 'leaving_soon' ? type : 'bundle';
-}
-
 /**
  * Record the open and mark the session as push-originated before routing, so
  * the detail page it lands on can show "Tell someone". Pushes sent before the
  * S4 function deploy carry only url and type: delivery_id is null then and
  * the moment has no service to name, so it does not show.
  */
-function recordPushOpen(payload: PushData, url: string): void {
+function recordPushOpen(payload: PushPayload, url: string): void {
   try {
-    const { object } = parseInboundLink(url);
-    const type = str(payload.type);
+    const { object, deliveryId, metadata } = pushOpen(payload, url);
     sendGrowthEvent({
       name: 'notification_opened',
       object,
-      deliveryId: str(payload.delivery_id),
+      deliveryId,
       via: 'push',
       src: 'push',
-      metadata: { type },
+      metadata,
     });
     setSessionOrigin({
       origin: 'push',
       object,
-      type: pushOriginType(type),
+      type: pushOriginType(str(payload.type)),
       serviceId: str(payload.service_id),
       expiresOn: str(payload.expires_on),
       at: Date.now(),
@@ -86,15 +73,16 @@ function recordPushOpen(payload: PushData, url: string): void {
 
 /**
  * Convert a videx:// deep link from the push payload into an expo-router path.
- * Routes with router.push, so +native-intent (system links only) is bypassed.
+ * Routes with router.push, so +native-intent (system links only) is bypassed;
+ * object links resolve through parseInboundLink (pushRoute), so
+ * videx://list/{id} lands on /list/{id} and videx://watchlist on /watchlist.
  */
 function routeFromData(data: unknown): void {
-  const payload = (data ?? {}) as PushData;
+  const payload = (data ?? {}) as PushPayload;
   const url = str(payload.url);
   if (!url) return;
-  // videx://detail/movie-123 → /detail/movie-123 ; videx://watchlist → /watchlist
-  const path = url.startsWith('videx://') ? `/${url.slice('videx://'.length)}` : url;
-  if (!path.startsWith('/')) return;
+  const path = pushRoute(url);
+  if (!path) return;
   try {
     router.push(path as never);
   } catch (err) {
@@ -111,7 +99,7 @@ function routeFromData(data: unknown): void {
 let lastHandledTap: string | null = null;
 
 function handleTap(response: Notifications.NotificationResponse): void {
-  const data = response.notification.request.content.data as PushData | undefined;
+  const data = response.notification.request.content.data as PushPayload | undefined;
   const id = response.notification.request.identifier || str(data?.delivery_id);
   if (id && id === lastHandledTap) return;
   lastHandledTap = id;

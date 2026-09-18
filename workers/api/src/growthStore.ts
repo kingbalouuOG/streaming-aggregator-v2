@@ -1,6 +1,8 @@
 /**
  * growth_events insert for the videx-api Worker (Growth G0-6, migration 090).
  * Service-role only: the table has RLS on and no policies.
+ *
+ * deliveryBelongsTo: the notification_opened ownership check (IN-GR-041).
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -19,4 +21,21 @@ export async function insertGrowthEvent(client: SupabaseClient, row: GrowthEvent
   }
   // postgrest messages can name schema objects: callers log, never return them.
   if (error) throw new Error(`growth_events insert failed: ${error.message}`);
+}
+
+/** True when notification_deliveries row `deliveryId` exists and is `userId`'s. */
+export async function deliveryBelongsTo(
+  client: SupabaseClient,
+  deliveryId: string,
+  userId: string,
+): Promise<boolean> {
+  const { data, error } = await client
+    .from('notification_deliveries')
+    .select('id')
+    .eq('id', deliveryId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  // postgrest messages can name schema objects: callers log, never return them.
+  if (error) throw new Error(`notification_deliveries lookup failed: ${error.message}`);
+  return data !== null;
 }

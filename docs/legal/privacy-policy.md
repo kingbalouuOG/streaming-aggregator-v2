@@ -93,8 +93,9 @@ services themselves, your photos, contacts, or any biometric data.
 ### Push notifications
 
 If you opt in to push alerts (a title on your watchlist arriving on
-one of your services, or leaving one soon), Videx additionally
-stores:
+one of your services, or leaving one soon; and household activity:
+when another member adds titles to a shared list you belong to),
+Videx additionally stores:
 
 - **Push token** (`user_push_tokens`): an identifier issued by the
   device push service (Google FCM / Apple APNs, relayed via Expo's
@@ -106,10 +107,12 @@ stores:
   you sign out, and dead tokens are pruned automatically by the
   delivery pipeline.
 - **Notification preferences** (`notification_preferences`): your
-  per-type on/off choices (arrivals, leaving-soon).
+  per-type on/off choices (arrivals, leaving-soon, household
+  activity).
 - **Delivery log** (`notification_deliveries`): which alert was sent
-  to you for which title, kept so the same title never alerts you
-  twice and to enforce the daily alert cap.
+  to you for which title or shared list, kept so the same title never
+  alerts you twice, so a shared list alerts you at most once an hour,
+  and to enforce the alert caps.
 
 Consent is asked for once, after you finish setting up your account,
 and never at first launch: Videx first explains what the alerts are,
@@ -117,12 +120,15 @@ and your device's permission prompt only appears if you choose to
 turn them on. You can withdraw it at any time in Profile → Settings,
 by revoking the notification permission in your device settings, or
 by signing out. Your choices
-are enforced server-side: the daily alert job filters on your
-consent, not just the client.
+are enforced server-side: the alert jobs filter on your consent, not
+just the client.
 
 Push delivery passes the push token and the alert text (the title
-name and a short availability line) — nothing more — to Expo's push
-service and on to Apple APNs / Google FCM for delivery.
+name and a short availability line, or a member's username and the
+household's name), nothing more, to Expo's push service and on to
+Apple APNs / Google FCM for delivery. A household activity alert names
+the member who added the titles, which everyone in the household can
+already see on the shared list.
 
 ## 3. Where your data is stored
 

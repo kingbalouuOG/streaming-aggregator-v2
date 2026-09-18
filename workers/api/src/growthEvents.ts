@@ -7,6 +7,8 @@
  *    verified JWT.
  *  - previewEventRow: the page handlers' preview_fetched / preview_opened.
  *  - rateLimitKey: the GROWTH_RATELIMIT key.
+ *  - checkPushOpen: notification_opened needs a verified user and, when it
+ *    names a delivery, that delivery must be theirs (IN-GR-041, G2 H4).
  *
  * Pure module, tested from the root vitest rig. The event contract itself
  * (names, body keys, object shapes) is src/lib/growth/growthEvents.ts, shared
@@ -148,6 +150,28 @@ export function validateGrowthEventBody(body: unknown): GrowthEventValidation {
       metadata,
     },
   };
+}
+
+export type PushOpenCheck = { ok: true } | { ok: false; status: 401 | 403; error: string };
+
+/**
+ * IN-GR-041: push CTR drives decisions from G2 on, so a notification_opened
+ * row can no longer be forged. Without a verified JWT it is refused (401);
+ * with a delivery_id, the delivery must belong to that user (403 otherwise,
+ * a missing row included). Every other event passes untouched.
+ * `ownsDelivery` is the service-role lookup (growthStore.deliveryBelongsTo).
+ */
+export async function checkPushOpen(
+  row: Pick<GrowthEventRow, 'event_name' | 'delivery_id'>,
+  userId: string | null,
+  ownsDelivery: (deliveryId: string, userId: string) => Promise<boolean>,
+): Promise<PushOpenCheck> {
+  if (row.event_name !== 'notification_opened') return { ok: true };
+  if (!userId) return { ok: false, status: 401, error: 'notification_opened needs a signed-in user' };
+  if (row.delivery_id && !(await ownsDelivery(row.delivery_id, userId))) {
+    return { ok: false, status: 403, error: 'delivery does not belong to this user' };
+  }
+  return { ok: true };
 }
 
 /** Per install when the body names one, else per client IP. */
