@@ -106,8 +106,12 @@ All SECURITY DEFINER, `search_path = public, pg_temp`, EXECUTE for `authenticate
 | `household_members_view(p_household_id uuid) returns table (user_id uuid, username text, role text, joined_at timestamptz)` | Co-members' usernames (no email, no display name), ordered by `joined_at` | `not_member` |
 | `household_leave_internal(p_user_id uuid, p_household_id uuid) returns void` | The leave logic, shared with `delete_own_account()`. EXECUTE granted to nobody | `not_member` |
 | `is_household_member(hid uuid) returns boolean` | STABLE; the membership test inside every household policy | none |
+| `remove_member(p_household_id uuid, p_user_id uuid) returns void` (094, D16) | Owner only. The removed person leaves through `household_leave_internal` (D12 semantics), then the open invite is revoked so they cannot rejoin from the same link | `not_owner`, `cannot_remove_self`, `not_member` |
+| `revoke_invite(p_household_id uuid) returns integer` (094, D16) | Owner only. Revokes the open invite without minting a new one; returns how many were revoked (0 is not an error) | `not_owner` |
 
-Verification: `supabase/queries/verify-093-households.sql` (one transaction, rolled back).
+Verification: `supabase/queries/verify-093-households.sql` and `verify-094-household-remove-member.sql` (each one transaction, rolled back).
+
+App side: `src/lib/household/rpc.ts` wraps every household RPC (unwraps `data[0]`, throws `HouseholdError` with the code); `src/lib/household/errors.ts` maps each code, plus `rls_denied` (42501) and `unknown`, to tone-guide copy. Items and reactions are direct table writes under RLS (`src/lib/household/items.ts`: the item insert is `ON CONFLICT DO NOTHING` because there is no UPDATE grant; title clipped to 300 code points, an over-long poster path dropped).
 
 ## Edge Functions (RPC-shaped HTTP endpoints)
 

@@ -1,12 +1,13 @@
-import { Share2 } from 'lucide-react-native';
+import { Share2, UserPlus } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, Platform, Pressable, Share, Text } from 'react-native';
 
 import { sendGrowthEvent } from '@/attribution';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import type { GrowthMetadata } from '@/lib/growth/growthEvents';
-import { parseInboundLink, type InboundObject, type SrcOrigin } from '@/lib/growth/inboundLink';
+import { parseInboundLink, type InboundObject, type SrcOrigin, type ViaChannel } from '@/lib/growth/inboundLink';
 import {
+  buildListShareCopy,
   buildRoomShareCopy,
   buildTitleShareCopy,
   shareSheetContent,
@@ -15,8 +16,12 @@ import {
   type ShareMomentType,
 } from '@/lib/growth/shareCopy';
 import { titlePageUrl } from '@/lib/growth/slug';
+import { householdErrorCode, householdErrorCopy } from '@/lib/household/errors';
+import { sharedListUrl } from '@/lib/household/links';
+import { createInvite } from '@/lib/household/rpc';
 import { getSessionSrc } from '@/lib/instrumentation/sessionOrigin';
 import { emitShare } from '@/lib/storage/interactions';
+import { supabase } from '@/lib/supabase';
 
 // Share action, top-right over a full-bleed page (mirrors BackButton).
 //
@@ -28,6 +33,12 @@ import { emitShare } from '@/lib/storage/interactions';
 // Room (Growth S1, copy and events S4): shares a room snapshot URL, given or
 // produced on tap (a room card snapshots the room with POST /v1/share/room
 // first). No `share` interaction for rooms.
+//
+// Shared list (Growth G2): the household's list URL, with ?via=household.
+// The owner's tap mints a fresh invite first (create_invite, which revokes
+// the previous one) and the URL carries ?invite={token}; a member shares the
+// plain list URL, which shows a recipient the preview and "Ask for an invite
+// link". Owners see Invite, members see Share.
 //
 // Every share records share_initiated when the sheet opens and
 // share_completed when the OS reports it (growth_events, plan G1-2). The URL
@@ -62,6 +73,15 @@ export type ShareTarget =
       label: string;
       count: number;
       surface: 'room' | 'room_card';
+    }
+  | {
+      listId: string;
+      listName: string;
+      householdName: string;
+      count: number;
+      householdId: string;
+      /** Owners mint an invite; members share the plain list URL. */
+      isOwner: boolean;
     };
 
 async function openSheet(
@@ -70,24 +90,44 @@ async function openSheet(
   src: SrcOrigin,
   metadata: GrowthMetadata,
   onShared?: (activityType: string | null) => void,
+  via: ViaChannel = 'share',
 ): Promise<void> {
-  sendGrowthEvent({ name: 'share_initiated', object, via: 'share', src, metadata });
+  sendGrowthEvent({ name: 'share_initiated', object, via, src, metadata });
   const result = await Share.share(shareSheetContent(copy, Platform.OS));
   if (result.action !== Share.sharedAction) return;
   const activityType = result.activityType ?? null;
   sendGrowthEvent({
     name: 'share_completed',
     object,
-    via: 'share',
+    via,
     src,
     metadata: { ...metadata, to_surface: activityType, platform_reports_completion: Platform.OS === 'ios' },
   });
   onShared?.(activityType);
 }
 
-/** Opens the share sheet for a title or room. Throws only if the OS sheet does. */
+/** Opens the share sheet for a title, room or shared list. Throws only if the OS sheet does. */
 export async function runShare(target: ShareTarget): Promise<void> {
   const src = getSessionSrc();
+
+  if ('listId' in target) {
+    let token: string | null = null;
+    if (target.isOwner) {
+      try {
+        token = (await createInvite(supabase, target.householdId)).token;
+      } catch (e) {
+        Alert.alert("Couldn't make an invite", householdErrorCopy(householdErrorCode(e)));
+        return;
+      }
+    }
+    const copy = buildListShareCopy({
+      householdName: target.householdName,
+      count: target.count,
+      url: withShareAttribution(sharedListUrl(target.listId, token), src, 'household'),
+    });
+    await openSheet(copy, { type: 'list', id: target.listId }, src, { surface: 'list' }, undefined, 'household');
+    return;
+  }
 
   if ('contentId' in target) {
     const { tmdbId, mediaType } = parseContentItemId(target.contentId);
@@ -130,6 +170,7 @@ export function ShareButton(props: ShareButtonProps) {
   const { top } = props;
   const [busy, setBusy] = useState(false);
   const moment = 'contentId' in props ? props.moment : null;
+  const invite = 'listId' in props && props.isOwner;
 
   const onShare = async () => {
     if (busy) return;
@@ -145,6 +186,22 @@ export function ShareButton(props: ShareButtonProps) {
 
   const position = top === undefined ? '' : 'absolute right-4 ';
   const style = top === undefined ? { opacity: busy ? 0.6 : 1 } : { top, opacity: busy ? 0.6 : 1 };
+
+  // A household owner's share is an invite: a labelled pill says so.
+  if (invite) {
+    return (
+      <Pressable
+        onPress={onShare}
+        disabled={busy}
+        accessibilityLabel="Invite to the household"
+        hitSlop={4}
+        style={style}
+        className={`${position}h-9 flex-row items-center gap-1.5 rounded-md bg-primary px-3 active:opacity-80`}>
+        <UserPlus size={16} color="#ffffff" />
+        <Text className="font-sans-bold text-meta text-white">Invite</Text>
+      </Pressable>
+    );
+  }
 
   // "Tell someone": the same spot, promoted to a labelled accent pill.
   if (moment) {

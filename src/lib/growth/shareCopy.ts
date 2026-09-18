@@ -10,6 +10,7 @@
  *   rent or buy only:     "Severance (2022). Rent or buy on Apple TV+ and Prime Video in the UK."
  *   nothing in the UK:    "Severance (2022). See where to watch in the UK on Videx."
  *   room:                 "More like Heat: 24 titles picked for the mood."
+ *   shared list (G2):     "The Flat: 12 titles to pick from together."
  *
  * A share made from the "Tell someone" moment (a push tap that opened this
  * title) leads with the moment: "Just landed on Apple TV+: Severance (2022). …"
@@ -20,7 +21,7 @@
 
 import { MONTH_NAMES } from '../format/months';
 import { countLabel } from '../format/plural';
-import type { SrcOrigin } from './inboundLink';
+import type { SrcOrigin, ViaChannel } from './inboundLink';
 import { neutraliseRoomLabel } from './roomSnapshot';
 import { shareServiceLabel } from './serviceLabels';
 
@@ -97,12 +98,29 @@ export function buildRoomShareCopy(input: RoomShareInput): ShareCopy {
   };
 }
 
+export interface ListShareInput {
+  householdName: string;
+  count: number;
+  /** The attributed list URL, with the invite token when the owner shares. */
+  url: string;
+}
+
+/** Growth G2: a household's shared list, shared or offered as an invite. */
+export function buildListShareCopy(input: ListShareInput): ShareCopy {
+  return {
+    message: `${input.householdName.trim()}: ${countLabel(input.count, 'title')} to pick from together.
+${input.url}`,
+    url: input.url,
+  };
+}
+
 /**
- * The canonical URL plus ?via=share, and &src=push when the share started in
- * a session a push tap opened. The canonical URL itself never changes.
+ * The canonical URL plus ?via={via} (share by default, household for a shared
+ * list), and &src=push when the share started in a session a push tap opened.
+ * The canonical URL itself never changes.
  */
-export function withShareAttribution(url: string, src: SrcOrigin): string {
-  const query = src === 'push' ? 'via=share&src=push' : 'via=share';
+export function withShareAttribution(url: string, src: SrcOrigin, via: ViaChannel = 'share'): string {
+  const query = src === 'push' ? `via=${via}&src=push` : `via=${via}`;
   return `${url}${url.includes('?') ? '&' : '?'}${query}`;
 }
 

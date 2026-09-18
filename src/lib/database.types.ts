@@ -2747,10 +2747,15 @@ export type Database = {
         Returns: undefined
       }
       refresh_title_available_services: { Args: never; Returns: number }
+      remove_member: {
+        Args: { p_household_id: string; p_user_id: string }
+        Returns: undefined
+      }
       resume_stalled_chains: {
         Args: { p_max_resumes?: number; p_stale_after?: string }
         Returns: number
       }
+      revoke_invite: { Args: { p_household_id: string }; Returns: number }
       run_data_quality_check: {
         Args: never
         Returns: {
