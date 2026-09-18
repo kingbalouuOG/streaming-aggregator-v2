@@ -1903,3 +1903,9 @@ only thing at stake.
 - Verified: dry run in PGlite with mutation tests, then `verify-093-households.sql` against production (16 steps, rolled back, 0 residue); `database.types.ts` regenerated (additions only).
 - §8 facts: no cross-user read policy existed anywhere; Realtime publication has no tables; 24 push tokens / 8 users; 1 of 11 installs has more than one account.
 - Updated: wiki/entities/codebase/database-schema.md, wiki/entities/codebase/rpcs.md, wiki/entities/codebase/migrations.md, wiki/entities/codebase/event-taxonomy.md, wiki/concepts/techniques/rls-pattern.md (Membership RLS), wiki/registers/parking-lot.md (IN-GR-043 closed, IN-GR-009 note).
+
+## [2026-09-18] query | G2 H1 reconciled; H2 and H3 handoffs written; D16 raised
+- Plan §11b records the H1 contract (RPC codes, idempotent member join, item and reaction write rules, invite revocation on owner leave, §8 answers) and what it changed: no JWT list route in H3 (RLS reads), the list screen clears its own pending link.
+- D16 for Joe: 093 has no member removal and no revoke RPC. Recommended (a): H2 adds migration 094 with `remove_member` and `revoke_invite`; H4 becomes 095.
+- Handoffs: `docs/plans/2026-09-18-003-handoff-growth-h2-household-app.md` (list screen with ?invite= join, tab picker, Add to household, invite share via a third ShareTarget arm, household_joined, Profile → Household, conditional 094) and `docs/plans/2026-09-18-004-handoff-growth-h3-list-links.md` (Worker list page and preview JSON at 60s TTL, invite marker after the cache read, PAGE_CACHE_VERSION bump, parseInboundLink invite, PendingLink v2 with intent, referrer l= and i=, IN-GR-040/044 resume pass). Strict file ownership; contract: route /list/{id}?invite= and the preview JSON shape.
+- Filed IN-GR-046 and IN-GR-047 from the H1 summary. `send-notifications` redeployed with the IN-GR-025 copy.
