@@ -8,16 +8,17 @@
  *
  *   https://videxstreaming.com/t/{movie|tv}/{tmdbId}[-{slug}] -> /detail/{type}-{id}
  *   https://videxstreaming.com/room/{uuid}                    -> /room/{uuid}
- *   https://videxstreaming.com/list/{id}                      -> '/' with a list object
- *                                                                (reserved for G2: no screen exists yet, so the
- *                                                                object is attributed but never routed or pended)
- *   videx://detail/{type}-{id}, videx://room/{uuid}           -> same routes
+ *   https://videxstreaming.com/list/{uuid}[?invite={uuid}]    -> /list/{uuid} (G2 H3), invite captured
+ *   videx://detail/{type}-{id}, videx://room/{uuid},
+ *   videx://list/{uuid}[?invite={uuid}]                       -> same routes
  *   any other videx:// path (watchlist, reset-password,
  *   confirm-email, profile/…)                                 -> passed through unchanged, no object
  *   any other https path                                      -> '/'
  *
  * ?via= is the URL channel and ?src= the originating session of a share.
- * Values outside the contract are dropped, not rewritten.
+ * Values outside the contract are dropped, not rewritten. ?invite= is a
+ * household invite token (G2): read on list links only, uuid only, else null.
+ * `route` never carries it; inboundHref() composes the router path with it.
  *
  * Pure: no React Native imports, so it runs under the root vitest rig.
  */
@@ -48,9 +49,12 @@ export interface InboundLink {
   object: InboundObject | null;
   via: ViaChannel | null;
   src: SrcOrigin | null;
+  /** Household invite token (uuid) from ?invite= on a list link; null otherwise. */
+  invite: string | null;
 }
 
-// The G2 watchlists entity does not exist yet; accept a conservative id.
+// A superset of the list id (a uuid since G2 H1, migration 093). Kept for
+// growth event validation; routing requires isListId.
 export const LIST_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 /** The one content-id rule for growth objects: "movie-603" / "tv-1396", a positive TMDb id of at most 10 digits. */
@@ -62,6 +66,29 @@ export function isContentId(id: unknown): id is string {
 
 export function isRoomId(id: string): boolean {
   return isUuid(id);
+}
+
+/** watchlists.id (093): a uuid. */
+export function isListId(id: string): boolean {
+  return isUuid(id);
+}
+
+/** A household invite token (household_invites.token, a uuid), lowercased, or null. */
+export function normaliseInvite(raw: string | null | undefined): string | null {
+  return raw && isUuid(raw) ? raw.toLowerCase() : null;
+}
+
+/**
+ * The router path for a link: its route, plus ?invite= when a list link
+ * carries a token (the list screen's contract, /list/{id}?invite={token}).
+ * Built from the object, so it is the same whether `route` already has the
+ * query (the install referrer) or not (parseInboundLink).
+ */
+export function inboundHref(link: Pick<InboundLink, 'route' | 'object'> & { invite?: string | null }): string {
+  if (link.object?.type !== 'list' || !isListId(link.object.id)) return link.route;
+  const base = `/list/${link.object.id.toLowerCase()}`;
+  const invite = normaliseInvite(link.invite);
+  return invite ? `${base}?invite=${invite}` : base;
 }
 
 export function normaliseVia(raw: string | null | undefined): ViaChannel | null {
@@ -77,7 +104,7 @@ export function isPendingLinkFresh(seenAt: number, now: number): boolean {
   return Number.isFinite(seenAt) && now >= seenAt && now - seenAt < PENDING_LINK_TTL_MS;
 }
 
-const home = (): InboundLink => ({ route: '/', object: null, via: null, src: null });
+const home = (): InboundLink => ({ route: '/', object: null, via: null, src: null, invite: null });
 
 /** First value per key; '+' is a space; undecodable pairs are skipped. Shared with the Play referrer parser. */
 export function readQuery(query: string): Map<string, string> {
@@ -139,21 +166,21 @@ export function parseInboundLink(input: string): InboundLink {
     if (!id) return home();
     const contentId = `${title[1]}-${id}`;
     if (!isContentId(contentId)) return home();
-    return { route: `/detail/${contentId}`, object: { type: 'title', id: contentId }, via, src };
+    return { route: `/detail/${contentId}`, object: { type: 'title', id: contentId }, via, src, invite: null };
   }
 
   const room = /^\/room\/([^/]+)$/.exec(path);
   if (room && isRoomId(room[1])) {
     const id = room[1].toLowerCase();
-    return { route: `/room/${id}`, object: { type: 'room', id }, via, src };
+    return { route: `/room/${id}`, object: { type: 'room', id }, via, src, invite: null };
   }
 
+  // G2 H3: a shared list. The invite rides only here; a token on any other
+  // link is ignored. A non-uuid id falls through to home below.
   const list = /^\/list\/([^/]+)$/.exec(path);
-  if (list && LIST_ID_RE.test(list[1])) {
-    // Reserved grammar (ADR-015, G2): the object is attributed, but there is
-    // no list screen yet, so the route is home and the link is never pended
-    // (pendingLink skips list objects) or replayed onto a missing screen.
-    return { route: '/', object: { type: 'list', id: list[1] }, via, src };
+  if (list && isListId(list[1])) {
+    const id = list[1].toLowerCase();
+    return { route: `/list/${id}`, object: { type: 'list', id }, via, src, invite: normaliseInvite(params.get('invite')) };
   }
 
   // Other app-scheme paths belong to Expo Router as they are (watchlist,
@@ -162,7 +189,7 @@ export function parseInboundLink(input: string): InboundLink {
   // malformed object link (a public-grammar prefix that did not match) and
   // an empty path still go home.
   if (fromApp && path !== '/' && !/^\/(t|room|list|detail)(\/|$)/.test(path)) {
-    return { route: raw, object: null, via: null, src: null };
+    return { route: raw, object: null, via: null, src: null, invite: null };
   }
 
   return home();

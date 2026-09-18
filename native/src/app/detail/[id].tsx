@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Star } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -24,7 +24,7 @@ import { serviceIdsToProviderIds } from '@/lib/adapters/platformAdapter';
 import { buildMomentCopy } from '@/lib/growth/shareCopy';
 import { dismissSessionBanner, type SessionOrigin } from '@/lib/instrumentation/sessionOrigin';
 import type { ContentItem } from '@/lib/types/content';
-import { clearPendingLinkFor } from '@/pendingLink';
+import { useClearPendingLinkOnFocus } from '@/pendingLink';
 import { useAuth } from '@/providers/auth';
 
 // Arrival and leaving-soon pushes only; a bundle lands on the watchlist and
@@ -68,11 +68,10 @@ export default function DetailRoute() {
   const dismissToast = useCallback(() => setToast(null), []);
 
   // A shared link that opened this title for a signed-in user needs no
-  // resume after a later sign-in (native/src/pendingLink.ts).
+  // resume after a later sign-in (native/src/pendingLink.ts). On focus, not
+  // on session change: beneath /auth this screen must leave it (IN-GR-040).
   const { session } = useAuth();
-  useEffect(() => {
-    if (session && params.id) clearPendingLinkFor(`/detail/${params.id}`);
-  }, [session, params.id]);
+  useClearPendingLinkOnFocus(`/detail/${params.id}`, !!session && !!params.id);
 
   // Growth S4: a push tap that opened this title makes it a share moment.
   const sessionOrigin = useSessionOrigin();

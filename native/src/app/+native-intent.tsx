@@ -1,6 +1,6 @@
 import { recordInboundLink } from '@/attribution';
 import { stripMalformedQuery } from '@/lib/deepLinkQueryGuard';
-import { parseInboundLink } from '@/lib/growth/inboundLink';
+import { inboundHref, parseInboundLink } from '@/lib/growth/inboundLink';
 import { writePendingLink } from '@/pendingLink';
 
 // Runs on every incoming system link, cold (`initial: true`) and warm,
@@ -16,6 +16,8 @@ import { writePendingLink } from '@/pendingLink';
 //    src/lib/growth/inboundLink.ts).
 // 3. Records object links as the pending link so a signed-out recipient
 //    lands on the object after sign-in or onboarding (native/src/pendingLink.ts).
+//    A shared list (G2) routes to /list/{id}?invite={token} when the link
+//    carries a token; the list screen owns the join.
 // 4. Records the first touch and posts link_opened with via / src / object
 //    (Growth S2, native/src/attribution.ts). Fire-and-forget.
 export function redirectSystemPath({ path }: { path: string; initial: boolean }): string {
@@ -26,7 +28,7 @@ export function redirectSystemPath({ path }: { path: string; initial: boolean })
     const link = parseInboundLink(safe);
     writePendingLink(link);
     recordInboundLink(link);
-    return link.route;
+    return inboundHref(link);
   } catch {
     // Never throw here: a crash in the interceptor kills the cold start.
     return '/';

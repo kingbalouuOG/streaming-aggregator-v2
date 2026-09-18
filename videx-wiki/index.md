@@ -42,6 +42,7 @@ Catalog of every page in this wiki. One line per page, grouped by category. Main
 - [Component Inventory](wiki/entities/codebase/components.md) — Every React component grouped by role.
 - [Hook Inventory](wiki/entities/codebase/hooks.md) — One row per `useX` hook (web + native sections).
 - [Event Taxonomy](wiki/entities/codebase/event-taxonomy.md) — Every emitted event, destination table, payload.
+- [videx-api Worker: public routes and cache TTLs](wiki/entities/codebase/videx-api-worker.md) — Object pages and JSON (`/t/`, `/room/`, `/list/`), cache keys, TTLs, attribution markers, list preview privacy boundary.
 
 ## Concepts
 

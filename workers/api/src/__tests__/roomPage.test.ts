@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { applyAttribution, PAGE_CACHE_VERSION, PLAY_STORE_URL } from '../pageShell';
+import { renderListNotFoundPage } from '../listPage';
 import {
-  renderListNotFoundPage,
   renderRoomNotFoundPage,
   renderRoomPage,
   roomOgDescription,

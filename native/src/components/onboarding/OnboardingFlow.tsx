@@ -17,7 +17,7 @@ import type { ServiceId } from '@/lib/types/content';
 import { DEFAULT_SLIDERS, type SliderState } from '@/lib/taste-v2/types';
 import { useAuth } from '@/providers/auth';
 import { markJustOnboarded } from '@/onboardingSignal';
-import { consumePendingLink } from '@/pendingLink';
+import { consumePendingLink, readPendingLink } from '@/pendingLink';
 import {
   clearOnboardingDraft,
   readOnboardingDraft,
@@ -281,7 +281,9 @@ export function OnboardingFlow() {
   // it again, which would overwrite its taste profile. Go to the tabs and
   // resume a pending shared link here: /auth may not be beneath us (a cold
   // link open stacks (tabs) → detail → auth → onboarding), so its focus
-  // effect cannot be relied on to do it (sweep, finder A 1).
+  // effect cannot be relied on to do it (sweep, finder A 1). As in auth.tsx
+  // (IN-GR-044), an account that never chose a name meets the name gate
+  // first; Curating resumes the link after the save.
   const onProviderSignedIn = async (userId: string, ageRange: string | null, viewingContext: string | null) => {
     const { data, error } = await supabase
       .from('profiles')
@@ -296,6 +298,10 @@ export function OnboardingFlow() {
     if (data?.onboarding_completed) {
       markOnboardingComplete(userId);
       clearOnboardingDraft();
+      if (readPendingLink() && !(await fetchUsernameChosen(userId))) {
+        router.replace({ pathname: '/choose-username', params: { next: 'curating' } });
+        return;
+      }
       const pending = consumePendingLink();
       router.replace('/');
       if (pending) setTimeout(() => router.push(pending.route as Href), 0);

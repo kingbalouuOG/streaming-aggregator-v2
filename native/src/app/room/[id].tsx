@@ -1,6 +1,5 @@
 import { FlashList } from '@shopify/flash-list';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,7 +10,7 @@ import { useSharedRoom } from '@/hooks/useSharedRoom';
 import { countLabel } from '@/lib/format/plural';
 import { formatPickedDate, sharedRoomUrl } from '@/lib/growth/roomSnapshot';
 import type { ContentItem } from '@/lib/types/content';
-import { clearPendingLinkFor } from '@/pendingLink';
+import { useClearPendingLinkOnFocus } from '@/pendingLink';
 import { useAuth } from '@/providers/auth';
 import { SharedRoomNotFoundError } from '@/sharedRoomApi';
 
@@ -28,10 +27,9 @@ export default function RoomRoute() {
   const { session } = useAuth();
   const { data, isLoading, isError, error, refetch } = useSharedRoom(id);
 
-  // Shown to a signed-in user: the pending link has done its job.
-  useEffect(() => {
-    if (session && id) clearPendingLinkFor(`/room/${id}`);
-  }, [session, id]);
+  // Shown to a signed-in user: the pending link has done its job (on focus,
+  // IN-GR-040; see native/src/pendingLink.ts).
+  useClearPendingLinkOnFocus(`/room/${id}`, !!session && !!id);
 
   const top = insets.top + 12;
   const back = () => (router.canGoBack() ? router.back() : router.replace('/'));

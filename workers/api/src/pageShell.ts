@@ -7,14 +7,20 @@
  *
  * Pure module — NO Hono/Workers imports — tested from the root vitest rig.
  *
- * Attribution and the edge cache: pages are cached for 24h keyed by object
- * id and platform bucket only, never by query string (a per-share cache
- * entry would defeat the cache). So pages are rendered with two markers in
- * the app-facing hrefs, and applyAttribution() fills them per request AFTER
- * the cache read. Nothing query-derived is ever stored.
+ * Attribution and the edge cache: pages are cached keyed by object id and
+ * platform bucket only, never by query string (a per-share cache entry would
+ * defeat the cache). So pages are rendered with two markers in the
+ * app-facing hrefs, and applyAttribution() fills them per request AFTER the
+ * cache read. Nothing query-derived is ever stored: that includes a list
+ * page's household invite token (G2 H3), which rides the same two markers.
  */
 
-import { normaliseSrc, normaliseVia, type InboundObject } from '../../../src/lib/growth/inboundLink';
+import {
+  normaliseInvite,
+  normaliseSrc,
+  normaliseVia,
+  type InboundObject,
+} from '../../../src/lib/growth/inboundLink';
 import { buildPlayReferrer } from '../../../src/lib/growth/installReferrer';
 
 /** Android is live on Google Play. */
@@ -76,10 +82,13 @@ export const HTML_SECURITY_HEADERS: Record<string, string> = {
  * it, and titles cached before that deploy kept serving the pre-slug page
  * (no 301, no smart banner, no attribution markers) until they expired.
  */
-export const PAGE_CACHE_VERSION = 'v3';
+export const PAGE_CACHE_VERSION = 'v4';
 
-/** Edge-cache TTL for every object page (/t/, /room/). */
+/** Edge-cache TTL for the frozen object pages (/t/, /room/). */
 export const PAGE_TTL_SECONDS = 24 * 60 * 60;
+
+/** Edge-cache TTL for a shared list (/list/ and its preview JSON): a live list, not a snapshot. */
+export const LIST_PAGE_TTL_SECONDS = 60;
 
 /**
  * Edge cache key for an object page: path and platform bucket only, plus
@@ -105,7 +114,7 @@ export function htmlPage(html: string, status = 200, extra: Record<string, strin
 }
 
 // ── Attribution pass-through ─────────────────────────────────────────
-/** Placed at the end of a videx:// href; becomes "?via=…&amp;src=…" or "". */
+/** Placed at the end of a videx:// href; becomes "?invite=…&amp;via=…&amp;src=…" or "". */
 export const DEEP_LINK_QUERY_MARK = '__VIDEX_DL_QUERY__';
 /** Placed at the end of the Play href; becomes "&amp;referrer=via%3D…" or "". */
 export const PLAY_REFERRER_MARK = '__VIDEX_PLAY_REFERRER__';
@@ -120,20 +129,28 @@ export const PLAY_REFERRER_MARK = '__VIDEX_PLAY_REFERRER__';
  * r={roomId}, src/lib/growth/installReferrer.ts), so an Android install from
  * the page lands on that object after sign-up. The deep link already carries
  * the object in its path.
+ *
+ * G2 H3: on a list page (object type 'list') a valid ?invite= token goes
+ * into both, as invite= on the deep link and i= in the referrer, so the
+ * invitee reaches /list/{id}?invite={token} on every path. Any other page
+ * ignores it.
  */
 export function applyAttribution(
   html: string,
   via: string | null | undefined,
   src: string | null | undefined,
   object?: InboundObject | null,
+  invite?: string | null,
 ): string {
   const pairs: string[] = [];
+  const token = object?.type === 'list' ? normaliseInvite(invite) : null;
   const v = normaliseVia(via);
   const s = normaliseSrc(src);
+  if (token) pairs.push(`invite=${token}`);
   if (v) pairs.push(`via=${v}`);
   if (s) pairs.push(`src=${s}`);
   const deepLinkQuery = pairs.length ? `?${pairs.join('&amp;')}` : '';
-  const referrer = buildPlayReferrer(via, src, object);
+  const referrer = buildPlayReferrer(via, src, object, token);
   const playReferrer = referrer ? `&amp;referrer=${encodeURIComponent(referrer)}` : '';
   return html.split(DEEP_LINK_QUERY_MARK).join(deepLinkQuery).split(PLAY_REFERRER_MARK).join(playReferrer);
 }

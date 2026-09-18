@@ -109,8 +109,8 @@ Sent pushes are logged to `notification_deliveries` (migration 057), NOT `user_i
 
 | `event_name` | Written by | When | Notable fields |
 |---|---|---|---|
-| `preview_fetched` | Worker page handler (`/t/`, `/room/`) | a crawler (chat unfurl, search bot) GETs a page, 200 only, cache hits included | `ua_class = crawler`, `metadata.agent` (`whatsapp`, `imessage`, `slack`…), `platform` = UA bucket, object, via/src from the query |
-| `preview_opened` | Worker page handler | a person GETs the page | `ua_class = human`, same fields |
+| `preview_fetched` | Worker page handler (`/t/`, `/room/`, `/list/` since G2 H3) | a crawler (chat unfurl, search bot) GETs a page, 200 only, cache hits included | `ua_class = crawler`, `metadata.agent` (`whatsapp`, `imessage`, `slack`…), `platform` = UA bucket, object, via/src from the query |
+| `preview_opened` | Worker page handler | a person GETs the page | `ua_class = human`, same fields. On `/list/` the object is `{type: 'list', id}` (`object_type = 'list'`, no migration); the invite token is never recorded. |
 | `link_opened` | app → `POST /v1/growth/events` (`+native-intent.tsx`) | an object link (title/room/list) reaches the app, pre-auth included | object, via, src; `user_id` if signed in |
 | `first_open` | app (`_layout.tsx` → `runFirstLaunchAttribution`) | once per install id | first-touch via/src/object; `metadata.touch` (`link` \| `install_referrer` \| null), `metadata.prior_install` |
 | `signup_completed` | app (`curating.tsx`) | end of onboarding, beside `first_home_view` | first-touch via/src/object; `metadata.touch`; `user_id` |

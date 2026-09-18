@@ -1,6 +1,6 @@
 /**
  * The Worker's branded HTML 404s (IN-GR-045): an unknown title, a malformed
- * or unknown room id, and the /list/:id grammar reserved for G2. One helper,
+ * or unknown room id, and a malformed or unknown shared list id. One helper,
  * so every 404 carries the same status, content type, security headers and
  * short cache. Attribution is applied by the caller, as for any page.
  *
@@ -9,7 +9,8 @@
 
 import { htmlPage, NOT_FOUND_CACHE_CONTROL, platformBucket } from './pageShell';
 import { renderTitleNotFoundPage } from './titlePage';
-import { renderListNotFoundPage, renderRoomNotFoundPage } from './roomPage';
+import { renderListNotFoundPage } from './listPage';
+import { renderRoomNotFoundPage } from './roomPage';
 
 export type NotFoundKind = 'title' | 'room' | 'list';
 

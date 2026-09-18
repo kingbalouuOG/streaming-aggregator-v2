@@ -3,7 +3,7 @@ title: Inbound deep linking (universal links, app links, pending link, room snap
 type: concept
 tags: [technique, deep-links, universal-links, app-links, expo-router, workers, growth]
 created: 2026-09-14
-updated: 2026-09-17
+updated: 2026-09-18
 sources:
   - docs/plans/2026-09-14-003-feat-phase-g0-g1-growth-foundations-and-sharing-plan.md (repo)
   - docs/plans/2026-09-14-004-handoff-growth-s1-links.md (repo)
@@ -21,13 +21,13 @@ How a `https://videxstreaming.com/…` link reaches the right screen, built in G
 
 | Piece | Where | Does |
 |---|---|---|
-| Object pages | `workers/api/src/{pageShell,titlePage,roomPage}.ts`, routes in `index.ts` | `/t/`, `/room/`, `/list/` HTML with OG tags, smart banner, deep link, store CTA; 24h Cache API keyed by id + platform bucket. |
+| Object pages | `workers/api/src/{pageShell,titlePage,roomPage,listPage}.ts`, routes in `index.ts` | `/t/`, `/room/`, `/list/` HTML with OG tags, smart banner, deep link, store CTA; Cache API keyed by id + platform bucket (24h; lists 60 s). Routes and TTLs: [videx-api Worker](../../entities/codebase/videx-api-worker.md). |
 | Association files | `workers/api/src/wellKnown.ts` | AASA (`CT8F3578W8.app.videx.streaming`, `components` + legacy `paths`) and `assetlinks.json` (package `app.videx.streaming`, fingerprints from `[vars] ASSETLINKS_FINGERPRINTS`). `application/json`, no redirect. |
 | iOS universal links | `native/app.json` `ios.associatedDomains: ["applinks:videxstreaming.com"]` | iOS fetches the AASA via Apple's CDN at install. |
 | Android app links | `native/app.json` `android.intentFilters` (VIEW, `autoVerify`, BROWSABLE + DEFAULT, `/t/`, `/room/`, `/list/`) | Android verifies `assetlinks.json` at install. `app.config.js` spreads `config.android`, so the dev variant keeps the filter (and will not verify, being `com.videx.app.dev`). |
 | Intent interceptor | `native/src/app/+native-intent.tsx` | Query guard (IN-DEP-001) → `parseInboundLink` → pending link → route. Must never throw. |
-| Mapper | `src/lib/growth/inboundLink.ts` | Pure grammar → route + `via`/`src`. Tests cover every form, malformed queries and the guard ordering. |
-| Pending link | `native/src/pendingLink.ts` | MMKV `{route, object, via, src, seenAt}`, 24h TTL. Resumed by `auth.tsx` (after sign-in) and `curating.tsx` (after onboarding), pushed on top of the tabs; dropped by `detail/[id]` and `room/[id]` when shown with a session, and on sign-out. |
+| Mapper | `src/lib/growth/inboundLink.ts` | Pure grammar → route + `via`/`src` + `invite` (list links only). Tests cover every form, malformed queries, invite decoys and the guard ordering. |
+| Pending link | `native/src/pendingLink.ts` + `src/lib/growth/pendingLinkRecord.ts` | MMKV v2 `{route, object, via, src, intent, invite, seenAt}`, 24h TTL. Resumed by `auth.tsx` (after sign-in; name gate first, IN-GR-044) and `curating.tsx` (after onboarding), pushed on top of the tabs; dropped by `detail/[id]` and `room/[id]` when they reach **focus** with a session (`useClearPendingLinkOnFocus`, IN-GR-040), by the list screen after its join, and on sign-out. |
 | Stack base | `native/src/app/_layout.tsx` `unstable_settings.initialRouteName = '(tabs)'` | A cold-start link renders the tabs beneath the object so Back has somewhere to go. |
 | Room snapshots | migration 088 `shared_rooms`; `POST /v1/share/room`; `GET /v1/room/:id`; `native/src/app/room/[id].tsx` | See below. |
 
@@ -47,7 +47,8 @@ The For You payload's `AnchorRoomPreview` carries `titleRefs` (all room titles, 
 - Every public prefix needs a Cloudflare dashboard route to `videx-api`, or Vercel answers 404 (verified 2026-09-14: `/.well-known/*` and `/room/*` return Vercel 404s before the routes exist).
 - `assetlinks.json` must list the **Play App Signing** key for Play installs; the upload key (`99:CE:FF:7E…`) signs only sideloaded CI APKs. **They are different keys** (verified on device 2026-09-17): Play signs with a Google-generated key, SHA-256 `09:BC:66:B5…89:81:9D`, SHA-1 `70:81:3D:08…C0:4D:E0`. Both are served since PR #201. Check with `adb shell pm get-app-links app.videx.streaming`; after a change, Google's Digital Asset Links cache can hold the old file for up to an hour (`assetlinks:check` returns `maxAge 3600s`), then `adb shell pm verify-app-links --re-verify app.videx.streaming`. State `1024` means not verified.
 - The same Play signing SHA-1 must be registered as a Google Cloud **Android OAuth client** for Google sign-in on Play installs; with only the upload-key client, sign-in fails with the app's generic "Couldn't sign in with Google" and nothing reaches Supabase.
-- A screen that needs sign-in for an action must **replace** itself with `/auth`, not push `/auth` over itself: a detail screen left mounted clears the pending link the moment the session appears (its own `clearPendingLinkFor` effect), before `auth.tsx` can resume it (IN-GR-028, found on device).
+- A screen that needs sign-in for an action must **replace** itself with `/auth`, not push `/auth` over itself: a detail screen left mounted clears the pending link the moment the session appears (its own `clearPendingLinkFor` effect), before `auth.tsx` can resume it (IN-GR-028, found on device). **Since G2 H3** the clearing is keyed on focus, so a screen beneath `/auth` no longer clears it; replace is kept anyway, and `auth.tsx` removes any older `/auth` entry when it gains focus (IN-GR-044).
+- `router.replace(route, { withAnchor: true })` cannot replace the resume's replace-then-push: expo-router 56 anchors only a nested navigator's initial route, and detail, room and list are root-stack siblings of `/auth` (checked in `getNavigationAction.js` and the stack router, 2026-09-18).
 - Device-verified 2026-09-16..17 (Growth S5): universal and app links cold and warm from WhatsApp, Messages and Slack; bare and stale slugs; room links on a second phone; pending link through sign-in and through provider sign-up and onboarding; tabs beneath reset-link and push cold starts; Play referrer carrying `movie-550` into a fresh install.
 - The Worker runs on cached page hits (`x-videx-cache: hit` on `/t/movie/603`, 2026-09-14), so no zone Cache Rule is bypassing it; attribution fill-in depends on that.
 - `onboarding_events` RLS is on with `auth.uid() = user_id` insert policies, so null-user (pre-auth) inserts are rejected — pre-auth telemetry must go through the Worker (S2).
