@@ -35,6 +35,7 @@ export const GROWTH_EVENT_NAMES = [
   'share_initiated',
   'share_completed',
   'notification_opened',
+  'household_joined',
 ] as const;
 export type GrowthEventName = (typeof GROWTH_EVENT_NAMES)[number];
 
@@ -50,6 +51,7 @@ export const CLIENT_EVENT_NAMES: readonly ClientEventName[] = [
   'share_initiated',
   'share_completed',
   'notification_opened',
+  'household_joined',
 ];
 
 /** Events about one object must name it. */
@@ -57,6 +59,7 @@ export const OBJECT_REQUIRED_EVENTS: readonly ClientEventName[] = [
   'link_opened',
   'share_initiated',
   'share_completed',
+  'household_joined',
 ];
 
 export const APP_PLATFORMS = ['ios', 'android'] as const;
@@ -113,6 +116,13 @@ export type GrowthEvent =
       object: InboundObject | null;
       deliveryId: string | null;
       metadata?: GrowthMetadata;
+    })
+  // Growth G2 / migration 093: the household loop's conversion event. The
+  // object is the shared list (type 'list', id the watchlists uuid).
+  | (Attributed & {
+      name: 'household_joined';
+      object: InboundObject & { type: 'list' };
+      metadata: { household_id: string };
     });
 
 /** The POST body. Exactly these keys; the Worker rejects any other. */
