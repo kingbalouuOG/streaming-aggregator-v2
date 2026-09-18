@@ -1909,3 +1909,6 @@ only thing at stake.
 - D16 for Joe: 093 has no member removal and no revoke RPC. Recommended (a): H2 adds migration 094 with `remove_member` and `revoke_invite`; H4 becomes 095.
 - Handoffs: `docs/plans/2026-09-18-003-handoff-growth-h2-household-app.md` (list screen with ?invite= join, tab picker, Add to household, invite share via a third ShareTarget arm, household_joined, Profile → Household, conditional 094) and `docs/plans/2026-09-18-004-handoff-growth-h3-list-links.md` (Worker list page and preview JSON at 60s TTL, invite marker after the cache read, PAGE_CACHE_VERSION bump, parseInboundLink invite, PendingLink v2 with intent, referrer l= and i=, IN-GR-040/044 resume pass). Strict file ownership; contract: route /list/{id}?invite= and the preview JSON shape.
 - Filed IN-GR-046 and IN-GR-047 from the H1 summary. `send-notifications` redeployed with the IN-GR-025 copy.
+
+## [2026-09-18] query | D16 decided: member removal in H2 (migration 094)
+- Joe chose (a). H2 handoff step 7 unconditional; migration numbers: 094 H2 (`remove_member`, `revoke_invite`), 095 H4 (nudges). Plan §11b updated.
