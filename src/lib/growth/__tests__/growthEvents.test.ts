@@ -94,6 +94,27 @@ describe('buildGrowthEventBody', () => {
     expect(body.metadata).toEqual({ type: 'bundle' });
   });
 
+  it('household_joined names the shared list and carries the household id (G2, 093)', () => {
+    const body = buildGrowthEventBody(
+      {
+        name: 'household_joined',
+        via: 'household',
+        src: null,
+        object: { type: 'list', id: ROOM },
+        metadata: { household_id: INSTALL },
+      },
+      CTX,
+    );
+    expect(body).toMatchObject({
+      event_name: 'household_joined',
+      via: 'household',
+      object_type: 'list',
+      object_id: ROOM,
+      delivery_id: null,
+      metadata: { household_id: INSTALL },
+    });
+  });
+
   it('drops a via outside the contract', () => {
     const body = buildGrowthEventBody(
       { name: 'link_opened', via: 'spam' as ViaChannel, src: null, object: { type: 'title', id: 'movie-1' } },

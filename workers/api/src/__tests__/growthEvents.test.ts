@@ -60,6 +60,15 @@ describe('validateGrowthEventBody', () => {
     expect(result).toMatchObject({ ok: true, value: { object_id: ROOM, delivery_id: ROOM } });
   });
 
+  it('accepts household_joined with a list object and refuses it without one (G2, 093)', () => {
+    const joined = { ...valid, event_name: 'household_joined', via: 'household', object_type: 'list', object_id: ROOM };
+    expect(validateGrowthEventBody({ ...joined, metadata: { household_id: INSTALL } })).toMatchObject({
+      ok: true,
+      value: { event_name: 'household_joined', via: 'household', object_type: 'list', object_id: ROOM },
+    });
+    expect(validateGrowthEventBody({ ...joined, object_type: null, object_id: null }).ok).toBe(false);
+  });
+
   it('drops via / src strings outside the contract rather than storing them', () => {
     expect(validateGrowthEventBody({ ...valid, via: 'spam', src: 'ads' })).toMatchObject({
       ok: true,

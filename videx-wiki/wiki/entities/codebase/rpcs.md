@@ -3,7 +3,7 @@ title: Supabase RPC Catalogue
 type: entity
 tags: [supabase, rpc, postgres]
 created: 2026-04-26
-updated: 2026-06-10
+updated: 2026-09-18
 sources:
   - raw/codebase-snapshots/rpc-catalogue.md
   - raw/phase-summaries/phase-5.5-summary.md
@@ -92,6 +92,22 @@ Every Supabase function callable via `supabase.rpc()`. Source of truth: `supabas
 - **Payload shape:** keys `profiles`, `taste_profiles`, `user_services`, `user_genres`, `watchlist`, `user_interactions`, `card_impressions` (capped to last 90 days — matches migration 014's daily-aggregate rollup), `onboarding_events`. Plus `_export_metadata` with `{ version: '1.0', generated_at: now(), user_id: auth.uid() }`. Empty tables return `'[]'::jsonb` via `COALESCE`.
 - Migration: 043 (applied 2026-05-15). Verified `prosecdef = true`, `search_path = public,pg_temp`.
 - **ENG-1 update (migration 044, 2026-06-10):** body CREATE OR REPLACEd to also export `user_interest_centroids` (IN-PX-54 honoured at table-creation time).
+
+## Households (Growth G2, migration 093)
+
+All SECURITY DEFINER, `search_path = public, pg_temp`, EXECUTE for `authenticated` only (revoked from PUBLIC and anon; an explicit function REVOKE sticks on this project, checked live 2026-09-18). The caller is always `auth.uid()`. Every failure is `RAISE EXCEPTION '<code>'` (SQLSTATE P0001, message = the code); the app maps codes to copy. Every function also raises `not_authenticated` when `auth.uid()` is null.
+
+| Signature | Does | Codes |
+|---|---|---|
+| `create_household(p_name text) returns table (household_id uuid, watchlist_id uuid)` | Household (name trimmed, 1–40) owned by the caller, the owner member row, one list `'Shared'` | `invalid_name`, `household_limit` (owns 3 already) |
+| `create_invite(p_household_id uuid) returns table (token uuid, expires_at timestamptz)` | Owner only. Revokes the active invite, mints a new one (7 days, 6 uses) | `not_owner`, `rate_limited` (10 per owner per rolling 24h, counted from `household_invites`) |
+| `join_household(p_token uuid) returns table (household_id uuid, watchlist_id uuid, already_member boolean)` | A caller already in the household gets its ids with `already_member = true` whatever the token's state, and `uses` is unchanged; otherwise checks in order, inserts a `member` row, `uses + 1` | `invite_invalid` (unknown or revoked), `invite_expired`, `invite_exhausted`, `household_full` (6 members) |
+| `leave_household(p_household_id uuid) returns void` | Via `household_leave_internal`: caller's reactions in the household deleted, their items kept with `added_by` null, member row deleted; an owner's leaving passes ownership (and role) to the earliest `joined_at` member and revokes open invites, or deletes the household if empty | `not_member` |
+| `household_members_view(p_household_id uuid) returns table (user_id uuid, username text, role text, joined_at timestamptz)` | Co-members' usernames (no email, no display name), ordered by `joined_at` | `not_member` |
+| `household_leave_internal(p_user_id uuid, p_household_id uuid) returns void` | The leave logic, shared with `delete_own_account()`. EXECUTE granted to nobody | `not_member` |
+| `is_household_member(hid uuid) returns boolean` | STABLE; the membership test inside every household policy | none |
+
+Verification: `supabase/queries/verify-093-households.sql` (one transaction, rolled back).
 
 ## Edge Functions (RPC-shaped HTTP endpoints)
 

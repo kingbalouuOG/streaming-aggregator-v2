@@ -3,12 +3,13 @@ title: Database Schema (Supabase)
 type: entity
 tags: [supabase, postgres, schema, pgvector, pg_partman]
 created: 2026-04-26
-updated: 2026-06-18
+updated: 2026-09-18
 sources:
   - raw/codebase-snapshots/database-schema-snapshot.md
   - raw/codebase-snapshots/migration-changelog.md
   - raw/v2-strategy/Videx_v2_Project_Orchestration_v0.8.md
   - supabase/migrations/047_app_feedback.sql
+  - supabase/migrations/093_households.sql
 related:
   - wiki/entities/codebase/migrations.md
   - wiki/entities/codebase/rpcs.md
@@ -23,7 +24,7 @@ related:
 
 # Database Schema (Supabase)
 
-Snapshot of the Videx Supabase schema **as of migration 047** (the live-production `information_schema` pull is REPO-1-era / migration 046, 2026-06-10; `app_feedback` from migration 047 added from the migration source for the NATIVE feedback loop). Source of truth: `supabase/migrations/` + orchestration v0.8 §3.4 for applied status. Use [migrations](migrations.md) for chronology, [RPC catalogue](rpcs.md) for callable functions. RLS is enabled on **every** public table.
+Snapshot of the Videx Supabase schema **as of migration 047**, plus the household layer from **093** (applied 2026-09-18) (the live-production `information_schema` pull is REPO-1-era / migration 046, 2026-06-10; `app_feedback` from migration 047 added from the migration source for the NATIVE feedback loop). Source of truth: `supabase/migrations/` + orchestration v0.8 §3.4 for applied status. Use [migrations](migrations.md) for chronology, [RPC catalogue](rpcs.md) for callable functions. RLS is enabled on **every** public table.
 
 ## Extensions
 
@@ -63,7 +64,21 @@ Snapshot of the Videx Supabase schema **as of migration 047** (the live-producti
 | `availability_reports` | "Report incorrect availability" submissions. | `tmdb_id`, `service_id`, `report_type`, `notes` |
 | `app_feedback` | **NATIVE (047):** in-app product feedback backing the native FeedbackSheet — deliberate written commentary (distinct from the `user_interactions` behavioural log). Immutable (no UPDATE/DELETE). FK `user_id` → `profiles(id)` CASCADE. | `message` (1–2000 chars, required), `rating` (1–5, optional), `context jsonb` (surface/platform triage hints), `created_at` |
 
-### Recommendation layer
+### Household layer (Growth G2, migration 093)
+
+Shared lists for households (plan `docs/plans/2026-09-17-004`, decisions D1–D7, D11–D13). **Additive: the personal `watchlist` above is untouched** (D1); its live definition, which no migration creates, is recorded in 093's header and re-captured by `supabase/queries/capture-watchlist-ddl.sql`.
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `households` | A group sharing a list. Created only by `create_household()`; a person owns at most 3. | `id uuid`, `name` (1–40), `owner_id` → profiles cascade, `created_at` |
+| `household_members` | Membership; cap 6 per household (enforced in `join_household`); a person may belong to several. | PK `(household_id, user_id)`, `role` `owner`\|`member`, `joined_at`; index `user_id` |
+| `watchlists` | Shared lists. v1 creates exactly one per household (`'Shared'`); no constraint forbids more later (D3). | `id uuid`, `household_id`, `name`, `created_by` → profiles set null |
+| `watchlist_items` | Titles on a shared list. | `id uuid`, `watchlist_id`, `tmdb_id`, `media_type`, `title`, `poster_path`, `added_by` → profiles **set null** (items outlive their adder, D12), `added_at`; UNIQUE `(watchlist_id, tmdb_id, media_type)` |
+| `watchlist_reactions` | One reaction per member per item (D11). | PK `(item_id, user_id)`, `reaction` `up`\|`down`\|`tonight`, `created_at`, `updated_at` (touch trigger) |
+| `household_invites` | Invite tokens (D4/D5): server-minted uuid, 7 days, `max_uses` 6, `uses`, `revoked_at`. **RLS on, no policies, no grants**: only the RPCs touch it. | PK `token`, `household_id`, `created_by`, `expires_at` |
+
+Access: membership RLS for reads and the app's writes, SECURITY DEFINER RPCs for the edges (see [RLS pattern § Membership RLS](../../concepts/techniques/rls-pattern.md#membership-rls-households-migration-093)). anon holds no grant on any of the six tables.
+
 
 | Table | Purpose | Key columns |
 |---|---|---|
@@ -84,7 +99,9 @@ Snapshot of the Videx Supabase schema **as of migration 047** (the live-producti
 | `get_available_tmdb_ids` | Single-query availability lookup; JSONB-array return since 035. |
 | `get_mood_rooms_for_user` / `get_mood_room_thumbnails` / `get_mood_room_detail` | Mood-room data access (031). |
 | `username_available` | SECURITY DEFINER signup check (038). |
-| `delete_own_account()` / `export_user_data()` | GDPR Art. 17 / Art. 20+15 (042/043); both cover **9** user-scoped tables since 044. |
+| `delete_own_account()` / `export_user_data()` | GDPR Art. 17 / Art. 20+15 (042/043), re-emitted with every user-scoped table (latest 093: households via `household_leave_internal`; export v1.4 adds `households`, `watchlist_items` the caller added, `watchlist_reactions`). |
+| `is_household_member(hid)` | **093.** SECURITY DEFINER, STABLE; the one membership test every household policy uses. |
+| `create_household` / `create_invite` / `join_household` / `leave_household` / `household_members_view` | **093.** Household edges; each failure is a stable code in the exception message. Signatures and codes in the [RPC catalogue](rpcs.md) and 093's header. |
 | `card_impressions_ensure_rls()` / `handle_new_user()` | Partition-RLS event trigger fn (016) / profiles trigger. |
 
 ## RLS policy pattern
@@ -92,6 +109,7 @@ Snapshot of the Videx Supabase schema **as of migration 047** (the live-producti
 - `anon` — SELECT on public content tables (titles, streaming_availability, streaming_history, mood_rooms, mood_room_titles).
 - `authenticated` — SELECT on the same (the migration-005 lesson), plus owner-scoped access to user tables via `auth.uid() = user_id`.
 - `service_role` — bypasses RLS (Edge Functions re-impose user scoping via `withUserScope` — IN-466 contract).
+- **Membership** (093) — household tables are readable by members of the same household through `is_household_member()`; the first cross-user reads in the schema, and the only ones (live check 2026-09-18: every other user-scoped policy is owner-only).
 
 See [RLS pattern](../../concepts/techniques/rls-pattern.md) and the [authenticated-role missing RLS solution](../../concepts/operations/solutions/authenticated-role-missing-rls.md).
 
@@ -99,7 +117,8 @@ See [RLS pattern](../../concepts/techniques/rls-pattern.md) and the [authenticat
 
 - `on_auth_user_created` → `handle_new_user()` → `profiles` row.
 - `card_impressions` partition event trigger (016) → RLS on new partitions.
-- `updated_at` touch triggers on `user_feature_flags` (041) and `user_interest_centroids` (044).
+- `updated_at` touch triggers on `user_feature_flags` (041), `user_interest_centroids` (044) and `watchlist_reactions` (093).
+- `profiles_leave_households` (093) BEFORE DELETE on `profiles` → `household_leave_internal` for each membership, so D12 (ownership hand-over, sole-owner household deleted) holds however an account is removed.
 
 ## Scheduled jobs (registrations live in migration 039 — `supabase/cron/` is intentionally empty)
 

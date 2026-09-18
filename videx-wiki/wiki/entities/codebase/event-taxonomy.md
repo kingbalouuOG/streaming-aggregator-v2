@@ -3,12 +3,13 @@ title: Event Taxonomy
 type: entity
 tags: [events, instrumentation, signals, analytics]
 created: 2026-04-26
-updated: 2026-09-17
+updated: 2026-09-18
 sources:
   - raw/codebase-snapshots/event-taxonomy.md
   - raw/v2-strategy/Videx_v2_Detail_Page_Signal_Capture_Spec_v0.3.2.md
   - docs/v2/phase-summaries/phase-5-summary.md
   - supabase/migrations/090_growth_events.sql (repo; Growth S2)
+  - supabase/migrations/093_households.sql (Growth G2 H1: household_joined)
 related:
   - wiki/concepts/forward-planning/growth-loops.md
   - wiki/concepts/decisions/adr-015-object-urls-and-inbound-links.md
@@ -116,6 +117,7 @@ Sent pushes are logged to `notification_deliveries` (migration 057), NOT `user_i
 | `share_initiated` | app (`ShareButton.tsx` `runShare`, Growth S4) | the share sheet opens (title, room screen, room card; a room card after its snapshot POST succeeds) | object, `via=share`, `src` = session origin; `metadata.surface` (`detail` \| `room` \| `room_card`), `metadata.moment` (`arrival` \| `leaving_soon`) when shared from "Tell someone" |
 | `share_completed` | app (same) | the OS reports `sharedAction` | same as initiated plus `metadata.to_surface` (iOS activity type, else null) and `metadata.platform_reports_completion` (true on iOS only: Android reports a dismissed sheet as shared) |
 | `notification_opened` | app (`providers/notifications.tsx`, warm and cold taps, once per notification id) | a push tap | `delivery_id` (single-title push; null for bundles and pre-S4 pushes), object from the payload URL (null for bundles), `via=push`, `src=push`, `metadata.type` (`arrival` \| `leaving_soon` \| `bundle`) |
+| `household_joined` | app (G2 H2, not yet emitted) | `join_household` returns `already_member = false` | object `list` (the shared `watchlists` uuid, required), `via=household` when the join came from an invite link, `metadata.household_id`. Added to the CHECK by migration 093 and to `GROWTH_EVENT_NAMES` / `CLIENT_EVENT_NAMES` / `OBJECT_REQUIRED_EVENTS` (D13: the one new name; the loop's other events reuse existing names with object type `list`) |
 
 Columns: `id`, `occurred_at`, `event_name`, `install_id` (app-minted UUID, null on page events), `user_id` (from the verified JWT only; never from the body), `via`, `src`, `object_type`, `object_id`, `platform`, `ua_class`, `delivery_id`, `metadata` (≤ 2 KB on ingest).
 
