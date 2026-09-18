@@ -12,16 +12,20 @@ import { useAuth } from '@/providers/auth';
 // notification taps can route via expo-router. Responsibilities:
 //   - foreground display behaviour (handler, set once at module scope)
 //   - Android channel
-//   - token register on sign-in / app start (silent — the value-moment
-//     PROMPT lives in the watchlist flow, not here)
+//   - token register on sign-in / app start (silent — the automatic ask
+//     lives on For You, not here)
 //   - token clear on sign-out
 //   - tap → deep-link to the title detail page (warm + cold start)
 //   - tap → notification_opened growth event and a push session origin
 //     (Growth S4: push CTR by delivery_id, src=push shares, "Tell someone")
 //
-// The consent PROMPT is deliberately NOT here — it fires at the first value
-// moment (WatchlistActions → maybePromptForPush), per the privacy-forward
-// "ask after value, not at launch" rule.
+// The consent PROMPT is deliberately NOT here. Rule (IN-GR-034, Joe
+// 2026-09-17): ask after onboarding, never at cold launch, with an in-app
+// explainer first. For You mounts PushExplainerHost once its feed has loaded
+// and any pending shared link has been shown; "Turn on" shows the OS prompt,
+// "Not now" is remembered and never re-asked automatically (Profile →
+// Notifications stays the way in). Once per install and account:
+// clearPushToken resets the record on sign-out.
 
 // Show a banner even when the app is foregrounded (SDK 56 shape:
 // shouldShowBanner/shouldShowList, not the deprecated shouldShowAlert).

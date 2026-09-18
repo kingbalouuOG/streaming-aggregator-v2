@@ -3,7 +3,7 @@ title: Notifications v1 (arrival + leaving-soon alerts)
 type: concept
 tags: [notifications, push, expo, edge-function, cron, retention, h0, stream-b]
 created: 2026-07-06
-updated: 2026-09-17
+updated: 2026-09-18
 sources:
   - docs/strategy/briefs/h0-stream-b-notifications-share.md
   - docs/strategy/Videx_Product_Strategy_and_Roadmap_v1.0.md
@@ -42,7 +42,12 @@ Migration 058 adds `share` to the `user_interactions` CHECK (Share v1, unrelated
 ## Consent (privacy-forward)
 
 - OS permission is the hard gate — no token without it, so a `user_push_tokens` row *is* the consent record.
-- The permission prompt fires at the **first value moment** (first watchlist add → `maybePromptForPush`), never at first launch. **Changing (IN-GR-034, Joe 2026-09-17):** device testing showed fresh installs rarely reach a watchlist add, so most have no token; the prompt moves to after onboarding with a one-line explainer (handoff `docs/plans/2026-09-17-002-handoff-notification-prompt-after-onboarding.md`). Until it ships, a reinstall leaves the account's old token in place and pushes go nowhere until permission is granted again in Settings.
+- **When we ask (IN-GR-034, Joe 2026-09-17; built 2026-09-18, rides the next OTA):** once per install and account, after onboarding, on For You, never at cold launch. `PushExplainerHost` (`native/src/components/PushExplainerSheet.tsx`) is mounted by For You once its feed has loaded and shows a bottom-sheet explainer ("Get told when something on your watchlist lands on your services, or is about to leave") with **Turn on** / **Not now** before any OS prompt. Turn on records the ask, then shows the system prompt and registers on grant (`acceptPushPrompt`); Not now (or Android back) records `declined` and is never re-asked automatically; Profile → Notifications stays the way in.
+  - Rule: the pure `decidePushPrompt` in `src/lib/notifications/promptDecision.ts` (tested): granted → register silently; blocked → never; already asked or declined → never; a pending shared link → wait; otherwise explain.
+  - Timing: For You must stay focused for 1.2s. At the end of onboarding `curating.tsx` pushes a pending shared title a tick after landing on For You, which blurs it and cancels the timer, so the explainer shows after the person comes back from the title, never over it. Existing installs never asked get it on their next For You visit.
+  - Record: MMKV `push_prompt_shown` (`'1'` asked, including the legacy watchlist-add value; `'declined'`), cleared by `clearPushToken` on sign-out so the next account on a shared phone gets its own ask.
+  - Permission state is read from `canAskAgain`, not `status`: on Android 13+ a fresh install reports `status: 'denied'` with `canAskAgain: true` (notifications are disabled until POST_NOTIFICATIONS is granted; expo-notifications declares the permission in its manifest and requests it); `canAskAgain` turns false after the second Android denial and after any iOS denial. The request creates the Android channel first, since the Android 13 dialog does not appear until one exists.
+  - The old first-watchlist-add trigger (`maybePromptForPush` in `WatchlistActions`) is removed: one entry point.
 - Per-type toggles live under **Profile → Notifications** (`ProfileNotifications.tsx`) and are honoured **server-side** — the cron filters `notification_preferences`, not just the client.
 - Withdrawal: in-app toggle off, sign-out (clears this device's token), OS-settings revoke (next send returns `DeviceNotRegistered` → token pruned), or account deletion.
 - Data-model note for the solicitor pass: `docs/legal/notifications-data-model.md`.

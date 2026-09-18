@@ -77,13 +77,13 @@ Cheaper than feared: `match_titles_by_vector` takes any vector with no identity 
 
 | Session | Scope | Migration | Depends on |
 |---|---|---|---|
-| **H1 Schema and RPCs** | Migration 093: capture the live `watchlist` DDL and RLS as a no-op record; `households`, `household_members`, `watchlists`, `watchlist_items`, `watchlist_reactions`, `household_invites`; membership RLS; RPCs `create_household`, `create_invite`, `join_household(token)`, `leave_household`, `household_members_view`; `delete_own_account` / `export_user_data` re-emitted; `growth_events` CHECK gains `household_joined`; typegen. Pure-SQL tests via `supabase/queries/verify-093-*.sql` in the 089 style. | 093 | Joe's §9 decisions |
+| **H1 Schema and RPCs** | Migration 093: capture the live `watchlist` DDL and RLS as a no-op record; `households`, `household_members`, `watchlists`, `watchlist_items`, `watchlist_reactions`, `household_invites`; membership RLS; RPCs `create_household`, `create_invite`, `join_household(token)`, `leave_household`, `household_members_view`; `delete_own_account` / `export_user_data` re-emitted; `growth_events` CHECK gains `household_joined`; typegen. **Folded in (18 Sept): IN-GR-043**, a length and charset CHECK on `profiles.username`, because G2 is the first time other people see usernames. Pure-SQL tests via `supabase/queries/verify-093-*.sql` in the 089 style. | 093 | Joe's §9 decisions |
 | **H2 App: list, items, reactions, invite share** | A `withListScope` read path in `src/lib` (new module, shared lib untouched otherwise); `native/src/app/list/[id].tsx` (members' view: items, who added, reactions, "tonight?"; signed-out preview state with Join → sign-in → resume); Watchlist tab gains a list picker axis ("Mine" / "Sofa"); "Add to Sofa" on the detail page beside the personal add; household creation and member management under Profile; invite share via a third `ShareTarget` arm with `via=household`; per-list react-query keys; events `share_initiated/completed` (list), `household_joined`. | none | H1 applied |
-| **H3 Links: preview page, join resume, referrer** | Worker: `/list/:id` real route (id validation, `loadListPreview`, short-TTL `listPageCacheKey`, `recordPreview`, object passed to `withAttribution`), `GET /v1/list/:id/preview` (public, cached) and `GET /v1/list/:id` (JWT, `private, no-store`), `POST /v1/household/invite` or the RPC route; `parseInboundLink` captures `invite`; `PendingLink` gains `intent` (version bump) and the list branch is made deliberate with tests; the list screen owns the join and clears the pending link only after it resolves; Play referrer `l=` key; `PAGE_CACHE_VERSION` bump. | none | H1 applied; runs in parallel with H2 (disjoint files) |
-| **H4 Nudges** | Migration 094: notification type CHECKs widened, nullable title columns plus partial unique indexes, per-type cap; `_shared/expoPush.ts` extraction; `send-nudges` function (`*/15`), cron migration; digest pass in the 08:00 run (stub); app: `PushOriginType` and routing through `parseInboundLink`, preference row, list-shaped "Tell someone" moment; privacy policy and in-app mirror wording (Joe approves); store forms; dashboard §6c/§6d literals. | 094 | H2 + H3 merged; **IN-GR-034 merged first** |
+| **H3 Links: preview page, join resume, referrer** | Worker: `/list/:id` real route (id validation, `loadListPreview`, short-TTL `listPageCacheKey`, `recordPreview`, object passed to `withAttribution`), `GET /v1/list/:id/preview` (public, cached) and `GET /v1/list/:id` (JWT, `private, no-store`), `POST /v1/household/invite` or the RPC route; `parseInboundLink` captures `invite`; `PendingLink` gains `intent` (version bump) and the list branch is made deliberate with tests; the list screen owns the join and clears the pending link only after it resolves; Play referrer `l=` key; `PAGE_CACHE_VERSION` bump. **Folded in (18 Sept): IN-GR-040 and IN-GR-044**, the resume-path pass (pending-link clearing keyed on focus, `replace(route, { withAnchor: true })`, the name-gate and double `/auth` cases), since H3 rewrites that path. | none | H1 applied; runs in parallel with H2 (disjoint files) |
+| **H4 Nudges** | Migration 094: notification type CHECKs widened, nullable title columns plus partial unique indexes, per-type cap; `_shared/expoPush.ts` extraction; `send-nudges` function (`*/15`), cron migration; digest pass in the 08:00 run (stub); app: `PushOriginType` and routing through `parseInboundLink`, preference row, list-shaped "Tell someone" moment; privacy policy and in-app mirror wording (Joe approves); store forms; dashboard §6c/§6d literals. **Folded in (18 Sept): IN-GR-041**, `notification_opened` requires a JWT and the Worker checks `delivery_id` ownership, since nudge CTR starts driving decisions. | 094 | H2 + H3 merged; **IN-GR-034 merged first** |
 | **H5 Verification and docs** | Device matrix on both platforms (two accounts, two phones; invite cold and warm, join after sign-up, referrer install on Android, reactions, nudge within 15 min, cap independence, leave and delete semantics); phase summary; wiki (schema, RLS pattern page gains the membership policy, event taxonomy, notifications-v1, growth-loops, registers); IN-GR-009 revisit for shared devices. | none | H4 merged; one rebuild only if a native module changes (none expected) |
 
-Suggested order: H1 → H2 ‖ H3 → H4 → H5, with the IN-GR-034 session before H4. Handoff prompts are written per session after the preceding summary, as in G0/G1, with file ownership when two run in parallel.
+Suggested order: H1 → H2 ‖ H3 → H4 → H5, with the IN-GR-034 session before H4. The pre-G2 hygiene session (`2026-09-18-001`) runs before H3 and H4 so neither inherits the Worker and push-function duplication it removes. Handoff prompts are written per session after the preceding summary, as in G0/G1, with file ownership when two run in parallel.
 
 ## 5. Migrations
 
@@ -126,6 +126,8 @@ Both additive. Apply is Joe's action; typegen after each.
 
 ## 9. Decisions needed from Joe
 
+> **Resolved 2026-09-18.** Joe accepted every recommendation as written (D1 to D14 the (a) or "as stated" option; D15 approved in principle, wording still to be approved when H4 drafts it). The table below is kept as the record; the H1 handoff is `2026-09-18-002-handoff-growth-h1-schema.md`.
+
 | # | Decision | Options | Recommendation from the audit |
 |---|---|---|---|
 | D1 | **Personal watchlist** | (a) untouched; shared lists are new tables beside it; (b) migrate it into a default personal list now | (a). (b) touches the shared storage layer the web compiles and changes For You exclusion semantics for no loop benefit. |
@@ -147,3 +149,11 @@ Both additive. Apply is Joe's action; typegen after each.
 ## 10. Done in this session
 
 - Four audits; this plan. No wiki register changes; the growth-loops page and log note the plan. The G2 session handoffs are written after Joe's §9 answers, H1 first.
+
+## 11. Session outcomes
+
+### 11a. 2026-09-18: decisions taken, H1 handoff written
+
+- All fifteen §9 decisions accepted as recommended (Joe, 18 Sept). D15's wording is still approved per text when H4 drafts it.
+- H1 handoff: `2026-09-18-002-handoff-growth-h1-schema.md`. It fixes the RPC signatures and error codes H2 and H3 build against, so those two handoffs are written after H1's summary, not before.
+- Prerequisites in flight: IN-GR-034 (notification prompt) and the pre-G2 hygiene session (IN-GR-022/025/045) started 18 Sept from their own handoffs; v2.5.0 build 14 / versionCode 17 submitted 18 Sept.

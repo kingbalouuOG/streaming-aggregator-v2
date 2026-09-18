@@ -6,8 +6,9 @@
  *
  * Consent model: an Expo push token cannot be minted without the OS
  * notification permission, so writing a user_push_tokens row IS the record
- * of consent. We prompt for that permission at the user's FIRST VALUE MOMENT
- * (first watchlist add) — never at first launch. Per-type toggles live in
+ * of consent. The automatic ask (IN-GR-034) comes after onboarding, on For
+ * You, behind a short in-app explainer (PushExplainerSheet) — never at cold
+ * launch, and at most once per install and account. Per-type toggles live in
  * notification_preferences; the daily Edge Function filters on them server-side.
  */
 
@@ -16,6 +17,14 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+import {
+  decidePushPrompt,
+  parsePromptRecord,
+  PROMPT_RECORD_ASKED,
+  PROMPT_RECORD_DECLINED,
+  toPushPermission,
+  type PromptDecision,
+} from '@/lib/notifications/promptDecision';
 import storage from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 
@@ -28,8 +37,8 @@ export const DEFAULT_PREFERENCES: Record<NotificationType, boolean> = {
 };
 
 const ANDROID_CHANNEL_ID = 'default';
-// MMKV bookkeeping so the value-moment prompt fires at most once per device,
-// and so this device's token can be cleared on sign-out without a network fetch.
+// MMKV bookkeeping so the automatic ask happens at most once per install and
+// account (values in promptDecision.ts: asked / declined), and so this device's token can be cleared on sign-out without a network fetch.
 const PROMPT_SHOWN_KEY = 'push_prompt_shown';
 const TOKEN_KEY = 'push_token';
 
@@ -57,6 +66,10 @@ export async function isPermissionGranted(): Promise<boolean> {
 }
 
 async function requestPermission(): Promise<boolean> {
+  // Android 13+: the POST_NOTIFICATIONS dialog does not appear until a
+  // channel exists. The provider creates it on mount; this makes the
+  // request independent of that ordering.
+  await ensureAndroidChannel();
   const perm = await Notifications.requestPermissionsAsync({
     ios: { allowAlert: true, allowBadge: true, allowSound: true },
   });
@@ -109,7 +122,7 @@ export async function registerPushToken(_userId: string): Promise<string | null>
 /**
  * Clear this device's push token on sign-out. Deletes the DB row for the token
  * we stored at registration (no network re-fetch), then clears local bookkeeping
- * so the NEXT user on this device gets their own value-moment prompt.
+ * so the NEXT user on this device gets their own explainer.
  */
 export async function clearPushToken(): Promise<void> {
   try {
@@ -125,36 +138,70 @@ export async function clearPushToken(): Promise<void> {
 }
 
 /**
- * First-value-moment consent prompt. Called after the user's first watchlist
- * add. Prompts the OS permission at most once per device (PROMPT_SHOWN_KEY),
- * then registers on grant. Respects a prior decision: if already granted, just
- * (re)registers silently; if previously denied, does nothing.
+ * Should For You offer the notification explainer? Reads the OS permission
+ * and this install's record; the rule itself is decidePushPrompt.
  */
-export async function maybePromptForPush(userId: string | null): Promise<void> {
+export async function getPushPromptDecision(
+  userId: string | null,
+  pendingLink: boolean,
+): Promise<PromptDecision> {
   try {
-    if (!userId || !Device.isDevice) return;
-    if ((await storage.getItem(PROMPT_SHOWN_KEY)) === '1') return;
+    if (!userId || !Device.isDevice) return 'skip';
+    const [perm, raw] = await Promise.all([
+      Notifications.getPermissionsAsync(),
+      storage.getItem(PROMPT_SHOWN_KEY),
+    ]);
+    return decidePushPrompt({
+      signedIn: true,
+      isDevice: true,
+      permission: toPushPermission(perm),
+      record: parsePromptRecord(raw),
+      pendingLink,
+    });
+  } catch (err) {
+    console.warn('[push] getPushPromptDecision error:', (err as Error).message);
+    return 'skip';
+  }
+}
 
+/**
+ * Explainer "Turn on": record the ask first (so a crash or kill mid-dialog
+ * never re-asks), then show the system prompt and register on grant.
+ */
+export async function acceptPushPrompt(userId: string): Promise<boolean> {
+  try {
+    await storage.setItem(PROMPT_SHOWN_KEY, PROMPT_RECORD_ASKED);
     const existing = await Notifications.getPermissionsAsync();
-    await storage.setItem(PROMPT_SHOWN_KEY, '1');
-
     if (existing.granted) {
       await registerPushToken(userId);
-      return;
+      return true;
     }
-    // Respect a permanent denial — don't surface a no-op prompt. canAskAgain
-    // is true while undetermined (first run) and false once blocked.
-    if (!existing.canAskAgain) return;
+    // Blocked since the explainer opened: the request would be a no-op.
+    if (!existing.canAskAgain) return false;
     const granted = await requestPermission();
     if (granted) await registerPushToken(userId);
+    return granted;
   } catch (err) {
-    console.warn('[push] maybePromptForPush error:', (err as Error).message);
+    console.warn('[push] acceptPushPrompt error:', (err as Error).message);
+    return false;
+  }
+}
+
+/**
+ * Explainer "Not now" (or dismissed): never ask automatically again on this
+ * install for this account. Profile → Notifications stays the way back in.
+ */
+export async function declinePushPrompt(): Promise<void> {
+  try {
+    await storage.setItem(PROMPT_SHOWN_KEY, PROMPT_RECORD_DECLINED);
+  } catch (err) {
+    console.warn('[push] declinePushPrompt error:', (err as Error).message);
   }
 }
 
 /**
  * Explicit opt-in from the Profile → Notifications screen (user actively
- * asked to turn alerts on). Unlike maybePromptForPush, this always tries to
+ * asked to turn alerts on). Unlike the automatic explainer, this always tries to
  * obtain permission and reports the outcome so the UI can route a blocked
  * user to OS settings.
  */
