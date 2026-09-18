@@ -1882,3 +1882,9 @@ only thing at stake.
 - Watchlist-add trigger (`maybePromptForPush`) removed. Android 13+: permission read from `canAskAgain` (a fresh install reports status denied); the request creates the channel first.
 - Privacy policy + `policyContent.ts`: "when we ask" sentence reworded (Joe to approve in the PR), dated 18 September 2026.
 - Updated: wiki/concepts/architecture/notifications-v1.md (Consent), wiki/registers/parking-lot.md (IN-GR-034 closed with the PR).
+
+## [2026-09-18] ingest | G2 H1: migration 093 households applied and verified
+- Migration 093 (applied by Joe 2026-09-18): six tables (`households`, `household_members`, `watchlists`, `watchlist_items`, `watchlist_reactions`, `household_invites`), membership RLS through `is_household_member(hid)`, RPCs `create_household` / `create_invite` / `join_household` / `leave_household` / `household_members_view` + internal `household_leave_internal`, `profiles_leave_households` BEFORE DELETE trigger (D12 on every deletion path), delete/export re-emitted (export 1.4), `household_joined` in the growth_events CHECK, `profiles.username` format CHECK (IN-GR-043). Personal `watchlist` untouched; its live DDL captured (`supabase/queries/capture-watchlist-ddl.sql`).
+- Verified: dry run in PGlite with mutation tests, then `verify-093-households.sql` against production (16 steps, rolled back, 0 residue); `database.types.ts` regenerated (additions only).
+- §8 facts: no cross-user read policy existed anywhere; Realtime publication has no tables; 24 push tokens / 8 users; 1 of 11 installs has more than one account.
+- Updated: wiki/entities/codebase/database-schema.md, wiki/entities/codebase/rpcs.md, wiki/entities/codebase/migrations.md, wiki/entities/codebase/event-taxonomy.md, wiki/concepts/techniques/rls-pattern.md (Membership RLS), wiki/registers/parking-lot.md (IN-GR-043 closed, IN-GR-009 note).

@@ -603,6 +603,119 @@ export type Database = {
           },
         ]
       }
+      household_invites: {
+        Row: {
+          created_at: string
+          created_by: string
+          expires_at: string
+          household_id: string
+          max_uses: number
+          revoked_at: string | null
+          token: string
+          uses: number
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          expires_at?: string
+          household_id: string
+          max_uses?: number
+          revoked_at?: string | null
+          token?: string
+          uses?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          household_id?: string
+          max_uses?: number
+          revoked_at?: string | null
+          token?: string
+          uses?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_invites_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_invites_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      household_members: {
+        Row: {
+          household_id: string
+          joined_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          household_id: string
+          joined_at?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          household_id?: string
+          joined_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_members_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      households: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          owner_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "households_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mood_room_anchor_labels: {
         Row: {
           anchor_media_type: string
@@ -1908,6 +2021,132 @@ export type Database = {
           },
         ]
       }
+      watchlist_items: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          id: string
+          media_type: string
+          poster_path: string | null
+          title: string
+          tmdb_id: number
+          watchlist_id: string
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string | null
+          id?: string
+          media_type: string
+          poster_path?: string | null
+          title: string
+          tmdb_id: number
+          watchlist_id: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          id?: string
+          media_type?: string
+          poster_path?: string | null
+          title?: string
+          tmdb_id?: number
+          watchlist_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchlist_items_added_by_fkey"
+            columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchlist_items_watchlist_id_fkey"
+            columns: ["watchlist_id"]
+            isOneToOne: false
+            referencedRelation: "watchlists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchlist_reactions: {
+        Row: {
+          created_at: string
+          item_id: string
+          reaction: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          item_id: string
+          reaction: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          item_id?: string
+          reaction?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchlist_reactions_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "watchlist_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchlist_reactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchlists: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          household_id: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          household_id: string
+          id?: string
+          name?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          household_id?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchlists_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchlists_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       data_freshness: {
@@ -2206,6 +2445,20 @@ export type Database = {
         Args: { p_min_age?: string }
         Returns: number
       }
+      create_household: {
+        Args: { p_name: string }
+        Returns: {
+          household_id: string
+          watchlist_id: string
+        }[]
+      }
+      create_invite: {
+        Args: { p_household_id: string }
+        Returns: {
+          expires_at: string
+          token: string
+        }[]
+      }
       create_parent: {
         Args: {
           p_automatic_maintenance?: string
@@ -2385,6 +2638,19 @@ export type Database = {
           tmdb_id: number
         }[]
       }
+      household_leave_internal: {
+        Args: { p_household_id: string; p_user_id: string }
+        Returns: undefined
+      }
+      household_members_view: {
+        Args: { p_household_id: string }
+        Returns: {
+          joined_at: string
+          role: string
+          user_id: string
+          username: string
+        }[]
+      }
       inherit_replica_identity: {
         Args: {
           p_child_tablename: string
@@ -2401,6 +2667,16 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_household_member: { Args: { hid: string }; Returns: boolean }
+      join_household: {
+        Args: { p_token: string }
+        Returns: {
+          already_member: boolean
+          household_id: string
+          watchlist_id: string
+        }[]
+      }
+      leave_household: { Args: { p_household_id: string }; Returns: undefined }
       list_missing_title_ids: {
         Args: { p_limit?: number }
         Returns: {

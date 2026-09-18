@@ -24,7 +24,7 @@ related:
 
 # Database Schema (Supabase)
 
-Snapshot of the Videx Supabase schema **as of migration 047** (the live-production `information_schema` pull is REPO-1-era / migration 046, 2026-06-10; `app_feedback` from migration 047 added from the migration source for the NATIVE feedback loop). Source of truth: `supabase/migrations/` + orchestration v0.8 §3.4 for applied status. Use [migrations](migrations.md) for chronology, [RPC catalogue](rpcs.md) for callable functions. RLS is enabled on **every** public table.
+Snapshot of the Videx Supabase schema **as of migration 047**, plus the household layer from **093** (applied 2026-09-18) (the live-production `information_schema` pull is REPO-1-era / migration 046, 2026-06-10; `app_feedback` from migration 047 added from the migration source for the NATIVE feedback loop). Source of truth: `supabase/migrations/` + orchestration v0.8 §3.4 for applied status. Use [migrations](migrations.md) for chronology, [RPC catalogue](rpcs.md) for callable functions. RLS is enabled on **every** public table.
 
 ## Extensions
 
