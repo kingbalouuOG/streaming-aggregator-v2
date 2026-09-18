@@ -24,11 +24,12 @@
  */
 
 import {
+  isContentId,
   isRoomId,
   normaliseSrc,
   normaliseVia,
-  parseInboundLink,
   readQuery,
+  tmdbId,
   type InboundLink,
   type InboundObject,
 } from './inboundLink';
@@ -38,21 +39,23 @@ export const REFERRER_ROOM_KEY = 'r';
 
 // A bare "movie-603" / "tv-095396" shape only (no path, no query); the
 // contract itself (positive id, at most ten digits, leading zeros dropped) is
-// applied by parseInboundLink, which normalises the id.
-const BARE_CONTENT_REF_RE = /^(movie|tv)-\d{1,15}$/;
+// the one parseInboundLink applies, through the same tmdbId and isContentId.
+const BARE_CONTENT_REF_RE = /^(movie|tv)-(\d{1,15})$/;
 
 /** The title object parseInboundLink would produce for this content id, or null. */
-function titleObject(contentId: string): InboundLink | null {
-  if (!BARE_CONTENT_REF_RE.test(contentId)) return null;
-  const link = parseInboundLink(`videx://detail/${contentId}`);
-  return link.object?.type === 'title' ? link : null;
+function titleObject(contentId: string): InboundObject | null {
+  const m = BARE_CONTENT_REF_RE.exec(contentId);
+  const id = m ? tmdbId(m[2]) : null;
+  const normalised = m && id ? `${m[1]}-${id}` : null;
+  return normalised && isContentId(normalised) ? { type: 'title', id: normalised } : null;
 }
 
-function roomObject(id: string): InboundLink | null {
-  if (!isRoomId(id)) return null;
-  const link = parseInboundLink(`videx://room/${id}`);
-  return link.object?.type === 'room' ? link : null;
+function roomObject(id: string): InboundObject | null {
+  return isRoomId(id) ? { type: 'room', id: id.toLowerCase() } : null;
 }
+
+const routeFor = (object: InboundObject) =>
+  object.type === 'title' ? `/detail/${object.id}` : `/room/${object.id}`;
 
 /**
  * The raw (not yet URL-encoded) referrer for a page's Play link, or '' when
@@ -69,11 +72,11 @@ export function buildPlayReferrer(
   if (v) pairs.push(`via=${v}`);
   if (s) pairs.push(`src=${s}`);
   if (object?.type === 'title') {
-    const link = titleObject(object.id);
-    if (link?.object) pairs.push(`${REFERRER_TITLE_KEY}=${encodeURIComponent(link.object.id)}`);
+    const title = titleObject(object.id);
+    if (title) pairs.push(`${REFERRER_TITLE_KEY}=${encodeURIComponent(title.id)}`);
   } else if (object?.type === 'room') {
-    const link = roomObject(object.id);
-    if (link?.object) pairs.push(`${REFERRER_ROOM_KEY}=${encodeURIComponent(link.object.id)}`);
+    const room = roomObject(object.id);
+    if (room) pairs.push(`${REFERRER_ROOM_KEY}=${encodeURIComponent(room.id)}`);
   }
   return pairs.join('&');
 }
@@ -95,11 +98,6 @@ export function parseInstallReferrer(raw: string | null | undefined): InboundLin
   const r = params.get(REFERRER_ROOM_KEY);
   const target = t ? titleObject(t) : r ? roomObject(r) : null;
 
-  if (!target?.object && !via && !src) return null;
-  return {
-    route: target?.object ? target.route : '/',
-    object: target?.object ?? null,
-    via,
-    src,
-  };
+  if (!target && !via && !src) return null;
+  return { route: target ? routeFor(target) : '/', object: target, via, src };
 }

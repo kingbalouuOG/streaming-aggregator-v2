@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowRight, Check, User } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -14,8 +14,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useMarkUsernameChosen } from '@/hooks/useUsernameChosen';
-import { isValidUsername, normaliseUsernameInput, suggestUsername } from '@/lib/auth/username';
-import { supabase } from '@/lib/supabase';
+import { useUsernameSave } from '@/hooks/useUsernameSave';
+import { normaliseUsernameInput, suggestUsername } from '@/lib/auth/username';
 import { clearProviderGivenName, peekProviderGivenName, useAuth } from '@/providers/auth';
 
 // "Choose your name" (Growth S3, decision D8). Shown once to an account whose
@@ -33,76 +33,30 @@ import { clearProviderGivenName, peekProviderGivenName, useAuth } from '@/provid
 // is never shown. Saving writes profiles (username + username_chosen, the
 // UNIQUE constraint is the final say on "taken") and then
 // user_metadata.username, which is what every screen displays
-// (ProfileAccount.tsx writes the same field).
+// (ProfileAccount.tsx writes the same field). The check and save live in
+// hooks/useUsernameSave.ts, shared with ProfileAccount.
 
 const MUTED = 'rgba(245,241,232,0.62)';
 
 export default function ChooseUsernameScreen() {
   const router = useRouter();
   const { next } = useLocalSearchParams<{ next?: string }>();
-  const { session, checkUsernameAvailable } = useAuth();
+  const { session } = useAuth();
   const markUsernameChosen = useMarkUsernameChosen();
   const userId = session?.user?.id;
 
   const [username, setUsername] = useState(() => normaliseUsernameInput(suggestUsername(peekProviderGivenName())));
-  const [status, setStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const valid = isValidUsername(username);
-  const canSubmit = valid && status !== 'taken' && status !== 'checking' && !!userId;
-
-  // Same debounced availability check as onboarding Step 1. A transient RPC
-  // error leaves 'idle' and does not block: the save's UNIQUE check decides.
-  useEffect(() => {
-    if (!valid) {
-      setStatus('idle');
-      return;
-    }
-    setStatus('checking');
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      try {
-        const free = await checkUsernameAvailable(username);
-        if (!cancelled) setStatus(free ? 'available' : 'taken');
-      } catch {
-        if (!cancelled) setStatus('idle');
-      }
-    }, 500);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [username, valid]);
-
-  const save = async () => {
-    if (!canSubmit || busy || !userId) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ username, username_chosen: true, updated_at: new Date().toISOString() })
-        .eq('id', userId);
-      if (profileError) {
-        if (profileError.code === '23505') setStatus('taken');
-        else setError("Couldn't save your name. Check your connection and try again.");
-        return;
-      }
-      const { error: metadataError } = await supabase.auth.updateUser({ data: { username } });
-      if (metadataError) {
-        // profiles already holds the name, so a retry re-saves the same row.
-        setError("Couldn't save your name. Check your connection and try again.");
-        return;
-      }
+  // Same debounced availability check and save as Profile → Account Details.
+  const { status, busy, error, valid, canSubmit, save } = useUsernameSave({
+    username,
+    userId,
+    failureMessage: "Couldn't save your name. Check your connection and try again.",
+    onSaved: () => {
       clearProviderGivenName();
-      markUsernameChosen(userId);
+      if (userId) markUsernameChosen(userId);
       router.replace(next === 'curating' ? '/curating' : '/');
-    } finally {
-      setBusy(false);
-    }
-  };
+    },
+  });
 
   const border = username.length === 0 ? 'border-border' : valid && status !== 'taken' ? 'border-success/50' : 'border-danger/60';
 

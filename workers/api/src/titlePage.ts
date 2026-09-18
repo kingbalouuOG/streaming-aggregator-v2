@@ -5,7 +5,7 @@
  * Pure module — NO Hono/Workers imports — so it runs under the root
  * vitest rig (see workers/api/src/__tests__/titlePage.test.ts). index.ts
  * wires it into the /t/:type/:ref route. The shell, store CTA and platform
- * bucketing live in pageShell.ts and are re-exported here.
+ * bucketing live in pageShell.ts; import them from there.
  *
  * URL (ADR-015): /t/{movie|tv}/{tmdbId}-{slug}. The page is resolved by
  * type and id only; index.ts 301s a bare or stale slug to the canonical
@@ -18,20 +18,10 @@ import {
   ATTRIBUTION_FOOTER,
   DEEP_LINK_QUERY_MARK,
   esc,
-  PAGE_CACHE_VERSION,
+  pageCacheKey,
   renderDocument,
   renderNotFoundPage,
   smartBannerMeta,
-  storeCta,
-  type PlatformBucket,
-} from './pageShell';
-
-export {
-  APP_STORE_URL,
-  IOS_APP_STORE_LIVE,
-  PLAY_STORE_URL,
-  esc,
-  platformBucket,
   storeCta,
   type PlatformBucket,
 } from './pageShell';
@@ -57,7 +47,7 @@ export interface TitlePageData {
  * of a title reads one cached render (attribution is filled after the read).
  */
 export function titlePageCacheKey(type: string, id: number, bucket: PlatformBucket): string {
-  return `https://cache.videx/t/${type}/${id}?p=${bucket}&v=${PAGE_CACHE_VERSION}`;
+  return pageCacheKey(`/t/${type}/${id}`, bucket);
 }
 
 const TITLE_CSS = `.hero{display:flex;gap:16px;align-items:flex-start}

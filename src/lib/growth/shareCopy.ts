@@ -18,6 +18,8 @@
  * Pure: no React Native imports, so it runs under the root vitest rig.
  */
 
+import { MONTH_NAMES } from '../format/months';
+import { countLabel } from '../format/plural';
 import type { SrcOrigin } from './inboundLink';
 import { neutraliseRoomLabel } from './roomSnapshot';
 import { shareServiceLabel } from './serviceLabels';
@@ -89,9 +91,8 @@ export interface RoomShareInput {
 }
 
 export function buildRoomShareCopy(input: RoomShareInput): ShareCopy {
-  const noun = input.count === 1 ? 'title' : 'titles';
   return {
-    message: `${neutraliseRoomLabel(input.label)}: ${input.count} ${noun} picked for the mood.\n${input.url}`,
+    message: `${neutraliseRoomLabel(input.label)}: ${countLabel(input.count, 'title')} picked for the mood.\n${input.url}`,
     url: input.url,
   };
 }
@@ -132,10 +133,6 @@ export interface MomentCopy {
 }
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
 
 /**
  * "Friday 19 September". The day of week alone is ambiguous a week out, and
@@ -145,7 +142,7 @@ export function formatLeavingDate(iso: string | null | undefined): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTH_NAMES[d.getUTCMonth()]}`;
 }
 
 export function buildMomentCopy(moment: ShareMoment, title: string): MomentCopy | null {

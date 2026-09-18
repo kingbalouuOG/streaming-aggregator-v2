@@ -8,6 +8,7 @@ import { BackButton } from '@/components/BackButton';
 import { PosterGridCard } from '@/components/PosterGridCard';
 import { ShareButton } from '@/components/ShareButton';
 import { useSharedRoom } from '@/hooks/useSharedRoom';
+import { countLabel } from '@/lib/format/plural';
 import { formatPickedDate, sharedRoomUrl } from '@/lib/growth/roomSnapshot';
 import type { ContentItem } from '@/lib/types/content';
 import { clearPendingLinkFor } from '@/pendingLink';
@@ -90,7 +91,7 @@ export default function RoomRoute() {
             </Text>
             <Text className="mt-1 font-display text-headline text-foreground">{data.label}</Text>
             <Text className="mt-1.5 font-sans text-body text-muted-foreground">
-              {count} {count === 1 ? 'title' : 'titles'}
+              {countLabel(count, 'title')}
               {picked ? ` · picked on ${picked}` : ''}
             </Text>
             {data.description ? (

@@ -15,17 +15,13 @@ import { heldChannelCount } from '@/lib/entitlements/channels';
 import { useWatchlist } from '@/hooks/useWatchlist';
 import { PROFILE_GLYPHS, type GlyphName } from '@/lib/constants/genreGlyphs';
 import { getDefaultTier } from '@/lib/data/platformPricing';
+import { MONTH_NAMES } from '@/lib/format/months';
 import { getV2TasteProfile } from '@/lib/taste-v2/tasteProfileV2';
 import { useAuth } from '@/providers/auth';
 
 // NATIVE-4 W1 — Profile landing. Aligned to the web ProfilePage: identity,
 // stat row, grouped action rows (monochrome glyph tiles), Sign Out. Action
 // rows push profile/[section].
-
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-] as const;
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -40,7 +36,7 @@ export default function ProfileScreen() {
   const name = ((session?.user?.user_metadata?.username as string | undefined) ?? '') || email.split('@')[0] || 'You';
   const initial = (name[0] ?? 'V').toUpperCase();
   const now = new Date();
-  const memberSince = `Member since ${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
+  const memberSince = `Member since ${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()}`;
 
   const wantCount = (watchlist ?? []).filter((i) => i.status === 'want_to_watch').length;
   const watchedCount = (watchlist ?? []).filter((i) => i.status === 'watched').length;
