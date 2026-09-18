@@ -10,6 +10,7 @@
  * branded 404 until then.
  */
 
+import { countLabel } from '../../../src/lib/format/plural';
 import { formatPickedDate } from '../../../src/lib/growth/roomSnapshot';
 import {
   ATTRIBUTION_FOOTER,
@@ -39,7 +40,7 @@ export function roomPageCacheKey(id: string, bucket: PlatformBucket): string {
 }
 
 export function roomOgDescription(count: number): string {
-  return `${count} ${count === 1 ? 'title' : 'titles'} picked for the mood, with UK availability on Videx`;
+  return `${countLabel(count, 'title')} picked for the mood, with UK availability on Videx`;
 }
 
 const ROOM_CSS = `.kicker{font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:#e85d25;font-weight:700;margin:0 0 6px}
@@ -80,7 +81,7 @@ ${firstPoster ? `<meta name="twitter:image" content="${esc(firstPoster)}">` : ''
 
   const body = `  <p class="kicker">Mood room</p>
   <h1>${esc(d.label)}</h1>
-  <p class="muted">${count} ${count === 1 ? 'title' : 'titles'}${picked ? ` · picked on ${esc(picked)}` : ''}</p>
+  <p class="muted">${countLabel(count, 'title')}${picked ? ` · picked on ${esc(picked)}` : ''}</p>
   ${d.description ? `<p class="desc">${esc(d.description)}</p>` : ''}
 
   ${posters ? `<ul class="grid">${posters}</ul>` : ''}

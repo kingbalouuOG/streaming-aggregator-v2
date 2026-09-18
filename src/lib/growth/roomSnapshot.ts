@@ -9,6 +9,7 @@
  */
 
 import type { ContentItem } from '../types/content';
+import { MONTH_NAMES } from '../format/months';
 import { CANONICAL_ORIGIN } from './slug';
 
 export const MAX_ROOM_TITLES = 60;
@@ -67,10 +68,6 @@ export function sharedRoomUrl(id: string): string {
 export function formatPickedDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
   // UTC, not Intl: Hermes and the Worker agree without locale data.
-  return `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  return `${d.getUTCDate()} ${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
