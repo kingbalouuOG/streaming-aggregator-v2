@@ -1876,3 +1876,9 @@ only thing at stake.
 ## [2026-09-18] query | v2.5.0 tagged; IN-GR triage before G2
 - Release: PR #205 merged (d90cdaf); annotated tag `v2.5.0` on the merge commit fired ios-release (build 14 → TestFlight) and android-release (versionCode 17 → Play internal). No 2.5.1: the version never went public. App Store submission, privacy rows and Confirm email ON remain Joe's.
 - Open IN-GR rows triaged for G2: two parallel sessions now (IN-GR-034 handoff refreshed; new hygiene handoff `docs/plans/2026-09-18-001-handoff-pre-g2-hygiene.md` for 022/025/045), three fold-ins (043 → H1, 040/044 → H3, 041 → H4), two monitoring notes (006, 021). Register updated; the G2 plan (PR #206, unmerged) picks the fold-ins up when the H1 handoff is written.
+
+## [2026-09-18] query | Pre-G2 hygiene (chore/pre-g2-hygiene, PR #210)
+- IN-GR-022: esm.sh supabase-js and postgrest-js pinned to 2.116.0 in `_shared/userScope.ts` and `send-notifications`; builder arity fixed; `deno check` green on send-notifications, embed-query, revoke-apple-token, label-anchor-room.
+- IN-GR-025: em dashes out of the two single-title push bodies (before and after copy in the PR for Joe); push `SERVICE_LABELS` parity test against `SHARE_SERVICE_LABELS`. Needs a `send-notifications` deploy.
+- IN-GR-045: Worker `notFound`, `pageCacheKey`/`PAGE_TTL_SECONDS`/`htmlPage` in `pageShell.ts`, `readJsonBody`; no `PAGE_CACHE_VERSION` bump (no page bytes changed). `installReferrer` validates parsed fields; `src/lib/format/` (`MONTH_NAMES`, `countLabel`); native `useUsernameSave` (rides the IN-GR-034 OTA).
+- Updated: wiki/registers/parking-lot.md (three rows closed, counts line), wiki/entities/codebase/hooks.md (useUsernameSave). The Worker entity pages are unchanged because `PAGE_CACHE_VERSION` stays in `pageShell.ts`.
