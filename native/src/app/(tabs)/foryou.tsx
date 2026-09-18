@@ -9,6 +9,7 @@ import { ContentRow } from '@/components/ContentRow';
 import { ForYouSkeleton } from '@/components/ForYouSkeleton';
 import { MagazineHero } from '@/components/MagazineHero';
 import { MoodRooms } from '@/components/MoodRooms';
+import { PushExplainerHost } from '@/components/PushExplainerSheet';
 import { HiddenRailsNote, QuickFilterEmptyState } from '@/components/QuickFilterNotices';
 import { RefreshableScrollView } from '@/components/RefreshableScrollView';
 import { Reveal } from '@/components/Reveal';
@@ -413,6 +414,8 @@ export default function ForYouScreen() {
 
         <HiddenRailsNote names={view.hiddenNames} category={category} />
       </RefreshableScrollView>
+      {/* IN-GR-034: the one automatic notification ask, after the feed lands. */}
+      <PushExplainerHost />
     </View>
   );
 }

@@ -15,12 +15,12 @@
  * Verbatim from the .md as of the dates below.
  */
 
-export const PRIVACY_POLICY_LAST_UPDATED = '16 September 2026';
+export const PRIVACY_POLICY_LAST_UPDATED = '18 September 2026';
 export const TERMS_LAST_UPDATED = '6 July 2026';
 
 export const PRIVACY_POLICY_MD = `# Privacy Policy
 
-**Last updated:** 16 September 2026
+**Last updated:** 18 September 2026
 **Effective from:** 6 July 2026
 
 ## 1. Who we are
@@ -60,7 +60,7 @@ If you opt in to push alerts (a title on your watchlist arriving on one of your 
 - **Notification preferences** (notification_preferences): your per-type on/off choices (arrivals, leaving-soon).
 - **Delivery log** (notification_deliveries): which alert was sent to you for which title, kept so the same title never alerts you twice and to enforce the daily alert cap.
 
-Consent is asked for after your first value moment in the app (your first watchlist add) — never at first launch — and you can withdraw it at any time in Profile → Settings, by revoking the notification permission in your device settings, or by signing out. Your choices are enforced server-side: the daily alert job filters on your consent, not just the client.
+Consent is asked for once, after you finish setting up your account, and never at first launch: Videx first explains what the alerts are, and your device's permission prompt only appears if you choose to turn them on. You can withdraw it at any time in Profile → Settings, by revoking the notification permission in your device settings, or by signing out. Your choices are enforced server-side: the daily alert job filters on your consent, not just the client.
 
 Push delivery passes the push token and the alert text (the title name and a short availability line) — nothing more — to Expo's push service and on to Apple APNs / Google FCM for delivery.
 
@@ -139,7 +139,7 @@ For a regulatory complaint, contact the UK Information Commissioner's Office: ht
 
 ---
 
-Videx is operated by Joe Green as an individual data controller based in the United Kingdom. This page describes how the app actually handles your data; if that changes, we update this page and (per §10) notify signed-in users. Last updated 16 September 2026.`;
+Videx is operated by Joe Green as an individual data controller based in the United Kingdom. This page describes how the app actually handles your data; if that changes, we update this page and (per §10) notify signed-in users. Last updated 18 September 2026.`;
 
 export const TERMS_MD = `# Terms of Service
 

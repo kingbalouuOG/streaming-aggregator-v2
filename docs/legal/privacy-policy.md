@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated:** 16 September 2026
+**Last updated:** 18 September 2026
 **Effective from:** 6 July 2026
 
 ## 1. Who we are
@@ -111,10 +111,12 @@ stores:
   to you for which title, kept so the same title never alerts you
   twice and to enforce the daily alert cap.
 
-Consent is asked for after your first value moment in the app (your
-first watchlist add) — never at first launch — and you can withdraw
-it at any time in Profile → Settings, by revoking the notification
-permission in your device settings, or by signing out. Your choices
+Consent is asked for once, after you finish setting up your account,
+and never at first launch: Videx first explains what the alerts are,
+and your device's permission prompt only appears if you choose to
+turn them on. You can withdraw it at any time in Profile → Settings,
+by revoking the notification permission in your device settings, or
+by signing out. Your choices
 are enforced server-side: the daily alert job filters on your
 consent, not just the client.
 
@@ -263,4 +265,4 @@ Commissioner's Office: <https://ico.org.uk/make-a-complaint/>.
 *Videx is operated by Joe Green as an individual data controller based
 in the United Kingdom. This page describes how the app actually handles
 your data; if that changes, we update this page and (per §10) notify
-signed-in users. Last updated 15 September 2026.*
+signed-in users. Last updated 18 September 2026.*

@@ -5,10 +5,8 @@ import { Pressable, Text, View } from 'react-native';
 import { trackTasteInteraction } from '@/instrumentation/trackInteraction';
 import { parseContentItemId } from '@/lib/adapters/contentAdapter';
 import { setLastAction } from '@/lib/instrumentation/dwellTimer';
-import { getAuthUserId } from '@/lib/storage';
 import { useWatchlist, useWatchlistMutations } from '@/hooks/useWatchlist';
 import type { ContentItem } from '@/lib/types/content';
-import { maybePromptForPush } from '@/notifications/push';
 import { readPendingLink, writePendingLink } from '@/pendingLink';
 import { useAuth } from '@/providers/auth';
 
@@ -55,8 +53,6 @@ export function WatchlistActions({ item }: { item: ContentItem }) {
           if (!bookmarked) {
             setLastAction('added_to_watchlist');
             void trackTasteInteraction(meta, 'watchlist_add');
-            // First value moment → ask for notification consent (once).
-            void maybePromptForPush(getAuthUserId());
           }
           toggle.mutate(item);
         }}
