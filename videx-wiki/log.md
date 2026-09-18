@@ -1882,3 +1882,7 @@ only thing at stake.
 - Watchlist-add trigger (`maybePromptForPush`) removed. Android 13+: permission read from `canAskAgain` (a fresh install reports status denied); the request creates the channel first.
 - Privacy policy + `policyContent.ts`: "when we ask" sentence reworded (Joe to approve in the PR), dated 18 September 2026.
 - Updated: wiki/concepts/architecture/notifications-v1.md (Consent), wiki/registers/parking-lot.md (IN-GR-034 closed with the PR).
+
+## [2026-09-18] query | G2 decisions taken; H1 handoff written
+- Joe accepted all fifteen §9 decisions of the G2 plan as recommended. Plan §9 marked resolved, §4 carries the fold-ins (IN-GR-043 → H1, IN-GR-040/044 → H3, IN-GR-041 → H4), §11a records the state.
+- H1 handoff: `docs/plans/2026-09-18-002-handoff-growth-h1-schema.md` (migration 093: six tables, `is_household_member` helper, membership policies, five RPCs with fixed error codes, 092 bodies re-emitted, `household_joined`, IN-GR-043 CHECK, verify script in the 089 style). H2 and H3 handoffs follow H1's summary.
