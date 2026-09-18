@@ -50,6 +50,9 @@ jobs:
             echo "EXPO_PUBLIC_SUPABASE_URL=${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}"
             echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}"
             echo "EXPO_PUBLIC_API_PROXY_URL=${{ secrets.EXPO_PUBLIC_API_PROXY_URL }}"
+            echo "EXPO_PUBLIC_SENTRY_DSN=${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}"
+            echo "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}"
+            echo "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }}"
           } > .env
 
       - name: A2 — .env present, before prebuild
@@ -76,15 +79,23 @@ jobs:
           F="$(find app/build -type f -name fingerprint | head -1)"; echo "gradle fingerprint: $(cat "$F")"
           grep -m1 '"sources"' /tmp/fp/d-gradle.log > /tmp/fp/d-gradle.json || true
 
+      - name: E — after Gradle, fingerprint:generate --debug (file-level)
+        working-directory: native
+        run: |
+          npx expo-updates fingerprint:generate --platform android --debug > /tmp/fp/e-postgradle.json
+          jq -r .hash /tmp/fp/e-postgradle.json
+          git status --porcelain --ignored -- node_modules/@react-native-masked-view node_modules/expo-updates/expo-updates-gradle-plugin | head -40
+          find node_modules/@react-native-masked-view/masked-view node_modules/expo-updates/expo-updates-gradle-plugin -newer package.json -not -path '*/build/*' | head -60
+
       - name: Diff source lists
         run: |
           cd /tmp/fp
-          for f in a-clean a2-env c-prebuilt d-gradle; do
+          for f in a-clean a2-env c-prebuilt d-gradle e-postgradle; do
             [ -s $f.json ] || continue
             echo "$f hash: $(jq -r .hash $f.json)"
             jq -r '.sources[] | "\(.type) \(.filePath // .id) \(.hash)"' $f.json | sort > $f.txt
           done
-          for f in a2-env c-prebuilt d-gradle; do
+          for f in a2-env c-prebuilt d-gradle e-postgradle; do
             [ -s $f.txt ] || continue
             echo "===== a-clean vs $f ====="; diff a-clean.txt $f.txt || true
           done
