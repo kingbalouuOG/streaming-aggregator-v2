@@ -1886,3 +1886,9 @@ only thing at stake.
 ## [2026-09-18] query | G2 decisions taken; H1 handoff written
 - Joe accepted all fifteen §9 decisions of the G2 plan as recommended. Plan §9 marked resolved, §4 carries the fold-ins (IN-GR-043 → H1, IN-GR-040/044 → H3, IN-GR-041 → H4), §11a records the state.
 - H1 handoff: `docs/plans/2026-09-18-002-handoff-growth-h1-schema.md` (migration 093: six tables, `is_household_member` helper, membership policies, five RPCs with fixed error codes, 092 bodies re-emitted, `household_joined`, IN-GR-043 CHECK, verify script in the 089 style). H2 and H3 handoffs follow H1's summary.
+
+## [2026-09-18] query | Pre-G2 hygiene (chore/pre-g2-hygiene, PR #210)
+- IN-GR-022: esm.sh supabase-js and postgrest-js pinned to 2.116.0 in `_shared/userScope.ts` and `send-notifications`; builder arity fixed; `deno check` green on send-notifications, embed-query, revoke-apple-token, label-anchor-room.
+- IN-GR-025: em dashes out of the two single-title push bodies (before and after copy in the PR for Joe); push `SERVICE_LABELS` parity test against `SHARE_SERVICE_LABELS`. Needs a `send-notifications` deploy.
+- IN-GR-045: Worker `notFound`, `pageCacheKey`/`PAGE_TTL_SECONDS`/`htmlPage` in `pageShell.ts`, `readJsonBody`; no `PAGE_CACHE_VERSION` bump (no page bytes changed). `installReferrer` validates parsed fields; `src/lib/format/` (`MONTH_NAMES`, `countLabel`); native `useUsernameSave` (rides the IN-GR-034 OTA).
+- Updated: wiki/registers/parking-lot.md (three rows closed, counts line), wiki/entities/codebase/hooks.md (useUsernameSave). The Worker entity pages are unchanged because `PAGE_CACHE_VERSION` stays in `pageShell.ts`.

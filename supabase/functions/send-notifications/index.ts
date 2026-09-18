@@ -30,7 +30,7 @@
  * Deploy: npx supabase functions deploy send-notifications --project-ref fmusugdcnnwiuzkbjquo
  */
 
-import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.116.0';
 
 import {
   composeMessage,

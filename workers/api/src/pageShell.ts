@@ -78,6 +78,32 @@ export const HTML_SECURITY_HEADERS: Record<string, string> = {
  */
 export const PAGE_CACHE_VERSION = 'v3';
 
+/** Edge-cache TTL for every object page (/t/, /room/). */
+export const PAGE_TTL_SECONDS = 24 * 60 * 60;
+
+/**
+ * Edge cache key for an object page: path and platform bucket only, plus
+ * PAGE_CACHE_VERSION. The slug and the ?via= / ?src= query are never part
+ * of it, so every share of an object reads one cached render (attribution
+ * is filled after the read).
+ */
+export function pageCacheKey(path: string, bucket: PlatformBucket): string {
+  return `https://cache.videx${path}?p=${bucket}&v=${PAGE_CACHE_VERSION}`;
+}
+
+/** Branded 404s cache briefly, so a room shared seconds later still resolves. */
+export const NOT_FOUND_CACHE_CONTROL = 'public, max-age=300';
+
+const HTML_CONTENT_TYPE = 'text/html; charset=utf-8';
+
+/** An HTML response with the security headers; `extra` headers win. */
+export function htmlPage(html: string, status = 200, extra: Record<string, string> = {}): Response {
+  return new Response(html, {
+    status,
+    headers: { 'Content-Type': HTML_CONTENT_TYPE, ...HTML_SECURITY_HEADERS, ...extra },
+  });
+}
+
 // ── Attribution pass-through ─────────────────────────────────────────
 /** Placed at the end of a videx:// href; becomes "?via=…&amp;src=…" or "". */
 export const DEEP_LINK_QUERY_MARK = '__VIDEX_DL_QUERY__';
