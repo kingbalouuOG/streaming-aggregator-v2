@@ -96,7 +96,7 @@ describe('first touch', () => {
   });
 
   it('keeps attribution without an object, ignores a link with neither', () => {
-    expect(firstTouchFromLink({ route: '/', object: null, via: 'seo', src: null }, 'install_referrer', 1)).toMatchObject({
+    expect(firstTouchFromLink({ route: '/', object: null, via: 'seo', src: null, invite: null }, 'install_referrer', 1)).toMatchObject({
       via: 'seo',
       objectType: null,
       objectId: null,
