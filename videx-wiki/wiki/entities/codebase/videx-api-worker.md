@@ -8,6 +8,7 @@ sources:
   - workers/api/src/index.ts, pageShell.ts, listPage.ts, listStore.ts (repo)
   - workers/api/README.md (repo)
   - docs/plans/2026-09-18-004-handoff-growth-h3-list-links.md (repo)
+  - docs/plans/2026-09-18-005-handoff-growth-h4-nudges.md (repo)
 related:
   - wiki/concepts/decisions/adr-015-object-urls-and-inbound-links.md
   - wiki/concepts/techniques/inbound-deep-linking.md
@@ -45,3 +46,5 @@ Members read the full list in the app under RLS; the plan's JWT member route `GE
 ## Telemetry
 
 Every page 200 records `preview_fetched` (crawler) or `preview_opened` (person) through `recordPreview`, cache hits included; list pages use object `{type: 'list', id}`. See [Event Taxonomy](event-taxonomy.md).
+
+`POST /v1/growth/events` (app events) is anonymous by default: a valid Bearer Supabase JWT sets `user_id`, an absent or expired one records the event without it. **Exception since G2 H4 (IN-GR-041):** `notification_opened` without a verified JWT answers **401**; with a `delivery_id`, a service-role lookup must find that `notification_deliveries` row for the same user, else **403** (a missing row included). Rate limiting and body validation run first, as for every event; other events are unchanged. Code: `checkPushOpen` (`growthEvents.ts`) and `deliveryBelongsTo` (`growthStore.ts`), both vitest-tested.

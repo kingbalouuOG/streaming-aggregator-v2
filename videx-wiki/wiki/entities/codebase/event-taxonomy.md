@@ -92,16 +92,18 @@ Written to `card_impressions` (partitioned monthly by pg_partman), batched clien
 
 ## Notification deliveries (separate table)
 
-Sent pushes are logged to `notification_deliveries` (migration 057), NOT `user_interactions`. It is a dedup + cap ledger written only by the `send-notifications` Edge Function (service_role), read-own by the user. See [notifications-v1](../../concepts/architecture/notifications-v1.md).
+Sent pushes are logged to `notification_deliveries` (migration 057; nudge columns 095), NOT `user_interactions`. It is a dedup + cap ledger written only by the `send-notifications` and `send-nudges` Edge Functions (service_role), read-own by the user. See [notifications-v1](../../concepts/architecture/notifications-v1.md).
 
 | Field | Description |
 |---|---|
-| `user_id`, `notification_type` | `arrival` \| `leaving_soon`. |
-| `tmdb_id`, `media_type` | The title alerted about. |
-| `sent_at` | Drives the ~1/day per-user cap. |
+| `user_id`, `notification_type` | `arrival` \| `leaving_soon` \| `household_nudge` (095). |
+| `tmdb_id`, `media_type` | The title alerted about (title alerts only; null on a nudge). |
+| `list_id`, `nudge_window` | Nudges only (095): the shared list, and the UTC hour it was claimed in. |
+| `push_id` | One uuid per push, shared by every row of a bundle (095, IN-GR-026). |
+| `sent_at` | Drives the caps: one push per cap group (`titles`, `household`) per 20h, 3 per 24h across groups (`_shared/pushPolicy.ts`). |
 | `expo_ticket_id`, `push_token_id`, `delivery_status` | Expo receipt polling → dead-token pruning. |
 
-`UNIQUE (user_id, notification_type, tmdb_id, media_type)` = the "never notify twice for the same arrival" guarantee.
+`UNIQUE (user_id, notification_type, tmdb_id, media_type)` = the "never notify twice for the same arrival" guarantee. `UNIQUE (user_id, notification_type, list_id, nudge_window)` (095) = one nudge per person, list and hour. Neither is partial (PostgREST upserts cannot target a partial index); NULLs are distinct, so each only matches its own type.
 
 ## Growth events (separate table)
 
@@ -116,7 +118,7 @@ Sent pushes are logged to `notification_deliveries` (migration 057), NOT `user_i
 | `signup_completed` | app (`curating.tsx`) | end of onboarding, beside `first_home_view` | first-touch via/src/object; `metadata.touch`; `user_id` |
 | `share_initiated` | app (`ShareButton.tsx` `runShare`, Growth S4) | the share sheet opens (title, room screen, room card; a room card after its snapshot POST succeeds; a shared list, G2 H2, after an owner's `create_invite`) | object, `via=share` (`via=household` and object `list` for a shared list), `src` = session origin; `metadata.surface` (`detail` \| `room` \| `room_card` \| `list`), `metadata.moment` (`arrival` \| `leaving_soon`) when shared from "Tell someone" |
 | `share_completed` | app (same) | the OS reports `sharedAction` | same as initiated plus `metadata.to_surface` (iOS activity type, else null) and `metadata.platform_reports_completion` (true on iOS only: Android reports a dismissed sheet as shared) |
-| `notification_opened` | app (`providers/notifications.tsx`, warm and cold taps, once per notification id) | a push tap | `delivery_id` (single-title push; null for bundles and pre-S4 pushes), object from the payload URL (null for bundles), `via=push`, `src=push`, `metadata.type` (`arrival` \| `leaving_soon` \| `bundle`) |
+| `notification_opened` | app (`providers/notifications.tsx`, warm and cold taps, once per notification id; pure half `src/lib/notifications/pushTap.ts`) | a push tap | `delivery_id` (single-title push or household nudge; null for bundles and pre-S4 pushes), object from the payload URL (title, `{type: 'list', id}` for a nudge, null for bundles), `via=push`, `src=push`, `metadata.type` (`arrival` \| `leaving_soon` \| `bundle` \| `household_nudge`), `metadata.push_id` (pushes sent after 095), `metadata.kind = 'household_nudge'` on a nudge (plan D13). **Since G2 H4 the Worker requires a verified JWT (401) and, with a `delivery_id`, that the delivery is the caller's (403) (IN-GR-041).** |
 | `household_joined` | app: `native/src/app/list/[id].tsx` (G2 H2) | the list screen's `join_household(token)` for a `?invite=` link returns `already_member = false` (a replay by an existing member emits nothing) | object `list` (the shared `watchlists` uuid, required), `via=household` when the join came from an invite link, `metadata.household_id`. Added to the CHECK by migration 093 and to `GROWTH_EVENT_NAMES` / `CLIENT_EVENT_NAMES` / `OBJECT_REQUIRED_EVENTS` (D13: the one new name; the loop's other events reuse existing names with object type `list`) |
 
 Columns: `id`, `occurred_at`, `event_name`, `install_id` (app-minted UUID, null on page events), `user_id` (from the verified JWT only; never from the body), `via`, `src`, `object_type`, `object_id`, `platform`, `ua_class`, `delivery_id`, `metadata` (≤ 2 KB on ingest).
@@ -127,7 +129,7 @@ Columns: `id`, `occurred_at`, `event_name`, `install_id` (app-minted UUID, null 
 - **Deletion/export** — `delete_own_account` / `export_user_data` (v1.3) cover the account's rows and every row of any install it used.
 - **Session origin** (S4, `src/lib/instrumentation/sessionOrigin.ts`): a push tap marks the in-memory session as push-originated until `sessionId`'s reset (5 minutes backgrounded). Every share in that session carries `src=push` on both events and in the URL (`&src=push`).
 - **Device-verified 2026-09-16..17 (Growth S5):** every `event_name` above was produced on a real phone with the documented fields: crawler agents `whatsapp`, `imessage`, `slack` on `preview_fetched`; `first_open` once per install (`touch` `link` on iOS, `install_referrer` on a Play install); `signup_completed` and `first_home_view` carrying `via=share` from the referrer; `share_completed` `platform_reports_completion` true with an activity type on iOS, false with null `to_surface` on Android; `notification_opened` with `delivery_id` for single-title pushes and null for bundles. Evidence: `docs/v2/phase-summaries/evidence/growth-s5-growth-events.md`. Note that account deletion removes the rows of every install the account used (IN-GR-009), which deleted the iPhone test trail in S5.
-- Shares per WAU (`growth-dashboard.sql` §1) read `share_initiated` since S4; the `user_interactions.share` source is kept commented for the transition. §6 has iOS completion, push vs organic share rate, notification CTR on `delivery_id`, and "Tell someone" take-up.
+- Shares per WAU (`growth-dashboard.sql` §1) read `share_initiated` since S4; the `user_interactions.share` source is kept commented for the transition. §6 has iOS completion, push vs organic share rate, notification CTR on `push_id` or `delivery_id` (G2 H4: bundles and nudges joined, a two-device tap counts once), and "Tell someone" take-up. §7 (G2 H4) is the household loop: households per 100 sign-ups, members per household, households with two or more members active in 30 days, adds per household per week, nudge-to-open (`metadata.kind = 'household_nudge'`).
 
 ## Source surfaces
 

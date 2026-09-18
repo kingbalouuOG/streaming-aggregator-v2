@@ -16,22 +16,40 @@
  * Guarantees:
  *   - Dedup: never notify twice for the same (user, type, title). Enforced by
  *     the UNIQUE index on notification_deliveries via ON CONFLICT DO NOTHING.
- *   - Cap: at most ONE push per user per day. Today's matches are BUNDLED into
- *     a single notification, so a catch-up sync that adds 50 titles still
- *     produces one push — no mass-firing.
+ *   - Cap: at most ONE title push per user per 20 hours (the 'titles' cap
+ *     group in _shared/pushPolicy.ts), plus the global floor of 3 pushes per
+ *     24 hours across groups. Household nudges (send-nudges) are their own
+ *     group, so a nudge never blocks an arrival. Today's matches are BUNDLED
+ *     into a single notification, so a catch-up sync that adds 50 titles
+ *     still produces one push — no mass-firing. Title alerts keep their 08:00
+ *     run and are exempt from the nudge quiet hours.
  *   - Consent: filters notification_preferences server-side (a disabled type is
  *     never sent, even from a stale client). Absent pref row = enabled (default-on).
  *   - Leaving-soon is kept cleanly separable (its own type + tier flag) so a
  *     future Premium gate is a one-line config change, not surgery.
  *
- * Also, at the start of each run: polls Expo push receipts for the previous
- * run's sends and prunes dead tokens (DeviceNotRegistered) from user_push_tokens.
+ * Also, at the start of each run: polls Expo push receipts for earlier sends
+ * (title alerts and nudges share the table) and prunes dead tokens
+ * (DeviceNotRegistered) from user_push_tokens. The Expo transport lives in
+ * _shared/expoPush.ts (Growth G2 H4).
+ *
+ * Every push carries a push_id (migration 095): written on each claimed row
+ * and sent in the payload, so a bundle's opens are counted once (IN-GR-026).
  *
  * Deploy: npx supabase functions deploy send-notifications --project-ref fmusugdcnnwiuzkbjquo
  */
 
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.116.0';
 
+import {
+  expoSend,
+  pollReceiptsAndPrune,
+  pruneSendTimeErrors,
+  type ExpoMessage,
+  type ExpoPushOptions,
+  type PushToken,
+} from '../_shared/expoPush.ts';
+import { capBlock, GLOBAL_FLOOR_WINDOW_MS, type RecentDelivery } from '../_shared/pushPolicy.ts';
 import {
   composeMessage,
   type Candidate,
@@ -46,10 +64,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 // Optional. When set, Expo enforces that only this project's server can send
 // to its tokens (recommended once "Enhanced Security for Push" is on).
 const EXPO_ACCESS_TOKEN = Deno.env.get('EXPO_ACCESS_TOKEN') ?? '';
-
-const EXPO_SEND_URL = 'https://exp.host/--/api/v2/push/send';
-const EXPO_RECEIPTS_URL = 'https://exp.host/--/api/v2/push/getReceipts';
-const EXPO_PUSH_CHUNK = 100; // Expo accepts up to 100 messages per request.
+const EXPO: ExpoPushOptions = { accessToken: EXPO_ACCESS_TOKEN, logTag: '[send-notifications]' };
 
 const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -77,27 +92,7 @@ function userTierAllows(type: NotificationType, _userId: string): boolean {
 const ARRIVAL_LOOKBACK_MS = 26 * 3600 * 1000;
 // Leaving-soon horizon: alert when a title is within this many days of expiry.
 const LEAVING_SOON_HORIZON_DAYS = 7;
-// Cap: if the user already received a push in this window, skip them today.
-const DAILY_CAP_WINDOW_MS = 20 * 3600 * 1000;
-// Receipt polling: only poll sends old enough for a receipt to exist, and
-// young enough to still matter.
-const RECEIPT_MIN_AGE_MS = 15 * 60 * 1000;
-const RECEIPT_MAX_AGE_MS = 3 * 24 * 3600 * 1000;
-
-// ── Types ────────────────────────────────────────────────
-interface PushToken {
-  id: string;
-  expo_push_token: string;
-  platform: string;
-}
-interface ExpoMessage {
-  to: string;
-  title: string;
-  body: string;
-  sound: 'default';
-  data: PushData;
-  channelId?: string;
-}
+// Caps (group rule and global floor) live in _shared/pushPolicy.ts.
 
 // ── Per-user candidate gathering ─────────────────────────
 
@@ -228,7 +223,8 @@ async function filterAlreadySent(userId: string, cands: Candidate[]): Promise<Ca
   const { data, error } = await supabase
     .from('notification_deliveries')
     .select('notification_type, tmdb_id, media_type')
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .in('notification_type', ['arrival', 'leaving_soon']);
   if (error) throw error;
   const sent = new Set(
     (data ?? []).map((r) => `${r.notification_type}:${r.media_type}-${r.tmdb_id}`),
@@ -236,129 +232,21 @@ async function filterAlreadySent(userId: string, cands: Candidate[]): Promise<Ca
   return cands.filter((c) => !sent.has(`${c.type}:${c.media_type}-${c.tmdb_id}`));
 }
 
-/** True if the user already got a push inside the cap window. */
+/**
+ * True if a title push may not go to this user now: a title alert inside the
+ * group's 20 hours, or 3 pushes of any type inside 24 hours (pushPolicy.ts).
+ * A household nudge earlier today does not block it.
+ */
 async function hitDailyCap(userId: string): Promise<boolean> {
-  const sinceIso = new Date(Date.now() - DAILY_CAP_WINDOW_MS).toISOString();
-  const { count, error } = await supabase
+  const now = new Date();
+  const sinceIso = new Date(now.getTime() - GLOBAL_FLOOR_WINDOW_MS).toISOString();
+  const { data, error } = await supabase
     .from('notification_deliveries')
-    .select('id', { count: 'exact', head: true })
+    .select('notification_type, sent_at, push_id')
     .eq('user_id', userId)
     .gte('sent_at', sinceIso);
   if (error) throw error;
-  return (count ?? 0) > 0;
-}
-
-// ── Expo push send (chunked) ─────────────────────────────
-interface ExpoTicket {
-  status: 'ok' | 'error';
-  id?: string;
-  message?: string;
-  details?: { error?: string };
-}
-
-async function expoSend(messages: ExpoMessage[]): Promise<ExpoTicket[]> {
-  const tickets: ExpoTicket[] = [];
-  for (let i = 0; i < messages.length; i += EXPO_PUSH_CHUNK) {
-    const chunk = messages.slice(i, i + EXPO_PUSH_CHUNK);
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Accept-Encoding': 'gzip, deflate',
-    };
-    if (EXPO_ACCESS_TOKEN) headers['Authorization'] = `Bearer ${EXPO_ACCESS_TOKEN}`;
-    try {
-      const res = await fetch(EXPO_SEND_URL, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(chunk),
-      });
-      const json = await res.json();
-      // Response shape: { data: ExpoTicket[] } (order matches the request).
-      const data = (json?.data ?? []) as ExpoTicket[];
-      tickets.push(...data);
-    } catch (err) {
-      console.error('[send-notifications] expoSend chunk failed:', (err as Error).message);
-      // Mark the whole chunk as errored so callers don't record phantom sends.
-      for (let j = 0; j < chunk.length; j++) tickets.push({ status: 'error', message: 'network' });
-    }
-  }
-  return tickets;
-}
-
-// ── Receipt polling + dead-token pruning ─────────────────
-// Runs at the START of each daily run against the PREVIOUS run's tickets.
-async function pollReceiptsAndPrune(): Promise<{ polled: number; pruned: number }> {
-  const minIso = new Date(Date.now() - RECEIPT_MAX_AGE_MS).toISOString();
-  const maxIso = new Date(Date.now() - RECEIPT_MIN_AGE_MS).toISOString();
-  const { data: pending, error } = await supabase
-    .from('notification_deliveries')
-    .select('id, expo_ticket_id, push_token_id')
-    .eq('delivery_status', 'pending')
-    .not('expo_ticket_id', 'is', null)
-    .gte('sent_at', minIso)
-    .lte('sent_at', maxIso)
-    .limit(1000);
-  if (error) throw error;
-  if (!pending || pending.length === 0) return { polled: 0, pruned: 0 };
-
-  // Poll receipts by unique ticket id (many delivery rows can share a ticket).
-  const ticketIds = [...new Set(pending.map((p) => p.expo_ticket_id as string))];
-  let receipts: Record<string, ExpoTicket> = {};
-  try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
-    if (EXPO_ACCESS_TOKEN) headers['Authorization'] = `Bearer ${EXPO_ACCESS_TOKEN}`;
-    const res = await fetch(EXPO_RECEIPTS_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ ids: ticketIds }),
-    });
-    const json = await res.json();
-    receipts = (json?.data ?? {}) as Record<string, ExpoTicket>;
-  } catch (err) {
-    console.error('[send-notifications] getReceipts failed:', (err as Error).message);
-    return { polled: 0, pruned: 0 };
-  }
-
-  const okDeliveryIds: string[] = [];
-  const errDeliveryIds: string[] = [];
-  const deadTokenIds = new Set<string>();
-  for (const p of pending) {
-    const r = receipts[p.expo_ticket_id as string];
-    if (!r) continue; // receipt not ready yet — leave pending for next run
-    if (r.status === 'ok') {
-      okDeliveryIds.push(p.id);
-    } else {
-      errDeliveryIds.push(p.id);
-      // The token is gone. push_token_id is set for single-device users; prune it.
-      if (r.details?.error === 'DeviceNotRegistered' && p.push_token_id) {
-        deadTokenIds.add(p.push_token_id as string);
-      }
-    }
-  }
-
-  if (okDeliveryIds.length) {
-    await supabase.from('notification_deliveries')
-      .update({ delivery_status: 'ok' }).in('id', okDeliveryIds);
-  }
-  if (errDeliveryIds.length) {
-    await supabase.from('notification_deliveries')
-      .update({ delivery_status: 'error', error_detail: 'receipt error' })
-      .in('id', errDeliveryIds);
-  }
-
-  let pruned = 0;
-  if (deadTokenIds.size) {
-    const { data: deleted } = await supabase
-      .from('user_push_tokens')
-      .delete()
-      .in('id', [...deadTokenIds])
-      .select('id');
-    pruned = deleted?.length ?? 0;
-  }
-  return { polled: pending.length, pruned };
+  return capBlock((data ?? []) as RecentDelivery[], 'arrival', now) !== null;
 }
 
 // ── Main run ─────────────────────────────────────────────
@@ -379,7 +267,7 @@ async function run(): Promise<RunReport> {
 
   // 1. Prune dead tokens from the previous run's receipts.
   try {
-    const { pruned } = await pollReceiptsAndPrune();
+    const { pruned } = await pollReceiptsAndPrune(supabase, EXPO);
     report.tokensPruned = pruned;
   } catch (err) {
     console.error('[send-notifications] receipt pass failed:', (err as Error).message);
@@ -426,6 +314,8 @@ async function run(): Promise<RunReport> {
 
       // Claim the deliveries FIRST (idempotent). Insert with ignoreDuplicates so
       // a concurrent/re-run can't double-send. Only push for rows we claimed.
+      // One push_id for every row of this push (095, IN-GR-026).
+      const pushId = crypto.randomUUID();
       const rows = candidates.map((c) => ({
         user_id: userId,
         notification_type: c.type,
@@ -433,6 +323,7 @@ async function run(): Promise<RunReport> {
         media_type: c.media_type,
         service_id: c.service_id,
         title: c.title,
+        push_id: pushId,
         delivery_status: 'pending',
       }));
       const { data: claimed, error: claimErr } = await supabase
@@ -455,10 +346,12 @@ async function run(): Promise<RunReport> {
         const deliveryId = claimedIds.get(`${c.type}:${c.media_type}-${c.tmdb_id}`);
         if (deliveryId) claimedCandidates.push({ ...c, delivery_id: deliveryId });
       }
-      const { title, body, data } = composeMessage(claimedCandidates);
+      const composed = composeMessage(claimedCandidates);
+      const { title, body } = composed;
+      const data: PushData = { ...composed.data, push_id: pushId };
 
       // Fan out to every device the user has.
-      const messages: ExpoMessage[] = tokens.map((tok) => ({
+      const messages: ExpoMessage<PushData>[] = tokens.map((tok) => ({
         to: tok.expo_push_token,
         title,
         body,
@@ -466,7 +359,7 @@ async function run(): Promise<RunReport> {
         data,
         channelId: 'default',
       }));
-      const tickets = await expoSend(messages);
+      const tickets = await expoSend(messages, EXPO);
 
       // Record the first ticket id against the claimed rows for receipt polling.
       // (One user → one logical push; tickets share fate. Store the first ok id.)
@@ -483,12 +376,7 @@ async function run(): Promise<RunReport> {
       }
 
       // DeviceNotRegistered at SEND time (immediate ticket error) → prune token now.
-      for (let i = 0; i < tickets.length; i++) {
-        if (tickets[i].status === 'error' && tickets[i].details?.error === 'DeviceNotRegistered') {
-          await supabase.from('user_push_tokens').delete().eq('id', tokens[i].id);
-          report.tokensPruned++;
-        }
-      }
+      report.tokensPruned += await pruneSendTimeErrors(supabase, tickets, tokens);
 
       if (anyDelivered) {
         report.usersNotified++;

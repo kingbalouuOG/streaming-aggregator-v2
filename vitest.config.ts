@@ -33,6 +33,8 @@ export default defineConfig({
       'supabase/functions/_shared/__tests__/**/*.test.ts',
       // Growth S4: send-notifications copy and push payload.
       'supabase/functions/send-notifications/__tests__/**/*.test.ts',
+      // Growth G2 H4: send-nudges selection, copy and payload.
+      'supabase/functions/send-nudges/__tests__/**/*.test.ts',
     ],
     exclude: [
       '**/node_modules/**',
