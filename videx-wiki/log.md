@@ -1872,3 +1872,7 @@ only thing at stake.
 - Four audits over the live tree. Findings that shape the plan: the personal `watchlist` table has no DDL or RLS in the repo; `withUserScope` forbids cross-user reads by construction; `profiles` is owner-readable only (no display name); the push cap is global and the delivery ledger cannot key a nudge; `/list/:id` is a 404 stub with no preview telemetry; the pending-link writer does not skip list objects despite the parser's comment (made deliberate in H3); the Play referrer has no list key; a "For both of you" row needs no new RPC (G5).
 - Plan: docs/plans/2026-09-17-004-feat-phase-g2-household-loop-plan.md (audit, architecture, sessions H1–H5, migrations 093/094, tests, risks, 15 decisions for Joe). Registers untouched until decisions land.
 - Updated: wiki/concepts/forward-planning/growth-loops.md (status + G2 note).
+
+## [2026-09-18] query | v2.5.0 tagged; IN-GR triage before G2
+- Release: PR #205 merged (d90cdaf); annotated tag `v2.5.0` on the merge commit fired ios-release (build 14 → TestFlight) and android-release (versionCode 17 → Play internal). No 2.5.1: the version never went public. App Store submission, privacy rows and Confirm email ON remain Joe's.
+- Open IN-GR rows triaged for G2: two parallel sessions now (IN-GR-034 handoff refreshed; new hygiene handoff `docs/plans/2026-09-18-001-handoff-pre-g2-hygiene.md` for 022/025/045), three fold-ins (043 → H1, 040/044 → H3, 041 → H4), two monitoring notes (006, 021). Register updated; the G2 plan (PR #206, unmerged) picks the fold-ins up when the H1 handoff is written.
