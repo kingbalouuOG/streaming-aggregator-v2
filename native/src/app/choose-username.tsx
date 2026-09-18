@@ -92,7 +92,7 @@ export default function ChooseUsernameScreen() {
           </View>
 
           {status === 'taken' ? (
-            <Text className="mt-1.5 font-sans text-meta text-danger">That username is taken — try another.</Text>
+            <Text className="mt-1.5 font-sans text-meta text-danger">That username is taken. Try another.</Text>
           ) : (
             <Text className="mt-1.5 font-sans text-meta text-muted-foreground">
               3–20 characters: letters, numbers, dots and underscores.

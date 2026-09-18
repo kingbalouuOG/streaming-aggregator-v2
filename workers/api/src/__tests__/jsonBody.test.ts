@@ -36,6 +36,13 @@ describe('readJsonBody (IN-GR-045)', () => {
     });
   });
 
+  it('413 measures bytes, not code units', async () => {
+    // 9 characters, 27 bytes: passes a code-unit check against 16, fails a byte check.
+    expect(await readJsonBody(req(`"${'\u4e2d'.repeat(7)}"`, '2'), { maxBytes: 16 })).toEqual({
+      ok: false, status: 413, error: 'body too large',
+    });
+  });
+
   it('400 on invalid JSON', async () => {
     expect(await readJsonBody(req('{nope', '5'), { maxBytes: 16, requireLength: true })).toEqual({
       ok: false, status: 400, error: 'invalid json',

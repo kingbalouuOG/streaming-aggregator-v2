@@ -24,7 +24,6 @@
  */
 
 import {
-  isContentId,
   isRoomId,
   normaliseSrc,
   normaliseVia,
@@ -39,15 +38,16 @@ export const REFERRER_ROOM_KEY = 'r';
 
 // A bare "movie-603" / "tv-095396" shape only (no path, no query); the
 // contract itself (positive id, at most ten digits, leading zeros dropped) is
-// the one parseInboundLink applies, through the same tmdbId and isContentId.
+// the one parseInboundLink applies, through the same tmdbId.
 const BARE_CONTENT_REF_RE = /^(movie|tv)-(\d{1,15})$/;
 
 /** The title object parseInboundLink would produce for this content id, or null. */
 function titleObject(contentId: string): InboundObject | null {
   const m = BARE_CONTENT_REF_RE.exec(contentId);
   const id = m ? tmdbId(m[2]) : null;
-  const normalised = m && id ? `${m[1]}-${id}` : null;
-  return normalised && isContentId(normalised) ? { type: 'title', id: normalised } : null;
+  // tmdbId is the whole rule (positive, at most ten digits, zeros dropped):
+  // the result is a content id by construction.
+  return m && id ? { type: 'title', id: `${m[1]}-${id}` } : null;
 }
 
 function roomObject(id: string): InboundObject | null {
