@@ -86,6 +86,10 @@ export function useUsernameSave({
         return;
       }
       onSaved?.();
+    } catch {
+      // A thrown client error (no network, aborted fetch) is a failure like a
+      // returned one: say so, rather than clearing busy with no message.
+      setError(failureMessage);
     } finally {
       setBusy(false);
     }

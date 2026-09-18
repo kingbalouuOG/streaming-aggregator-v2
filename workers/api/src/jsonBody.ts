@@ -32,7 +32,11 @@ export async function readJsonBody(
   if (Number(declared ?? '0') > maxBytes) return { ok: false, status: 413, error: 'body too large' };
   try {
     const text = await c.req.text();
-    if (text.length > maxBytes) return { ok: false, status: 413, error: 'body too large' };
+    // Bytes, not UTF-16 code units: a multi-byte body must not pass at up to
+    // three times the cap when the declared length understates it.
+    if (new TextEncoder().encode(text).byteLength > maxBytes) {
+      return { ok: false, status: 413, error: 'body too large' };
+    }
     return { ok: true, body: JSON.parse(text) };
   } catch {
     return { ok: false, status: 400, error: 'invalid json' };
