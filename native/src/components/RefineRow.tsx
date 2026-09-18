@@ -8,6 +8,7 @@ import {
   type RefineChip,
   type RefineField,
 } from '@/lib/content/refineChips';
+import { countLabel } from '@/lib/format/plural';
 
 // The refine row (recommendation 2026-09-08-002 §9.2, prototype states 3–4).
 //
@@ -94,7 +95,7 @@ export function RefineRow({
           <Text
             numberOfLines={1}
             className="font-sans-bold text-kicker uppercase tracking-[1.6px] text-muted-foreground">
-            {loading ? 'Refining…' : `${resultCount} ${resultCount === 1 ? 'title' : 'titles'}`}
+            {loading ? 'Refining…' : countLabel(resultCount, 'title')}
           </Text>
           {onClearAll && activeCount > 0 ? (
             <Pressable

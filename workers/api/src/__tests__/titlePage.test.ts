@@ -7,16 +7,22 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  platformBucket,
-  storeCta,
   renderTitlePage,
   renderTitleNotFoundPage,
-  esc,
-  PLAY_STORE_URL,
   titlePageCacheKey,
   type TitlePageData,
 } from '../titlePage';
-import { APP_STORE_URL, applyAttribution, DEEP_LINK_QUERY_MARK, PAGE_CACHE_VERSION, PLAY_REFERRER_MARK } from '../pageShell';
+import {
+  APP_STORE_URL,
+  applyAttribution,
+  DEEP_LINK_QUERY_MARK,
+  esc,
+  PAGE_CACHE_VERSION,
+  platformBucket,
+  PLAY_REFERRER_MARK,
+  PLAY_STORE_URL,
+  storeCta,
+} from '../pageShell';
 
 const SAMPLE: TitlePageData = {
   title: 'Predator',

@@ -49,20 +49,21 @@ import { markdownToHtml, renderPolicyPage } from './policyPages';
 import { bridgeAppUrl, bridgeKind, renderResetBridgePage } from './resetBridge';
 import {
   CANONICAL_REF_HEADER,
-  platformBucket,
   renderTitlePage,
-  renderTitleNotFoundPage,
   SHARE_SERVICE_LABELS,
   titlePageCacheKey,
   type TitlePageData,
 } from './titlePage';
-import { applyAttribution, HTML_SECURITY_HEADERS } from './pageShell';
 import {
-  renderListNotFoundPage,
-  renderRoomNotFoundPage,
-  renderRoomPage,
-  roomPageCacheKey,
-} from './roomPage';
+  applyAttribution,
+  HTML_SECURITY_HEADERS,
+  htmlPage,
+  PAGE_TTL_SECONDS,
+  platformBucket,
+} from './pageShell';
+import { renderRoomPage, roomPageCacheKey } from './roomPage';
+import { notFound } from './notFound';
+import { readJsonBody } from './jsonBody';
 import {
   appleAppSiteAssociation,
   assetLinks,
@@ -318,14 +319,7 @@ app.get('/v1/title/:type/:id', async (c) => {
 });
 
 // ── Public object pages: shared helpers ──────────────────────────────
-const HTML_CONTENT_TYPE = 'text/html; charset=utf-8';
-
-function htmlPage(html: string, status = 200, extra: Record<string, string> = {}): Response {
-  return new Response(html, {
-    status,
-    headers: { 'Content-Type': HTML_CONTENT_TYPE, ...HTML_SECURITY_HEADERS, ...extra },
-  });
-}
+// htmlPage, pageCacheKey, PAGE_TTL_SECONDS: pageShell.ts. notFound: notFound.ts.
 
 /**
  * Fill the ?via= / ?src= markers AFTER the edge-cache read (pageShell.ts):
@@ -394,8 +388,6 @@ function recordPreview(c: Context<{ Bindings: Env }>, resp: Response, object: In
 // and id only; a missing or stale slug 301s to the canonical ref (query
 // kept). The canonical ref rides the cached response in a header, so a
 // cache hit redirects without touching the database.
-const TITLE_PAGE_TTL_SECONDS = 24 * 60 * 60;
-
 app.get('/t/:type/:ref', async (c) => {
   const { type, ref } = c.req.param();
   const parsed = parseTitleRef(ref);
@@ -415,7 +407,7 @@ app.get('/t/:type/:ref', async (c) => {
   const resp = await withEdgeCache(
     c,
     titlePageCacheKey(type, id, bucket),
-    TITLE_PAGE_TTL_SECONDS,
+    PAGE_TTL_SECONDS,
     async () => {
       const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -435,9 +427,7 @@ app.get('/t/:type/:ref', async (c) => {
 
       // Unknown title: a real 404 (never a junk "Title #N" 200 stuck in
       // the 24h edge cache — withEdgeCache only stores ok responses).
-      if (!titleRow) {
-        return htmlPage(renderTitleNotFoundPage(bucket), 404, { 'Cache-Control': 'public, max-age=300' });
-      }
+      if (!titleRow) return notFound(c, 'title');
 
       // Distinct service labels, split by whether you can stream vs rent/buy.
       const subSet = new Set<string>();
@@ -492,7 +482,6 @@ app.get('/t/:type/:ref', async (c) => {
 // JSON for the app's room screen. Both read through loadSharedRoom. Rows
 // are immutable (no unshare, no expiry), so the page caches 24h by id and
 // platform bucket; the JSON 1h, since it carries today's availability.
-const ROOM_PAGE_TTL_SECONDS = 24 * 60 * 60;
 const ROOM_JSON_TTL_SECONDS = 60 * 60;
 
 app.get('/room/:id', async (c) => {
@@ -500,20 +489,12 @@ app.get('/room/:id', async (c) => {
   const id = c.req.param('id').toLowerCase();
   const via = c.req.query('via');
   const src = c.req.query('src');
-  if (!isUuid(id)) {
-    return withAttribution(
-      htmlPage(renderRoomNotFoundPage(bucket), 404, { 'Cache-Control': 'public, max-age=300' }),
-      via,
-      src,
-    );
-  }
+  if (!isUuid(id)) return withAttribution(notFound(c, 'room'), via, src);
   try {
-    const resp = await withEdgeCache(c, roomPageCacheKey(id, bucket), ROOM_PAGE_TTL_SECONDS, async () => {
+    const resp = await withEdgeCache(c, roomPageCacheKey(id, bucket), PAGE_TTL_SECONDS, async () => {
       const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
       const room = await loadSharedRoom(client, id);
-      if (!room) {
-        return htmlPage(renderRoomNotFoundPage(bucket), 404, { 'Cache-Control': 'public, max-age=300' });
-      }
+      if (!room) return notFound(c, 'room');
       const html = renderRoomPage(
         {
           id: room.id,
@@ -553,15 +534,7 @@ app.get('/v1/room/:id', async (c) => {
 });
 
 // GET /list/:id — grammar reserved for the G2 watchlists entity (plan D3).
-app.get('/list/:id', (c) =>
-  withAttribution(
-    htmlPage(renderListNotFoundPage(platformBucket(c.req.header('user-agent'))), 404, {
-      'Cache-Control': 'public, max-age=300',
-    }),
-    c.req.query('via'),
-    c.req.query('src'),
-  ),
-);
+app.get('/list/:id', (c) => withAttribution(notFound(c, 'list'), c.req.query('via'), c.req.query('src')));
 
 // POST /v1/share/room — freeze a room at share time and return its URL.
 // Authorization: Bearer <supabase user JWT>. Rate limited on the verified
@@ -581,19 +554,10 @@ app.post('/v1/share/room', async (c) => {
     return c.json({ error: 'rate limited' }, 429, { 'Retry-After': '60' });
   }
 
-  if (Number(c.req.header('content-length') ?? '0') > SHARE_ROOM_BODY_MAX_BYTES) {
-    return c.json({ error: 'body too large' }, 413);
-  }
-  let body: unknown;
-  try {
-    const text = await c.req.text();
-    if (text.length > SHARE_ROOM_BODY_MAX_BYTES) return c.json({ error: 'body too large' }, 413);
-    body = JSON.parse(text);
-  } catch {
-    return c.json({ error: 'invalid json' }, 400);
-  }
+  const read = await readJsonBody(c, { maxBytes: SHARE_ROOM_BODY_MAX_BYTES });
+  if (!read.ok) return c.json({ error: read.error }, read.status);
 
-  const result = validateShareRoomBody(body);
+  const result = validateShareRoomBody(read.body);
   if (!result.ok) return c.json({ error: result.error }, 400);
 
   try {
@@ -624,20 +588,10 @@ app.post('/v1/share/room', async (c) => {
 app.post(GROWTH_EVENTS_PATH, async (c) => {
   // The declared length gates the read; without one the whole body would be
   // buffered before any check (sweep, security 3). Every app client sends it.
-  const declaredLength = c.req.header('content-length');
-  if (declaredLength === undefined) return c.json({ error: 'content-length required' }, 411);
-  if (Number(declaredLength) > GROWTH_EVENT_BODY_MAX_BYTES) {
-    return c.json({ error: 'body too large' }, 413);
-  }
-  let body: unknown;
-  let parsed = true;
-  try {
-    const text = await c.req.text();
-    if (text.length > GROWTH_EVENT_BODY_MAX_BYTES) return c.json({ error: 'body too large' }, 413);
-    body = JSON.parse(text);
-  } catch {
-    parsed = false;
-  }
+  // 411 and 413 answer now; invalid JSON answers after the rate limit below.
+  const read = await readJsonBody(c, { maxBytes: GROWTH_EVENT_BODY_MAX_BYTES, requireLength: true });
+  if (!read.ok && read.status !== 400) return c.json({ error: read.error }, read.status);
+  const body = read.ok ? read.body : undefined;
 
   // Two buckets: per install (or IP when the body has no id) and, always,
   // per IP, so rotating install ids cannot escape a budget (sweep, security 2).
@@ -649,7 +603,7 @@ app.post(GROWTH_EVENTS_PATH, async (c) => {
   if (!installLimit.success || !ipLimit.success) {
     return c.json({ error: 'rate limited' }, 429, { 'Retry-After': '60' });
   }
-  if (!parsed) return c.json({ error: 'invalid json' }, 400);
+  if (!read.ok) return c.json({ error: read.error }, read.status);
 
   const result = validateGrowthEventBody(body);
   if (!result.ok) return c.json({ error: result.error }, 400);

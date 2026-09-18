@@ -1883,6 +1883,16 @@ only thing at stake.
 - Privacy policy + `policyContent.ts`: "when we ask" sentence reworded (Joe to approve in the PR), dated 18 September 2026.
 - Updated: wiki/concepts/architecture/notifications-v1.md (Consent), wiki/registers/parking-lot.md (IN-GR-034 closed with the PR).
 
+## [2026-09-18] query | G2 decisions taken; H1 handoff written
+- Joe accepted all fifteen §9 decisions of the G2 plan as recommended. Plan §9 marked resolved, §4 carries the fold-ins (IN-GR-043 → H1, IN-GR-040/044 → H3, IN-GR-041 → H4), §11a records the state.
+- H1 handoff: `docs/plans/2026-09-18-002-handoff-growth-h1-schema.md` (migration 093: six tables, `is_household_member` helper, membership policies, five RPCs with fixed error codes, 092 bodies re-emitted, `household_joined`, IN-GR-043 CHECK, verify script in the 089 style). H2 and H3 handoffs follow H1's summary.
+
+## [2026-09-18] query | Pre-G2 hygiene (chore/pre-g2-hygiene, PR #210)
+- IN-GR-022: esm.sh supabase-js and postgrest-js pinned to 2.116.0 in `_shared/userScope.ts` and `send-notifications`; builder arity fixed; `deno check` green on send-notifications, embed-query, revoke-apple-token, label-anchor-room.
+- IN-GR-025: em dashes out of the two single-title push bodies (before and after copy in the PR for Joe); push `SERVICE_LABELS` parity test against `SHARE_SERVICE_LABELS`. Needs a `send-notifications` deploy.
+- IN-GR-045: Worker `notFound`, `pageCacheKey`/`PAGE_TTL_SECONDS`/`htmlPage` in `pageShell.ts`, `readJsonBody`; no `PAGE_CACHE_VERSION` bump (no page bytes changed). `installReferrer` validates parsed fields; `src/lib/format/` (`MONTH_NAMES`, `countLabel`); native `useUsernameSave` (rides the IN-GR-034 OTA).
+- Updated: wiki/registers/parking-lot.md (three rows closed, counts line), wiki/entities/codebase/hooks.md (useUsernameSave). The Worker entity pages are unchanged because `PAGE_CACHE_VERSION` stays in `pageShell.ts`.
+
 ## [2026-09-18] query | IN-GR-034 device-verified on iPhone
 - An OTA from main to preview/ios (run 35361194411) published under runtime 2f0341fd… and reached no device: the build 13 → 14 / versionCode 16 → 17 bump in native/app.json alone changed the fingerprint, and Joe's ad-hoc preview was build 13 (db6af33c…). A buildNumber bump orphans OTAs for every older binary.
 - New ad-hoc preview build 14 from main 3f6d819 (EAS 6c1580b1, runtime 2f0341fd…, same as TestFlight build 14). Fresh install passed all checks: Turn on → one user_push_tokens row with app_version 2.5.0, claimed 24s after sign-up (iOS kept the token across reinstall, so claim_push_token moved the existing row); Not now → no system prompt, Profile → Notifications still turns alerts on; shared-link sign-up → title first, explainer after.

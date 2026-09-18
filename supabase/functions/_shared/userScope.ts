@@ -25,7 +25,7 @@
  *   const { data } = await supabase.from('titles').select('*');
  */
 
-import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.116.0';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -123,14 +123,14 @@ export interface UserScope {
    *  Returns a PostgrestFilterBuilder so callers can chain `.in / .gte /
    *  .order / .limit / .maybeSingle` etc. The `any` generics keep the
    *  ergonomics of dynamic table names without Database<> generic. */
-  select: (table: string, columns: string) => PostgrestFilterBuilder<any, any, any[]>;
+  select: (table: string, columns: string) => PostgrestFilterBuilder<any, any, any, any[]>;
   /** Pre-scoped count-head: applies .eq('user_id', userId) automatically. */
-  countHead: (table: string) => PostgrestFilterBuilder<any, any, any[]>;
+  countHead: (table: string) => PostgrestFilterBuilder<any, any, any, any[]>;
 }
 
 // Type-only import — keeps the Deno bundle slim while giving callers
 // proper IntelliSense on the chained query builder methods.
-import type { PostgrestFilterBuilder } from 'https://esm.sh/@supabase/postgrest-js@1';
+import type { PostgrestFilterBuilder } from 'https://esm.sh/@supabase/postgrest-js@2.116.0';
 
 export function withUserScope(client: SupabaseClient, userId: string): UserScope {
   return {
