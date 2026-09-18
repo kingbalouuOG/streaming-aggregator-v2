@@ -1882,3 +1882,8 @@ only thing at stake.
 - Watchlist-add trigger (`maybePromptForPush`) removed. Android 13+: permission read from `canAskAgain` (a fresh install reports status denied); the request creates the channel first.
 - Privacy policy + `policyContent.ts`: "when we ask" sentence reworded (Joe to approve in the PR), dated 18 September 2026.
 - Updated: wiki/concepts/architecture/notifications-v1.md (Consent), wiki/registers/parking-lot.md (IN-GR-034 closed with the PR).
+
+## [2026-09-18] query | IN-GR-034 device-verified on iPhone
+- An OTA from main to preview/ios (run 35361194411) published under runtime 2f0341fd… and reached no device: the build 13 → 14 / versionCode 16 → 17 bump in native/app.json alone changed the fingerprint, and Joe's ad-hoc preview was build 13 (db6af33c…). A buildNumber bump orphans OTAs for every older binary.
+- New ad-hoc preview build 14 from main 3f6d819 (EAS 6c1580b1, runtime 2f0341fd…, same as TestFlight build 14). Fresh install passed all checks: Turn on → one user_push_tokens row with app_version 2.5.0, claimed 24s after sign-up (iOS kept the token across reinstall, so claim_push_token moved the existing row); Not now → no system prompt, Profile → Notifications still turns alerts on; shared-link sign-up → title first, explainer after.
+- Updated: wiki/registers/parking-lot.md (IN-GR-034), wiki/concepts/architecture/notifications-v1.md.
