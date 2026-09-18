@@ -2,10 +2,10 @@
 title: Growth loops (G-phases)
 type: concept
 tags: [forward-planning, growth, loops, sharing, deep-links, universal-links, attribution, households, seo]
-status: G0/G1 verified on device and swept (17 Sept 2026, 2.5.0 release in progress); G2 household loop PLANNED 17 Sept (docs/plans/2026-09-17-004, 15 decisions for Joe), not built; then G3 taste cards, G4 SEO, G5 household recs
+status: G0/G1 shipped (v2.5.0 build 14 / versionCode 17 submitted 18 Sept 2026); G2 household loop plan APPROVED 18 Sept (all 15 decisions as recommended), H1 schema handoff written, not built; pre-G2 sessions IN-GR-034 + hygiene in flight; then G3 taste cards, G4 SEO, G5 household recs
 horizon: H1 onward (runs beside the user track and search track from Roadmap v1.1)
 created: 2026-09-14
-updated: 2026-09-17
+updated: 2026-09-18
 sources:
   - raw/forward-planning/Videx_Growth_Loops_Strategy_v0.1_2026-09.md
   - docs/plans/2026-09-14-003-feat-phase-g0-g1-growth-foundations-and-sharing-plan.md (repo; not snapshotted into raw/)
