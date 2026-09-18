@@ -1,10 +1,10 @@
 import { Check, Mail, User } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { isValidUsername, normaliseUsernameInput } from '@/lib/auth/username';
-import { supabase } from '@/lib/supabase';
+import { useUsernameSave } from '@/hooks/useUsernameSave';
+import { normaliseUsernameInput } from '@/lib/auth/username';
 import { useAuth } from '@/providers/auth';
 import { SubScreenHeader } from './SubScreenHeader';
 
@@ -18,11 +18,12 @@ import { SubScreenHeader } from './SubScreenHeader';
 // user_metadata.username, which every screen displays and which flows back
 // through onAuthStateChange. Before, only user_metadata changed, so profiles
 // kept the old name: it stayed "taken" and two people could show the same one.
+// The check and save live in hooks/useUsernameSave.ts, shared with that screen.
 
 const MUTED = 'rgba(245,241,232,0.62)';
 
 export function ProfileAccount() {
-  const { session, checkUsernameAvailable } = useAuth();
+  const { session } = useAuth();
   const user = session?.user;
   const email = user?.email ?? '';
   const initialName = ((user?.user_metadata?.username as string | undefined) ?? '') || email.split('@')[0] || 'You';
@@ -31,65 +32,22 @@ export function ProfileAccount() {
     : null;
 
   const [name, setName] = useState(initialName);
-  const [status, setStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
-  const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const changed = name !== initialName;
-  const valid = isValidUsername(name);
-  const canSave = changed && valid && status !== 'taken' && status !== 'checking' && !!user;
+  // Same debounced availability check and save as "Choose your name".
+  const { status, busy, error, valid, canSubmit: canSave, save: saveUsername } = useUsernameSave({
+    username: name,
+    userId: user?.id,
+    enabled: changed,
+    failureMessage: "Couldn't save your username. Check your connection and try again.",
+    onSaved: () => setSaved(true),
+  });
 
-  // Same debounced availability check as Step 1 and the name prompt. A
-  // transient RPC error leaves 'idle' and does not block: the save's UNIQUE
-  // check decides.
-  useEffect(() => {
-    if (!changed || !valid) {
-      setStatus('idle');
-      return;
-    }
-    setStatus('checking');
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      try {
-        const free = await checkUsernameAvailable(name);
-        if (!cancelled) setStatus(free ? 'available' : 'taken');
-      } catch {
-        if (!cancelled) setStatus('idle');
-      }
-    }, 500);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, changed, valid]);
-
-  const save = async () => {
-    if (!canSave || busy || !user) return;
-    setBusy(true);
+  const save = () => {
+    if (!canSave || busy) return;
     setSaved(false);
-    setError(null);
-    try {
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ username: name, username_chosen: true, updated_at: new Date().toISOString() })
-        .eq('id', user.id);
-      if (profileError) {
-        if (profileError.code === '23505') setStatus('taken');
-        else setError("Couldn't save your username. Check your connection and try again.");
-        return;
-      }
-      const { error: metadataError } = await supabase.auth.updateUser({ data: { username: name } });
-      if (metadataError) {
-        // profiles already holds the name, so a retry re-saves the same row.
-        setError("Couldn't save your username. Check your connection and try again.");
-        return;
-      }
-      setSaved(true);
-    } finally {
-      setBusy(false);
-    }
+    void saveUsername();
   };
 
   const border = !changed ? 'border-border' : valid && status !== 'taken' ? 'border-success/50' : 'border-danger/60';
