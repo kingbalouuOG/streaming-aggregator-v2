@@ -1876,3 +1876,9 @@ only thing at stake.
 ## [2026-09-18] query | v2.5.0 tagged; IN-GR triage before G2
 - Release: PR #205 merged (d90cdaf); annotated tag `v2.5.0` on the merge commit fired ios-release (build 14 → TestFlight) and android-release (versionCode 17 → Play internal). No 2.5.1: the version never went public. App Store submission, privacy rows and Confirm email ON remain Joe's.
 - Open IN-GR rows triaged for G2: two parallel sessions now (IN-GR-034 handoff refreshed; new hygiene handoff `docs/plans/2026-09-18-001-handoff-pre-g2-hygiene.md` for 022/025/045), three fold-ins (043 → H1, 040/044 → H3, 041 → H4), two monitoring notes (006, 021). Register updated; the G2 plan (PR #206, unmerged) picks the fold-ins up when the H1 handoff is written.
+
+## [2026-09-18] query | IN-GR-034 built: notification explainer after onboarding
+- For You mounts `PushExplainerHost` once its feed has loaded; after 1.2s of focus it asks `getPushPromptDecision` (pure rule `src/lib/notifications/promptDecision.ts`, 13 tests) and shows a bottom sheet (Turn on / Not now) before the OS prompt. Once per install and account (`push_prompt_shown`: asked / declined, cleared on sign-out); a pending shared title blurs For You first, so the sheet comes after it.
+- Watchlist-add trigger (`maybePromptForPush`) removed. Android 13+: permission read from `canAskAgain` (a fresh install reports status denied); the request creates the channel first.
+- Privacy policy + `policyContent.ts`: "when we ask" sentence reworded (Joe to approve in the PR), dated 18 September 2026.
+- Updated: wiki/concepts/architecture/notifications-v1.md (Consent), wiki/registers/parking-lot.md (IN-GR-034 closed with the PR).
