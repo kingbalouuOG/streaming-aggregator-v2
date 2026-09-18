@@ -16,7 +16,9 @@
  * deterministic install-to-object path; iOS has none, by decision.
  *
  * Keys: via and src (the ADR-015 contract), t = title content id
- * ("movie-603"), r = room uuid. An organic Play install reports
+ * ("movie-603"), r = room uuid, l = shared list uuid and i = its household
+ * invite token (uuid; G2 H3, read only beside l). One object per referrer:
+ * a present l key wins over t, and t over r, even when the winner is refused. An organic Play install reports
  * "utm_source=google-play&utm_medium=organic", which parses to null.
  *
  * Pure: no React Native imports, so it runs under the root vitest rig and in
@@ -24,7 +26,10 @@
  */
 
 import {
+  inboundHref,
+  isListId,
   isRoomId,
+  normaliseInvite,
   normaliseSrc,
   normaliseVia,
   readQuery,
@@ -35,6 +40,8 @@ import {
 
 export const REFERRER_TITLE_KEY = 't';
 export const REFERRER_ROOM_KEY = 'r';
+export const REFERRER_LIST_KEY = 'l';
+export const REFERRER_INVITE_KEY = 'i';
 
 // A bare "movie-603" / "tv-095396" shape only (no path, no query); the
 // contract itself (positive id, at most ten digits, leading zeros dropped) is
@@ -54,17 +61,23 @@ function roomObject(id: string): InboundObject | null {
   return isRoomId(id) ? { type: 'room', id: id.toLowerCase() } : null;
 }
 
+function listObject(id: string): InboundObject | null {
+  return isListId(id) ? { type: 'list', id: id.toLowerCase() } : null;
+}
+
 const routeFor = (object: InboundObject) =>
-  object.type === 'title' ? `/detail/${object.id}` : `/room/${object.id}`;
+  object.type === 'title' ? `/detail/${object.id}` : object.type === 'room' ? `/room/${object.id}` : `/list/${object.id}`;
 
 /**
  * The raw (not yet URL-encoded) referrer for a page's Play link, or '' when
- * there is nothing to carry. Values outside the contract are dropped.
+ * there is nothing to carry. Values outside the contract are dropped; the
+ * invite is carried only with a list object.
  */
 export function buildPlayReferrer(
   via: string | null | undefined,
   src: string | null | undefined,
   object?: InboundObject | null,
+  invite?: string | null,
 ): string {
   const pairs: string[] = [];
   const v = normaliseVia(via);
@@ -77,6 +90,11 @@ export function buildPlayReferrer(
   } else if (object?.type === 'room') {
     const room = roomObject(object.id);
     if (room) pairs.push(`${REFERRER_ROOM_KEY}=${encodeURIComponent(room.id)}`);
+  } else if (object?.type === 'list') {
+    const list = listObject(object.id);
+    const token = normaliseInvite(invite);
+    if (list) pairs.push(`${REFERRER_LIST_KEY}=${encodeURIComponent(list.id)}`);
+    if (list && token) pairs.push(`${REFERRER_INVITE_KEY}=${encodeURIComponent(token)}`);
   }
   return pairs.join('&');
 }
@@ -96,8 +114,14 @@ export function parseInstallReferrer(raw: string | null | undefined): InboundLin
 
   const t = params.get(REFERRER_TITLE_KEY);
   const r = params.get(REFERRER_ROOM_KEY);
-  const target = t ? titleObject(t) : r ? roomObject(r) : null;
+  const l = params.get(REFERRER_LIST_KEY);
+  // Precedence by key presence, not validity: a refused list id does not fall
+  // back to a title or room (the same rule as t over r).
+  const target = l ? listObject(l) : t ? titleObject(t) : r ? roomObject(r) : null;
+  const invite = target?.type === 'list' ? normaliseInvite(params.get(REFERRER_INVITE_KEY)) : null;
 
   if (!target && !via && !src) return null;
-  return { route: target ? routeFor(target) : '/', object: target, via, src };
+  // The list route carries its invite (the app pushes `route` as it is).
+  const route = target ? inboundHref({ route: routeFor(target), object: target, invite }) : '/';
+  return { route, object: target, via, src, invite };
 }

@@ -21,14 +21,15 @@
  * Object URLs (Growth S1, ADR-015) — each needs a dashboard zone route:
  *   GET /t/:type/:ref          — title page; ref {tmdbId}[-{slug}], 301 to canonical.
  *   GET /room/:id              — shared room snapshot page.
- *   GET /list/:id              — reserved for G2; branded 404.
+ *   GET /list/:id              — shared household list page (G2 H3), 60s cache.
  *   GET /.well-known/apple-app-site-association, /.well-known/assetlinks.json
  *   POST /v1/share/room        — snapshot a room (Supabase JWT).
  *   GET /v1/room/:id           — snapshot JSON for the app.
+ *   GET /v1/list/:id/preview   — public list preview JSON (G2 H3), 60s cache.
  *
  * Growth telemetry (Growth S2, migration 090):
  *   POST /v1/growth/events     — app events (optional Supabase JWT sets user_id).
- *   /t/ and /room/ pages record preview_fetched / preview_opened via waitUntil.
+ *   /t/, /room/ and /list/ pages record preview_fetched / preview_opened via waitUntil.
  *
  * Caching: caches.default keyed on the normalised request URL; the
  * Cache-Control written by cacheControlFor() drives both the Worker
@@ -58,10 +59,13 @@ import {
   applyAttribution,
   HTML_SECURITY_HEADERS,
   htmlPage,
+  LIST_PAGE_TTL_SECONDS,
   PAGE_TTL_SECONDS,
   platformBucket,
 } from './pageShell';
 import { renderRoomPage, roomPageCacheKey } from './roomPage';
+import { listPageCacheKey, renderListPage } from './listPage';
+import { loadListPreview } from './listStore';
 import { notFound } from './notFound';
 import { readJsonBody } from './jsonBody';
 import {
@@ -325,16 +329,18 @@ app.get('/v1/title/:type/:id', async (c) => {
  * Fill the ?via= / ?src= markers AFTER the edge-cache read (pageShell.ts):
  * the cached body is query-free, the served body carries the attribution
  * into the app deep link and the Play referrer (which also names `object`,
- * Growth S2). Also strips the internal canonical-ref header.
+ * Growth S2, and on a list page the ?invite= token, G2 H3). Also strips the
+ * internal canonical-ref header.
  */
 async function withAttribution(
   resp: Response,
   via: string | undefined,
   src: string | undefined,
   object?: InboundObject | null,
+  invite?: string,
 ): Promise<Response> {
   if (!(resp.headers.get('Content-Type') ?? '').startsWith('text/html')) return resp;
-  const out = new Response(applyAttribution(await resp.text(), via, src, object), resp);
+  const out = new Response(applyAttribution(await resp.text(), via, src, object, invite), resp);
   out.headers.delete('Content-Length');
   out.headers.delete(CANONICAL_REF_HEADER);
   return out;
@@ -533,8 +539,50 @@ app.get('/v1/room/:id', async (c) => {
   }
 });
 
-// GET /list/:id — grammar reserved for the G2 watchlists entity (plan D3).
-app.get('/list/:id', (c) => withAttribution(notFound(c, 'list'), c.req.query('via'), c.req.query('src')));
+// ── Shared household lists (Growth G2 H3, migration 093) ─────────────
+// GET /list/:id — public page; GET /v1/list/:id/preview — the same preview as
+// JSON for the app's signed-out list screen. Both read through
+// loadListPreview (names, counts, posters; never members' names or tokens).
+// A list is live, so both cache LIST_PAGE_TTL_SECONDS. ?invite= is not part
+// of the cache key: withAttribution puts it back into the deep link and the
+// Play referrer per request. Members read the full list in the app under RLS.
+app.get('/list/:id', async (c) => {
+  const bucket = platformBucket(c.req.header('user-agent'));
+  const id = c.req.param('id').toLowerCase();
+  const via = c.req.query('via');
+  const src = c.req.query('src');
+  if (!isUuid(id)) return withAttribution(notFound(c, 'list'), via, src);
+  try {
+    const resp = await withEdgeCache(c, listPageCacheKey(id, bucket), LIST_PAGE_TTL_SECONDS, async () => {
+      const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
+      const list = await loadListPreview(client, id);
+      if (!list) return notFound(c, 'list');
+      return htmlPage(renderListPage(list, bucket));
+    });
+    const object: InboundObject = { type: 'list', id };
+    const out = await withAttribution(resp, via, src, object, c.req.query('invite'));
+    recordPreview(c, out, object);
+    return out;
+  } catch (err) {
+    console.error('[list-page] error:', err);
+    return c.text('Internal error', 500);
+  }
+});
+
+app.get('/v1/list/:id/preview', async (c) => {
+  const id = c.req.param('id').toLowerCase();
+  if (!isUuid(id)) return c.json({ error: 'not found' }, 404);
+  try {
+    return await withEdgeCache(c, `https://cache.videx/v1/list/${id}/preview`, LIST_PAGE_TTL_SECONDS, async () => {
+      const client = createServiceRoleClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
+      const list = await loadListPreview(client, id);
+      return list ? Response.json(list) : Response.json({ error: 'not found' }, { status: 404 });
+    });
+  } catch (err) {
+    console.error('[list-preview] error:', err);
+    return c.json({ error: 'internal error' }, 500);
+  }
+});
 
 // POST /v1/share/room — freeze a room at share time and return its URL.
 // Authorization: Bearer <supabase user JWT>. Rate limited on the verified

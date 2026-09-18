@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
 import { stripMalformedQuery } from '../../deepLinkQueryGuard';
-import { isPendingLinkFresh, parseInboundLink, PENDING_LINK_TTL_MS } from '../inboundLink';
+import {
+  inboundHref,
+  isPendingLinkFresh,
+  normaliseInvite,
+  parseInboundLink,
+  PENDING_LINK_TTL_MS,
+} from '../inboundLink';
 
 const ROOM = '3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b';
-const HOME = { route: '/', object: null, via: null, src: null };
+const LIST = '8c1e3f2b-4e6f-4a9d-8b7a-5a6b1c2d3e4f';
+const TOKEN = 'd3e4f5a6-1c2d-4b7a-9a4d-3f2b8c1e4e6f';
+const HOME = { route: '/', object: null, via: null, src: null, invite: null };
 
 describe('parseInboundLink — titles', () => {
   const expected = { route: '/detail/movie-603', object: { type: 'title', id: 'movie-603' } };
@@ -18,7 +26,7 @@ describe('parseInboundLink — titles', () => {
     'videx://detail/movie-603',
     'videx:///detail/movie-603',
   ])('%s', (input) => {
-    expect(parseInboundLink(input)).toEqual({ ...expected, via: null, src: null });
+    expect(parseInboundLink(input)).toEqual({ ...expected, via: null, src: null, invite: null });
   });
 
   it('maps tv and normalises leading zeros', () => {
@@ -30,11 +38,12 @@ describe('parseInboundLink — titles', () => {
   it('captures via and src from the query', () => {
     expect(
       parseInboundLink('https://videxstreaming.com/t/movie/603-the-matrix-1999?via=share&src=push'),
-    ).toEqual({ ...expected, via: 'share', src: 'push' });
+    ).toEqual({ ...expected, via: 'share', src: 'push', invite: null });
     expect(parseInboundLink('videx://detail/movie-603?via=push')).toEqual({
       ...expected,
       via: 'push',
       src: null,
+      invite: null,
     });
   });
 
@@ -75,13 +84,77 @@ describe('parseInboundLink — rooms and lists', () => {
     expect(parseInboundLink('https://videxstreaming.com/room/<script>')).toEqual(HOME);
   });
 
-  it('attributes the reserved list grammar but routes home (no list screen until G2)', () => {
-    expect(parseInboundLink('https://videxstreaming.com/list/abc123?via=household')).toEqual({
-      route: '/',
-      object: { type: 'list', id: 'abc123' },
-      via: 'household',
-      src: null,
-    });
+});
+
+describe('parseInboundLink — shared lists (G2 H3)', () => {
+  const list = { route: `/list/${LIST}`, object: { type: 'list', id: LIST } };
+
+  it.each([
+    [`https://videxstreaming.com/list/${LIST}?invite=${TOKEN}&via=household`, 'household'],
+    [`https://www.videxstreaming.com/list/${LIST.toUpperCase()}/?via=household&invite=${TOKEN.toUpperCase()}`, 'household'],
+    [`videx://list/${LIST}?invite=${TOKEN}`, null],
+    [`videx:///list/${LIST}?invite=${TOKEN}&via=household`, 'household'],
+    [`/list/${LIST}?invite=${TOKEN}`, null],
+  ])('%s routes to the list screen with the invite', (input, via) => {
+    expect(parseInboundLink(input)).toEqual({ ...list, via, src: null, invite: TOKEN });
+  });
+
+  it.each([
+    `https://videxstreaming.com/list/${LIST}`,
+    `videx://list/${LIST}`,
+    `https://videxstreaming.com/list/${LIST}?invite=`,
+    `https://videxstreaming.com/list/${LIST}?invite=not-a-token`,
+    `https://videxstreaming.com/list/${LIST}?invite=${TOKEN}x`,
+    `videx://list/${LIST}?invite=${'%FF'}`,
+  ])('%s has no invite', (input) => {
+    const link = parseInboundLink(input);
+    expect(link.route).toBe(`/list/${LIST}`);
+    expect(link.object).toEqual({ type: 'list', id: LIST });
+    expect(link.invite).toBeNull();
+  });
+
+  it('keeps the first invite when the key repeats', () => {
+    const other = '11111111-2222-4333-8444-555555555555';
+    expect(parseInboundLink(`/list/${LIST}?invite=${TOKEN}&invite=${other}`).invite).toBe(TOKEN);
+  });
+
+  it.each([
+    'https://videxstreaming.com/list/abc123?via=household',
+    `https://videxstreaming.com/list/abc123?invite=${TOKEN}`,
+    'videx://list/<script>',
+    `videx://list/${LIST}/items`,
+  ])('%s: a non-uuid list id stays home with no object', (input) => {
+    expect(parseInboundLink(input)).toEqual({ ...HOME, via: parseInboundLink(input).via });
+  });
+
+  it('ignores an invite on a title or room link (decoys)', () => {
+    expect(parseInboundLink(`https://videxstreaming.com/t/movie/603?invite=${TOKEN}`).invite).toBeNull();
+    expect(parseInboundLink(`videx://detail/movie-603?invite=${TOKEN}`).invite).toBeNull();
+    expect(parseInboundLink(`https://videxstreaming.com/room/${ROOM}?invite=${TOKEN}`).invite).toBeNull();
+    expect(parseInboundLink(`https://videxstreaming.com/?invite=${TOKEN}`)).toEqual(HOME);
+    expect(parseInboundLink(`videx://watchlist?invite=${TOKEN}`).invite).toBeNull();
+  });
+});
+
+describe('inboundHref and normaliseInvite', () => {
+  it('adds ?invite= to a list route only', () => {
+    expect(inboundHref(parseInboundLink(`videx://list/${LIST}?invite=${TOKEN}`))).toBe(`/list/${LIST}?invite=${TOKEN}`);
+    expect(inboundHref(parseInboundLink(`videx://list/${LIST}`))).toBe(`/list/${LIST}`);
+    expect(inboundHref(parseInboundLink(`/t/movie/603?invite=${TOKEN}`))).toBe('/detail/movie-603');
+    expect(inboundHref(parseInboundLink('videx://watchlist'))).toBe('videx://watchlist');
+  });
+
+  it('is idempotent on a route that already carries the invite (the install referrer)', () => {
+    const link = { route: `/list/${LIST}?invite=${TOKEN}`, object: { type: 'list' as const, id: LIST }, invite: TOKEN };
+    expect(inboundHref(link)).toBe(`/list/${LIST}?invite=${TOKEN}`);
+  });
+
+  it('accepts uuid tokens only, lowercased', () => {
+    expect(normaliseInvite(TOKEN.toUpperCase())).toBe(TOKEN);
+    expect(normaliseInvite('abc')).toBeNull();
+    expect(normaliseInvite('')).toBeNull();
+    expect(normaliseInvite(null)).toBeNull();
+    expect(normaliseInvite(undefined)).toBeNull();
   });
 });
 
@@ -92,6 +165,7 @@ describe('parseInboundLink — pass-through and fallback', () => {
       object: null,
       via: null,
       src: null,
+      invite: null,
     });
   });
 
@@ -102,7 +176,7 @@ describe('parseInboundLink — pass-through and fallback', () => {
 
   it('passes the sign-up confirmation bridge through unchanged, query included', () => {
     const confirm = 'videx://confirm-email?token_hash=abc123def&type=email';
-    expect(parseInboundLink(confirm)).toEqual({ route: confirm, object: null, via: null, src: null });
+    expect(parseInboundLink(confirm)).toEqual({ route: confirm, object: null, via: null, src: null, invite: null });
   });
 
   it.each([
@@ -156,11 +230,12 @@ describe('parseInboundLink — sweep additions', () => {
       object: null,
       via: null,
       src: null,
+      invite: null,
     });
   });
 
   it('sends unknown https paths home', () => {
-    expect(parseInboundLink('https://videxstreaming.com/about')).toEqual({ route: '/', object: null, via: null, src: null });
+    expect(parseInboundLink('https://videxstreaming.com/about')).toEqual(HOME);
   });
 
   it('rejects a title id longer than ten digits', () => {

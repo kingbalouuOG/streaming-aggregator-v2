@@ -27,12 +27,18 @@ Object URLs (Growth S1, ADR-015 — see the wiki `inbound-deep-linking` page):
   `{tmdbId}-{slug}`; resolved by type + id, a missing or stale slug 301s
   to canonical. OG tags, iOS smart banner, deep link, UA-aware store CTA.
 - `GET /room/:id` — shared room snapshot page (migration 088).
-- `GET /list/:id` — reserved for G2; branded noindex 404.
+- `GET /list/:id` — shared household list page (G2 H3, migration 093):
+  household name, counts, up to 6 posters, never member names; noindex;
+  60 s edge cache (`LIST_PAGE_TTL_SECONDS`); `?invite=` is re-applied to the
+  deep link and the Play referrer (`l=`, `i=`) after the cache read.
 - `GET /.well-known/apple-app-site-association` and
   `GET /.well-known/assetlinks.json` — universal / app link association
   (src/wellKnown.ts). Fingerprints from `[vars] ASSETLINKS_FINGERPRINTS`.
 - `POST /v1/share/room` — snapshot a room (Supabase JWT, 30/min per user).
 - `GET /v1/room/:id` — snapshot JSON for the app.
+- `GET /v1/list/:id/preview` — public list preview JSON
+  `{ id, name, household_name, count, posters, members }`, 60 s edge cache,
+  404 JSON when unknown (the app's signed-out list screen).
 
 Growth telemetry (Growth S2, migration 090 `growth_events`):
 

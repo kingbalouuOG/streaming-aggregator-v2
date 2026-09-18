@@ -3,7 +3,7 @@ title: ADR-015 — Object URLs are Worker-owned; inbound links route through Exp
 type: concept
 tags: [adr, decision, growth, deep-links, universal-links, app-links, workers, expo-router, locked]
 created: 2026-09-14
-updated: 2026-09-14
+updated: 2026-09-18
 sources:
   - raw/forward-planning/Videx_Growth_Loops_Strategy_v0.1_2026-09.md
   - docs/plans/2026-09-14-003-feat-phase-g0-g1-growth-foundations-and-sharing-plan.md (repo; §3, §9 D1–D5, D13)
@@ -34,12 +34,13 @@ G0 needs every shareable object to have one https URL that unfurls in chat apps,
 |---|---|---|---|
 | `/t/{movie\|tv}/{tmdbId}-{slug}` | type + id only | `/detail/{type}-{id}` | Slug = `titleSlug(title, year)` (`src/lib/growth/slug.ts`), cosmetic; a bare or stale slug 301s to canonical, query kept. No slug column (D1). |
 | `/room/{uuid}` | `shared_rooms.id` | `/room/{uuid}` | A snapshot, never a live `mood_rooms.id` (D2). |
-| `/list/{id}` | — | `/list/{id}` | Reserved for the G2 `watchlists` entity; branded 404 (noindex) until then, no screen (D3). |
+| `/list/{uuid}[?invite={uuid}]` | `watchlists.id` (093) | `/list/{uuid}[?invite={uuid}]` | **Live since G2 H3 (2026-09-18).** Public preview: household name, counts, up to 6 posters, never member names; noindex; 60 s cache. The screen is H2's and owns the join. A non-uuid or unknown id gets the branded 404. |
 
 Query contract, identical on the page and in the app:
 
 - `via` — the URL channel: `share` · `push` · `seo` · `card` · `household`.
 - `src` — the session a share originated in: `push` · `organic`.
+- `invite` — a household invite token (G2 H3). Read on list links only, uuid only; anywhere else, or malformed, it is null. It goes into the list page's deep link (`videx://list/{id}?invite=…`) and Play referrer (`l=` + `i=`) after the cache read, never into a cache key or the cached body.
 - Values outside these sets are dropped, never rewritten. The page passes valid values unchanged into the `videx://` deep link and into the Play URL as `&referrer=via%3D…%26src%3D…`. Edge-cache keys never include the query (`titlePageCacheKey`, `roomPageCacheKey`); the markers are filled after the cache read.
 
 ## Snapshot rule for rooms
@@ -50,11 +51,13 @@ A shared room is frozen at share time: `POST /v1/share/room` (Supabase JWT) inse
 
 `parseInboundLink(path)` in `src/lib/growth/inboundLink.ts` (pure, unit-tested) returns `{ route, object, via, src }`:
 
-- https forms above (www or apex, with or without slug, query or trailing slash) and `videx://detail/{type}-{id}`, `videx://room/{uuid}` → the app routes above, `object` = `{type: 'title', id: 'movie-603'}` / `{type: 'room', id}` / `{type: 'list', id}`.
+- https forms above (www or apex, with or without slug, query or trailing slash) and `videx://detail/{type}-{id}`, `videx://room/{uuid}`, `videx://list/{uuid}` → the app routes above, `object` = `{type: 'title', id: 'movie-603'}` / `{type: 'room', id}` / `{type: 'list', id}`. Since H3 the result also carries `invite` (list links only); `inboundHref(link)` composes the router path `/list/{id}?invite={token}`.
 - `videx://watchlist` and `videx://reset-password?…` → passed through unchanged, `object` null.
 - Anything else → `'/'`, `object` null.
 
-`+native-intent.tsx` runs `stripMalformedQuery` first (IN-DEP-001 guard), then the mapper, records object links as the **pending link** (`native/src/pendingLink.ts`, MMKV, 24h TTL) and returns the route. The pending link is resumed once, after sign-in (`auth.tsx`) or at the end of onboarding (`curating.tsx`), and dropped when the target screen is shown to a signed-in user or on sign-out.
+`+native-intent.tsx` runs `stripMalformedQuery` first (IN-DEP-001 guard), then the mapper, records object links as the **pending link** (`native/src/pendingLink.ts`, MMKV, 24h TTL) and returns `inboundHref(link)`. The pending link is resumed after sign-in (`auth.tsx`) or at the end of onboarding (`curating.tsx`), and dropped when the target screen reaches focus for a signed-in user, or on sign-out.
+
+**Pending link v2 (G2 H3, 2026-09-18):** `{version: 2, route, object, via, src, intent: 'open' | 'join', invite, seenAt}`; shape and rules in `src/lib/growth/pendingLinkRecord.ts` (pure, tested). A list link is stored deliberately, `intent: 'join'` with a token, else `'open'`, and `route` includes `?invite=`. Version-1 rows are discarded on read. A resume consumes title and room links but **never clears a list link**: the list screen calls `clearPendingLinkFor('/list/{id}')` (query ignored) once `join_household` resolves, so a failed join can be retried after the next sign-in.
 
 ## Consequences
 

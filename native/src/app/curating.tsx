@@ -110,6 +110,9 @@ export default function CuratingScreen() {
     }
     router.replace('/(tabs)/foryou');
     // Growth S1: a link opened before sign-up lands now, on top of For You.
+    // Also the resume after the name gate (auth.tsx, IN-GR-044). A shared
+    // list's route carries its ?invite= and is not cleared here: the list
+    // screen clears it once the join resolves (G2).
     const pending = consumePendingLink();
     if (pending) setTimeout(() => router.push(pending.route as Href), 0);
   };

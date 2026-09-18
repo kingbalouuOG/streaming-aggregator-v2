@@ -4,10 +4,8 @@
  * Pure module — NO Hono/Workers imports — tested from the root vitest rig.
  * Same shell, store CTA, smart banner and attribution markers as the title
  * page (pageShell.ts). The row is immutable (no unshare, no expiry), so the
- * page caches 24h keyed by id and platform bucket.
- *
- * /list/:id is reserved for the G2 watchlists entity and renders the
- * branded 404 until then.
+ * page caches 24h keyed by id and platform bucket. The shared-list page
+ * (/list/:id, G2) is listPage.ts.
  */
 
 import { countLabel } from '../../../src/lib/format/plural';
@@ -98,8 +96,4 @@ ${firstPoster ? `<meta name="twitter:image" content="${esc(firstPoster)}">` : ''
 
 export function renderRoomNotFoundPage(bucket: PlatformBucket): string {
   return renderNotFoundPage('Room not found', "This shared room doesn't exist.", bucket);
-}
-
-export function renderListNotFoundPage(bucket: PlatformBucket): string {
-  return renderNotFoundPage('List not found', "This list doesn't exist.", bucket);
 }
