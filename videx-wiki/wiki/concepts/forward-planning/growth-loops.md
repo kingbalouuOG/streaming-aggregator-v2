@@ -2,7 +2,7 @@
 title: Growth loops (G-phases)
 type: concept
 tags: [forward-planning, growth, loops, sharing, deep-links, universal-links, attribution, households, seo]
-status: G0/G1 verified on device (iPhone and Android, 2.5.0, 16–17 Sept 2026); S5 fixes in PR #197 reach stores with the next binaries; Confirm email goes on permanently at the public 2.5.0 release; IN-GR-032 (custom Apple button) closed in PR #200; handoff open for IN-GR-034 (notification prompt)
+status: G0/G1 verified on device and swept (17 Sept 2026, 2.5.0 release in progress); G2 household loop PLANNED 17 Sept (docs/plans/2026-09-17-004, 15 decisions for Joe), not built; then G3 taste cards, G4 SEO, G5 household recs
 horizon: H1 onward (runs beside the user track and search track from Roadmap v1.1)
 created: 2026-09-14
 updated: 2026-09-17
@@ -29,6 +29,8 @@ related:
 > **Status: S2 (attribution) merged and live 2026-09-16 (PR #188; migration 090 applied; privacy wording live; store forms drafted, not filed)** — `growth_events`, Worker `POST /v1/growth/events` + `preview_fetched` / `preview_opened` on the pages, app install id + first touch + `first_open` / `link_opened` / `signup_completed`, Android Play Install Referrer as a local Expo module (`native/modules/play-install-referrer`) carrying the object for the deferred deep link, `supabase/queries/growth-dashboard.sql`, privacy + store-form drafts (not filed); see [event taxonomy](../../entities/codebase/event-taxonomy.md); follow-ups IN-GR-005..009.
 >
 > **Status: S1 (links) built 2026-09-14** — [ADR-015](../decisions/adr-015-object-urls-and-inbound-links.md), [inbound deep linking](../techniques/inbound-deep-linking.md), migration 088, follow-ups IN-GR-001..004. Merged, deployed, 088 applied and routes live 2026-09-15; Android fingerprints done (IN-GR-001 closed); still pending: App Store flip (IN-GR-002), rebuilds (held until the other streams finish), device checks (S5). Summary: `docs/v2/phase-summaries/phase-growth-s1-summary.md`. **G0/G1 approved.** Strategy at `docs/strategy/Videx_Growth_Loops_Strategy_v0.1.md` (summary: [source page](../../sources/growth-loops-strategy-v0-1.md)). The G0 + G1 audit and plan is `docs/plans/2026-09-14-003-…-plan.md`; its §9 records the 19 decisions Joe took on 14 Sept and §13 the five-session execution. S1 handoff: `docs/plans/2026-09-14-004-handoff-growth-s1-links.md`. Go-to-market: all loops go live together. Update this page when a session ships.
+
+> **G2 planned 2026-09-17.** Four audits (watchlist model, notifications for nudges, invite/join/list links, For You blending) and a plan at `docs/plans/2026-09-17-004-feat-phase-g2-household-loop-plan.md`: additive schema (personal `watchlist` untouched), one shared list per household in v1, invite as a revocable token on the list's stable URL, membership RLS plus SECURITY DEFINER RPCs, Worker public preview, nudges from a separate 15-minute function with per-type cap groups. Migrations 093 (entity) and 094 (nudges) pre-assigned. Prerequisite: IN-GR-034. Sessions H1 schema → H2 app ‖ H3 links → H4 nudges → H5 verification, handoffs written after Joe's §9 answers.
 
 ## The model
 

@@ -1867,3 +1867,8 @@ only thing at stake.
 - deleteAccount: a failed Apple revoke is reported (console + Sentry warning) and deletion goes ahead; a closed Apple sheet still cancels. Rationale: erasure must not depend on Apple or the Edge Function; a token that could not be revoked cannot be revoked later without the user anyway.
 - wrangler.toml: [observability.logs] invocation_logs = false (the /reset token_hash travels in the URL).
 - native/app.json: 2.5.0 build 14 / versionCode 17 for the release binaries (16 went to Play internal in S5).
+
+## [2026-09-17] query | G2 household loop planned in the strategy thread
+- Four audits over the live tree. Findings that shape the plan: the personal `watchlist` table has no DDL or RLS in the repo; `withUserScope` forbids cross-user reads by construction; `profiles` is owner-readable only (no display name); the push cap is global and the delivery ledger cannot key a nudge; `/list/:id` is a 404 stub with no preview telemetry; the pending-link writer does not skip list objects despite the parser's comment (made deliberate in H3); the Play referrer has no list key; a "For both of you" row needs no new RPC (G5).
+- Plan: docs/plans/2026-09-17-004-feat-phase-g2-household-loop-plan.md (audit, architecture, sessions H1–H5, migrations 093/094, tests, risks, 15 decisions for Joe). Registers untouched until decisions land.
+- Updated: wiki/concepts/forward-planning/growth-loops.md (status + G2 note).
